@@ -1,2 +1,6 @@
+CacheControl==0.10.2
+certifi==14.05.14
+httpcache==0.1.3
 httplib2==0.9
+requests==2.4.0
 wsgiref==0.1.2
