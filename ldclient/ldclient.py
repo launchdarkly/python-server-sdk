@@ -4,7 +4,7 @@ import hashlib
 
 from cachecontrol import CacheControl
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 

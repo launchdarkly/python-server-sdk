@@ -5,13 +5,13 @@ except ImportError:
 
 setup(
     name='ldclient-py',
-    version='0.1',
+    version='0.2',
     author='Catamorphic Co.',
     author_email='team@catamorphic.com',
     packages=['ldclient'],
     url='https://github.com/launchdarkly/python-client',
     description='LaunchDarkly SDK for Python',
-    long_description=open('README.md').read(),
+    long_description='LaunchDarkly SDK for Python',
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
