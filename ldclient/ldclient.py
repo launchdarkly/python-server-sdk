@@ -17,7 +17,7 @@ class Config(object):
   def default(cls):
     return cls('https://app.launchdarkly.com')
 
-class LdClient(object):
+class LDClient(object):
 
   def __init__(self, apiKey, config = Config.default()):
     self._apiKey = apiKey
