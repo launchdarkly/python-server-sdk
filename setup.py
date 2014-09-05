@@ -11,7 +11,7 @@ setup(
     packages=['ldclient'],
     url='https://github.com/launchdarkly/python-client',
     description='LaunchDarkly SDK for Python',
-    long_description=open('README.txt').read(),
+    long_description=open('README.md').read(),
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
