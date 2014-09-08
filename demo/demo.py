@@ -1,6 +1,6 @@
-from ldclient import LdClient
+from ldclient import LDClient
 
 if __name__ == '__main__':
     apiKey = 'feefifofum'
-    client = LdClient(apiKey)
+    client = LDClient(apiKey)
     print client._apiKey    
