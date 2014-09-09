@@ -11,8 +11,10 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 class Config(object):
 
-    def __init__(self, baseUri):
-        self._baseUri = baseUri
+    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
+        self._base_uri = base_uri
+        self._connect = connect_timeout
+        self._read = read_timeout
 
     @classmethod
     def default(cls):
@@ -36,8 +38,8 @@ class LDClient(object):
     def _get_flag(self, key, user, default):
         hdrs = {'Authorization': 'api_key ' + self._apiKey,
              'User-Agent': 'PythonClient/' + __version__}
-        uri = self._config._baseUri + '/api/eval/features/' + key
-        r = self._session.get(uri, headers=hdrs)
+        uri = self._config._base_uri + '/api/eval/features/' + key
+        r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
         dict = r.json()
         val = _evaluate(dict, user)
         if val is None:
