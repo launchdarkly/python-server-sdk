@@ -1,13 +1,13 @@
 import requests
 import json
 import hashlib
+import logging
 
 from cachecontrol import CacheControl
 
 __version__ = "0.2"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
-
 
 class Config(object):
 
@@ -27,19 +27,25 @@ class LDClient(object):
         self._session = CacheControl(requests.Session())
 
     def get_flag(self, key, user, default=False):
+        try:
+            return self._get_flag(key, user, default)
+        except:
+            logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
+            return default
+
+    def _get_flag(self, key, user, default):
         hdrs = {'Authorization': 'api_key ' + self._apiKey,
              'User-Agent': 'PythonClient/' + __version__}
         uri = self._config._baseUri + '/api/eval/features/' + key
         r = self._session.get(uri, headers=hdrs)
         dict = r.json()
-        val = evaluate(dict, user)
+        val = _evaluate(dict, user)
         if val is None:
             return default
         else:
             return val
 
-
-def param_for_user(feature, user):
+def _param_for_user(feature, user):
     if 'key' in user:
         idHash = user['key']
     else:
@@ -52,11 +58,14 @@ def param_for_user(feature, user):
     return result
 
 
-def match_target(target, user):
+def _match_target(target, user):
     attr = target['attribute']
-    if (attr == 'key' or attr == 'ip' or attr == 'country') and attr in user:
-        u_value = user[attr]
-        return u_value in target['values']
+    if attr == 'key' or attr == 'ip' or attr == 'country':
+        if attr in user:
+            u_value = user[attr]
+            return u_value in target['values']
+        else:
+            return False
     else:  # custom attribute
         if 'custom' not in user:
             return False
@@ -70,23 +79,22 @@ def match_target(target, user):
         return False
 
 
-def match_variation(variation, user):
-    any(match_target(t, user) for t in variation['targets'])
+def _match_variation(variation, user):
     for target in variation['targets']:
-        if match_target(target, user):
+        if _match_target(target, user):
             return True
     return False
 
 
-def evaluate(feature, user):
+def _evaluate(feature, user):
     if not feature['on']:
         return None
-    param = param_for_user(feature, user)
+    param = _param_for_user(feature, user)
     if param is None:
         return None
 
     for variation in feature['variations']:
-        if match_variation(variation, user):
+        if _match_variation(variation, user):
             return variation['value']
 
     total = 0.0
