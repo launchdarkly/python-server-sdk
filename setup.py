@@ -14,7 +14,7 @@ reqs = [str(ir.req) for ir in install_reqs]
 
 setup(
     name='ldclient-py',
-    version='0.2',
+    version='0.3',
     author='Catamorphic Co.',
     author_email='team@catamorphic.com',
     packages=['ldclient'],
