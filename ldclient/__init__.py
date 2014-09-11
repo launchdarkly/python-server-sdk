@@ -50,7 +50,7 @@ class LDClient(object):
             )
             return default  
         else:
-            return _evaluate(dict, user)
+            return _evaluate(dict, user) or default
         
 
 def _param_for_user(feature, user):
