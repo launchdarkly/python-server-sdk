@@ -111,4 +111,4 @@ def _evaluate(feature, user):
         if param < total:
             return variation['value']
 
-    return False
+    return None
