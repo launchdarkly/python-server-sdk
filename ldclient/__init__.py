@@ -40,17 +40,12 @@ class LDClient(object):
              'User-Agent': 'PythonClient/' + __version__}
         uri = self._config._base_uri + '/api/eval/features/' + key
         r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
-        try:
-            dict = r.json()
-        except ValueError:
-            # expected if parsing a non 2xx response
-            logging.exception(
-                'Received non 2xx HTTP response in get_flag. '
-                'Returning default value for flag. Check feature settings.'
-            )
-            return default  
-        else:
-            return _evaluate(dict, user) or default
+        r.raise_for_status()
+        hash = r.json()
+        val = _evaluate(hash, user)
+        if val is None:
+            return default
+        return val
         
 
 def _param_for_user(feature, user):
