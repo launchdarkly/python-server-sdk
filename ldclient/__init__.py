@@ -5,7 +5,7 @@ import logging
 
 from cachecontrol import CacheControl
 
-__version__ = "0.4"
+__version__ = "0.5"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
