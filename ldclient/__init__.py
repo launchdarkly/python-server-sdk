@@ -31,7 +31,7 @@ class LDClient(object):
         self._config = config
         self._session = CacheControl(requests.Session())
         self.queue = deque([], config._capacity)
-        threading.Timer(10, self._process_events).start()
+        threading.Timer(30, self._process_events).start()
 
     def _process_events(self):
         to_process = []
