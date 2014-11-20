@@ -8,7 +8,7 @@ import threading
 from cachecontrol import CacheControl
 from collections import deque
 
-__version__ = "0.7"
+__version__ = "0.8"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -84,7 +84,7 @@ class LDClient(object):
         
 
 def _param_for_user(feature, user):
-    if 'key' in user && user['key']:
+    if 'key' in user and user['key']:
         idHash = user['key']
     else:
         return None
