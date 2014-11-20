@@ -31,25 +31,24 @@ class LDClient(object):
         self._config = config
         self._session = CacheControl(requests.Session())
         self.queue = deque([], config._capacity)
-        threading.Timer(30, self._process_events).start()
+        self._process_events()
 
     def _process_events(self):
         to_process = []
         while True:
             try:
                 to_process.append(self.queue.popleft())
-            except IndexError:
-                break
-            try:
                 if to_process:
                     hdrs = self._get_headers()
                     uri = self._config._base_uri + '/api/events/bulk'
                     r = self._session.post(uri, headers=hdrs, data=json.dumps(to_process))
                     r.raise_for_status()
+            except IndexError:
+                break
             except:
                 logging.exception('Unhandled exception in process_events. Some analytics events were not processed')
             finally:
-                threading.Timer(30, self._process_events).start()
+                threading.Timer(5, self._process_events).start()
 
     def _add_event(self, event):
         event['creationDate'] = int(time.time()*1000)
