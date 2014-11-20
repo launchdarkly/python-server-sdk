@@ -84,7 +84,7 @@ class LDClient(object):
         
 
 def _param_for_user(feature, user):
-    if 'key' in user:
+    if 'key' in user && user['key']:
         idHash = user['key']
     else:
         return None
