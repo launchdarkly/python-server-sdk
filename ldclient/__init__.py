@@ -8,7 +8,7 @@ import threading
 from cachecontrol import CacheControl
 from collections import deque
 
-__version__ = "0.9"
+__version__ = "0.10"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
