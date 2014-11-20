@@ -8,7 +8,7 @@ import threading
 from cachecontrol import CacheControl
 from collections import deque
 
-__version__ = "0.8"
+__version__ = "0.9"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -40,23 +40,23 @@ class LDClient(object):
                 to_process.append(self.queue.popleft())
             except IndexError:
                 break
-        if to_process:
             try:
-                hdrs = self._get_headers()
-                uri = self._config._base_uri + '/api/events/bulk'
-                r = self._session.post(uri, headers=hdrs, data=json.dumps(to_process))
-                r.raise_for_status()
-                return
+                if to_process:
+                    hdrs = self._get_headers()
+                    uri = self._config._base_uri + '/api/events/bulk'
+                    r = self._session.post(uri, headers=hdrs, data=json.dumps(to_process))
+                    r.raise_for_status()
             except:
                 logging.exception('Unhandled exception in process_events. Some analytics events were not processed')
-                return
+            finally:
+                threading.Timer(30, self._process_events).start()
 
     def _add_event(self, event):
         event['creationDate'] = int(time.time()*1000)
         self.queue.append(event)
 
     def send_event(self, event_name, user, data):
-        self._add_event(self, {'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        self._add_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def get_flag(self, key, user, default=False):
         try:
