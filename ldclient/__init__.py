@@ -112,10 +112,6 @@ class LDClient(object):
             logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
             return default
 
-    def _get_headers(self):
-        return {'Authorization': 'api_key ' + self._api_key,
-             'User-Agent': 'PythonClient/' + __version__}
-
     def _get_flag(self, key, user, default):
         hdrs = _headers(self._api_key)
         uri = self._config._base_uri + '/api/eval/features/' + key
