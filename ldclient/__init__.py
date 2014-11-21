@@ -5,6 +5,7 @@ import logging
 import time
 import threading
 
+from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
 
@@ -14,64 +15,116 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 class Config(object):
 
-    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10, capacity = 10000):
+    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
         self._base_uri = base_uri
         self._connect = connect_timeout
         self._read = read_timeout
-        self._capacity = capacity
 
     @classmethod
     def default(cls):
         return cls('https://app.launchdarkly.com')
 
-class LDClient(object):
-
-    def __init__(self, apiKey, config=Config.default()):
-        self._apiKey = apiKey
+class Consumer(object):
+    def __init__(self, api_key, config = Config.default()):
+        self._session = requests.Session()
         self._config = config
-        self._session = CacheControl(requests.Session())
-        self.queue = deque([], config._capacity)
-        self._process_events()
+        self._api_key = api_key
 
-    def _process_events(self):
+    def send(self, events):
+        try: 
+            if isinstance(events, dict):
+                body = [events]
+            else:
+                body = events    
+            hdrs = _headers(self._api_key)
+            uri = self._config._base_uri + '/api/events/bulk'
+            r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
+            r.raise_for_status()
+        except:
+            logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
+
+class AbstractBufferedConsumer(object):
+    def __init__(self, capacity, interval):
+        self._capacity = capacity
+        self.queue = deque([], capacity) 
+        self.last_flush = datetime.now()
+        self._interval = interval
+
+    def send(self, events):
+        if isinstance(events, dict):
+            self.queue.append(events)
+        else:
+            self.queue.extend(events)
+        if self._should_flush():
+            self.flush()
+
+    def _should_flush(self):
+        now = datetime.now()
+        if self.last_flush + timedelta(seconds=self._interval) < now:
+            return True
+        if len(self.queue) >= self._capacity:
+            return True
+        return False
+
+    def do_send(self, events):
+        raise error("Unimplemented")
+
+    def flush(self):
         to_process = []
+        self.last_flush = datetime.now()
         while True:
             try:
                 to_process.append(self.queue.popleft())
-                if to_process:
-                    hdrs = self._get_headers()
-                    uri = self._config._base_uri + '/api/events/bulk'
-                    r = self._session.post(uri, headers=hdrs, data=json.dumps(to_process))
-                    r.raise_for_status()
             except IndexError:
                 break
-            except:
-                logging.exception('Unhandled exception in process_events. Some analytics events were not processed')
-            finally:
-                threading.Timer(5, self._process_events).start()
+        if to_process:
+            self.do_send(to_process)
 
-    def _add_event(self, event):
+
+class BufferedConsumer(AbstractBufferedConsumer):
+    def __init__(self, consumer, capacity = 500, interval = 5):
+        self._consumer = consumer
+        super(BufferedConsumer, self).__init__(capacity, interval)
+
+    def do_send(self, events):
+        self._consumer.send(events)
+
+class AsyncConsumer(object):
+    def __init__(self, consumer):
+        self._consumer = consumer
+
+    def send(self, events):
+        t = threading.Thread(target=self._consumer.send, kwargs = {"events": events })
+        t.daemon = True
+        t.start()
+
+
+class LDClient(object):
+
+    def __init__(self, api_key, config = None, consumer = None):
+        self._api_key = api_key
+        self._config = config or Config.default()
+        self._session = CacheControl(requests.Session())
+        self._consumer = consumer or BufferedConsumer(AsyncConsumer(Consumer(api_key, config)))
+
+    def _send(self, event):
         event['creationDate'] = int(time.time()*1000)
-        self.queue.append(event)
+        self._consumer.send(event)
 
     def send_event(self, event_name, user, data):
-        self._add_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def get_flag(self, key, user, default=False):
         try:
             val = self._get_flag(key, user, default)
-            self._add_event({'kind': 'feature', 'key': key, 'user': user, 'value': val})
+            self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
             return val
         except:
             logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
             return default
 
-    def _get_headers(self):
-        return {'Authorization': 'api_key ' + self._apiKey,
-             'User-Agent': 'PythonClient/' + __version__}
-
     def _get_flag(self, key, user, default):
-        hdrs = self._get_headers()
+        hdrs = _headers(self._api_key)
         uri = self._config._base_uri + '/api/eval/features/' + key
         r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
         r.raise_for_status()
@@ -80,7 +133,9 @@ class LDClient(object):
         if val is None:
             return default
         return val
-        
+
+def _headers(api_key):
+    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__}
 
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
