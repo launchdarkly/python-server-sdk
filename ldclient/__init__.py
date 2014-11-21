@@ -12,13 +12,26 @@ __version__ = "0.10"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
+class Consumer(object):
+    def __init__(self):
+        self._session = requests.Session()
+
+    def send(self, event, api_key, base_uri, connect_timeout, read_timeout):
+        try:            
+            body = [event]
+            hdrs = _headers(api_key)
+            uri = base_uri + '/api/events/bulk'
+            r = self._session.post(uri, headers=hdrs, timeout = (connect_timeout, read_timeout), data=json.dumps(body))
+            r.raise_for_status()
+        except:
+            logging.exception('Unhandled exception in consumer. An analytics event was not processed')
+
 class Config(object):
 
-    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10, capacity = 10000):
+    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
         self._base_uri = base_uri
         self._connect = connect_timeout
         self._read = read_timeout
-        self._capacity = capacity
 
     @classmethod
     def default(cls):
@@ -26,52 +39,34 @@ class Config(object):
 
 class LDClient(object):
 
-    def __init__(self, apiKey, config=Config.default()):
-        self._apiKey = apiKey
+    def __init__(self, api_key, config = Config.default(), consumer = Consumer()):
+        self._api_key = api_key
         self._config = config
         self._session = CacheControl(requests.Session())
-        self.queue = deque([], config._capacity)
-        self._process_events()
+        self._consumer = consumer
 
-    def _process_events(self):
-        to_process = []
-        while True:
-            try:
-                to_process.append(self.queue.popleft())
-                if to_process:
-                    hdrs = self._get_headers()
-                    uri = self._config._base_uri + '/api/events/bulk'
-                    r = self._session.post(uri, headers=hdrs, data=json.dumps(to_process))
-                    r.raise_for_status()
-            except IndexError:
-                break
-            except:
-                logging.exception('Unhandled exception in process_events. Some analytics events were not processed')
-            finally:
-                threading.Timer(5, self._process_events).start()
-
-    def _add_event(self, event):
+    def _send(self, event):
         event['creationDate'] = int(time.time()*1000)
-        self.queue.append(event)
+        self._consumer.send(event, self._api_key, self._config._base_uri, self._config._connect, self._config._read)
 
     def send_event(self, event_name, user, data):
-        self._add_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def get_flag(self, key, user, default=False):
         try:
             val = self._get_flag(key, user, default)
-            self._add_event({'kind': 'feature', 'key': key, 'user': user, 'value': val})
+            self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
             return val
         except:
             logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
             return default
 
     def _get_headers(self):
-        return {'Authorization': 'api_key ' + self._apiKey,
+        return {'Authorization': 'api_key ' + self._api_key,
              'User-Agent': 'PythonClient/' + __version__}
 
     def _get_flag(self, key, user, default):
-        hdrs = self._get_headers()
+        hdrs = _headers(self._api_key)
         uri = self._config._base_uri + '/api/eval/features/' + key
         r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
         r.raise_for_status()
@@ -80,7 +75,9 @@ class LDClient(object):
         if val is None:
             return default
         return val
-        
+
+def _headers(api_key):
+    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__}
 
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
