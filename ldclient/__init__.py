@@ -44,8 +44,8 @@ class Consumer(object):
             logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
 
 class BufferedConsumer(object):
-    def __init__(self, api_key, config = Config.default(), capacity = 500, interval = 5):
-        self._consumer = Consumer(api_key, config)
+    def __init__(self, api_key, config = Config.default(), capacity = 500, interval = 5, consumer = None):
+        self._consumer = consumer or Consumer(api_key, config)
         self._capacity = capacity
         self.queue = deque([], capacity) 
         self.last_flush = datetime.now()
