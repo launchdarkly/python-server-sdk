@@ -5,29 +5,13 @@ import logging
 import time
 import threading
 
+from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
 
 __version__ = "0.10"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
-
-class Consumer(object):
-    def __init__(self):
-        self._session = requests.Session()
-
-    def send(self, events, api_key, base_uri, connect_timeout, read_timeout):
-        try: 
-            if isinstance(events, dict):
-                body = [events]
-            else:
-                body = events    
-            hdrs = _headers(api_key)
-            uri = base_uri + '/api/events/bulk'
-            r = self._session.post(uri, headers = hdrs, timeout = (connect_timeout, read_timeout), data=json.dumps(body))
-            r.raise_for_status()
-        except:
-            logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
 
 class Config(object):
 
@@ -40,17 +24,71 @@ class Config(object):
     def default(cls):
         return cls('https://app.launchdarkly.com')
 
+class Consumer(object):
+    def __init__(self, api_key, config = Config.default()):
+        self._session = requests.Session()
+        self._config = config
+        self._api_key = api_key
+
+    def send(self, events):
+        try: 
+            if isinstance(events, dict):
+                body = [events]
+            else:
+                body = events    
+            hdrs = _headers(self._api_key)
+            uri = self._config._base_uri + '/api/events/bulk'
+            r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
+            r.raise_for_status()
+        except:
+            logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
+
+class BufferedConsumer(object):
+    def __init__(self, api_key, config = Config.default(), capacity = 500, interval = 5):
+        self._consumer = Consumer(api_key, config)
+        self._capacity = capacity
+        self.queue = deque([], capacity) 
+        self.last_flush = datetime.now()
+        self._interval = interval
+
+    def send(self, events):
+        if isinstance(events, dict):
+            self.queue.append(events)
+        else:
+            self.queue.extend(events)
+        if self._should_flush():
+            self.flush()
+
+    def _should_flush(self):
+        now = datetime.now()
+        if self.last_flush + timedelta(seconds=self._interval) < now:
+            return True
+        if len(self.queue) >= self._capacity:
+            return True
+        return False
+
+    def flush(self):
+        to_process = []
+        self.last_flush = datetime.now()
+        while True:
+            try:
+                to_process.append(self.queue.popleft())
+            except IndexError:
+                break
+        if to_process:
+            self._consumer.send(to_process)
+
 class LDClient(object):
 
-    def __init__(self, api_key, config = Config.default(), consumer = Consumer()):
+    def __init__(self, api_key, config = None, consumer = None):
         self._api_key = api_key
-        self._config = config
+        self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
-        self._consumer = consumer
+        self._consumer = consumer or BufferedConsumer(api_key, config)
 
     def _send(self, event):
         event['creationDate'] = int(time.time()*1000)
-        self._consumer.send(event, self._api_key, self._config._base_uri, self._config._connect, self._config._read)
+        self._consumer.send(event)
 
     def send_event(self, event_name, user, data):
         self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
