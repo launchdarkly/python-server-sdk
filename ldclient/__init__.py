@@ -43,9 +43,8 @@ class Consumer(object):
         except:
             logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
 
-class BufferedConsumer(object):
-    def __init__(self, consumer, capacity = 500, interval = 5):
-        self._consumer = consumer
+class AbstractBufferedConsumer(object):
+    def __init__(self, capacity, interval):
         self._capacity = capacity
         self.queue = deque([], capacity) 
         self.last_flush = datetime.now()
@@ -67,6 +66,9 @@ class BufferedConsumer(object):
             return True
         return False
 
+    def do_send(self, events):
+        raise error("Unimplemented")
+
     def flush(self):
         to_process = []
         self.last_flush = datetime.now()
@@ -76,7 +78,16 @@ class BufferedConsumer(object):
             except IndexError:
                 break
         if to_process:
-            self._consumer.send(to_process)
+            self.do_send(to_process)
+
+
+class BufferedConsumer(AbstractBufferedConsumer):
+    def __init__(self, consumer, capacity = 500, interval = 5):
+        self._consumer = consumer
+        super(BufferedConsumer, self).__init__(capacity, interval)
+
+    def do_send(self, events):
+        self._consumer.send(events)
 
 class AsyncConsumer(object):
     def __init__(self, consumer):
