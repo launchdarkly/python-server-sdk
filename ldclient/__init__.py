@@ -44,8 +44,8 @@ class Consumer(object):
             logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
 
 class BufferedConsumer(object):
-    def __init__(self, api_key, config = Config.default(), capacity = 500, interval = 5, consumer = None):
-        self._consumer = consumer or Consumer(api_key, config)
+    def __init__(self, consumer, capacity = 500, interval = 5):
+        self._consumer = consumer
         self._capacity = capacity
         self.queue = deque([], capacity) 
         self.last_flush = datetime.now()
@@ -78,13 +78,23 @@ class BufferedConsumer(object):
         if to_process:
             self._consumer.send(to_process)
 
+class AsyncConsumer(object):
+    def __init__(self, consumer):
+        self._consumer = consumer
+
+    def send(self, events):
+        t = threading.Thread(target=self._consumer.send, kwargs = {"events": events })
+        t.daemon = True
+        t.start()
+
+
 class LDClient(object):
 
     def __init__(self, api_key, config = None, consumer = None):
         self._api_key = api_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
-        self._consumer = consumer or BufferedConsumer(api_key, config)
+        self._consumer = consumer or BufferedConsumer(AsyncConsumer(Consumer(api_key, config)))
 
     def _send(self, event):
         event['creationDate'] = int(time.time()*1000)
