@@ -16,15 +16,18 @@ class Consumer(object):
     def __init__(self):
         self._session = requests.Session()
 
-    def send(self, event, api_key, base_uri, connect_timeout, read_timeout):
-        try:            
-            body = [event]
+    def send(self, events, api_key, base_uri, connect_timeout, read_timeout):
+        try: 
+            if isinstance(events, dict):
+                body = [events]
+            else:
+                body = events    
             hdrs = _headers(api_key)
             uri = base_uri + '/api/events/bulk'
-            r = self._session.post(uri, headers=hdrs, timeout = (connect_timeout, read_timeout), data=json.dumps(body))
+            r = self._session.post(uri, headers = hdrs, timeout = (connect_timeout, read_timeout), data=json.dumps(body))
             r.raise_for_status()
         except:
-            logging.exception('Unhandled exception in consumer. An analytics event was not processed')
+            logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
 
 class Config(object):
 
