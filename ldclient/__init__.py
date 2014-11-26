@@ -135,7 +135,7 @@ class LDClient(object):
         return val
 
 def _headers(api_key):
-    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__}
+    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Content-Type': "application/json"}
 
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
