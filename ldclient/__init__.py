@@ -16,7 +16,7 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 class Config(object):
 
     def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
-        self._base_uri = base_uri
+        self._base_uri = base_uri.rstrip('\\')
         self._connect = connect_timeout
         self._read = read_timeout
 
