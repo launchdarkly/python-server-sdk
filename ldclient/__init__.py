@@ -141,6 +141,7 @@ def _param_for_user(feature, user):
     if 'key' in user and user['key']:
         idHash = user['key']
     else:
+        logging.exception('User does not have a valid key set. Returning default value for flag.')
         return None
     if 'secondary' in user:
         idHash += "." + user['secondary']
