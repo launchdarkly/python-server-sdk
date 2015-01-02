@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
 
-__version__ = "0.12"
+__version__ = "0.13"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
