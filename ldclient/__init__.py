@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
 
-__version__ = "0.13"
+__version__ = "0.14.0"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -106,16 +106,33 @@ class LDClient(object):
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
         self._consumer = consumer or BufferedConsumer(AsyncConsumer(Consumer(api_key, config)))
+        self._offline = False
 
     def _send(self, event):
+        if self._offline:
+            return
         event['creationDate'] = int(time.time()*1000)
         self._consumer.send(event)
 
-    def send_event(self, event_name, user, data):
+    def track(self, event_name, user, data):
         self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+
+    def identify(self, user):
+        self._send({'kind': 'identify', 'key': user['key'], 'user': user})
+
+    def set_offline(self):
+        self._offline = true
+
+    def set_online(self):
+        self._offline = false
+
+    def is_offline(self):
+        return self._offline
 
     def get_flag(self, key, user, default=False):
         try:
+            if self._offline:
+                return default
             val = self._get_flag(key, user, default)
             self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
             return val
