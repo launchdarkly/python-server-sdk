@@ -13,6 +13,8 @@ __version__ = "0.14.0"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
+__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name"]
+
 class Config(object):
 
     def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
@@ -170,7 +172,7 @@ def _param_for_user(feature, user):
 
 def _match_target(target, user):
     attr = target['attribute']
-    if attr == 'key' or attr == 'ip' or attr == 'country':
+    if attr in __BUILTINS__:
         if attr in user:
             u_value = user[attr]
             return u_value in target['values']
