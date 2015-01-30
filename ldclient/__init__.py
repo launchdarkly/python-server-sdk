@@ -188,9 +188,15 @@ def _match_target(target, user):
             return len(set(u_value).intersection(target['values'])) > 0
         return False
 
+def _match_user(variation, user):
+    if 'userTarget' in variation:
+        return _match_target(variation['userTarget'], user)
+    return False
 
 def _match_variation(variation, user):
     for target in variation['targets']:
+        if 'userTarget' in variation and target['attribute'] == 'key':
+            continue
         if _match_target(target, user):
             return True
     return False
@@ -202,6 +208,10 @@ def _evaluate(feature, user):
     param = _param_for_user(feature, user)
     if param is None:
         return None
+
+    for variation in feature['variations']:
+        if _match_user(variation, user):
+            return variation['value']
 
     for variation in feature['variations']:
         if _match_variation(variation, user):
