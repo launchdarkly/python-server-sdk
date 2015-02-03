@@ -22,3 +22,15 @@ Your first feature flag
             # application code to show the feature
         else:
             # the code to run if the feature is off
+
+Development information (for developing this module itself)
+-----------------------------------------------------------
+
+1. Install requirements (run-time & test):
+
+        pip install -r requirements.txt
+        pip install -r test-requirements.txt
+
+2. Run tests:
+
+        $ py.test
