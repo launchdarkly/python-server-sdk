@@ -86,6 +86,11 @@ def test_match_target_custom_attribute_mismatch():
 
 def test_match_variation_target_match():
   variation = {
+    u'userTarget': {
+      u'attribute': u'key',
+      u'op': u'in',
+      u'values': [ ]
+    },
     u'targets': [
       {
         u'attribute': u'bazzle',
@@ -103,6 +108,11 @@ def test_match_variation_target_match():
 
 def test_match_variation_target_mismatch():
   variation = {
+    u'userTarget': {
+      u'attribute': u'key',
+      u'op': u'in',
+      u'values': [ ]
+    },
     u'targets': [
       {
         u'attribute': u'bazzle',
@@ -129,6 +139,11 @@ def test_evaluate_first_variation_target_match():
     {
       u'value': True,
       u'weight': 0,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ ]
+      },
       u'targets': [
         {
           u'attribute': u'bazzle',
@@ -145,6 +160,11 @@ def test_evaluate_first_variation_target_match():
     {
       u'value': False,
       u'weight': 100,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ ]
+      },
       u'targets': []
     }
   ]
@@ -156,6 +176,11 @@ def test_evaluate_first_variation_both_targets_match():
     {
       u'value': True,
       u'weight': 0,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ ]
+      },
       u'targets': [
         {
           u'attribute': u'bazzle',
@@ -167,6 +192,44 @@ def test_evaluate_first_variation_both_targets_match():
           u'op': u'in',
           u'values': [ u'def' ]
         }
+      ]
+    },
+    {
+      u'value': False,
+      u'weight': 100,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ ]
+      },
+      u'targets': [
+        {
+          u'attribute': u'bazzle',
+          u'op': u'in',
+          u'values': [ u'zyx' ]
+        },
+        {
+          u'attribute': u'bizzle',
+          u'op': u'in',
+          u'values': [ u'def' ]
+        }
+      ]
+    }
+  ]
+  assert ldclient._evaluate(feature, user) == True
+
+def test_evaluate_first_variation_both_targets_match_user_key_match_no_user_target():
+  feature = copy(minimal_feature)
+  feature['variations'] = [
+    {
+      u'value': True,
+      u'weight': 0,
+      u'targets': [
+        {
+          u'attribute': u'key',
+          u'op': u'in',
+          u'values': [ 'xyz' ]
+        },
       ]
     },
     {
@@ -187,6 +250,54 @@ def test_evaluate_first_variation_both_targets_match():
     }
   ]
   assert ldclient._evaluate(feature, user) == True
+
+def test_evaluate_second_variation_user_match_both_targets_match():
+  feature = copy(minimal_feature)
+  feature['variations'] = [
+    {
+      u'value': True,
+      u'weight': 0,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ ]
+      },
+      u'targets': [
+        {
+          u'attribute': u'bazzle',
+          u'op': u'in',
+          u'values': [ u'zyx' ]
+        },
+        {
+          u'attribute': u'bizzle',
+          u'op': u'in',
+          u'values': [ u'def' ]
+        }
+      ]
+    },
+    {
+      u'value': False,
+      u'weight': 100,
+      u'userTarget': {
+        u'attribute': u'key',
+        u'op': u'in',
+        u'values': [ 'xyz' ]
+      },
+      u'targets': [
+        {
+          u'attribute': u'bazzle',
+          u'op': u'in',
+          u'values': [ u'zyx' ]
+        },
+        {
+          u'attribute': u'bizzle',
+          u'op': u'in',
+          u'values': [ u'def' ]
+        }
+      ]
+    }
+  ]
+  assert ldclient._evaluate(feature, user) == False
 
 def test_evaluate_second_variation_target_match():
   feature = copy(minimal_feature)
