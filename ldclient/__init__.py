@@ -121,13 +121,18 @@ class LDClient(object):
         self._send({'kind': 'identify', 'key': user['key'], 'user': user})
 
     def set_offline(self):
-        self._offline = true
+        self._offline = True
 
     def set_online(self):
-        self._offline = false
+        self._offline = False
 
     def is_offline(self):
         return self._offline
+
+    def flush(self):
+        if self._offline:
+            return
+        self._consumer.flush()
 
     def get_flag(self, key, user, default=False):
         try:
@@ -182,7 +187,7 @@ def _match_target(target, user):
         if attr not in user['custom']:
             return False
         u_value = user['custom'][attr]
-        if isinstance(u_value, str) or isinstance(u_value, (float, int, long)):
+        if isinstance(u_value, (str, unicode, float, int, long)):
             return u_value in target['values']
         elif isinstance(u_value, (list, tuple)):
             return len(set(u_value).intersection(target['values'])) > 0
