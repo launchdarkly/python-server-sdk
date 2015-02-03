@@ -13,6 +13,8 @@ __version__ = "0.14.0"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
+__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name"]
+
 class Config(object):
 
     def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
@@ -170,7 +172,7 @@ def _param_for_user(feature, user):
 
 def _match_target(target, user):
     attr = target['attribute']
-    if attr == 'key' or attr == 'ip' or attr == 'country':
+    if attr in __BUILTINS__:
         if attr in user:
             u_value = user[attr]
             return u_value in target['values']
@@ -188,9 +190,15 @@ def _match_target(target, user):
             return len(set(u_value).intersection(target['values'])) > 0
         return False
 
+def _match_user(variation, user):
+    if 'userTarget' in variation:
+        return _match_target(variation['userTarget'], user)
+    return False
 
 def _match_variation(variation, user):
     for target in variation['targets']:
+        if 'userTarget' in variation and target['attribute'] == 'key':
+            continue
         if _match_target(target, user):
             return True
     return False
@@ -202,6 +210,10 @@ def _evaluate(feature, user):
     param = _param_for_user(feature, user)
     if param is None:
         return None
+
+    for variation in feature['variations']:
+        if _match_user(variation, user):
+            return variation['value']
 
     for variation in feature['variations']:
         if _match_variation(variation, user):
