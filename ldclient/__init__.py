@@ -32,6 +32,9 @@ class Consumer(object):
         self._config = config
         self._api_key = api_key
 
+    def flush(self):
+        pass
+
     def send(self, events):
         try: 
             if isinstance(events, dict):
@@ -94,6 +97,9 @@ class BufferedConsumer(AbstractBufferedConsumer):
 class AsyncConsumer(object):
     def __init__(self, consumer):
         self._consumer = consumer
+
+    def flush(self):
+        self._consumer.flush()
 
     def send(self, events):
         t = threading.Thread(target=self._consumer.send, kwargs = {"events": events })
