@@ -1,6 +1,8 @@
 LaunchDarkly SDK for Python
 ===========================
 
+![Circle CI](https://circleci.com/gh/launchdarkly/python-client.png)
+
 Quick setup
 -----------
 
