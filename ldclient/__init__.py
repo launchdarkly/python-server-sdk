@@ -99,9 +99,7 @@ class AsyncConsumer(object):
         self._consumer = consumer
 
     def flush(self):
-        t = threading.Thread(target=self._consumer.flush)
-        t.daemon = True
-        t.start()
+        self._consumer.flush()
 
     def send(self, events):
         t = threading.Thread(target=self._consumer.send, kwargs = {"events": events })
