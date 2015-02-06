@@ -1,7 +1,6 @@
 import sys
 try:
-    from setuptools import setup
-    from setuptools.command.test import test as TestCommand
+    from setuptools import setup, Command
 except ImportError:
     from distutils.core import setup
 
@@ -11,28 +10,23 @@ import uuid
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
+test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
 
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 reqs = [str(ir.req) for ir in install_reqs]
+testreqs = [str(ir.req) for ir in test_reqs]
 
-class PyTest(TestCommand):
-    user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
-
+class PyTest(Command):
+    user_options = []
     def initialize_options(self):
-        TestCommand.initialize_options(self)
-        self.pytest_args = []
-
+        pass
     def finalize_options(self):
-        TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
-
-    def run_tests(self):
-        #import here, cause outside the eggs aren't loaded
-        import pytest
-        errno = pytest.main(self.pytest_args)
-        sys.exit(errno)
+        pass
+    def run(self):
+        import sys,subprocess
+        errno = subprocess.call([sys.executable, 'runtests.py'])
+        raise SystemExit(errno)
 
 setup(
     name='ldclient-py',
@@ -49,6 +43,6 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 2 :: Only',
     ],
-    tests_require=['pytest'],
+    tests_require=testreqs,
     cmdclass = {'test': PyTest},
 )
