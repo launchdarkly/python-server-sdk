@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
+from requests.packages.urllib3.exceptions import ProtocolError
 
 __version__ = "0.15.0"
 
