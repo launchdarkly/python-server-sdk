@@ -166,7 +166,7 @@ class LDClient(object):
             except:
                 logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
                 return default
-        do_get_flag(False)
+        return do_get_flag(False)
 
     def _get_flag(self, key, user, default):
         hdrs = _headers(self._api_key)
