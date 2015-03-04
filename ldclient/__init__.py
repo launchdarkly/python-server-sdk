@@ -162,7 +162,7 @@ class LDClient(object):
             except ProtocolError as e:
                 if should_retry:
                     logging.warning('ProtocolError exception caught while getting flag. Retrying.')
-                    do_send(False)
+                    do_get_flag(False)
                 else:
                     logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
                     return default
