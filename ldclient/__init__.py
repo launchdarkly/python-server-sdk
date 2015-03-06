@@ -4,6 +4,7 @@ import hashlib
 import logging
 import time
 import threading
+import errno
 
 from datetime import datetime, timedelta
 from cachecontrol import CacheControl
@@ -48,7 +49,8 @@ class Consumer(object):
                 r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:
-                if should_retry:
+                inner = e.args[1]
+                if inner.errno == errno.ECONNRESET and should_retry:
                     logging.warning('ProtocolError exception caught while sending events. Retrying.')
                     do_send(False)
                 else:
@@ -160,7 +162,8 @@ class LDClient(object):
                 self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
                 return val
             except ProtocolError as e:
-                if should_retry:
+                inner = e.args[1]
+                if inner.errno == errno.ECONNRESET and should_retry:
                     logging.warning('ProtocolError exception caught while getting flag. Retrying.')
                     do_get_flag(False)
                 else:
