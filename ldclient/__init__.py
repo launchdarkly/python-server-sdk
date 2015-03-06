@@ -4,12 +4,14 @@ import hashlib
 import logging
 import time
 import threading
+import errno
 
 from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from collections import deque
+from requests.packages.urllib3.exceptions import ProtocolError
 
-__version__ = "0.15.0"
+__version__ = "0.15.1"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -36,17 +38,26 @@ class Consumer(object):
         pass
 
     def send(self, events):
-        try: 
-            if isinstance(events, dict):
-                body = [events]
-            else:
-                body = events    
-            hdrs = _headers(self._api_key)
-            uri = self._config._base_uri + '/api/events/bulk'
-            r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
-            r.raise_for_status()
-        except:
-            logging.exception('Unhandled exception in consumer. Analytics events were not processed.')    
+        def do_send(should_retry):
+            try: 
+                if isinstance(events, dict):
+                    body = [events]
+                else:
+                    body = events    
+                hdrs = _headers(self._api_key)
+                uri = self._config._base_uri + '/api/events/bulk'
+                r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
+                r.raise_for_status()
+            except ProtocolError as e:
+                inner = e.args[1]
+                if inner.errno == errno.ECONNRESET and should_retry:
+                    logging.warning('ProtocolError exception caught while sending events. Retrying.')
+                    do_send(False)
+                else:
+                    logging.exception('Unhandled exception in consumer. Analytics events were not processed.')
+            except:
+                logging.exception('Unhandled exception in consumer. Analytics events were not processed.')
+        do_send(True)
 
 class AbstractBufferedConsumer(object):
     def __init__(self, capacity, interval):
@@ -143,15 +154,25 @@ class LDClient(object):
         self._consumer.flush()
 
     def get_flag(self, key, user, default=False):
-        try:
-            if self._offline:
+        def do_get_flag(should_retry):
+            try:
+                if self._offline:
+                    return default
+                val = self._get_flag(key, user, default)
+                self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
+                return val
+            except ProtocolError as e:
+                inner = e.args[1]
+                if inner.errno == errno.ECONNRESET and should_retry:
+                    logging.warning('ProtocolError exception caught while getting flag. Retrying.')
+                    do_get_flag(False)
+                else:
+                    logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
+                    return default
+            except:
+                logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
                 return default
-            val = self._get_flag(key, user, default)
-            self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
-            return val
-        except:
-            logging.exception('Unhandled exception in get_flag. Returning default value for flag.')
-            return default
+        return do_get_flag(True)
 
     def _get_flag(self, key, user, default):
         hdrs = _headers(self._api_key)
