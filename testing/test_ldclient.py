@@ -18,11 +18,11 @@ class MockBufferedConsumer(ldclient.BufferedConsumer):
 # LDClient mock that has all the real functionality, except it always uses a static feature
 class StaticLDClient(ldclient.LDClient):
     def __init__(self, api_key, config = None, consumer = None):
-        self._get_flag_count = 0
+        self._toggle_count = 0
         super(StaticLDClient, self).__init__(api_key, config, consumer)
 
-    def _get_flag(self, key, user, default):
-        self._get_flag_count += 1
+    def _toggle(self, key, user, default):
+        self._toggle_count += 1
         hash = minimal_feature = {
           u'key': u'feature.key', 
           u'salt': u'abc',
@@ -71,23 +71,23 @@ def test_set_online():
   client.set_online()
   assert client.is_offline() == False
 
-def test_get_flag():
-  assert client.get_flag('xyz', user, default=None) == True
+def test_toggle():
+  assert client.toggle('xyz', user, default=None) == True
 
-def test_get_flag_event():
-  client.get_flag('xyz', user, default=None)
+def test_toggle_event():
+  client.toggle('xyz', user, default=None)
   def expected_event(e):
     return e['kind'] == 'feature' and e['key']  == 'xyz' and e['user'] == user and e['value'] == True
   assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is not None
 
 
-def test_get_flag_offline():
+def test_toggle_offline():
   client.set_offline()
-  assert client.get_flag('xyz', user, default=None) == None
+  assert client.toggle('xyz', user, default=None) == None
 
-def test_get_flag_event_offline():
+def test_toggle_event_offline():
   client.set_offline()
-  client.get_flag('xyz', user, default=None)
+  client.toggle('xyz', user, default=None)
   def expected_event(e):
     return e['kind'] == 'feature' and e['key']  == 'xyz' and e['user'] == user and e['value'] == True
   assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is None

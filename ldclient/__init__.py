@@ -219,7 +219,7 @@ def _match_target(target, user):
         if attr not in user['custom']:
             return False
         u_value = user['custom'][attr]
-        if isinstance(u_value, (str, unicode, float, int, long)):
+        if isinstance(u_value, (str, unicode, float, int, long, bool)):
             return u_value in target['values']
         elif isinstance(u_value, (list, tuple)):
             return len(set(u_value).intersection(target['values'])) > 0
