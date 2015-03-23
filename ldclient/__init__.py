@@ -11,7 +11,7 @@ from cachecontrol import CacheControl
 from collections import deque
 from requests.packages.urllib3.exceptions import ProtocolError
 
-__version__ = "0.16.0"
+__version__ = "0.16.1"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -124,7 +124,7 @@ class LDClient(object):
         self._api_key = api_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
-        self._consumer = consumer or BufferedConsumer(AsyncConsumer(Consumer(api_key, config)))
+        self._consumer = consumer or BufferedConsumer(AsyncConsumer(Consumer(api_key, self._config)))
         self._offline = False
 
     def _send(self, event):
