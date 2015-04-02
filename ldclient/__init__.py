@@ -133,7 +133,7 @@ class LDClient(object):
         event['creationDate'] = int(time.time()*1000)
         self._consumer.send(event)
 
-    def track(self, event_name, user, data):
+    def track(self, event_name, user, data = None):
         self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
