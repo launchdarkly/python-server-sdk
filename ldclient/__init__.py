@@ -20,6 +20,13 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
+try:
+  unicode
+except NameError:
+  __BASE_TYPES__ = (str, float, int, bool)
+else:
+  __BASE_TYPES__ = (str, float, int, bool, unicode)
+
 class Config(object):
 
     def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10):
@@ -222,7 +229,7 @@ def _match_target(target, user):
         if attr not in user['custom']:
             return False
         u_value = user['custom'][attr]
-        if isinstance(u_value, (str, float, int, bool)):
+        if isinstance(u_value, __BASE_TYPES__):
             return u_value in target['values']
         elif isinstance(u_value, (list, tuple)):
             return len(set(u_value).intersection(target['values'])) > 0
