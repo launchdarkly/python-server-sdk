@@ -1,5 +1,8 @@
+from builtins import next
+from builtins import filter
+from builtins import object
 import ldclient
-from itertools import ifilter
+
 
 class MockConsumer(object):
     def __init__(self):
@@ -78,7 +81,7 @@ def test_toggle_event():
   client.toggle('xyz', user, default=None)
   def expected_event(e):
     return e['kind'] == 'feature' and e['key']  == 'xyz' and e['user'] == user and e['value'] == True
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is not None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is not None
 
 
 def test_toggle_offline():
@@ -90,33 +93,33 @@ def test_toggle_event_offline():
   client.toggle('xyz', user, default=None)
   def expected_event(e):
     return e['kind'] == 'feature' and e['key']  == 'xyz' and e['user'] == user and e['value'] == True
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is None
 
 def test_identify():
   client.identify(user)
   def expected_event(e):
     return e['kind'] == 'identify' and e['key']  == u'xyz' and e['user'] == user
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is not None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is not None
 
 def test_identify_offline():
   client.set_offline()
   client.identify(user)
   def expected_event(e):
     return e['kind'] == 'identify' and e['key']  == u'xyz' and e['user'] == user
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is None
 
 def test_track():
   client.track('my_event', user, 42)
   def expected_event(e):
     return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 42
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is not None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is not None
 
 def test_track_offline():
   client.set_offline()
   client.track('my_event', user, 42)
   def expected_event(e):
     return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 42
-  assert next(ifilter(expected_event, mock_buffered_consumer.queue), None) is None
+  assert next(filter(expected_event, mock_buffered_consumer.queue), None) is None
 
 def test_flush_empties_queue():
   client.track('my_event', user, 42)
@@ -135,8 +138,8 @@ def test_flush_sends_events():
     return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 33
 
   assert (
-    next(ifilter(expected_event1, mock_consumer.sent), None) is not None and 
-    next(ifilter(expected_event2, mock_consumer.sent), None) is not None
+    next(filter(expected_event1, mock_consumer.sent), None) is not None and 
+    next(filter(expected_event2, mock_consumer.sent), None) is not None
     )
 
 def test_flush_offline():
@@ -151,6 +154,6 @@ def test_flush_offline():
     return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 33
 
   assert (
-    next(ifilter(expected_event1, mock_consumer.sent), None) is None and 
-    next(ifilter(expected_event2, mock_consumer.sent), None) is None
+    next(filter(expected_event1, mock_consumer.sent), None) is None and 
+    next(filter(expected_event2, mock_consumer.sent), None) is None
     )
