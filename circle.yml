@@ -1,6 +1,9 @@
 machine:
   python:
     version: 3.3.3
+dependencies:
+  override:
+    - pip install --upgrade pip
 test:
   override:
     - pip install -r test-requirements.txt
