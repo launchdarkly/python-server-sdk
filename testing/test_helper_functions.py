@@ -1,5 +1,4 @@
 from __future__ import division
-from past.utils import old_div
 import ldclient
 import hashlib
 from copy import copy
@@ -35,7 +34,7 @@ def test_param_for_user_with_no_key():
 
 
 def test_param_for_user_with_no_secondary():
-    expected = old_div(int(hashlib.sha1('feature.key.abc.xyz').hexdigest()[:15], 16), float(0xFFFFFFFFFFFFFFF))
+    expected = int(hashlib.sha1('feature.key.abc.xyz').hexdigest()[:15], 16) / float(0xFFFFFFFFFFFFFFF)
     assert ldclient._param_for_user(minimal_feature, {u'key': u'xyz'}) == expected
 
 def test_match_target_key_mismatch():
@@ -370,7 +369,7 @@ def test_evaluate_first_variation_no_target_match():
 
 def test_evaluate_second_variation_no_target_match():
   feature = copy(minimal_feature)
-  hash_value = old_div(int(hashlib.sha1('feature.key.abc.xyz').hexdigest()[:15], 16), float(0xFFFFFFFFFFFFFFF))
+  hash_value = int(hashlib.sha1('feature.key.abc.xyz').hexdigest()[:15], 16) / float(0xFFFFFFFFFFFFFFF)
   feature['variations'] = [
     {
       u'value': True,

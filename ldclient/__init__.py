@@ -1,5 +1,4 @@
 from __future__ import division
-from past.utils import old_div
 from builtins import object
 import requests
 import json
@@ -211,7 +210,7 @@ def _param_for_user(feature, user):
         idHash += "." + user['secondary']
     hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], idHash)
     hash_val = int(hashlib.sha1(hash_key).hexdigest()[:15], 16)
-    result = old_div(hash_val, __LONG_SCALE__)
+    result = hash_val / __LONG_SCALE__
     return result
 
 
@@ -266,7 +265,7 @@ def _evaluate(feature, user):
 
     total = 0.0
     for variation in feature['variations']:
-        total += old_div(float(variation['weight']), 100.0)
+        total += float(variation['weight']) / 100.0
         if param < total:
             return variation['value']
 
