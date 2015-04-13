@@ -13,7 +13,7 @@ from cachecontrol import CacheControl
 from collections import deque
 from requests.packages.urllib3.exceptions import ProtocolError
 
-__version__ = "0.16.1"
+__version__ = "0.16.2"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
