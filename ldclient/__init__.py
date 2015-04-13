@@ -1,3 +1,5 @@
+from __future__ import division
+from builtins import object
 import requests
 import json
 import hashlib
@@ -16,6 +18,13 @@ __version__ = "0.16.1"
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
+
+try:
+  unicode
+except NameError:
+  __BASE_TYPES__ = (str, float, int, bool)
+else:
+  __BASE_TYPES__ = (str, float, int, bool, unicode)
 
 class Config(object):
 
@@ -200,7 +209,7 @@ def _param_for_user(feature, user):
     if 'secondary' in user:
         idHash += "." + user['secondary']
     hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], idHash)
-    hash_val = long(hashlib.sha1(hash_key).hexdigest()[:15], 16)
+    hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
 
@@ -219,7 +228,7 @@ def _match_target(target, user):
         if attr not in user['custom']:
             return False
         u_value = user['custom'][attr]
-        if isinstance(u_value, (str, unicode, float, int, long, bool)):
+        if isinstance(u_value, __BASE_TYPES__):
             return u_value in target['values']
         elif isinstance(u_value, (list, tuple)):
             return len(set(u_value).intersection(target['values'])) > 0
