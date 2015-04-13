@@ -1,6 +1,13 @@
+dependencies:
+  cache_directories:
+    - .pip-cache
+    - .pyenv
+
+  pre:
+    - pyenv shell 2.6.8; $(pyenv which pip) install -r --download-cache test-requirements.txt
+    - pyenv shell 3.3.3; $(pyenv which pip) install -r --download-cache test-requirements.txt
+
 test:
   override:
-    - pyenv shell 2.6.8; $(pyenv which pip) install -r test-requirements.txt
-    - pyenv shell 2.6.8; $(pyenv which python) -m py.test testing
-    - pyenv shell 3.3.3; $(pyenv which pip) install -r test-requirements.txt
-    - pyenv shell 3.3.3; $(pyenv which python) -m py.test testing
+    - pyenv shell 2.6.8; $(pyenv which py.test) testing
+    - pyenv shell 3.3.3; $(pyenv which py.test) testing
