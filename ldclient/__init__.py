@@ -209,7 +209,7 @@ def _param_for_user(feature, user):
     if 'secondary' in user:
         idHash += "." + user['secondary']
     hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], idHash)
-    hash_val = int(hashlib.sha1(hash_key).hexdigest()[:15], 16)
+    hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
 
