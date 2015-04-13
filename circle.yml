@@ -1,10 +1,6 @@
-machine:
-  python:
-    version: 3.3.3
-dependencies:
-  override:
-    - pip install --upgrade pip
 test:
   override:
-    - pip install -r test-requirements.txt
-    - py.test testing
+    - pyenv shell 2.6.8; $(pyenv which pip) install -r test-requirements.txt
+    - pyenv shell 2.6.8; $(pyenv which python) -m py.test testing
+    - pyenv shell 3.3.3; $(pyenv which pip) install -r test-requirements.txt
+    - pyenv shell 3.3.3; $(pyenv which python) -m py.test testing
