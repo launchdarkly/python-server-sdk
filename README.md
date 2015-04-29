@@ -36,3 +36,9 @@ Development information (for developing this module itself)
 2. Run tests:
 
         $ py.test
+
+
+Learn more
+-----------
+
+Check out our [documentation](http://docs.launchdarkly.com) for in-depth instructions on configuring and using LaunchDarkly. You can also head straight to the [complete reference guide for this SDK](http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference).
