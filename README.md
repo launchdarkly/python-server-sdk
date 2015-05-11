@@ -36,3 +36,8 @@ Development information (for developing this module itself)
 2. Run tests:
 
         $ py.test
+
+Contributing
+------------
+
+We encourage pull-requests and other contributions from the community. We've also published an [SDK contributor's guide](http://docs.launchdarkly.com/v1.0/docs/sdk-contributors-guide) that provides a detailed explanation of how our SDKs work.
