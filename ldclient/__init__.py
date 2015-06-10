@@ -130,6 +130,7 @@ class AsyncConsumer(object):
 class LDClient(object):
 
     def __init__(self, api_key, config = None, consumer = None):
+        check_uwsgi()
         self._api_key = api_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
@@ -246,6 +247,15 @@ def _match_variation(variation, user):
         if _match_target(target, user):
             return True
     return False
+
+def check_uwsgi():
+    if 'uwsgi' in sys.modules:
+        import uwsgi
+        if not uwsgi.opt.get('enable-threads'):
+            logging.warning('The LaunchDarkly client requires the enable-threads option '
+                            'be passed to uWSGI. If enable-threads is not provided, no '
+                            'threads will run and flag data will not be sent to LaunchDarkly. '
+                            'To learn more, see http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
 
 
 def _evaluate(feature, user):
