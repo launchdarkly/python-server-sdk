@@ -7,6 +7,7 @@ import logging
 import time
 import threading
 import errno
+import sys
 
 from datetime import datetime, timedelta
 from cachecontrol import CacheControl
