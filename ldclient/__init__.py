@@ -20,6 +20,16 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
+log = logging.getLogger(__name__)
+
+# Add a NullHandler for Python < 2.7 compatibility
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
+if not log.handlers:
+    log.addHandler(NullHandler())
+
 try:
   unicode
 except NameError:
@@ -61,12 +71,12 @@ class Consumer(object):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    logging.warning('ProtocolError exception caught while sending events. Retrying.')
+                    log.warning('ProtocolError exception caught while sending events. Retrying.')
                     do_send(False)
                 else:
-                    logging.exception('Unhandled exception in consumer. Analytics events were not processed.')
+                    log.exception('Unhandled exception in consumer. Analytics events were not processed.')
             except:
-                logging.exception('Unhandled exception in consumer. Analytics events were not processed.')
+                log.exception('Unhandled exception in consumer. Analytics events were not processed.')
         do_send(True)
 
 class AbstractBufferedConsumer(object):
@@ -178,13 +188,13 @@ class LDClient(object):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    logging.warning('ProtocolError exception caught while getting flag. Retrying.')
+                    log.warning('ProtocolError exception caught while getting flag. Retrying.')
                     do_toggle(False)
                 else:
-                    logging.exception('Unhandled exception. Returning default value for flag.')
+                    log.exception('Unhandled exception. Returning default value for flag.')
                     return default
             except:
-                logging.exception('Unhandled exception. Returning default value for flag.')
+                log.exception('Unhandled exception. Returning default value for flag.')
                 return default
         return do_toggle(True)
 
@@ -206,7 +216,7 @@ def _param_for_user(feature, user):
     if 'key' in user and user['key']:
         idHash = user['key']
     else:
-        logging.exception('User does not have a valid key set. Returning default value for flag.')
+        log.exception('User does not have a valid key set. Returning default value for flag.')
         return None
     if 'secondary' in user:
         idHash += "." + user['secondary']
@@ -253,7 +263,7 @@ def check_uwsgi():
     if 'uwsgi' in sys.modules:
         import uwsgi
         if not uwsgi.opt.get('enable-threads'):
-            logging.warning('The LaunchDarkly client requires the enable-threads option '
+            log.warning('The LaunchDarkly client requires the enable-threads option '
                             'be passed to uWSGI. If enable-threads is not provided, no '
                             'threads will run and event data will not be sent to LaunchDarkly. '
                             'To learn more, see http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
