@@ -3,7 +3,6 @@ from builtins import filter
 from builtins import object
 import ldclient
 import pytest
-import threading
 
 try:
     import queue
@@ -125,44 +124,23 @@ def test_track_offline():
   client.track('my_event', user, 42)
   assert client._queue.empty()
 
-'''
-
-
+def drain(queue):
+    while not queue.empty():
+      queue.get()
+      queue.task_done()
+    return
 
 def test_flush_empties_queue():
   client.track('my_event', user, 42)
   client.track('my_event', user, 33)
+  drain(client._queue)
   client.flush()
-  assert len(mock_buffered_consumer.queue) == 0
+  assert client._queue.empty()
 
-def test_flush_sends_events():
-  client.track('my_event', user, 42)
-  client.track('my_event', user, 33)
-  client.flush()
 
-  def expected_event1(e):
-    return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 42
-  def expected_event2(e):
-    return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 33
-
-  assert (
-    next(filter(expected_event1, mock_consumer.sent), None) is not None and 
-    next(filter(expected_event2, mock_consumer.sent), None) is not None
-    )
-
-def test_flush_offline():
+def test_flush_offline_does_not_empty_queue():
   client.track('my_event', user, 42)
   client.track('my_event', user, 33)
   client.set_offline()
   client.flush()
-
-  def expected_event1(e):
-    return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 42
-  def expected_event2(e):
-    return e['kind'] == 'custom' and e['key']  == 'my_event' and e['user'] == user and e['data'] == 33
-
-  assert (
-    next(filter(expected_event1, mock_consumer.sent), None) is None and 
-    next(filter(expected_event2, mock_consumer.sent), None) is None
-    )
-'''
+  assert not client._queue.empty()
