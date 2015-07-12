@@ -1,2 +1,1 @@
 pytest==2.6.4
-pytest-mock==0.7.0
