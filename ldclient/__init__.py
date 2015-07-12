@@ -181,7 +181,7 @@ class LDClient(object):
     def flush(self):
         if self._offline:
             return
-        self._check_consumer()      
+        self._check_consumer()
         self._queue.join()
 
     def get_flag(self, key, user, default=False):

@@ -3,6 +3,7 @@ from builtins import filter
 from builtins import object
 import ldclient
 import pytest
+import threading
 
 try:
     import queue
@@ -20,13 +21,23 @@ user = {
 
 class MockConsumer(object):
     def __init__(self):
-      self.sent = []
+      self._running = False
 
-    def send(self, events):
-      self.sent.extend(events)
+    def stop(self):
+      self._running = False
+
+    def start(self):
+      self._running = True
+
+    def is_alive(self):
+      return self._running
+
 
 def mock_consumer():
-  return MockConsumer()      
+  return MockConsumer()  
+
+def noop_consumer():
+  return    
 
 def mock_toggle(key, user, default):
     hash = minimal_feature = {
@@ -54,10 +65,11 @@ def mock_toggle(key, user, default):
 def setup_function(function):
   client.set_online()
   client._queue = queue.Queue(10)
+  client._consumer = mock_consumer()
 
 @pytest.fixture(autouse=True)
-def use_mock_consumer(monkeypatch):
-  monkeypatch.setattr(client, '_check_consumer', mock_consumer)
+def noop_check_consumer(monkeypatch):
+  monkeypatch.setattr(client, '_check_consumer', noop_consumer)
 
 @pytest.fixture(autouse=True)
 def no_remote_toggle(monkeypatch):
@@ -112,7 +124,6 @@ def test_track_offline():
   client.set_offline()
   client.track('my_event', user, 42)
   assert client._queue.empty()
-
 
 '''
 
