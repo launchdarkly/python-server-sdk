@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, with_statement
 from builtins import object
 import requests
 import json
@@ -16,7 +16,7 @@ except:
 from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
-from threading import Thread
+from threading import Thread, Lock
 
 __version__ = "0.16.2"
 
@@ -141,11 +141,13 @@ class LDClient(object):
         self._queue = queue.Queue(self._config._capacity)
         self._consumer = None
         self._offline = False
+        self._lock = Lock()
 
     def _check_consumer(self):
-        if not self._consumer or not self._consumer.is_alive():
-            self._consumer = Consumer(self._queue, self._api_key, self._config)
-            self._consumer.start()
+        with self._lock:
+            if not self._consumer or not self._consumer.is_alive():
+                self._consumer = Consumer(self._queue, self._api_key, self._config)
+                self._consumer.start()
 
     def _stop_consumer(self):
         if self._consumer and self._consumer.is_alive():
