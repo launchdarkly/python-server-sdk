@@ -18,7 +18,7 @@ from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
 from threading import Thread, Lock
 
-__version__ = "0.16.2"
+__version__ = "0.17.0"
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
