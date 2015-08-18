@@ -78,7 +78,7 @@ class InMemoryFeatureStore(object):
     def all(self):
         try:
             self._lock.rlock()
-            return {k:f for (k,f) in self._features.iteritems() if not f[:deleted] }
+            return dict((k,f) for k,f in self._features.iteritems() if not f[:deleted])
         finally:
             self._lock.runlock()
 
