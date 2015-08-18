@@ -18,7 +18,10 @@ from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
 from threading import Thread, Lock
 
-__version__ = "0.17.0"
+from ldclient.version import VERSION
+from ldclient.rwlock import ReadWriteLock
+
+__version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -43,8 +46,10 @@ else:
 
 class Config(object):
 
-    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10, upload_limit = 100, capacity = 10000):
+    def __init__(self, base_uri = 'https://app.launchdarkly.com', connect_timeout = 2, read_timeout = 10, upload_limit = 100, capacity = 10000, stream_uri = 'https://stream.launchdarkly.com', stream = False):
         self._base_uri = base_uri.rstrip('\\')
+        self._stream_uri = stream_uri.rstrip('\\')
+        self._stream = stream
         self._connect = connect_timeout
         self._read = read_timeout
         self._upload_limit = upload_limit
@@ -52,7 +57,67 @@ class Config(object):
 
     @classmethod
     def default(cls):
-        return cls('https://app.launchdarkly.com')
+        return cls()
+
+class InMemoryFeatureStore(object):
+    def __init__(self):
+        self._lock = ReadWriteLock()
+        self._initialized = False
+        self._features = {}
+
+    def get(self, key):
+        try:
+            self._lock.rlock()
+            f = self._features[key]
+            if f is None or f['deleted']:
+                return None
+            return f
+        finally:
+            self._lock.runlock()
+
+    def all(self):
+        try:
+            self._lock.rlock()
+            return {k:f for (k,f) in self._features.iteritems() if not f[:deleted] }
+        finally:
+            self._lock.runlock()
+
+    def init(self, features):
+        try:
+            self._lock.lock()
+            self._featuers = dict(features)
+            self._initialized = True
+        finally:
+            self._lock.unlock()
+
+    def delete(self, key, version):
+        try: 
+            self._lock.lock()
+            f = self._features[key]
+            if f is not None and f['version'] < version:
+                f['deleted'] = True
+                f['version'] = version
+            elif f is None:
+                f = {'deleted': True, 'version': version}
+                self._features[key] = f
+        finally:
+            self._lock.unlock()        
+
+    def upsert(self, key, feature):
+        try:
+            self._lock.lock()
+            f = self._features[key]
+            if f is None or f['version'] < feature['version']:
+                self._features[key] = f
+        finally:
+            self._lock.unlock()        
+
+    def initialized(self):
+        try:
+            self._lock.rlock()
+            return self._initialized
+        finally:
+            self._lock.runlock()
 
 class Consumer(Thread):
     def __init__(self, queue, api_key, config):
@@ -236,7 +301,6 @@ def _param_for_user(feature, user):
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
-
 
 def _match_target(target, user):
     attr = target['attribute']
