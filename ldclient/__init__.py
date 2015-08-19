@@ -47,7 +47,15 @@ else:
 
 class Config(object):
 
-    def __init__(self, base_uri = 'https://app.launchdarkly.com', connect_timeout = 2, read_timeout = 10, upload_limit = 100, capacity = 10000, stream_uri = 'https://stream.launchdarkly.com', stream = False, verify = True):
+    def __init__(self,
+                 base_uri = 'https://app.launchdarkly.com',
+                 connect_timeout = 2,
+                 read_timeout = 10,
+                 upload_limit = 100,
+                 capacity = 10000,
+                 stream_uri = 'https://stream.launchdarkly.com',
+                 stream = False,
+                 verify = True):
         self._base_uri = base_uri.rstrip('\\')
         self._stream_uri = stream_uri.rstrip('\\')
         self._stream = stream
