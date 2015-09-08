@@ -22,7 +22,6 @@ class TwistedLDClient(LDClient):
 
     def flush(self):
         if self._offline:
-            print("offline")
             return defer.succeed(True)
         self._check_consumer()
         return self._consumer.flush()
@@ -103,7 +102,6 @@ class TwistedConsumer(object):
 
         if items:
             def on_batch_done(*_):
-                print("========== batch done")
                 self._flushed.callback(True)
                 self._flushed = defer.Deferred()
 
