@@ -11,5 +11,5 @@ dependencies:
 
 test:
   override:
-    - pyenv shell 2.6.8; $(pyenv which py.test) testing
+    - pyenv shell 2.7.10; $(pyenv which py.test) testing
     - pyenv shell 3.3.3; $(pyenv which py.test) testing
