@@ -1,5 +1,5 @@
-from builtins import next
-from builtins import filter
+from __future__ import absolute_import
+
 from builtins import object
 import ldclient
 from ldclient.twisted import TwistedLDClient
