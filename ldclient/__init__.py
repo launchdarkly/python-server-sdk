@@ -161,6 +161,7 @@ class LDClient(object):
         if self._queue.full():
             log.warning("Event queue is full-- dropped an event")
         else:
+            print("putting in {}".format(event))
             self._queue.put(event)
 
     def track(self, event_name, user, data = None):

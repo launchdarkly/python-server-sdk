@@ -3,3 +3,5 @@ venv
 dist
 ldclient_py.egg-info
 build/
+.idea
+*.iml
