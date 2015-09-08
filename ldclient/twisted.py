@@ -31,7 +31,7 @@ class TwistedLDClient(LDClient):
             # noinspection PyBroadException
             try:
                 if self._offline:
-                    return default
+                    defer.returnValue(default)
                 val = yield self._toggle(key, user, default)
                 self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
                 defer.returnValue(val)
