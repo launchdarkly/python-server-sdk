@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import json
 from queue import Empty
 import errno
@@ -10,7 +12,7 @@ import txrequests
 
 class TwistedLDClient(LDClient):
     def __init__(self, api_key, config=None):
-        super().__init__(api_key, config)
+        super(TwistedLDClient, self).__init__(api_key, config)
         self._session = CacheControl(txrequests.Session())
 
     def _check_consumer(self):
