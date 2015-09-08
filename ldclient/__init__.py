@@ -78,7 +78,7 @@ class InMemoryFeatureStore(object):
     def get(self, key):
         try:
             self._lock.rlock()
-            f = self._features[key]
+            f = self._features.get(key)
             if f is None or 'deleted' in f and f['deleted']:
                 return None
             return f
@@ -103,7 +103,7 @@ class InMemoryFeatureStore(object):
     def delete(self, key, version):
         try: 
             self._lock.lock()
-            f = self._features[key]
+            f = self._features.get(key)
             if f is not None and f['version'] < version:
                 f['deleted'] = True
                 f['version'] = version
@@ -116,7 +116,7 @@ class InMemoryFeatureStore(object):
     def upsert(self, key, feature):
         try:
             self._lock.lock()
-            f = self._features[key]
+            f = self._features.get(key)
             if f is None or f['version'] < feature['version']:
                 self._features[key] = f
         finally:
