@@ -3,3 +3,4 @@ venv
 dist
 ldclient_py.egg-info
 build/
+test.py

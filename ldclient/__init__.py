@@ -17,8 +17,12 @@ from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
 from threading import Thread, Lock
+from sseclient import SSEClient
 
-__version__ = "0.17.0"
+from ldclient.version import VERSION
+from ldclient.rwlock import ReadWriteLock
+
+__version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -43,16 +47,121 @@ else:
 
 class Config(object):
 
-    def __init__(self, base_uri, connect_timeout = 2, read_timeout = 10, upload_limit = 100, capacity = 10000):
+    def __init__(self,
+                 base_uri = 'https://app.launchdarkly.com',
+                 connect_timeout = 2,
+                 read_timeout = 10,
+                 upload_limit = 100,
+                 capacity = 10000,
+                 stream_uri = 'https://stream.launchdarkly.com',
+                 stream = False,
+                 verify = True):
         self._base_uri = base_uri.rstrip('\\')
+        self._stream_uri = stream_uri.rstrip('\\')
+        self._stream = stream
         self._connect = connect_timeout
         self._read = read_timeout
         self._upload_limit = upload_limit
         self._capacity = capacity
+        self._verify = verify
 
     @classmethod
     def default(cls):
-        return cls('https://app.launchdarkly.com')
+        return cls()
+
+class InMemoryFeatureStore(object):
+    def __init__(self):
+        self._lock = ReadWriteLock()
+        self._initialized = False
+        self._features = {}
+
+    def get(self, key):
+        try:
+            self._lock.rlock()
+            f = self._features.get(key)
+            if f is None or 'deleted' in f and f['deleted']:
+                return None
+            return f
+        finally:
+            self._lock.runlock()
+
+    def all(self):
+        try:
+            self._lock.rlock()
+            return dict((k,f) for k,f in self._features.iteritems() if ('deleted' not in f) or not f['deleted'])
+        finally:
+            self._lock.runlock()
+
+    def init(self, features):
+        try:
+            self._lock.lock()
+            self._features = dict(features)
+            self._initialized = True
+        finally:
+            self._lock.unlock()
+
+    def delete(self, key, version):
+        try: 
+            self._lock.lock()
+            f = self._features.get(key)
+            if f is not None and f['version'] < version:
+                f['deleted'] = True
+                f['version'] = version
+            elif f is None:
+                f = {'deleted': True, 'version': version}
+                self._features[key] = f
+        finally:
+            self._lock.unlock()        
+
+    def upsert(self, key, feature):
+        try:
+            self._lock.lock()
+            f = self._features.get(key)
+            if f is None or f['version'] < feature['version']:
+                self._features[key] = f
+        finally:
+            self._lock.unlock()        
+
+    def initialized(self):
+        try:
+            self._lock.rlock()
+            return self._initialized
+        finally:
+            self._lock.runlock()
+
+class StreamProcessor(Thread):
+    def __init__(self, api_key, config):
+        Thread.__init__(self)
+        self.daemon = True
+        self._api_key = api_key
+        self._config = config
+        self._store = InMemoryFeatureStore()
+
+    def run(self):
+        log.debug("Starting stream processor")
+        hdrs = _stream_headers(self._api_key)
+        uri = self._config._stream_uri + "/"    
+        messages = SSEClient(uri, verify = self._config._verify, headers = hdrs)
+        for msg in messages:
+            payload = json.loads(msg.data)
+            if msg.event == 'put/features':
+                self._store.init(payload)
+            elif msg.event == 'patch/features':
+                key = payload['path'][1:]
+                feature = payload['data']
+                self._store.upsert(key, feature)
+            elif msg.event == 'delete/features':
+                key = payload['path'][1:]
+                version = payload['version']
+                self._store.delete(key, version)
+            else:
+                log.warning('Unhandled event in stream processor: ' + msg.event)
+
+    def initialized(self):
+        return self._store.initialized()
+
+    def get_feature(self, key):
+        return self._store.get(key)
 
 class Consumer(Thread):
     def __init__(self, queue, api_key, config):
@@ -81,7 +190,7 @@ class Consumer(Thread):
                     body = events    
                 hdrs = _headers(self._api_key)
                 uri = self._config._base_uri + '/api/events/bulk'
-                r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body))
+                r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body)) 
                 r.raise_for_status()
             except ProtocolError as e:
                 inner = e.args[1]
@@ -142,6 +251,9 @@ class LDClient(object):
         self._consumer = None
         self._offline = False
         self._lock = Lock()
+        if self._config._stream:
+            self._stream_processor = StreamProcessor(api_key, config)
+            self._stream_processor.start()
 
     def _check_consumer(self):
         with self._lock:
@@ -205,24 +317,30 @@ class LDClient(object):
                 else:
                     log.exception('Unhandled exception. Returning default value for flag.')
                     return default
-            except:
+            except Exception as e:
                 log.exception('Unhandled exception. Returning default value for flag.')
                 return default
         return do_toggle(True)
 
     def _toggle(self, key, user, default):
-        hdrs = _headers(self._api_key)
-        uri = self._config._base_uri + '/api/eval/features/' + key
-        r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
-        r.raise_for_status()
-        hash = r.json()
-        val = _evaluate(hash, user)
+        if self._config._stream and self._stream_processor.initialized():
+            feature = self._stream_processor.get_feature(key)
+        else:
+            hdrs = _headers(self._api_key)
+            uri = self._config._base_uri + '/api/eval/features/' + key
+            r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
+            r.raise_for_status()
+            feature = r.json()
+        val = _evaluate(feature, user)
         if val is None:
             return default
         return val
 
 def _headers(api_key):
     return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Content-Type': "application/json"}
+
+def _stream_headers(api_key):
+    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Accept': "text/event-stream"}
 
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
@@ -236,7 +354,6 @@ def _param_for_user(feature, user):
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
-
 
 def _match_target(target, user):
     attr = target['attribute']
@@ -282,6 +399,8 @@ def check_uwsgi():
 
 
 def _evaluate(feature, user):
+    if feature is None:
+        return None
     if not feature['on']:
         return None
     param = _param_for_user(feature, user)
