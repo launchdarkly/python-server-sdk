@@ -6,3 +6,4 @@ ldclient_py.egg-info
 build/
 .idea
 *.iml
+test.py
