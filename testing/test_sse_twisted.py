@@ -26,24 +26,9 @@ def stream(request):
 
 @pytest.inlineCallbacks
 def test_sse_init(server, stream):
-    stream.queue.put(Event(event="put/features", data={
-                       "foo": {"name": "Foo", "key": "foo", "kind": "flag", "salt": "Zm9v", "on": True,
-                               "variations": [{"value": True, "weight": 100,
-                                               "targets": [{"attribute": "key", "op": "in", "values": []}],
-                                               "userTarget": {"attribute": "key", "op": "in", "values": []}},
-                                              {"value": False, "weight": 0,
-                                               "targets": [{"attribute": "key", "op": "in", "values": []}],
-                                               "userTarget": {"attribute": "key", "op": "in", "values": []}}],
-                               "commitDate": "2015-09-08T21:24:16.712Z",
-                               "creationDate": "2015-09-08T21:06:16.527Z", "version": 4}}))
-    client = TwistedLDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url + "/all"))
-    user = {
-        u'key': u'xyz',
-        u'custom': {
-            u'bizzle': u'def'
-        }
-    }
-    yield wait_until(lambda: client.toggle("foo", user, False))
+    stream.queue.put(Event(event="put/features", data=feature("foo", True)))
+    client = TwistedLDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url + "/"))
+    yield wait_until(lambda: client.toggle("foo", user('xyz'), False))
 
 
 @pytest.skip
@@ -53,26 +38,14 @@ def test_sse_reconnect(server):
     with SSEServer() as stream:
         stream.queue.put(Event(event="put/features", data=feature("foo", True)))
         client = TwistedLDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url + "/all"))
-        user = {
-            u'key': u'xyz',
-            u'custom': {
-                u'bizzle': u'def'
-            }
-        }
-        yield wait_until(lambda: client.toggle("foo", user, False))
+        yield wait_until(lambda: client.toggle("foo", user('xyz'), False))
 
     yield wait_until(lambda: client.toggle("foo", user, False))
 
     with SSEServer() as stream:
         stream.queue.put(Event(event="put/features", data=feature("foo", False)))
         client = TwistedLDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url + "/all"))
-        user = {
-            u'key': u'xyz',
-            u'custom': {
-                u'bizzle': u'def'
-            }
-        }
-        yield wait_until(lambda: not client.toggle("foo", user, True))
+        yield wait_until(lambda: not client.toggle("foo", user('xyz'), True))
 
 
 def feature(key, val):
@@ -86,3 +59,11 @@ def feature(key, val):
                                 "userTarget": {"attribute": "key", "op": "in", "values": []}}],
                 "commitDate": "2015-09-08T21:24:16.712Z",
                 "creationDate": "2015-09-08T21:06:16.527Z", "version": 4}}
+
+def user(name):
+    return {
+        u'key': name,
+        u'custom': {
+            u'bizzle': u'def'
+        }
+    }

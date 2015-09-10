@@ -9,7 +9,7 @@ import time
 from twisted.internet import defer, reactor
 
 try:
-    import queuemod
+    import queue as queuemod
 except:
     import Queue as queuemod
 
