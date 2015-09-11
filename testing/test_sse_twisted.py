@@ -42,7 +42,6 @@ def test_sse_reconnect(server, stream):
 
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "on"))
 
-    print('starting again')
     stream.start()
 
     stream.queue.put(Event(event="put/features", data=feature("foo", "jim")))
