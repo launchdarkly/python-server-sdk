@@ -73,10 +73,16 @@ class GenericServer:
                                                 keyfile=key_file,
                                                 server_side=True,
                                                 ssl_version=ssl.PROTOCOL_TLSv1)
+        self.start()
 
+    def start(self):
+        self.stopping = False
         httpd_thread = threading.Thread(target=self.httpd.serve_forever)
         httpd_thread.setDaemon(True)
         httpd_thread.start()
+
+    def stop(self):
+        self.shutdown()
 
     def post_events(self):
         q = queuemod.Queue()
@@ -158,3 +164,11 @@ def wait_until(condition, timeout=5):
             d = defer.Deferred()
             reactor.callLater(.1, d.callback, None)
             yield d
+
+
+def is_equal(f, val):
+    @defer.inlineCallbacks
+    def inner():
+        result = yield defer.maybeDeferred(f)
+        defer.returnValue(result == val)
+    return inner

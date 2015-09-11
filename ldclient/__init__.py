@@ -441,5 +441,4 @@ def _evaluate(feature, user):
         total += float(variation['weight']) / 100.0
         if param < total:
             return variation['value']
-
     return None
