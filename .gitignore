@@ -1,6 +1,9 @@
 venv
+p2venv
 *.pyc
 dist
 ldclient_py.egg-info
 build/
+.idea
+*.iml
 test.py

@@ -32,10 +32,11 @@ Development information (for developing this module itself)
 
         pip install -r requirements.txt
         pip install -r test-requirements.txt
+        pip install -r twisted-requirements.txt
 
 2. Run tests:
 
-        $ py.test
+        $ py.test testing
 
 
 Learn more

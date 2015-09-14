@@ -55,10 +55,14 @@ class Config(object):
                  capacity = 10000,
                  stream_uri = 'https://stream.launchdarkly.com',
                  stream = False,
-                 verify = True):
+                 verify = True,
+                 stream_processor_class = None,
+                 feature_store_class = None):
         self._base_uri = base_uri.rstrip('\\')
         self._stream_uri = stream_uri.rstrip('\\')
         self._stream = stream
+        self._stream_processor_class = StreamProcessor if not stream_processor_class else stream_processor_class
+        self._feature_store_class = InMemoryFeatureStore if not feature_store_class else feature_store_class
         self._connect = connect_timeout
         self._read = read_timeout
         self._upload_limit = upload_limit
@@ -135,33 +139,44 @@ class StreamProcessor(Thread):
         self.daemon = True
         self._api_key = api_key
         self._config = config
-        self._store = InMemoryFeatureStore()
+        self._store = config._feature_store_class()
+        self._running = False
 
     def run(self):
         log.debug("Starting stream processor")
+        self._running = True
         hdrs = _stream_headers(self._api_key)
         uri = self._config._stream_uri + "/"    
         messages = SSEClient(uri, verify = self._config._verify, headers = hdrs)
         for msg in messages:
-            payload = json.loads(msg.data)
-            if msg.event == 'put/features':
-                self._store.init(payload)
-            elif msg.event == 'patch/features':
-                key = payload['path'][1:]
-                feature = payload['data']
-                self._store.upsert(key, feature)
-            elif msg.event == 'delete/features':
-                key = payload['path'][1:]
-                version = payload['version']
-                self._store.delete(key, version)
-            else:
-                log.warning('Unhandled event in stream processor: ' + msg.event)
+            if not self._running:
+                break
+            self.process_message(self._store, msg)
 
     def initialized(self):
         return self._store.initialized()
 
     def get_feature(self, key):
         return self._store.get(key)
+
+    def stop(self):
+        self._running = False
+
+    @staticmethod
+    def process_message(store, msg):
+        payload = json.loads(msg.data)
+        if msg.event == 'put':
+            store.init(payload)
+        elif msg.event == 'patch':
+            key = payload['path'][1:]
+            feature = payload['data']
+            store.upsert(key, feature)
+        elif msg.event == 'delete':
+            key = payload['path'][1:]
+            version = payload['version']
+            store.delete(key, version)
+        else:
+            log.warning('Unhandled event in stream processor: ' + msg.event)
 
 class Consumer(Thread):
     def __init__(self, queue, api_key, config):
@@ -251,8 +266,9 @@ class LDClient(object):
         self._consumer = None
         self._offline = False
         self._lock = Lock()
+        self._stream_processor = None
         if self._config._stream:
-            self._stream_processor = StreamProcessor(api_key, config)
+            self._stream_processor = config._stream_processor_class(api_key, config)
             self._stream_processor.start()
 
     def _check_consumer(self):
@@ -261,9 +277,11 @@ class LDClient(object):
                 self._consumer = Consumer(self._queue, self._api_key, self._config)
                 self._consumer.start()
 
-    def _stop_consumer(self):
+    def _stop_consumers(self):
         if self._consumer and self._consumer.is_alive():
             self._consumer.stop()
+        if self._stream_processor and self._stream_processor.is_alive():
+            self._stream_processor.stop()
 
     def _send(self, event):
         if self._offline:
@@ -283,7 +301,7 @@ class LDClient(object):
 
     def set_offline(self):
         self._offline = True
-        self._stop_consumer()
+        self._stop_consumers()
 
     def set_online(self):
         self._offline = False
@@ -339,8 +357,11 @@ class LDClient(object):
 def _headers(api_key):
     return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Content-Type': "application/json"}
 
-def _stream_headers(api_key):
-    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Accept': "text/event-stream"}
+def _stream_headers(api_key, client="PythonClient"):
+    return {'Authorization': 'api_key ' + api_key,
+            'User-Agent': 'PythonClient/' + __version__,
+            'Cache-Control': 'no-cache',
+            'Accept': "text/event-stream"}
 
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
@@ -420,5 +441,4 @@ def _evaluate(feature, user):
         total += float(variation['weight']) / 100.0
         if param < total:
             return variation['value']
-
     return None

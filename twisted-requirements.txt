@@ -1,0 +1,2 @@
+txrequests>=0.9
+pyOpenSSL>=0.14
