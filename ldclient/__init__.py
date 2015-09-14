@@ -165,13 +165,13 @@ class StreamProcessor(Thread):
     @staticmethod
     def process_message(store, msg):
         payload = json.loads(msg.data)
-        if msg.event == 'put/features':
+        if msg.event == 'put':
             store.init(payload)
-        elif msg.event == 'patch/features':
+        elif msg.event == 'patch':
             key = payload['path'][1:]
             feature = payload['data']
             store.upsert(key, feature)
-        elif msg.event == 'delete/features':
+        elif msg.event == 'delete':
             key = payload['path'][1:]
             version = payload['version']
             store.delete(key, version)
@@ -357,7 +357,7 @@ class LDClient(object):
 def _headers(api_key):
     return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Content-Type': "application/json"}
 
-def _stream_headers(api_key):
+def _stream_headers(api_key, client="PythonClient"):
     return {'Authorization': 'api_key ' + api_key,
             'User-Agent': 'PythonClient/' + __version__,
             'Cache-Control': 'no-cache',

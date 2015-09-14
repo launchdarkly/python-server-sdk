@@ -81,7 +81,8 @@ class TwistedStreamProcessor(object):
 
     def __init__(self, api_key, config):
         self._store = config._feature_store_class()
-        self.sse_client = TwistedSSEClient(config._stream_uri + "/", headers=_stream_headers(api_key),
+        self.sse_client = TwistedSSEClient(config._stream_uri + "/", headers=_stream_headers(api_key,
+                                                                                             "PythonTwistedClient"),
                                            verify=config._verify,
                                            on_event=partial(StreamProcessor.process_message, self._store))
         self.running = False
@@ -112,7 +113,6 @@ class TwistedConsumer(object):
 
         self._api_key = api_key
         self._config = config
-        self._flushed = None
         """ :type: Deferred """
         self._looping_call = None
         """ :type: LoopingCall"""
@@ -129,7 +129,7 @@ class TwistedConsumer(object):
         return self._looping_call is not None and self._looping_call.running
 
     def flush(self):
-        return self._flushed
+        return self._consume()
 
     def _consume(self):
         items = []
@@ -140,13 +140,7 @@ class TwistedConsumer(object):
             pass
 
         if items:
-            def on_batch_done(*_):
-                self._flushed.callback(True)
-                self._flushed = defer.Deferred()
-
-            d = self.send_batch(items)
-            """ :type: Deferred """
-            d.addBoth(on_batch_done)
+            return self.send_batch(items)
 
     @defer.inlineCallbacks
     def send_batch(self, events):

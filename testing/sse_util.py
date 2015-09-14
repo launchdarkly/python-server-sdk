@@ -33,7 +33,7 @@ class TestServer(socketserver.TCPServer):
 
 class GenericServer:
 
-    def __init__(self, host=socket.gethostname(), use_ssl=False, port=None, cert_file="self_signed.crt",
+    def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key"):
 
         self.get_paths = {}
@@ -61,11 +61,11 @@ class GenericServer:
             def do_POST(self):
                 self.handle_request(parent.post_paths)
 
-        self.httpd = TestServer(("", 0), CustomHandler)
+        self.httpd = TestServer(("0.0.0.0", 0), CustomHandler)
         port = port if port is not None else self.httpd.socket.getsockname()[1]
         self.url = ("https://" if use_ssl else "http://") + host + ":%s" % port
         self.port = port
-        logging.info("serving at port %s" % port)
+        logging.info("serving at port %s: %s" % (port, self.url))
 
         if use_ssl:
             self.httpd.socket = ssl.wrap_socket(self.httpd.socket,
@@ -127,7 +127,7 @@ class GenericServer:
 
 
 class SSEServer(GenericServer):
-    def __init__(self, host=socket.gethostname(), use_ssl=False, port=None, cert_file="self_signed.crt",
+    def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key", queue=queuemod.Queue()):
         GenericServer.__init__(self, host, use_ssl, port, cert_file, key_file)
 
@@ -159,7 +159,7 @@ def wait_until(condition, timeout=5):
         if result:
             defer.returnValue(condition)
         elif time.time() > end_time:
-            raise TimeoutError("Timeout waiting for {}".format(condition))  # pragma: no cover
+            raise Exception("Timeout waiting for {}".format(condition.__name__))  # pragma: no cover
         else:
             d = defer.Deferred()
             reactor.callLater(.1, d.callback, None)
@@ -168,7 +168,7 @@ def wait_until(condition, timeout=5):
 
 def is_equal(f, val):
     @defer.inlineCallbacks
-    def inner():
+    def is_equal_eval():
         result = yield defer.maybeDeferred(f)
         defer.returnValue(result == val)
-    return inner
+    return is_equal_eval
