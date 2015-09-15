@@ -56,8 +56,12 @@ class Config(object):
                  stream_uri = 'https://stream.launchdarkly.com',
                  stream = False,
                  verify = True,
+                 defaults = None,
                  stream_processor_class = None,
                  feature_store_class = None):
+        if defaults is None:
+            defaults = {}
+
         self._base_uri = base_uri.rstrip('\\')
         self._stream_uri = stream_uri.rstrip('\\')
         self._stream = stream
@@ -68,6 +72,10 @@ class Config(object):
         self._upload_limit = upload_limit
         self._capacity = capacity
         self._verify = verify
+        self._defaults = defaults
+
+    def get_default(self, key, default):
+        return default if key not in self._defaults else self._defaults[key]
 
     @classmethod
     def default(cls):
@@ -320,6 +328,8 @@ class LDClient(object):
         return self.toggle(key, user, default)
 
     def toggle(self, key, user, default=False):
+        default = self._config.get_default(key, default)
+
         def do_toggle(should_retry):
             try:
                 if self._offline:
