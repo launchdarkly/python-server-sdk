@@ -10,16 +10,21 @@ logging.basicConfig(level=logging.DEBUG)
 @pytest.fixture()
 def server(request):
     server = GenericServer()
+
     def fin():
         server.shutdown()
+
     request.addfinalizer(fin)
     return server
+
 
 @pytest.fixture()
 def stream(request):
     server = SSEServer()
+
     def fin():
         server.shutdown()
+
     request.addfinalizer(fin)
     return server
 
@@ -52,14 +57,14 @@ def test_sse_reconnect(server, stream):
 def feature(key, val):
     return {
         key: {"name": "Feature {}".format(key), "key": key, "kind": "flag", "salt": "Zm9v", "on": val,
-                "variations": [{"value": val, "weight": 100,
-                                "targets": [{"attribute": "key", "op": "in", "values": []}],
-                                "userTarget": {"attribute": "key", "op": "in", "values": []}},
-                               {"value": False, "weight": 0,
-                                "targets": [{"attribute": "key", "op": "in", "values": []}],
-                                "userTarget": {"attribute": "key", "op": "in", "values": []}}],
-                "commitDate": "2015-09-08T21:24:16.712Z",
-                "creationDate": "2015-09-08T21:06:16.527Z", "version": 4}}
+              "variations": [{"value": val, "weight": 100,
+                              "targets": [{"attribute": "key", "op": "in", "values": []}],
+                              "userTarget": {"attribute": "key", "op": "in", "values": []}},
+                             {"value": False, "weight": 0,
+                              "targets": [{"attribute": "key", "op": "in", "values": []}],
+                              "userTarget": {"attribute": "key", "op": "in", "values": []}}],
+              "commitDate": "2015-09-08T21:24:16.712Z",
+              "creationDate": "2015-09-08T21:06:16.527Z", "version": 4}}
 
 
 def user(name):

@@ -1,7 +1,6 @@
 import json
 import logging
 from queue import Empty
-import socket
 import ssl
 import threading
 
@@ -32,7 +31,6 @@ class TestServer(socketserver.TCPServer):
 
 
 class GenericServer:
-
     def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key"):
 
@@ -86,10 +84,11 @@ class GenericServer:
 
     def post_events(self):
         q = queuemod.Queue()
+
         def do_nothing(handler):
-                handler.send_response(200)
-                handler.end_headers()
-                handler.wfile.close()
+            handler.send_response(200)
+            handler.end_headers()
+            handler.wfile.close()
 
         self.post_paths["/api/events/bulk"] = do_nothing
         return q
@@ -171,4 +170,5 @@ def is_equal(f, val):
     def is_equal_eval():
         result = yield defer.maybeDeferred(f)
         defer.returnValue(result == val)
+
     return is_equal_eval

@@ -19,6 +19,7 @@ reqs = [str(ir.req) for ir in install_reqs]
 testreqs = [str(ir.req) for ir in test_reqs]
 txreqs = [str(ir.req) for ir in twisted_reqs]
 
+
 class PyTest(Command):
     user_options = []
     def initialize_options(self):

@@ -1,4 +1,4 @@
-from __future__ import division, with_statement
+from __future__ import division, with_statement, absolute_import
 from builtins import object
 import requests
 import json
@@ -8,12 +8,13 @@ import time
 import errno
 import sys
 
+# noinspection PyBroadException
 try:
     import queue
 except:
+    # noinspection PyUnresolvedReferences,PyPep8Naming
     import Queue as queue
 
-from datetime import datetime, timedelta
 from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
 from threading import Thread, Lock
@@ -30,56 +31,61 @@ __BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avata
 
 log = logging.getLogger(__name__)
 
+
 # Add a NullHandler for Python < 2.7 compatibility
 class NullHandler(logging.Handler):
     def emit(self, record):
         pass
 
+
 if not log.handlers:
     log.addHandler(NullHandler())
 
 try:
-  unicode
+    # noinspection PyUnresolvedReferences
+    unicode
 except NameError:
-  __BASE_TYPES__ = (str, float, int, bool)
+    __BASE_TYPES__ = (str, float, int, bool)
 else:
-  __BASE_TYPES__ = (str, float, int, bool, unicode)
+    # noinspection PyUnresolvedReferences
+    __BASE_TYPES__ = (str, float, int, bool, unicode)
+
 
 class Config(object):
-
     def __init__(self,
-                 base_uri = 'https://app.launchdarkly.com',
-                 connect_timeout = 2,
-                 read_timeout = 10,
-                 upload_limit = 100,
-                 capacity = 10000,
-                 stream_uri = 'https://stream.launchdarkly.com',
-                 stream = False,
-                 verify = True,
-                 defaults = None,
-                 stream_processor_class = None,
-                 feature_store_class = None):
+                 base_uri='https://app.launchdarkly.com',
+                 connect_timeout=2,
+                 read_timeout=10,
+                 upload_limit=100,
+                 capacity=10000,
+                 stream_uri='https://stream.launchdarkly.com',
+                 stream=False,
+                 verify=True,
+                 defaults=None,
+                 stream_processor_class=None,
+                 feature_store_class=None):
         if defaults is None:
             defaults = {}
 
-        self._base_uri = base_uri.rstrip('\\')
-        self._stream_uri = stream_uri.rstrip('\\')
-        self._stream = stream
-        self._stream_processor_class = StreamProcessor if not stream_processor_class else stream_processor_class
-        self._feature_store_class = InMemoryFeatureStore if not feature_store_class else feature_store_class
-        self._connect = connect_timeout
-        self._read = read_timeout
-        self._upload_limit = upload_limit
-        self._capacity = capacity
-        self._verify = verify
-        self._defaults = defaults
+        self.base_uri = base_uri.rstrip('\\')
+        self.stream_uri = stream_uri.rstrip('\\')
+        self.stream = stream
+        self.stream_processor_class = StreamProcessor if not stream_processor_class else stream_processor_class
+        self.feature_store_class = InMemoryFeatureStore if not feature_store_class else feature_store_class
+        self.connect = connect_timeout
+        self.read = read_timeout
+        self.upload_limit = upload_limit
+        self.capacity = capacity
+        self.verify = verify
+        self.defaults = defaults
 
     def get_default(self, key, default):
-        return default if key not in self._defaults else self._defaults[key]
+        return default if key not in self.defaults else self.defaults[key]
 
     @classmethod
     def default(cls):
         return cls()
+
 
 class InMemoryFeatureStore(object):
     def __init__(self):
@@ -100,7 +106,7 @@ class InMemoryFeatureStore(object):
     def all(self):
         try:
             self._lock.rlock()
-            return dict((k,f) for k,f in self._features.iteritems() if ('deleted' not in f) or not f['deleted'])
+            return dict((k, f) for k, f in self._features.items() if ('deleted' not in f) or not f['deleted'])
         finally:
             self._lock.runlock()
 
@@ -112,8 +118,9 @@ class InMemoryFeatureStore(object):
         finally:
             self._lock.unlock()
 
+    # noinspection PyShadowingNames
     def delete(self, key, version):
-        try: 
+        try:
             self._lock.lock()
             f = self._features.get(key)
             if f is not None and f['version'] < version:
@@ -123,7 +130,7 @@ class InMemoryFeatureStore(object):
                 f = {'deleted': True, 'version': version}
                 self._features[key] = f
         finally:
-            self._lock.unlock()        
+            self._lock.unlock()
 
     def upsert(self, key, feature):
         try:
@@ -132,7 +139,7 @@ class InMemoryFeatureStore(object):
             if f is None or f['version'] < feature['version']:
                 self._features[key] = f
         finally:
-            self._lock.unlock()        
+            self._lock.unlock()
 
     def initialized(self):
         try:
@@ -141,21 +148,22 @@ class InMemoryFeatureStore(object):
         finally:
             self._lock.runlock()
 
+
 class StreamProcessor(Thread):
     def __init__(self, api_key, config):
         Thread.__init__(self)
         self.daemon = True
         self._api_key = api_key
         self._config = config
-        self._store = config._feature_store_class()
+        self._store = config.feature_store_class()
         self._running = False
 
     def run(self):
         log.debug("Starting stream processor")
         self._running = True
         hdrs = _stream_headers(self._api_key)
-        uri = self._config._stream_uri + "/"    
-        messages = SSEClient(uri, verify = self._config._verify, headers = hdrs)
+        uri = self._config.stream_uri + "/"
+        messages = SSEClient(uri, verify=self._config.verify, headers=hdrs)
         for msg in messages:
             if not self._running:
                 break
@@ -181,19 +189,22 @@ class StreamProcessor(Thread):
             store.upsert(key, feature)
         elif msg.event == 'delete':
             key = payload['path'][1:]
+            # noinspection PyShadowingNames
             version = payload['version']
             store.delete(key, version)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
 
+
 class Consumer(Thread):
-    def __init__(self, queue, api_key, config):
+    def __init__(self, event_queue, api_key, config):
         Thread.__init__(self)
         self._session = requests.Session()
         self.daemon = True
         self._api_key = api_key
         self._config = config
-        self._queue = queue
+        self._queue = event_queue
+        self._running = False
 
     def run(self):
         log.debug("Starting event consumer")
@@ -206,14 +217,16 @@ class Consumer(Thread):
 
     def send_batch(self, events):
         def do_send(should_retry):
-            try: 
+            # noinspection PyBroadException
+            try:
                 if isinstance(events, dict):
                     body = [events]
                 else:
-                    body = events    
+                    body = events
                 hdrs = _headers(self._api_key)
-                uri = self._config._base_uri + '/api/events/bulk'
-                r = self._session.post(uri, headers = hdrs, timeout = (self._config._connect, self._config._read), data=json.dumps(body)) 
+                uri = self._config.base_uri + '/api/events/bulk'
+                r = self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read),
+                                       data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:
                 inner = e.args[1]
@@ -224,12 +237,12 @@ class Consumer(Thread):
                     log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
             except:
                 log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
-        try:
-            do_send(True)            
-        finally:
-            for event in events:
-                self._queue.task_done()
 
+        try:
+            do_send(True)
+        finally:
+            for _ in events:
+                self._queue.task_done()
 
     def send(self):
         events = self.next()
@@ -240,7 +253,7 @@ class Consumer(Thread):
             self.send_batch(events)
 
     def next(self):
-        queue = self._queue
+        q = self._queue
         items = []
 
         item = self.next_item()
@@ -248,7 +261,7 @@ class Consumer(Thread):
             return items
 
         items.append(item)
-        while len(items) < self._config._upload_limit and not queue.empty():
+        while len(items) < self._config.upload_limit and not q.empty():
             item = self.next_item()
             if item:
                 items.append(item)
@@ -256,28 +269,34 @@ class Consumer(Thread):
         return items
 
     def next_item(self):
-        queue = self._queue
+        q = self._queue
+        # noinspection PyBroadException
         try:
-            item = queue.get(block=True, timeout=5)
+            item = q.get(block=True, timeout=5)
             return item
         except Exception:
             return None
 
-class LDClient(object):
 
-    def __init__(self, api_key, config = None):
+class LDClient(object):
+    def __init__(self, api_key, config=None):
         check_uwsgi()
         self._api_key = api_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
-        self._queue = queue.Queue(self._config._capacity)
+        self._queue = queue.Queue(self._config.capacity)
         self._consumer = None
         self._offline = False
         self._lock = Lock()
+
         self._stream_processor = None
-        if self._config._stream:
-            self._stream_processor = config._stream_processor_class(api_key, config)
+        if self._config.stream:
+            self._stream_processor = config.stream_processor_class(api_key, config)
             self._stream_processor.start()
+
+    @property
+    def api_key(self):
+        return self._api_key
 
     def _check_consumer(self):
         with self._lock:
@@ -295,13 +314,13 @@ class LDClient(object):
         if self._offline:
             return
         self._check_consumer()
-        event['creationDate'] = int(time.time()*1000)
+        event['creationDate'] = int(time.time() * 1000)
         if self._queue.full():
             log.warning("Event queue is full-- dropped an event")
         else:
             self._queue.put(event)
 
-    def track(self, event_name, user, data = None):
+    def track(self, event_name, user, data=None):
         self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
@@ -331,6 +350,7 @@ class LDClient(object):
         default = self._config.get_default(key, default)
 
         def do_toggle(should_retry):
+            # noinspection PyBroadException
             try:
                 if self._offline:
                     return default
@@ -345,18 +365,19 @@ class LDClient(object):
                 else:
                     log.exception('Unhandled exception. Returning default value for flag.')
                     return default
-            except Exception as e:
+            except Exception:
                 log.exception('Unhandled exception. Returning default value for flag.')
                 return default
+
         return do_toggle(True)
 
     def _toggle(self, key, user, default):
-        if self._config._stream and self._stream_processor.initialized():
+        if self._config.stream and self._stream_processor.initialized():
             feature = self._stream_processor.get_feature(key)
         else:
             hdrs = _headers(self._api_key)
-            uri = self._config._base_uri + '/api/eval/features/' + key
-            r = self._session.get(uri, headers=hdrs, timeout = (self._config._connect, self._config._read))
+            uri = self._config.base_uri + '/api/eval/features/' + key
+            r = self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
             r.raise_for_status()
             feature = r.json()
         val = _evaluate(feature, user)
@@ -364,27 +385,32 @@ class LDClient(object):
             return default
         return val
 
+
 def _headers(api_key):
-    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__, 'Content-Type': "application/json"}
+    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + __version__,
+            'Content-Type': "application/json"}
+
 
 def _stream_headers(api_key, client="PythonClient"):
     return {'Authorization': 'api_key ' + api_key,
-            'User-Agent': 'PythonClient/' + __version__,
+            'User-Agent': '{}/{}'.format(client, __version__),
             'Cache-Control': 'no-cache',
             'Accept': "text/event-stream"}
 
+
 def _param_for_user(feature, user):
     if 'key' in user and user['key']:
-        idHash = user['key']
+        id_hash = user['key']
     else:
         log.exception('User does not have a valid key set. Returning default value for flag.')
         return None
     if 'secondary' in user:
-        idHash += "." + user['secondary']
-    hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], idHash)
+        id_hash += "." + user['secondary']
+    hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], id_hash)
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
+
 
 def _match_target(target, user):
     attr = target['attribute']
@@ -406,10 +432,12 @@ def _match_target(target, user):
             return len(set(u_value).intersection(target['values'])) > 0
         return False
 
+
 def _match_user(variation, user):
     if 'userTarget' in variation:
         return _match_target(variation['userTarget'], user)
     return False
+
 
 def _match_variation(variation, user):
     for target in variation['targets']:
@@ -419,14 +447,18 @@ def _match_variation(variation, user):
             return True
     return False
 
+
 def check_uwsgi():
     if 'uwsgi' in sys.modules:
+        # noinspection PyPackageRequirements,PyUnresolvedReferences
         import uwsgi
+
         if not uwsgi.opt.get('enable-threads'):
             log.warning('The LaunchDarkly client requires the enable-threads option '
-                            'be passed to uWSGI. If enable-threads is not provided, no '
-                            'threads will run and event data will not be sent to LaunchDarkly. '
-                            'To learn more, see http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
+                        'be passed to uWSGI. If enable-threads is not provided, no '
+                        'threads will run and event data will not be sent to LaunchDarkly. '
+                        'To learn more, see '
+                        'http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
 
 
 def _evaluate(feature, user):

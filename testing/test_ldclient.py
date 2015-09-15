@@ -163,6 +163,7 @@ def test_defaults_with_error_online():
 
     def err(*_):
         raise Exception("blah")
+
     client._toggle = err
     assert "bar" == client.toggle('feature.key', user, default=None)
 
@@ -172,6 +173,7 @@ def test_defaults_with_protocol_error_online():
 
     def err(*_):
         raise ProtocolError("blah")
+
     client._toggle = err
     assert "bar" == client.toggle('feature.key', user, default=None)
 

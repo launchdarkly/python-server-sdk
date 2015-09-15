@@ -137,7 +137,7 @@ class EventSourceProtocol(LineReceiver):
                 self.retry = value
                 pass
 
-    def connectionLost(self, reason):
+    def connectionLost(self, *_):
         self.finished.callback(self)
 
     def dispatch_event(self):
@@ -156,10 +156,10 @@ class EventSourceProtocol(LineReceiver):
 
 
 class Event(object):
-    def __init__(self, data='', event='message', id=None, retry=None):
+    def __init__(self, data='', event='message', event_id=None, retry=None):
         self.data = data
         self.event = event
-        self.id = id
+        self.id = event_id
         self.retry = retry
 
     def __str__(self, *args, **kwargs):
