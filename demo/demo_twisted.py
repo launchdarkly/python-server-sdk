@@ -1,5 +1,5 @@
 from __future__ import print_function
-from ldclient.twisted import TwistedLDClient
+from ldclient.twisted_impls import TwistedLDClient
 from twisted.internet import task, defer
 
 

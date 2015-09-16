@@ -1,6 +1,6 @@
 import logging
 from ldclient.client import LDClient
-from ldclient.twisted import TwistedConfig
+from ldclient.twisted_impls import TwistedConfig
 from ldclient.twisted_sse import Event
 import pytest
 from testing.server_util import SSEServer, GenericServer

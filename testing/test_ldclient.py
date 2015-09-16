@@ -2,6 +2,7 @@ from builtins import object
 from ldclient.client import LDClient, Config
 from ldclient.interfaces import FeatureRequester
 import pytest
+from testing.sync_util import wait_until
 
 try:
     import queue
@@ -10,32 +11,34 @@ except:
 
 
 class MockFeatureRequester(FeatureRequester):
-
     def __init__(self, *_):
         pass
 
     def get(self, key, callback):
-        return callback({
-            u'key': u'feature.key',
-            u'salt': u'abc',
-            u'on': True,
-            u'variations': [
-                {
-                    u'value': True,
-                    u'weight': 100,
-                    u'targets': []
-                },
-                {
-                    u'value': False,
-                    u'weight': 0,
-                    u'targets': []
-                }
-            ]
-        })
+        if key == "feature.key":
+            return callback({
+                u'key': u'feature.key',
+                u'salt': u'abc',
+                u'on': True,
+                u'variations': [
+                    {
+                        u'value': True,
+                        u'weight': 100,
+                        u'targets': []
+                    },
+                    {
+                        u'value': False,
+                        u'weight': 0,
+                        u'targets': []
+                    }
+                ]
+            })
+        else:
+            return callback(None)
 
 
 client = LDClient("API_KEY", Config("http://localhost:3000",
-                                                      feature_requester_class=MockFeatureRequester))
+                                    feature_requester_class=MockFeatureRequester))
 
 user = {
     u'key': u'xyz',
@@ -46,7 +49,7 @@ user = {
 
 
 class MockConsumer(object):
-    def __init__(self):
+    def __init__(self, *_):
         self._running = False
 
     def stop(self):
@@ -81,6 +84,11 @@ def noop_check_consumer(monkeypatch):
     monkeypatch.setattr(client, '_check_consumer', noop_consumer)
 
 
+def wait_for_event(c, cb):
+    e = c._queue.get(False)
+    return cb(e)
+
+
 def test_set_offline():
     client.set_offline()
     assert client.is_offline() == True
@@ -93,26 +101,26 @@ def test_set_online():
 
 
 def test_toggle():
-    assert client.toggle('xyz', user, default=None) == True
+    assert client.toggle('feature.key', user, default=None) == True
 
 
 def test_toggle_offline():
     client.set_offline()
-    assert client.toggle('xyz', user, default=None) == None
+    assert client.toggle('feature.key', user, default=None) == None
 
 
 def test_toggle_event():
-    client.toggle('xyz', user, default=None)
+    client.toggle('feature.key', user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'xyz' and e['user'] == user and e['value'] == True
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True
 
     assert expected_event(client._queue.get(False))
 
 
 def test_toggle_event_offline():
     client.set_offline()
-    client.toggle('xyz', user, default=None)
+    client.toggle('feature.key', user, default=None)
     assert client._queue.empty()
 
 
@@ -153,9 +161,35 @@ def test_defaults():
 
 
 def test_defaults_and_online():
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"feature.key": "bar"},
-                                                          feature_requester_class=MockFeatureRequester))
-    assert True == client.toggle('feature.key', user, default=None)
+    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+                                        feature_requester_class=MockFeatureRequester,
+                                        consumer_class=MockConsumer))
+    assert "bar" == client.toggle('foo', user, default="jim")
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
+
+
+def test_defaults_and_online_no_default():
+    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+                                        feature_requester_class=MockFeatureRequester,
+                                        consumer_class=MockConsumer))
+    assert "jim" == client.toggle('baz', user, default="jim")
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
+
+
+def test_exception_in_retrieval():
+    class ExceptionFeatureRequester(FeatureRequester):
+
+        def __init__(self, *_):
+            pass
+
+        def get(self, key, callback):
+            raise Exception("blah")
+
+    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+                                        feature_requester_class=ExceptionFeatureRequester,
+                                        consumer_class=MockConsumer))
+    assert "bar" == client.toggle('foo', user, default="jim")
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
 
 def test_no_defaults():

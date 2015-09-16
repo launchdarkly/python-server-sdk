@@ -4,7 +4,7 @@ import json
 from threading import Thread
 from cachecontrol import CacheControl
 from ldclient.util import log
-from ldclient.interfaces import FeatureRequester, StreamProcessor, Consumer
+from ldclient.interfaces import FeatureRequester, StreamProcessor, EventConsumer
 from ldclient.util import _headers, _stream_headers
 import requests
 from requests.packages.urllib3.exceptions import ProtocolError
@@ -49,7 +49,7 @@ class RequestsFeatureRequester(FeatureRequester):
         return feature
 
 
-class SSEProcessor(Thread, StreamProcessor):
+class RequestsStreamProcessor(Thread, StreamProcessor):
     def __init__(self, api_key, config, store):
         Thread.__init__(self)
         self.daemon = True
@@ -90,7 +90,7 @@ class SSEProcessor(Thread, StreamProcessor):
             log.warning('Unhandled event in stream processor: ' + msg.event)
 
 
-class RequestsConsumer(Thread, Consumer):
+class RequestsEventConsumer(Thread, EventConsumer):
     def __init__(self, event_queue, api_key, config):
         Thread.__init__(self)
         self._session = requests.Session()

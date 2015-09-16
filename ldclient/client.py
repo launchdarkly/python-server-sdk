@@ -3,7 +3,7 @@ from builtins import object
 import time
 
 from ldclient.interfaces import FeatureStore
-from ldclient.requests import SSEProcessor, RequestsConsumer, RequestsFeatureRequester
+from ldclient.requests import RequestsStreamProcessor, RequestsEventConsumer, RequestsFeatureRequester
 from ldclient.util import check_uwsgi, _evaluate, log
 import requests
 
@@ -42,9 +42,9 @@ class Config(object):
         self.base_uri = base_uri.rstrip('\\')
         self.stream_uri = stream_uri.rstrip('\\')
         self.stream = stream
-        self.stream_processor_class = SSEProcessor if not stream_processor_class else stream_processor_class
+        self.stream_processor_class = RequestsStreamProcessor if not stream_processor_class else stream_processor_class
         self.feature_store_class = InMemoryFeatureStore if not feature_store_class else feature_store_class
-        self.consumer_class = RequestsConsumer if not consumer_class else consumer_class
+        self.consumer_class = RequestsEventConsumer if not consumer_class else consumer_class
         self.feature_requester_class = RequestsFeatureRequester if not feature_requester_class else \
             feature_requester_class
         self.connect = connect_timeout
@@ -208,10 +208,11 @@ class LDClient(object):
 
         def cb(feature):
             if feature is None:
-                return default
-            val = _evaluate(feature, user)
-            if val is None:
-                return default
+                val = default
+            else:
+                val = _evaluate(feature, user)
+                if val is None:
+                    val = default
             self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
             return val
 
@@ -223,6 +224,6 @@ class LDClient(object):
                 return self._feature_requester.get(key, cb)
             except Exception:
                 log.exception('Unhandled exception. Returning default value for flag.')
-                return default
+                return cb(None)
 
 __all__ = ['LDClient', 'Config']

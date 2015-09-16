@@ -1,6 +1,6 @@
 from .client import *
 from ldclient.version import VERSION
-from .twisted import *
+from .twisted_impls import *
 from .util import log
 import logging
 

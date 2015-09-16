@@ -99,18 +99,8 @@ class StreamProcessor(BackgroundOperation):
     """
     __metaclass__ = ABCMeta
 
-    # @abstractmethod
-    # def get_feature(self, key):
-    #     """
-    #     Gets feature data
-    #
-    #     :param key: The feature flag key
-    #     :type key: str
-    #     :rtype: dict
-    #     """
 
-
-class Consumer(BackgroundOperation):
+class EventConsumer(BackgroundOperation):
     """
     Consumes events from the client and sends them to LaunchDarkly
     """
@@ -125,12 +115,18 @@ class Consumer(BackgroundOperation):
 
 class FeatureRequester(object):
     """
-    Consumes events from the client and sends them to LaunchDarkly
+    Requests features if they aren't in the store
     """
     __metaclass__ = ABCMeta
 
     @abstractmethod
     def get(self, key, callback):
         """
-        Flushes any outstanding events immediately.
+        Gets a feature and calls the callback with the feature data to return the result
+
+        :param key: The feature key
+        :type key: str
+        :param callback: The function that accepts the feature data and returns the feature value
+        :type callback: function
+        :return: The feature value. None if not found
         """
