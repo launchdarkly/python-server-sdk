@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from copy import deepcopy
-from ldclient import log
+from ldclient.util import log
 from twisted.internet.defer import Deferred
 from twisted.internet.ssl import ClientContextFactory
 from twisted.web.client import Agent

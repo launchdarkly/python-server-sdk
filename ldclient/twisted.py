@@ -1,44 +1,38 @@
 from __future__ import absolute_import
 from functools import partial
-
 import json
 from queue import Empty
 import errno
+
 from cachecontrol import CacheControl
-from ldclient import LDClient, _headers, log, _evaluate, _stream_headers, StreamProcessor, Config
+from ldclient.client import Config
+from ldclient.interfaces import FeatureRequester, StreamProcessor, Consumer
+from ldclient.requests import SSEProcessor
 from ldclient.twisted_sse import TwistedSSEClient
+from ldclient.util import _headers, _stream_headers, log
 from requests.packages.urllib3.exceptions import ProtocolError
 from twisted.internet import task, defer
 import txrequests
 
 
-class TwistedLDClient(LDClient):
-    def __init__(self, api_key, config=None):
-        if config is None:
-            config = TwistedConfig.default()
-        super(TwistedLDClient, self).__init__(api_key, config)
+class TwistedFeatureRequester(FeatureRequester):
+
+    def __init__(self, api_key, config):
+        self._api_key = api_key
         self._session = CacheControl(txrequests.Session())
+        self._config = config
 
-    def _check_consumer(self):
-        if not self._consumer or not self._consumer.is_alive():
-            self._consumer = TwistedConsumer(self._session, self._queue, self._api_key, self._config)
-            self._consumer.start()
+    def get(self, key, callback):
+        d = self.toggle(key)
+        d.addBoth(callback)
+        return d
 
-    def flush(self):
-        if self._offline:
-            return defer.succeed(True)
-        self._check_consumer()
-        return self._consumer.flush()
-
-    def toggle(self, key, user, default=False):
+    def toggle(self, key):
         @defer.inlineCallbacks
         def run(should_retry):
             # noinspection PyBroadException
             try:
-                if self._offline:
-                    defer.returnValue(default)
-                val = yield self._toggle(key, user, default)
-                self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
+                val = yield self._toggle(key)
                 defer.returnValue(val)
             except ProtocolError as e:
                 inner = e.args[1]
@@ -48,43 +42,39 @@ class TwistedLDClient(LDClient):
                     defer.returnValue(d)
                 else:
                     log.exception('Unhandled exception. Returning default value for flag.')
-                    defer.returnValue(default)
+                    defer.returnValue(None)
             except Exception:
                 log.exception('Unhandled exception. Returning default value for flag.')
-                defer.returnValue(default)
+                defer.returnValue(None)
 
         return run(True)
 
     @defer.inlineCallbacks
-    def _toggle(self, key, user, default):
-        if self._config.stream and self._stream_processor.initialized():
-            feature = self._stream_processor.get_feature(key)
-        else:
-            hdrs = _headers(self._api_key)
-            uri = self._config.base_uri + '/api/eval/features/' + key
-            r = yield self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
-            r.raise_for_status()
-            feature = r.json()
-        val = _evaluate(feature, user)
-        if val is None:
-            val = default
-        defer.returnValue(val)
+    def _toggle(self, key):
+        hdrs = _headers(self._api_key)
+        uri = self._config.base_uri + '/api/eval/features/' + key
+        r = yield self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
+        r.raise_for_status()
+        feature = r.json()
+        defer.returnValue(feature)
 
 
 class TwistedConfig(Config):
     def __init__(self, *args, **kwargs):
         super(TwistedConfig, self).__init__(*args, **kwargs)
         self.stream_processor_class = TwistedStreamProcessor
+        self.consumer_class = TwistedConsumer
+        self.feature_requester_class = TwistedFeatureRequester
 
 
-class TwistedStreamProcessor(object):
+class TwistedStreamProcessor(StreamProcessor):
 
-    def __init__(self, api_key, config):
-        self._store = config.feature_store_class()
+    def __init__(self, api_key, config, store):
+        self._store = store
         self.sse_client = TwistedSSEClient(config.stream_uri + "/", headers=_stream_headers(api_key,
                                                                                             "PythonTwistedClient"),
                                            verify=config.verify,
-                                           on_event=partial(StreamProcessor.process_message, self._store))
+                                           on_event=partial(SSEProcessor.process_message, self._store))
         self.running = False
 
     def start(self):
@@ -104,12 +94,12 @@ class TwistedStreamProcessor(object):
         return self.running
 
 
-class TwistedConsumer(object):
-    def __init__(self, session, queue, api_key, config):
+class TwistedConsumer(Consumer):
+    def __init__(self, queue, api_key, config):
         self._queue = queue
         """ @type: queue.Queue """
 
-        self._session = session
+        self._session = CacheControl(txrequests.Session())
         """ :type: txrequests.Session """
 
         self._api_key = api_key
@@ -174,3 +164,6 @@ class TwistedConsumer(object):
         finally:
             for _ in events:
                 self._queue.task_done()
+
+
+__all__ = ['TwistedConfig']

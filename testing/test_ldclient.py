@@ -1,7 +1,6 @@
-from builtins import next
-from builtins import filter
 from builtins import object
-import ldclient
+from ldclient.client import LDClient, Config
+from ldclient.interfaces import FeatureRequester
 import pytest
 
 try:
@@ -9,7 +8,34 @@ try:
 except:
     import Queue as queue
 
-client = ldclient.LDClient("API_KEY", ldclient.Config("http://localhost:3000"))
+
+class MockFeatureRequester(FeatureRequester):
+
+    def __init__(self, *_):
+        pass
+
+    def get(self, key, callback):
+        return callback({
+            u'key': u'feature.key',
+            u'salt': u'abc',
+            u'on': True,
+            u'variations': [
+                {
+                    u'value': True,
+                    u'weight': 100,
+                    u'targets': []
+                },
+                {
+                    u'value': False,
+                    u'weight': 0,
+                    u'targets': []
+                }
+            ]
+        })
+
+
+client = LDClient("API_KEY", Config("http://localhost:3000",
+                                                      feature_requester_class=MockFeatureRequester))
 
 user = {
     u'key': u'xyz',
@@ -32,6 +58,9 @@ class MockConsumer(object):
     def is_alive(self):
         return self._running
 
+    def flush(self):
+        pass
+
 
 def mock_consumer():
     return MockConsumer()
@@ -39,30 +68,6 @@ def mock_consumer():
 
 def noop_consumer():
     return
-
-
-def mock_toggle(key, user, default):
-    hash = minimal_feature = {
-        u'key': u'feature.key',
-        u'salt': u'abc',
-        u'on': True,
-        u'variations': [
-            {
-                u'value': True,
-                u'weight': 100,
-                u'targets': []
-            },
-            {
-                u'value': False,
-                u'weight': 0,
-                u'targets': []
-            }
-        ]
-    }
-    val = ldclient._evaluate(hash, user)
-    if val is None:
-        return default
-    return val
 
 
 def setup_function(function):
@@ -74,11 +79,6 @@ def setup_function(function):
 @pytest.fixture(autouse=True)
 def noop_check_consumer(monkeypatch):
     monkeypatch.setattr(client, '_check_consumer', noop_consumer)
-
-
-@pytest.fixture(autouse=True)
-def no_remote_toggle(monkeypatch):
-    monkeypatch.setattr(client, '_toggle', mock_toggle)
 
 
 def test_set_offline():
@@ -147,35 +147,15 @@ def test_track_offline():
 
 
 def test_defaults():
-    client = ldclient.LDClient("API_KEY", ldclient.Config("http://localhost:3000", defaults={"foo": "bar"}))
+    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"}))
     client.set_offline()
     assert "bar" == client.toggle('foo', user, default=None)
 
 
 def test_defaults_and_online():
-    client = ldclient.LDClient("API_KEY", ldclient.Config("http://localhost:3000", defaults={"feature.key": "bar"}))
-    client._toggle = mock_toggle
+    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"feature.key": "bar"},
+                                                          feature_requester_class=MockFeatureRequester))
     assert True == client.toggle('feature.key', user, default=None)
-
-
-def test_defaults_with_error_online():
-    client = ldclient.LDClient("API_KEY", ldclient.Config("http://localhost:3000", defaults={"feature.key": "bar"}))
-
-    def err(*_):
-        raise Exception("blah")
-
-    client._toggle = err
-    assert "bar" == client.toggle('feature.key', user, default=None)
-
-
-def test_defaults_with_protocol_error_online():
-    client = ldclient.LDClient("API_KEY", ldclient.Config("http://localhost:3000", defaults={"feature.key": "bar"}))
-
-    def err(*_):
-        raise ProtocolError("blah")
-
-    client._toggle = err
-    assert "bar" == client.toggle('feature.key', user, default=None)
 
 
 def test_no_defaults():

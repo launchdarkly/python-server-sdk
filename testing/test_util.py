@@ -1,8 +1,8 @@
 from __future__ import division
-import ldclient
 import hashlib
 from copy import copy
 from math import floor
+from ldclient import util
 
 minimal_feature = {
     u'key': u'feature.key',
@@ -31,12 +31,12 @@ user = {
 
 
 def test_param_for_user_with_no_key():
-    assert ldclient._param_for_user(minimal_feature, {}) is None
+    assert util._param_for_user(minimal_feature, {}) is None
 
 
 def test_param_for_user_with_no_secondary():
     expected = int(hashlib.sha1('feature.key.abc.xyz'.encode('utf-8')).hexdigest()[:15], 16) / float(0xFFFFFFFFFFFFFFF)
-    assert ldclient._param_for_user(minimal_feature, {u'key': u'xyz'}) == expected
+    assert util._param_for_user(minimal_feature, {u'key': u'xyz'}) == expected
 
 
 def test_match_target_key_mismatch():
@@ -45,7 +45,7 @@ def test_match_target_key_mismatch():
         u'op': u'in',
         u'values': ['lmno']
     }
-    assert ldclient._match_target(target, {'key': 'xyz'}) == False
+    assert util._match_target(target, {'key': 'xyz'}) == False
 
 
 def test_match_target_key_empty():
@@ -54,7 +54,7 @@ def test_match_target_key_empty():
         u'op': u'in',
         u'values': []
     }
-    assert ldclient._match_target(target, {'key': 'xyz'}) == False
+    assert util._match_target(target, {'key': 'xyz'}) == False
 
 
 def test_match_target_key_match():
@@ -63,7 +63,7 @@ def test_match_target_key_match():
         u'op': u'in',
         u'values': ['xyz']
     }
-    assert ldclient._match_target(target, {'key': 'xyz'}) == True
+    assert util._match_target(target, {'key': 'xyz'}) == True
 
 
 def test_match_target_custom_match():
@@ -72,7 +72,7 @@ def test_match_target_custom_match():
         u'op': u'in',
         u'values': [u'def']
     }
-    assert ldclient._match_target(target, user) == True
+    assert util._match_target(target, user) == True
 
 
 def test_match_target_custom_mismatch():
@@ -81,7 +81,7 @@ def test_match_target_custom_mismatch():
         u'op': u'in',
         u'values': [u'ghi']
     }
-    assert ldclient._match_target(target, user) == False
+    assert util._match_target(target, user) == False
 
 
 def test_match_target_custom_attribute_mismatch():
@@ -90,7 +90,7 @@ def test_match_target_custom_attribute_mismatch():
         u'op': u'in',
         u'values': [u'def']
     }
-    assert ldclient._match_target(target, user) == False
+    assert util._match_target(target, user) == False
 
 
 def test_match_variation_target_match():
@@ -113,7 +113,7 @@ def test_match_variation_target_match():
             }
         ]
     }
-    assert ldclient._match_variation(variation, user) == True
+    assert util._match_variation(variation, user) == True
 
 
 def test_match_variation_target_mismatch():
@@ -136,13 +136,13 @@ def test_match_variation_target_mismatch():
             }
         ]
     }
-    assert ldclient._match_variation(variation, user) == False
+    assert util._match_variation(variation, user) == False
 
 
 def test_evaluate_feature_off():
     feature = copy(minimal_feature)
     feature['on'] = False
-    assert ldclient._evaluate(feature, user) == None
+    assert util._evaluate(feature, user) == None
 
 
 def test_evaluate_first_variation_target_match():
@@ -180,7 +180,7 @@ def test_evaluate_first_variation_target_match():
             u'targets': []
         }
     ]
-    assert ldclient._evaluate(feature, user) == True
+    assert util._evaluate(feature, user) == True
 
 
 def test_evaluate_first_variation_both_targets_match():
@@ -229,7 +229,7 @@ def test_evaluate_first_variation_both_targets_match():
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == True
+    assert util._evaluate(feature, user) == True
 
 
 def test_evaluate_first_variation_both_targets_match_user_key_match_no_user_target():
@@ -263,7 +263,7 @@ def test_evaluate_first_variation_both_targets_match_user_key_match_no_user_targ
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == True
+    assert util._evaluate(feature, user) == True
 
 
 def test_evaluate_second_variation_user_match_both_targets_match():
@@ -312,7 +312,7 @@ def test_evaluate_second_variation_user_match_both_targets_match():
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == False
+    assert util._evaluate(feature, user) == False
 
 
 def test_evaluate_second_variation_target_match():
@@ -346,7 +346,7 @@ def test_evaluate_second_variation_target_match():
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == False
+    assert util._evaluate(feature, user) == False
 
 
 def test_evaluate_first_variation_no_target_match():
@@ -382,7 +382,7 @@ def test_evaluate_first_variation_no_target_match():
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == True
+    assert util._evaluate(feature, user) == True
 
 
 def test_evaluate_second_variation_no_target_match():
@@ -418,5 +418,5 @@ def test_evaluate_second_variation_no_target_match():
             ]
         }
     ]
-    assert ldclient._evaluate(feature, user) == False
+    assert util._evaluate(feature, user) == False
 
