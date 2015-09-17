@@ -1,8 +1,12 @@
 from .client import *
 from ldclient.version import VERSION
-from .twisted_impls import *
 from .util import log
 import logging
+
+try:
+    from .twisted_impls import *
+except ImportError:
+    log.info("Twisted support not available")
 
 __version__ = VERSION
 
