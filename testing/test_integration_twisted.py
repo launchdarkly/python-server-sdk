@@ -63,6 +63,13 @@ def test_sse_reconnect(server, stream):
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))
 
 
+@pytest.inlineCallbacks
+def test_toggle_redis_background(server):
+    server.add_feature("foo", feature("foo", "jim")['foo'])
+    client = LDClient("apikey", TwistedConfig(base_uri=server.url, ))
+    yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))
+
+
 def feature(key, val):
     return {
         key: {"name": "Feature {}".format(key), "key": key, "kind": "flag", "salt": "Zm9v", "on": val,

@@ -15,7 +15,7 @@ from twisted.internet import task, defer
 import txrequests
 
 
-class TwistedFeatureRequester(FeatureRequester):
+class TwistedHttpFeatureRequester(FeatureRequester):
 
     def __init__(self, api_key, config):
         self._api_key = api_key
@@ -64,7 +64,7 @@ class TwistedConfig(Config):
         super(TwistedConfig, self).__init__(*args, **kwargs)
         self.stream_processor_class = TwistedStreamProcessor
         self.consumer_class = TwistedEventConsumer
-        self.feature_requester_class = TwistedFeatureRequester
+        self.feature_requester_class = TwistedHttpFeatureRequester
 
 
 class TwistedStreamProcessor(StreamProcessor):
@@ -108,10 +108,8 @@ class TwistedEventConsumer(EventConsumer):
 
         self._looping_call = None
         """ :type: LoopingCall"""
-        self._flushed = None
 
     def start(self):
-        self._flushed = defer.Deferred()
         self._looping_call = task.LoopingCall(self._consume)
         self._looping_call.start(5)
 

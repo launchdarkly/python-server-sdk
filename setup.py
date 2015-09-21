@@ -12,12 +12,14 @@ import uuid
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
 twisted_reqs = parse_requirements('twisted-requirements.txt', session=uuid.uuid1())
+redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
 
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 reqs = [str(ir.req) for ir in install_reqs]
 testreqs = [str(ir.req) for ir in test_reqs]
 txreqs = [str(ir.req) for ir in twisted_reqs]
+redisreqs = [str(ir.req) for ir in redis_reqs]
 
 
 class PyTest(Command):
@@ -47,7 +49,8 @@ setup(
         'Programming Language :: Python :: 2 :: Only',
     ],
     extras_require={
-        "twisted": txreqs
+        "twisted": txreqs,
+        "redis": redisreqs
     },
     tests_require=testreqs,
     cmdclass = {'test': PyTest},

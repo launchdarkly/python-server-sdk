@@ -32,10 +32,23 @@ class Config(object):
                  stream=False,
                  verify=True,
                  defaults=None,
+                 events=True,
                  stream_processor_class=None,
                  feature_store_class=None,
                  feature_requester_class=None,
                  consumer_class=None):
+        """
+
+        :param stream_processor_class: A factory for a StreamProcessor implementation taking the api key, config,
+                                       and FeatureStore implementation
+        :type stream_processor_class: (str, Config, FeatureStore) -> StreamProcessor
+        :param feature_store_class: A factory for a FeatureStore implementation
+        :type feature_store_class: () -> FeatureStore
+        :param feature_requester_class: A factory for a FeatureRequester implementation taking the api key and config
+        :type feature_requester_class: (str, Config) -> FeatureRequester
+        :param consumer_class: A factory for an EventConsumer implementation taking the event queue, api key, and config
+        :type consumer_class: (queue.Queue, str, Config) -> EventConsumer
+        """
         if defaults is None:
             defaults = {}
 
@@ -53,6 +66,7 @@ class Config(object):
         self.capacity = capacity
         self.verify = verify
         self.defaults = defaults
+        self.events = events
 
     def get_default(self, key, default):
         return default if key not in self.defaults else self.defaults[key]
@@ -164,7 +178,7 @@ class LDClient(object):
             self._stream_processor.stop()
 
     def _send(self, event):
-        if self._offline:
+        if self._offline or not self._config.events:
             return
         self._check_consumer()
         event['creationDate'] = int(time.time() * 1000)
