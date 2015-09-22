@@ -7,3 +7,6 @@ build/
 .idea
 *.iml
 test.py
+.vagrant
+ldd/py2
+ldd/py3

@@ -128,3 +128,14 @@ def _evaluate(feature, user):
         if param < total:
             return variation['value']
     return None
+
+
+class Event(object):
+    def __init__(self, data='', event='message', event_id=None, retry=None):
+        self.data = data
+        self.event = event
+        self.id = event_id
+        self.retry = retry
+
+    def __str__(self, *args, **kwargs):
+        return self.data

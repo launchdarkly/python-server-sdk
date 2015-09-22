@@ -47,5 +47,9 @@ class TwistedRedisLDDStreamProcessor(StreamProcessor):
         redis = yield self._get_connection()
         """ :type: RedisClient """
         result = yield redis.hgetall(self._features_key)
-        data = json.loads(result)
-        self._store.init(data)
+        if result:
+            data = {}
+            for key, value in result.items():
+                if value:
+                    data[key] = json.loads(value.decode('utf-8'))
+            self._store.init(data)

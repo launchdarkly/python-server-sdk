@@ -55,7 +55,7 @@ class GenericServer:
             def do_POST(self):
                 self.handle_request(parent.post_paths)
 
-        self.httpd = TestServer(("0.0.0.0", 0), CustomHandler)
+        self.httpd = TestServer(("0.0.0.0", port if port is not None else 0), CustomHandler)
         port = port if port is not None else self.httpd.socket.getsockname()[1]
         self.url = ("https://" if use_ssl else "http://") + host + ":%s" % port
         self.port = port
@@ -145,6 +145,7 @@ class SSEServer(GenericServer):
                     if event:
                         lines = "event: {event}\ndata: {data}\n\n".format(event=event.event,
                                                                           data=json.dumps(event.data))
+                        print("returning {}".format(lines))
                         handler.wfile.write(lines.encode('utf-8'))
                 except Empty:
                     pass

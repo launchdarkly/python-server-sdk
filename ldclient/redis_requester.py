@@ -5,8 +5,13 @@ import redis
 
 
 # noinspection PyUnusedLocal
-def create_redis_ldd_requester(api_key, config, store, **kwargs):
+def create_redis_ldd_requester(api_key, config, **kwargs):
     return RedisLDDRequester(config, **kwargs)
+
+
+class ForgetfulDict(dict):
+    def __setitem__(self, key, value):
+        pass
 
 
 class RedisLDDRequester(FeatureRequester):
@@ -25,7 +30,8 @@ class RedisLDDRequester(FeatureRequester):
         self._redis_host = redis_host
         self._redis_port = redis_port
         self._features_key = "{}:features".format(redis_prefix)
-        self._cache = ExpiringDict(max_len=config.capacity, max_age_seconds=expiration)
+        self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=config.capacity,
+                                                                           max_age_seconds=expiration)
         self._pool = None
 
     def _get_connection(self):
@@ -36,13 +42,13 @@ class RedisLDDRequester(FeatureRequester):
     def get(self, key, callback):
         cached = self._cache.get(key)
         if cached is not None:
-            return cached
+            return callback(cached)
         else:
             rd = self._get_connection()
             raw = rd.hget(self._features_key, key)
             if raw:
-                val = json.loads(raw)
+                val = json.loads(raw.decode('utf-8'))
             else:
                 val = None
             self._cache[key] = val
-            return val
+            return callback(val)

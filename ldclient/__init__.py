@@ -3,11 +3,6 @@ from ldclient.version import VERSION
 from .util import log
 import logging
 
-try:
-    from .twisted_impls import *
-except ImportError:
-    log.info("Twisted support not available")
-
 __version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
@@ -32,3 +27,9 @@ except NameError:
 else:
     # noinspection PyUnresolvedReferences
     __BASE_TYPES__ = (str, float, int, bool, unicode)
+
+
+try:
+    from .twisted_impls import *
+except ImportError:
+    print("Twisted support not available")

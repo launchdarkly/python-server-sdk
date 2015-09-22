@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from copy import deepcopy
-from ldclient.util import log
+from ldclient.util import log, Event
 from twisted.internet.defer import Deferred
 from twisted.internet.ssl import ClientContextFactory
 from twisted.web.client import Agent
@@ -153,17 +153,6 @@ class EventSourceProtocol(LineReceiver):
         if self.id:
             self.last_id = self.id
         self.reset()
-
-
-class Event(object):
-    def __init__(self, data='', event='message', event_id=None, retry=None):
-        self.data = data
-        self.event = event
-        self.id = event_id
-        self.retry = retry
-
-    def __str__(self, *args, **kwargs):
-        return self.data
 
 
 def lstrip(value):
