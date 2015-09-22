@@ -5,7 +5,7 @@ from queue import Empty
 import errno
 
 from cachecontrol import CacheControl
-from ldclient.client import Config
+from ldclient.client import Config, LDClient
 from ldclient.interfaces import FeatureRequester, StreamProcessor, EventConsumer
 from ldclient.requests import RequestsStreamProcessor
 from ldclient.twisted_sse import TwistedSSEClient
@@ -164,4 +164,11 @@ class TwistedEventConsumer(EventConsumer):
                 self._queue.task_done()
 
 
-__all__ = ['TwistedConfig']
+class TwistedLDClient(LDClient):
+    def __init__(self, api_key, config=None):
+        if config is None:
+            config = TwistedConfig()
+        LDClient.__init__(self, api_key, config)
+
+
+__all__ = ['TwistedConfig', 'TwistedLDClient']
