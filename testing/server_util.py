@@ -1,12 +1,8 @@
 import json
 import logging
 from queue import Empty
-import socket
 import ssl
 import threading
-
-import time
-from twisted.internet import defer, reactor
 
 try:
     import queue as queuemod
@@ -32,7 +28,6 @@ class TestServer(socketserver.TCPServer):
 
 
 class GenericServer:
-
     def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key"):
 
@@ -52,7 +47,6 @@ class GenericServer:
                         return
                 self.send_response(404)
                 self.end_headers()
-                self.wfile.close()
 
             def do_GET(self):
                 self.handle_request(parent.get_paths)
@@ -61,7 +55,7 @@ class GenericServer:
             def do_POST(self):
                 self.handle_request(parent.post_paths)
 
-        self.httpd = TestServer(("0.0.0.0", 0), CustomHandler)
+        self.httpd = TestServer(("0.0.0.0", port if port is not None else 0), CustomHandler)
         port = port if port is not None else self.httpd.socket.getsockname()[1]
         self.url = ("https://" if use_ssl else "http://") + host + ":%s" % port
         self.port = port
@@ -86,13 +80,22 @@ class GenericServer:
 
     def post_events(self):
         q = queuemod.Queue()
+
         def do_nothing(handler):
-                handler.send_response(200)
-                handler.end_headers()
-                handler.wfile.close()
+            handler.send_response(200)
+            handler.end_headers()
 
         self.post_paths["/api/events/bulk"] = do_nothing
         return q
+
+    def add_feature(self, key, data):
+        def handle(handler):
+            handler.send_response(200)
+            handler.send_header('Content-type', 'application/json')
+            handler.end_headers()
+            handler.wfile.write(json.dumps(data).encode('utf-8'))
+
+        self.get("/api/eval/features/{}".format(key), handle)
 
     def get(self, path, func):
         """
@@ -142,33 +145,10 @@ class SSEServer(GenericServer):
                     if event:
                         lines = "event: {event}\ndata: {data}\n\n".format(event=event.event,
                                                                           data=json.dumps(event.data))
-                        handler.wfile.write(lines)
+                        print("returning {}".format(lines))
+                        handler.wfile.write(lines.encode('utf-8'))
                 except Empty:
                     pass
 
         self.get_paths["/"] = feed_forever
         self.queue = queue
-
-
-@defer.inlineCallbacks
-def wait_until(condition, timeout=5):
-    end_time = time.time() + timeout
-
-    while True:
-        result = yield defer.maybeDeferred(condition)
-        if result:
-            defer.returnValue(condition)
-        elif time.time() > end_time:
-            raise Exception("Timeout waiting for {}".format(condition.__name__))  # pragma: no cover
-        else:
-            d = defer.Deferred()
-            reactor.callLater(.1, d.callback, None)
-            yield d
-
-
-def is_equal(f, val):
-    @defer.inlineCallbacks
-    def is_equal_eval():
-        result = yield defer.maybeDeferred(f)
-        defer.returnValue(result == val)
-    return is_equal_eval

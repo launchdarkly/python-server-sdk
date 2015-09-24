@@ -1,5 +1,6 @@
 import threading
 
+
 class ReadWriteLock:
     """ A lock object that allows many simultaneous "read locks", but
     only one "write lock." """
@@ -15,7 +16,7 @@ class ReadWriteLock:
         try:
             self._readers += 1
         finally:
-            self._read_ready.release(  )
+            self._read_ready.release()
 
     def runlock(self):
         """ Release a read lock. """
