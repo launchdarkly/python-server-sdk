@@ -29,7 +29,7 @@ class Config(object):
                  upload_limit=100,
                  capacity=10000,
                  stream_uri='https://stream.launchdarkly.com',
-                 stream=False,
+                 stream=True,
                  verify=True,
                  defaults=None,
                  events=True,
