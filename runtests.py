@@ -11,7 +11,7 @@
 # some package they want to install. Pytest has a lot of code to collect and
 # execute tests, and other such sort of "tribal knowledge" that has been en-
 # coded in its code base. Because of this we basically include a basic copy
-# of pytest inside this blob. We do this  because it let's you as a maintainer
+# of pytest inside this blob. We do this because it lets you as a maintainer
 # or application developer who wants people who don't deal with python much to
 # easily run tests without installing the complete pytest package.
 #
