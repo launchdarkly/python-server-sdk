@@ -4,3 +4,6 @@ dist
 ldclient_py.egg-info
 build/
 test.py
+Makefile
+make.bat
+_build/
