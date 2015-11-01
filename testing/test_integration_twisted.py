@@ -40,7 +40,8 @@ def test_toggle(server):
 @pytest.inlineCallbacks
 def test_sse_init(server, stream):
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-    client = LDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url))
+    client = LDClient("apikey", TwistedConfig(
+        stream=True, base_uri=server.url, stream_uri=stream.url))
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))
 
 
@@ -48,7 +49,8 @@ def test_sse_init(server, stream):
 def test_sse_reconnect(server, stream):
     server.post_events()
     stream.queue.put(Event(event="put", data=feature("foo", "on")))
-    client = LDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url))
+    client = LDClient("apikey", TwistedConfig(
+        stream=True, base_uri=server.url, stream_uri=stream.url))
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "on"))
 
     stream.stop()
@@ -58,7 +60,8 @@ def test_sse_reconnect(server, stream):
     stream.start()
 
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-    client = LDClient("apikey", TwistedConfig(stream=True, base_uri=server.url, stream_uri=stream.url))
+    client = LDClient("apikey", TwistedConfig(
+        stream=True, base_uri=server.url, stream_uri=stream.url))
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))
 
 

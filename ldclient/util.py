@@ -18,7 +18,8 @@ except:
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = ["key", "ip", "country", "email",
+                "firstName", "lastName", "avatar", "name", "anonymous"]
 
 try:
     # noinspection PyUnresolvedReferences
@@ -46,7 +47,8 @@ def _param_for_user(feature, user):
     if 'key' in user and user['key']:
         id_hash = user['key']
     else:
-        log.exception('User does not have a valid key set. Returning default value for flag.')
+        log.exception(
+            'User does not have a valid key set. Returning default value for flag.')
         return None
     if 'secondary' in user:
         id_hash += "." + user['secondary']
@@ -131,6 +133,7 @@ def _evaluate(feature, user):
 
 
 class Event(object):
+
     def __init__(self, data='', event='message', event_id=None, retry=None):
         self.data = data
         self.event = event

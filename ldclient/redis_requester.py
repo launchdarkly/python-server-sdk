@@ -10,6 +10,7 @@ def create_redis_ldd_requester(api_key, config, **kwargs):
 
 
 class ForgetfulDict(dict):
+
     def __setitem__(self, key, value):
         pass
 
@@ -19,6 +20,7 @@ class RedisLDDRequester(FeatureRequester):
     Requests features from redis, usually stored via the LaunchDarkly Daemon (LDD).  Recommended to be combined
     with the ExpiringInMemoryFeatureStore
     """
+
     def __init__(self, config,
                  expiration=15,
                  redis_host='localhost',
@@ -36,7 +38,8 @@ class RedisLDDRequester(FeatureRequester):
 
     def _get_connection(self):
         if self._pool is None:
-            self._pool = redis.ConnectionPool(host=self._redis_host, port=self._redis_port)
+            self._pool = redis.ConnectionPool(
+                host=self._redis_host, port=self._redis_port)
         return redis.Redis(connection_pool=self._pool)
 
     def get(self, key, callback):

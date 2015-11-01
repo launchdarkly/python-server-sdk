@@ -7,11 +7,13 @@ __version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = ["key", "ip", "country", "email",
+                "firstName", "lastName", "avatar", "name", "anonymous"]
 
 
 # Add a NullHandler for Python < 2.7 compatibility
 class NullHandler(logging.Handler):
+
     def emit(self, record):
         pass
 

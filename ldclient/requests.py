@@ -29,13 +29,16 @@ class RequestsFeatureRequester(FeatureRequester):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning('ProtocolError exception caught while getting flag. Retrying.')
+                    log.warning(
+                        'ProtocolError exception caught while getting flag. Retrying.')
                     return do_toggle(False)
                 else:
-                    log.exception('Unhandled exception. Returning default value for flag.')
+                    log.exception(
+                        'Unhandled exception. Returning default value for flag.')
                     return None
             except Exception:
-                log.exception('Unhandled exception. Returning default value for flag.')
+                log.exception(
+                    'Unhandled exception. Returning default value for flag.')
                 return None
 
         return callback(do_toggle(True))
@@ -43,13 +46,15 @@ class RequestsFeatureRequester(FeatureRequester):
     def _toggle(self, key):
         hdrs = _headers(self._api_key)
         uri = self._config.base_uri + '/api/eval/features/' + key
-        r = self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
+        r = self._session.get(uri, headers=hdrs, timeout=(
+            self._config.connect, self._config.read))
         r.raise_for_status()
         feature = r.json()
         return feature
 
 
 class RequestsStreamProcessor(Thread, StreamProcessor):
+
     def __init__(self, api_key, config, store):
         Thread.__init__(self)
         self.daemon = True
@@ -91,6 +96,7 @@ class RequestsStreamProcessor(Thread, StreamProcessor):
 
 
 class RequestsEventConsumer(Thread, EventConsumer):
+
     def __init__(self, event_queue, api_key, config):
         Thread.__init__(self)
         self._session = requests.Session()
@@ -128,12 +134,15 @@ class RequestsEventConsumer(Thread, EventConsumer):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning('ProtocolError exception caught while sending events. Retrying.')
+                    log.warning(
+                        'ProtocolError exception caught while sending events. Retrying.')
                     do_send(False)
                 else:
-                    log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
+                    log.exception(
+                        'Unhandled exception in event consumer. Analytics events were not processed.')
             except:
-                log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
+                log.exception(
+                    'Unhandled exception in event consumer. Analytics events were not processed.')
 
         try:
             do_send(True)
