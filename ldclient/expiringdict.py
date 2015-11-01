@@ -15,6 +15,9 @@ The values stored in the following way:
 NOTE: iteration over dict and also keys() do not remove expired values!
 
 Copied from https://github.com/mailgun/expiringdict/commit/d17d071721dd12af6829819885a74497492d7fb7 under the APLv2
+
+TODO - Use PyPI version once https://github.com/mailgun/expiringdict/issues/13 has been fixed so that
+https://github.com/mailgun/expiringdict/commit/62c50ce7083a1557a1140dae19145f3a0a7a1a14 is patched
 '''
 
 import time
