@@ -86,6 +86,7 @@ class GenericServer:
             handler.end_headers()
 
         self.post_paths["/api/events/bulk"] = do_nothing
+        self.post_paths["/bulk"] = do_nothing
         return q
 
     def add_feature(self, key, data):

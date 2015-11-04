@@ -24,6 +24,7 @@ from ldclient.rwlock import ReadWriteLock
 class Config(object):
     def __init__(self,
                  base_uri='https://app.launchdarkly.com',
+                 events_uri='https://events.launchdarkly.com',
                  connect_timeout=2,
                  read_timeout=10,
                  upload_limit=100,
@@ -53,6 +54,7 @@ class Config(object):
             defaults = {}
 
         self.base_uri = base_uri.rstrip('\\')
+        self.events_uri = events_uri.rstrip('\\')
         self.stream_uri = stream_uri.rstrip('\\')
         self.stream = stream
         self.stream_processor_class = RequestsStreamProcessor if not stream_processor_class else stream_processor_class
