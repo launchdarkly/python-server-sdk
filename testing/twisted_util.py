@@ -12,7 +12,8 @@ def wait_until(condition, timeout=5):
         if result:
             defer.returnValue(condition)
         elif time.time() > end_time:
-            raise Exception("Timeout waiting for {}".format(condition.__name__))  # pragma: no cover
+            raise Exception("Timeout waiting for {}".format(
+                condition.__name__))  # pragma: no cover
         else:
             d = defer.Deferred()
             reactor.callLater(.1, d.callback, None)

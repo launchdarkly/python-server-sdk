@@ -37,14 +37,17 @@ class TwistedHttpFeatureRequester(FeatureRequester):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning('ProtocolError exception caught while getting flag. Retrying.')
+                    log.warning(
+                        'ProtocolError exception caught while getting flag. Retrying.')
                     d = yield run(False)
                     defer.returnValue(d)
                 else:
-                    log.exception('Unhandled exception. Returning default value for flag.')
+                    log.exception(
+                        'Unhandled exception. Returning default value for flag.')
                     defer.returnValue(None)
             except Exception:
-                log.exception('Unhandled exception. Returning default value for flag.')
+                log.exception(
+                    'Unhandled exception. Returning default value for flag.')
                 defer.returnValue(None)
 
         return run(True)
@@ -60,6 +63,7 @@ class TwistedHttpFeatureRequester(FeatureRequester):
 
 
 class TwistedConfig(Config):
+
     def __init__(self, *args, **kwargs):
         self.stream_processor_class = TwistedStreamProcessor
         self.consumer_class = TwistedEventConsumer
@@ -95,6 +99,7 @@ class TwistedStreamProcessor(StreamProcessor):
 
 
 class TwistedEventConsumer(EventConsumer):
+
     def __init__(self, queue, api_key, config):
         self._queue = queue
         """ @type: queue.Queue """
@@ -151,12 +156,15 @@ class TwistedEventConsumer(EventConsumer):
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning('ProtocolError exception caught while sending events. Retrying.')
+                    log.warning(
+                        'ProtocolError exception caught while sending events. Retrying.')
                     yield do_send(False)
                 else:
-                    log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
+                    log.exception(
+                        'Unhandled exception in event consumer. Analytics events were not processed.')
             except:
-                log.exception('Unhandled exception in event consumer. Analytics events were not processed.')
+                log.exception(
+                    'Unhandled exception in event consumer. Analytics events were not processed.')
         try:
             yield do_send(True)
         finally:
@@ -165,6 +173,7 @@ class TwistedEventConsumer(EventConsumer):
 
 
 class TwistedLDClient(LDClient):
+
     def __init__(self, api_key, config=None):
         if config is None:
             config = TwistedConfig()
