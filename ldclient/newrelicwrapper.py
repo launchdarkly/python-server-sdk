@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+
+from ldclient.util import log
+
 def check_newrelic_enabled():
     try:
         import newrelic
@@ -15,3 +19,13 @@ def annotate_transaction(key, value):
     if NEWRELIC_ENABLED:
         import newrelic
         newrelic.agent.add_custom_parameter(str(key), str(value))
+
+def annotate_newrelic(func):
+    def wrapped_func(*args, **kwargs):
+        value = func(*args, **kwargs)
+        try:
+            annotate_transaction(args[1], value)
+        except Exception:
+            log.exception('Unhandled exception from annotating New Relic transaction')
+        return value
+    return wrapped_func
