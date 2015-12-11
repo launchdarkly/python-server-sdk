@@ -153,17 +153,17 @@ class LDClient(object):
         self._offline = False
         self._lock = Lock()
 
-        self._store = config.feature_store_class()
+        self._store = self._config.feature_store_class()
         """ :type: FeatureStore """
 
-        self._feature_requester = config.feature_requester_class(
-            api_key, config)
+        self._feature_requester = self._config.feature_requester_class(
+            api_key, self._config)
         """ :type: FeatureRequester """
 
         self._stream_processor = None
         if self._config.stream:
-            self._stream_processor = config.stream_processor_class(
-                api_key, config, self._store)
+            self._stream_processor = self._config.stream_processor_class(
+                api_key, self._config, self._store)
             self._stream_processor.start()
 
     @property
