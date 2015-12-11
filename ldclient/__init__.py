@@ -34,4 +34,4 @@ else:
 try:
     from .twisted_impls import *
 except ImportError:
-    print("Twisted support not available")
+    pass
