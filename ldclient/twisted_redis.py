@@ -53,3 +53,5 @@ class TwistedRedisLDDStreamProcessor(StreamProcessor):
                 if value:
                     data[key] = json.loads(value.decode('utf-8'))
             self._store.init(data)
+        else:
+            self._store.init({})
