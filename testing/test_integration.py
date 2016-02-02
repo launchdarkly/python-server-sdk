@@ -38,7 +38,8 @@ def test_toggle(server):
 
 def test_sse_init(server, stream):
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-    client = LDClient("apikey", Config(stream=True, base_uri=server.url, events_uri=server.url, stream_uri=stream.url))
+    client = LDClient("apikey", Config(
+        stream=True, base_uri=server.url, events_uri=server.url, stream_uri=stream.url))
     wait_until(lambda: client.toggle("foo", user('xyz'), "blah") == "jim")
 
 

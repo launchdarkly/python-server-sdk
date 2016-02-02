@@ -22,6 +22,7 @@ from ldclient.rwlock import ReadWriteLock
 
 
 class Config(object):
+
     def __init__(self,
                  base_uri='https://app.launchdarkly.com',
                  events_uri='https://events.launchdarkly.com',
@@ -79,6 +80,7 @@ class Config(object):
 
 
 class InMemoryFeatureStore(FeatureStore):
+
     def __init__(self):
         self._lock = ReadWriteLock()
         self._initialized = False
@@ -142,6 +144,7 @@ class InMemoryFeatureStore(FeatureStore):
 
 
 class LDClient(object):
+
     def __init__(self, api_key, config=None):
         check_uwsgi()
         self._api_key = api_key
@@ -152,15 +155,17 @@ class LDClient(object):
         self._offline = False
         self._lock = Lock()
 
-        self._store = config.feature_store_class()
+        self._store = self._config.feature_store_class()
         """ :type: FeatureStore """
 
-        self._feature_requester = config.feature_requester_class(api_key, config)
+        self._feature_requester = self._config.feature_requester_class(
+            api_key, self._config)
         """ :type: FeatureRequester """
 
         self._stream_processor = None
         if self._config.stream:
-            self._stream_processor = config.stream_processor_class(api_key, config, self._store)
+            self._stream_processor = self._config.stream_processor_class(
+                api_key, self._config, self._store)
             self._stream_processor.start()
 
     @property
@@ -170,7 +175,8 @@ class LDClient(object):
     def _check_consumer(self):
         with self._lock:
             if not self._consumer or not self._consumer.is_alive():
-                self._consumer = self._config.consumer_class(self._queue, self._api_key, self._config)
+                self._consumer = self._config.consumer_class(
+                    self._queue, self._api_key, self._config)
                 self._consumer.start()
 
     def _stop_consumers(self):
@@ -190,7 +196,8 @@ class LDClient(object):
             self._queue.put(event)
 
     def track(self, event_name, user, data=None):
-        self._send({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        self._send({'kind': 'custom', 'key': event_name,
+                    'user': user, 'data': data})
 
     def identify(self, user):
         self._send({'kind': 'identify', 'key': user['key'], 'user': user})
@@ -229,7 +236,8 @@ class LDClient(object):
                 val = _evaluate(feature, user)
                 if val is None:
                     val = default
-            self._send({'kind': 'feature', 'key': key, 'user': user, 'value': val})
+            self._send({'kind': 'feature', 'key': key,
+                        'user': user, 'value': val})
             return val
 
         if self._config.stream and self._store.initialized:
@@ -239,7 +247,8 @@ class LDClient(object):
             try:
                 return self._feature_requester.get(key, cb)
             except Exception:
-                log.exception('Unhandled exception. Returning default value for flag.')
+                log.exception(
+                    'Unhandled exception. Returning default value for flag.')
                 return cb(None)
 
 __all__ = ['LDClient', 'Config']

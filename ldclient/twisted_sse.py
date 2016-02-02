@@ -10,11 +10,13 @@ from twisted.protocols.basic import LineReceiver
 
 
 class NoValidationContextFactory(ClientContextFactory):
+
     def getContext(self, *_):
         return ClientContextFactory.getContext(self)
 
 
 class TwistedSSEClient(object):
+
     def __init__(self, url, headers, verify, on_event):
         self.url = url + "/features"
         self.verify = verify
@@ -87,11 +89,13 @@ class TwistedSSEClient(object):
         """
         from twisted.internet import reactor
         ignored.printTraceback()
-        log.error("error connecting to endpoint {}: {}".format(self.url, ignored.getTraceback()))
+        log.error("error connecting to endpoint {}: {}".format(
+            self.url, ignored.getTraceback()))
         reactor.callLater(self.on_error_retry, self.connect)
 
 
 class EventSourceProtocol(LineReceiver):
+
     def __init__(self, on_event, finished_deferred):
         self.finished = finished_deferred
         self.on_event = on_event
@@ -147,7 +151,8 @@ class EventSourceProtocol(LineReceiver):
         # If last character is LF, strip it.
         if self.data.endswith('\n'):
             self.data = self.data[:-1]
-        log.debug("Dispatching event %s[%s]: %s", self.event, self.id, self.data)
+        log.debug("Dispatching event %s[%s]: %s",
+                  self.event, self.id, self.data)
         event = Event(self.data, self.event, self.id, self.retry)
         self.on_event(event)
         if self.id:

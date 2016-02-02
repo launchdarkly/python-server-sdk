@@ -11,7 +11,8 @@ import uuid
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
-twisted_reqs = parse_requirements('twisted-requirements.txt', session=uuid.uuid1())
+twisted_reqs = parse_requirements(
+    'twisted-requirements.txt', session=uuid.uuid1())
 redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
 
 # reqs is a list of requirement
@@ -24,18 +25,22 @@ redisreqs = [str(ir.req) for ir in redis_reqs]
 
 class PyTest(Command):
     user_options = []
+
     def initialize_options(self):
         pass
+
     def finalize_options(self):
         pass
+
     def run(self):
-        import sys,subprocess
+        import sys
+        import subprocess
         errno = subprocess.call([sys.executable, 'runtests.py'])
         raise SystemExit(errno)
 
 setup(
     name='ldclient-py',
-    version='0.19.1',
+    version='0.19.2',
     author='Catamorphic Co.',
     author_email='team@catamorphic.com',
     packages=['ldclient'],
@@ -53,5 +58,5 @@ setup(
         "redis": redisreqs
     },
     tests_require=testreqs,
-    cmdclass = {'test': PyTest},
+    cmdclass={'test': PyTest},
 )

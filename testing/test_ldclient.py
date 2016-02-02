@@ -11,6 +11,7 @@ except:
 
 
 class MockFeatureRequester(FeatureRequester):
+
     def __init__(self, *_):
         pass
 
@@ -49,6 +50,7 @@ user = {
 
 
 class MockConsumer(object):
+
     def __init__(self, *_):
         self._running = False
 
@@ -155,7 +157,8 @@ def test_track_offline():
 
 
 def test_defaults():
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"}))
+    client = LDClient("API_KEY", Config(
+        "http://localhost:3000", defaults={"foo": "bar"}))
     client.set_offline()
     assert "bar" == client.toggle('foo', user, default=None)
 
@@ -165,7 +168,8 @@ def test_defaults_and_online():
                                         feature_requester_class=MockFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
+                          'key'] == u'foo' and e['user'] == user)
 
 
 def test_defaults_and_online_no_default():
@@ -173,7 +177,8 @@ def test_defaults_and_online_no_default():
                                         feature_requester_class=MockFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "jim" == client.toggle('baz', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
+                          'key'] == u'baz' and e['user'] == user)
 
 
 def test_exception_in_retrieval():
@@ -189,7 +194,8 @@ def test_exception_in_retrieval():
                                         feature_requester_class=ExceptionFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
+                          'key'] == u'foo' and e['user'] == user)
 
 
 def test_no_defaults():

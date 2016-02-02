@@ -10,6 +10,7 @@ def create_redis_ldd_processor(api_key, config, store, **kwargs):
 
 
 class TwistedRedisLDDStreamProcessor(StreamProcessor):
+
     def __init__(self, store, update_delay=15, redis_host='localhost',
                  redis_port=6379,
                  redis_prefix='launchdarkly'):
@@ -53,3 +54,5 @@ class TwistedRedisLDDStreamProcessor(StreamProcessor):
                 if value:
                     data[key] = json.loads(value.decode('utf-8'))
             self._store.init(data)
+        else:
+            self._store.init({})

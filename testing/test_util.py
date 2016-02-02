@@ -35,7 +35,8 @@ def test_param_for_user_with_no_key():
 
 
 def test_param_for_user_with_no_secondary():
-    expected = int(hashlib.sha1('feature.key.abc.xyz'.encode('utf-8')).hexdigest()[:15], 16) / float(0xFFFFFFFFFFFFFFF)
+    expected = int(hashlib.sha1('feature.key.abc.xyz'.encode(
+        'utf-8')).hexdigest()[:15], 16) / float(0xFFFFFFFFFFFFFFF)
     assert util._param_for_user(minimal_feature, {u'key': u'xyz'}) == expected
 
 
@@ -419,4 +420,3 @@ def test_evaluate_second_variation_no_target_match():
         }
     ]
     assert util._evaluate(feature, user) == False
-

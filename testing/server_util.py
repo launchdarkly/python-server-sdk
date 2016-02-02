@@ -28,6 +28,7 @@ class TestServer(socketserver.TCPServer):
 
 
 class GenericServer:
+
     def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key"):
 
@@ -55,7 +56,8 @@ class GenericServer:
             def do_POST(self):
                 self.handle_request(parent.post_paths)
 
-        self.httpd = TestServer(("0.0.0.0", port if port is not None else 0), CustomHandler)
+        self.httpd = TestServer(
+            ("0.0.0.0", port if port is not None else 0), CustomHandler)
         port = port if port is not None else self.httpd.socket.getsockname()[1]
         self.url = ("https://" if use_ssl else "http://") + host + ":%s" % port
         self.port = port
@@ -131,13 +133,15 @@ class GenericServer:
 
 
 class SSEServer(GenericServer):
+
     def __init__(self, host='localhost', use_ssl=False, port=None, cert_file="self_signed.crt",
                  key_file="self_signed.key", queue=queuemod.Queue()):
         GenericServer.__init__(self, host, use_ssl, port, cert_file, key_file)
 
         def feed_forever(handler):
             handler.send_response(200)
-            handler.send_header('Content-type', 'text/event-stream; charset=utf-8')
+            handler.send_header(
+                'Content-type', 'text/event-stream; charset=utf-8')
             handler.end_headers()
             while not self.stopping:
                 try:
