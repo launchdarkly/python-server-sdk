@@ -115,7 +115,7 @@ def test_toggle_event():
     client.toggle('feature.key', user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e['default'] == None
 
     assert expected_event(client._queue.get(False))
 

@@ -235,7 +235,7 @@ class LDClient(object):
                 if val is None:
                     val = default
             self._send({'kind': 'feature', 'key': key,
-                        'user': user, 'value': val})
+                        'user': user, 'value': val, 'default': default})
             return val
 
         if self._config.stream and self._store.initialized:
