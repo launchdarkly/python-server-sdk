@@ -32,14 +32,14 @@ def stream(request):
 
 def test_toggle(server):
     server.add_feature("foo", feature("foo", "jim")['foo'])
-    client = LDClient("apikey", Config(base_uri=server.url))
+    client = LDClient("apikey", Config(base_uri=server.url, events_uri=server.url))
     wait_until(lambda: client.toggle("foo", user('xyz'), "blah") == "jim")
 
 
 def test_sse_init(server, stream):
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
     client = LDClient("apikey", Config(
-        stream=True, base_uri=server.url, stream_uri=stream.url))
+        stream=True, base_uri=server.url, events_uri=server.url, stream_uri=stream.url))
     wait_until(lambda: client.toggle("foo", user('xyz'), "blah") == "jim")
 
 

@@ -149,7 +149,7 @@ class TwistedEventConsumer(EventConsumer):
                 else:
                     body = events
                 hdrs = _headers(self._api_key)
-                uri = self._config.base_uri + '/api/events/bulk'
+                uri = self._config.events_uri + '/bulk'
                 r = yield self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read),
                                              data=json.dumps(body))
                 r.raise_for_status()
