@@ -254,6 +254,7 @@ class LDClient(object):
                 return cb(None)
 
     def _sanitize_user(self, user):
-        user['key'] = str(user['key'])
+        if 'key' in user:
+            user['key'] = str(user['key'])
 
 __all__ = ['LDClient', 'Config']
