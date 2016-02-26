@@ -196,10 +196,12 @@ class LDClient(object):
             self._queue.put(event)
 
     def track(self, event_name, user, data=None):
+        self._sanitize_user(user)
         self._send({'kind': 'custom', 'key': event_name,
                     'user': user, 'data': data})
 
     def identify(self, user):
+        self._sanitize_user(user)
         self._send({'kind': 'identify', 'key': user['key'], 'user': user})
 
     def set_offline(self):
@@ -223,7 +225,7 @@ class LDClient(object):
         return self.toggle(key, user, default)
 
     def toggle(self, key, user, default=False):
-
+        self._sanitize_user(user)
         default = self._config.get_default(key, default)
 
         if self._offline:
@@ -250,5 +252,8 @@ class LDClient(object):
                 log.exception(
                     'Unhandled exception. Returning default value for flag.')
                 return cb(None)
+
+    def _sanitize_user(self, user):
+        user['key'] = str(user['key'])
 
 __all__ = ['LDClient', 'Config']
