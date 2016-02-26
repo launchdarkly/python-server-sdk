@@ -48,6 +48,15 @@ user = {
     }
 }
 
+numeric_key_user = {}
+
+sanitized_numeric_key_user = {
+    u'key': '33',
+    u'custom': {
+        u'bizzle': u'def'
+    }
+}
+
 
 class MockConsumer(object):
 
@@ -76,6 +85,13 @@ def noop_consumer():
 
 
 def setup_function(function):
+    global numeric_key_user
+    numeric_key_user = {
+        u'key': 33,
+        u'custom': {
+            u'bizzle': u'def'
+        }
+    }
     client.set_online()
     client._queue = queue.Queue(10)
     client._consumer = mock_consumer()
@@ -119,6 +135,18 @@ def test_toggle_event():
 
     assert expected_event(client._queue.get(False))
 
+def test_sanitize_user():
+    client._sanitize_user(numeric_key_user)
+    assert numeric_key_user == sanitized_numeric_key_user
+
+def test_toggle_event_numeric_user_key():
+    client.toggle('feature.key', numeric_key_user, default=None)
+
+    def expected_event(e):
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user and e['value'] == True and e['default'] == None
+
+    assert expected_event(client._queue.get(False))
+
 
 def test_toggle_event_offline():
     client.set_offline()
@@ -135,6 +163,15 @@ def test_identify():
     assert expected_event(client._queue.get(False))
 
 
+def test_identify_numeric_key_user():
+    client.identify(numeric_key_user)
+
+    def expected_event(e):
+        return e['kind'] == 'identify' and e['key'] == '33' and e['user'] == sanitized_numeric_key_user
+
+    assert expected_event(client._queue.get(False))
+
+
 def test_identify_offline():
     client.set_offline()
     client.identify(user)
@@ -146,6 +183,15 @@ def test_track():
 
     def expected_event(e):
         return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
+
+    assert expected_event(client._queue.get(False))
+
+
+def test_track_numeric_key_user():
+    client.track('my_event', numeric_key_user, 42)
+
+    def expected_event(e):
+        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user and e['data'] == 42
 
     assert expected_event(client._queue.get(False))
 
