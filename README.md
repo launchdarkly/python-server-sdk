@@ -68,7 +68,7 @@ About LaunchDarkly
     * [Ruby] (http://docs.launchdarkly.com/docs/ruby-sdk-reference "LaunchDarkly Ruby SDK")
     * [Python Twisted] (http://docs.launchdarkly.com/docs/python-twisted "LaunchDarkly Python Twisted SDK")
 * Explore LaunchDarkly
-    * [www.launchdarkly.com] (http://www.launchdarkly.com/ "LaunchDarkly Main Website") for more information
+    * [launchdarkly.com] (https://launchdarkly.com/ "LaunchDarkly Main Website") for more information
     * [docs.launchdarkly.com] (http://docs.launchdarkly.com/  "LaunchDarkly Documentation") for our documentation and SDKs
     * [apidocs.launchdarkly.com] (http://apidocs.launchdarkly.com/  "LaunchDarkly API Documentation") for our API documentation
     * [blog.launchdarkly.com] (http://blog.launchdarkly.com/  "LaunchDarkly Blog Documentation") for the latest product updates
