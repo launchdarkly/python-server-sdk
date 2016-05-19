@@ -1,3 +1,7 @@
+checkout:
+  post:
+    - pip install -U pip setuptools virtualenv
+    
 dependencies:
   pre:
     - pyenv shell 2.7.10; $(pyenv which pip) install --upgrade pip
