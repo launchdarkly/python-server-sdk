@@ -80,11 +80,13 @@ class RequestsStreamProcessor(Thread, StreamProcessor):
     @staticmethod
     def process_message(store, msg):
         payload = json.loads(msg.data)
+        log.debug("Recieved stream event {}".format(msg.event))
         if msg.event == 'put':
             store.init(payload)
         elif msg.event == 'patch':
             key = payload['path'][1:]
             feature = payload['data']
+            log.debug("Updating feature {}".format(key))
             store.upsert(key, feature)
         elif msg.event == 'delete':
             key = payload['path'][1:]

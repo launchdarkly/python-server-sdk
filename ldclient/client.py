@@ -130,7 +130,8 @@ class InMemoryFeatureStore(FeatureStore):
             self._lock.lock()
             f = self._features.get(key)
             if f is None or f['version'] < feature['version']:
-                self._features[key] = f
+                self._features[key] = feature
+                log.debug("Updated feature {} to version {}".format(key, feature['version']))
         finally:
             self._lock.unlock()
 
