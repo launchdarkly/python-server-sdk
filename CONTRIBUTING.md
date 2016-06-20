@@ -6,12 +6,18 @@ We encourage pull-requests and other contributions from the community. We've als
 Development information (for developing this module itself)
 -----------------------------------------------------------
 
+1. One-time setup:
+
+       mkvirtualenv python-client
+
+1. When working on the project be sure to activate the python-client virtualenv using the technique of your choosing.
+
 1. Install requirements (run-time & test):
 
         pip install -r requirements.txt
         pip install -r test-requirements.txt
         pip install -r twisted-requirements.txt
 
-2. Run tests:
+1. Run tests:
 
         $ py.test testing
