@@ -67,7 +67,7 @@ class RequestsStreamProcessor(Thread, StreamProcessor):
         log.debug("Starting stream processor")
         self._running = True
         hdrs = _stream_headers(self._api_key)
-        uri = self._config.stream_uri + "/"
+        uri = self._config.stream_uri + "/features"
         messages = SSEClient(uri, verify=self._config.verify, headers=hdrs)
         for msg in messages:
             if not self._running:
