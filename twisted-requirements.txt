@@ -2,3 +2,4 @@ txrequests>=0.9
 pyOpenSSL>=0.14
 txredis>=2.3
 cryptography>=1.0
+service_identity>=16.0

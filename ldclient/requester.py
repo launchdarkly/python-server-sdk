@@ -1,104 +1,88 @@
 from __future__ import absolute_import
+
 import errno
 import json
 from threading import Thread
-from cachecontrol import CacheControl
-from ldclient.util import log
-from ldclient.interfaces import FeatureRequester, StreamProcessor, EventConsumer
-from ldclient.util import _headers, _stream_headers
+
 import requests
+from cachecontrol import CacheControl
 from requests.packages.urllib3.exceptions import ProtocolError
-from sseclient import SSEClient
+
+from ldclient.interfaces import EventConsumer, FeatureRequester
+from ldclient.util import _headers
+from ldclient.util import log
 
 
-class RequestsFeatureRequester(FeatureRequester):
-
+class FeatureRequesterImpl(FeatureRequester):
     def __init__(self, api_key, config):
         self._api_key = api_key
         self._session = CacheControl(requests.Session())
         self._config = config
 
-    def get(self, key, callback):
-        # return callback(do_toggle(key))
-
-        def do_toggle(should_retry):
-            # noinspection PyBroadException,PyUnresolvedReferences
-            try:
-                val = self._toggle(key)
-                return val
-            except ProtocolError as e:
-                inner = e.args[1]
-                if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning(
-                        'ProtocolError exception caught while getting flag. Retrying.')
-                    return do_toggle(False)
-                else:
-                    log.exception(
-                        'Unhandled exception. Returning default value for flag.')
-                    return None
-            except Exception:
-                log.exception(
-                    'Unhandled exception. Returning default value for flag.')
-                return None
-
-        return callback(do_toggle(True))
-
-    def _toggle(self, key):
+    def getAll(self):
         hdrs = _headers(self._api_key)
-        uri = self._config.base_uri + '/api/eval/features/' + key
+        uri = self._config.get_latest_features_uri
         r = self._session.get(uri, headers=hdrs, timeout=(
-            self._config.connect, self._config.read))
+            self._config.connect, self._config.read_timeout))
+        r.raise_for_status()
+        features = r.json()
+        return features
+
+    def get(self, key):
+        hdrs = _headers(self._api_key)
+        uri = self._config.get_latest_features_uri + '/' + key
+        r = self._session.get(uri, headers=hdrs, timeout=(
+            self._config.connect, self._config.read_timeout))
         r.raise_for_status()
         feature = r.json()
         return feature
 
 
-class RequestsStreamProcessor(Thread, StreamProcessor):
-
-    def __init__(self, api_key, config, store):
-        Thread.__init__(self)
-        self.daemon = True
-        self._api_key = api_key
-        self._config = config
-        self._store = store
-        self._running = False
-
-    def run(self):
-        log.debug("Starting stream processor")
-        self._running = True
-        hdrs = _stream_headers(self._api_key)
-        uri = self._config.stream_uri + "/features"
-        messages = SSEClient(uri, verify=self._config.verify, headers=hdrs)
-        for msg in messages:
-            if not self._running:
-                break
-            self.process_message(self._store, msg)
-
-    def stop(self):
-        self._running = False
-
-    @staticmethod
-    def process_message(store, msg):
-        payload = json.loads(msg.data)
-        log.debug("Recieved stream event {}".format(msg.event))
-        if msg.event == 'put':
-            store.init(payload)
-        elif msg.event == 'patch':
-            key = payload['path'][1:]
-            feature = payload['data']
-            log.debug("Updating feature {}".format(key))
-            store.upsert(key, feature)
-        elif msg.event == 'delete':
-            key = payload['path'][1:]
-            # noinspection PyShadowingNames
-            version = payload['version']
-            store.delete(key, version)
-        else:
-            log.warning('Unhandled event in stream processor: ' + msg.event)
-
+# class RequestsStreamProcessor(Thread, StreamProcessor):
+#
+#     def __init__(self, api_key, config, store):
+#         Thread.__init__(self)
+#         self.daemon = True
+#         self._api_key = api_key
+#         self._config = config
+#         self._store = store
+#         self._running = False
+#
+#     def run(self):
+#         log.debug("Starting stream processor")
+#         self._running = True
+#         hdrs = _stream_headers(self._api_key)
+#         uri = self._config.stream_uri + "/features"
+#         messages = SSEClient(uri, verify=self._config.verify, headers=hdrs)
+#         for msg in messages:
+#             if not self._running:
+#                 break
+#             self.process_message(self._store, msg)
+#
+#     def stop(self):
+#         self._running = False
+#
+#     @staticmethod
+#     def process_message(store, msg):
+#         payload = json.loads(msg.data)
+#         log.debug("Recieved stream event {}".format(msg.event))
+#         if msg.event == 'put':
+#             store.init(payload)
+#         elif msg.event == 'patch':
+#             key = payload['path'][1:]
+#             feature = payload['data']
+#             log.debug("Updating feature {}".format(key))
+#             store.upsert(key, feature)
+#         elif msg.event == 'delete':
+#             key = payload['path'][1:]
+#             # noinspection PyShadowingNames
+#             version = payload['version']
+#             store.delete(key, version)
+#         else:
+#             log.warning('Unhandled event in stream processor: ' + msg.event)
+#
 
 class RequestsEventConsumer(Thread, EventConsumer):
-
     def __init__(self, event_queue, api_key, config):
         Thread.__init__(self)
         self._session = requests.Session()
@@ -130,7 +114,7 @@ class RequestsEventConsumer(Thread, EventConsumer):
                     body = events
                 hdrs = _headers(self._api_key)
                 uri = self._config.events_uri + '/bulk'
-                r = self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read),
+                r = self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read_timeout),
                                        data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:

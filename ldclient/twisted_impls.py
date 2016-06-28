@@ -6,8 +6,8 @@ import errno
 
 from cachecontrol import CacheControl
 from ldclient.client import Config, LDClient
-from ldclient.interfaces import FeatureRequester, StreamProcessor, EventConsumer
-from ldclient.requests import RequestsStreamProcessor
+from ldclient.interfaces import FeatureRequester, EventConsumer, UpdateProcessor
+from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.twisted_sse import TwistedSSEClient
 from ldclient.util import _headers, _stream_headers, log
 from requests.packages.urllib3.exceptions import ProtocolError
@@ -65,20 +65,23 @@ class TwistedHttpFeatureRequester(FeatureRequester):
 class TwistedConfig(Config):
 
     def __init__(self, *args, **kwargs):
-        self.stream_processor_class = TwistedStreamProcessor
+        self.update_processor_class = TwistedStreamProcessor
         self.consumer_class = TwistedEventConsumer
         self.feature_requester_class = TwistedHttpFeatureRequester
         super(TwistedConfig, self).__init__(*args, **kwargs)
 
 
-class TwistedStreamProcessor(StreamProcessor):
+class TwistedStreamProcessor(UpdateProcessor):
+
+    def close(self):
+        self.sse_client.stop()
 
     def __init__(self, api_key, config, store):
         self._store = store
         self.sse_client = TwistedSSEClient(config.stream_uri + "/", headers=_stream_headers(api_key,
                                                                                             "PythonTwistedClient"),
                                            verify=config.verify,
-                                           on_event=partial(RequestsStreamProcessor.process_message, self._store))
+                                           on_event=partial(StreamingUpdateProcessor.process_message, self._store))
         self.running = False
 
     def start(self):

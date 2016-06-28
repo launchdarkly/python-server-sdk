@@ -1,5 +1,5 @@
 import json
-from ldclient.interfaces import StreamProcessor
+from ldclient.interfaces import StreamProcessor, UpdateProcessor
 from twisted.internet import task, defer, protocol, reactor
 from txredis.client import RedisClient
 
@@ -9,7 +9,14 @@ def create_redis_ldd_processor(api_key, config, store, **kwargs):
     return TwistedRedisLDDStreamProcessor(store, **kwargs)
 
 
-class TwistedRedisLDDStreamProcessor(StreamProcessor):
+class TwistedRedisLDDStreamProcessor(UpdateProcessor):
+    def close(self):
+        pass
+        # TODO: implement
+
+    def initialized(self):
+        pass
+        # TODO: implement
 
     def __init__(self, store, update_delay=15, redis_host='localhost',
                  redis_port=6379,

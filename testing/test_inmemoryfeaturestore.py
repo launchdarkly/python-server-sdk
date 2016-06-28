@@ -1,4 +1,4 @@
-from ldclient.client import InMemoryFeatureStore
+from ldclient.feature_store import InMemoryFeatureStore
 import pytest
 
 def make_feature(key, ver):

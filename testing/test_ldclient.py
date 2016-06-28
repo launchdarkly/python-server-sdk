@@ -1,6 +1,7 @@
 from builtins import object
 from ldclient.client import LDClient, Config
-from ldclient.interfaces import FeatureRequester
+from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.interfaces import FeatureRequester, FeatureStore
 import pytest
 from testing.sync_util import wait_until
 
@@ -10,14 +11,29 @@ except:
     import Queue as queue
 
 
-class MockFeatureRequester(FeatureRequester):
+class MockFeatureStore(FeatureStore):
+    def delete(self, key, version):
+        pass
+
+    @property
+    def initialized(self):
+        pass
+
+    def init(self, features):
+        pass
+
+    def all(self):
+        pass
+
+    def upsert(self, key, feature):
+        pass
 
     def __init__(self, *_):
         pass
 
-    def get(self, key, callback):
+    def get(self, key):
         if key == "feature.key":
-            return callback({
+            return {
                 u'key': u'feature.key',
                 u'salt': u'abc',
                 u'on': True,
@@ -33,13 +49,12 @@ class MockFeatureRequester(FeatureRequester):
                         u'targets': []
                     }
                 ]
-            })
+            }
         else:
-            return callback(None)
+            return None
 
 
-client = LDClient("API_KEY", Config("http://localhost:3000",
-                                    feature_requester_class=MockFeatureRequester))
+client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
 
 user = {
     u'key': u'xyz',
@@ -59,7 +74,6 @@ sanitized_numeric_key_user = {
 
 
 class MockConsumer(object):
-
     def __init__(self, *_):
         self._running = False
 
@@ -135,9 +149,11 @@ def test_toggle_event():
 
     assert expected_event(client._queue.get(False))
 
+
 def test_sanitize_user():
     client._sanitize_user(numeric_key_user)
     assert numeric_key_user == sanitized_numeric_key_user
+
 
 def test_toggle_event_numeric_user_key():
     client.toggle('feature.key', numeric_key_user, default=None)
@@ -191,7 +207,8 @@ def test_track_numeric_key_user():
     client.track('my_event', numeric_key_user, 42)
 
     def expected_event(e):
-        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user and e['data'] == 42
+        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user and e[
+                                                                                                                    'data'] == 42
 
     assert expected_event(client._queue.get(False))
 
@@ -211,25 +228,22 @@ def test_defaults():
 
 def test_defaults_and_online():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        feature_requester_class=MockFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                          'key'] == u'foo' and e['user'] == user)
+                                                                           'key'] == u'foo' and e['user'] == user)
 
 
 def test_defaults_and_online_no_default():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        feature_requester_class=MockFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "jim" == client.toggle('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                          'key'] == u'baz' and e['user'] == user)
+                                                                           'key'] == u'baz' and e['user'] == user)
 
 
 def test_exception_in_retrieval():
     class ExceptionFeatureRequester(FeatureRequester):
-
         def __init__(self, *_):
             pass
 
@@ -241,7 +255,7 @@ def test_exception_in_retrieval():
                                         consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                          'key'] == u'foo' and e['user'] == user)
+                                                                           'key'] == u'foo' and e['user'] == user)
 
 
 def test_no_defaults():
