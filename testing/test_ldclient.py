@@ -90,6 +90,14 @@ class MockConsumer(object):
         pass
 
 
+class MockFeatureRequester(FeatureRequester):
+    def __init__(self, *_):
+        pass
+
+    def getAll(self):
+        pass
+
+
 def mock_consumer():
     return MockConsumer()
 
@@ -145,7 +153,8 @@ def test_toggle_event():
     client.toggle('feature.key', user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e['default'] == None
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e[
+                                                                                                                         'default'] == None
 
     assert expected_event(client._queue.get(False))
 
@@ -159,7 +168,9 @@ def test_toggle_event_numeric_user_key():
     client.toggle('feature.key', numeric_key_user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user and e['value'] == True and e['default'] == None
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user and e[
+                                                                                                                        'value'] == True and \
+               e['default'] == None
 
     assert expected_event(client._queue.get(False))
 
@@ -227,16 +238,19 @@ def test_defaults():
 
 
 def test_defaults_and_online():
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        consumer_class=MockConsumer))
-    assert "bar" == client.toggle('foo', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                                                                           'key'] == u'foo' and e['user'] == user)
+    expected = "bar"
+    my_client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": expected},
+                                           consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester,
+                                           feature_store=InMemoryFeatureStore()))
+    actual = my_client.toggle('foo', user, default="originalDefault")
+    print(str(actual))
+    assert actual == expected
+    assert wait_for_event(my_client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
 
 def test_defaults_and_online_no_default():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        consumer_class=MockConsumer))
+                                        consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester))
     assert "jim" == client.toggle('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
                                                                            'key'] == u'baz' and e['user'] == user)
@@ -247,15 +261,15 @@ def test_exception_in_retrieval():
         def __init__(self, *_):
             pass
 
-        def get(self, key, callback):
+        def getAll(self):
             raise Exception("blah")
 
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+                                        feature_store=InMemoryFeatureStore(),
                                         feature_requester_class=ExceptionFeatureRequester,
                                         consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                                                                           'key'] == u'foo' and e['user'] == user)
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
 
 def test_no_defaults():

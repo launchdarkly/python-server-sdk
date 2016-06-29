@@ -1,6 +1,5 @@
 import logging
 from ldclient.client import Config, LDClient
-from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.twisted_sse import Event
 import pytest
 from testing.server_util import SSEServer, GenericServer
@@ -32,21 +31,16 @@ def stream(request):
 
 
 def test_toggle(server):
-    feature_store = InMemoryFeatureStore()
-    server.add_feature(
-        feature("foo", "jim")['foo'])
-
-    server.post_events()
-
-    client = LDClient("apikey", Config(stream=False, base_uri=server.url, events_uri=server.url, feature_store=feature_store))
-    wait_until(lambda: client.toggle("foo", user('xyz'), False) == True)
+    server.add_feature(feature("foo", "jim")['foo'])
+    client = LDClient("apikey", Config(stream=True, base_uri=server.url, events_uri=server.url))
+    wait_until(lambda: client.toggle("foo", user('xyz'), "blah") == "jim")
 
 
-# def test_sse_init(server, stream):
-#     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-#     client = LDClient("apikey", Config(
-#         stream=True, base_uri=server.url, events_uri=server.url, stream_uri=stream.url))
-#     wait_until(lambda: client.toggle("foo", user('xyz'), False) == True)
+def test_sse_init(server, stream):
+    stream.queue.put(Event(event="put", data=feature("foo", "jim")))
+    client = LDClient("apikey", Config(
+        stream=True, base_uri=server.url, events_uri=server.url, stream_uri=stream.url))
+    wait_until(lambda: client.toggle("foo", user('xyz'), "blah") == "jim")
 
 
 # Doesn't seem to handle disconnects?
