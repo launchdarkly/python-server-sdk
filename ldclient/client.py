@@ -194,13 +194,11 @@ class LDClient(object):
         if 'key' in user and user['key']:
             feature = self._store.get(key)
         else:
-            # log warning?
             send_event(default)
             return default
 
         val = _evaluate(feature, user)
         if val is None:
-            # log warning?
             send_event(default)
             return default
 

@@ -95,27 +95,9 @@ class BackgroundOperation(object):
 
 class UpdateProcessor(BackgroundOperation):
     """
-    Responsible for retrieving Feature Flag updates from LaunchDarkly
+    Responsible for retrieving Feature Flag updates from LaunchDarkly and saving them to the feature store
     """
     __metaclass__ = ABCMeta
-    #
-    # @abstractmethod
-    # def initialized(self):
-    #     """
-    #     :rtype: Returns whether the processor has been initialized yet or not
-    #     """
-    #
-    # @abstractmethod
-    # def close(self):
-    #     """
-    #     Closes the processor
-    #     """
-    #
-    # @abstractmethod
-    # def start(self):
-    #     """
-    #     Starts the processor
-    #     """
 
 
 class EventConsumer(BackgroundOperation):
@@ -133,7 +115,7 @@ class EventConsumer(BackgroundOperation):
 
 class FeatureRequester(object):
     """
-    Requests features if they aren't in the store
+    Requests features.
     """
     __metaclass__ = ABCMeta
 

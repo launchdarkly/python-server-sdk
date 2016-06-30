@@ -252,8 +252,7 @@ def test_defaults_and_online_no_default():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
                                         consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester))
     assert "jim" == client.toggle('baz', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e[
-                                                                           'key'] == u'baz' and e['user'] == user)
+    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
 
 
 def test_exception_in_retrieval():
