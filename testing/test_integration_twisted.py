@@ -1,5 +1,5 @@
 import logging
-from ldclient import LDClient
+from ldclient import LDClient, TwistedLDClient, TwistedConfig
 from ldclient.twisted_sse import Event
 import pytest
 from testing.server_util import SSEServer, GenericServer
@@ -28,14 +28,6 @@ def stream(request):
 
     request.addfinalizer(fin)
     return server
-
-
-@pytest.inlineCallbacks
-def test_toggle(server):
-    server.add_feature("foo", feature("foo", "jim")['foo'])
-    client = TwistedLDClient("apikey", TwistedConfig(base_uri=server.url))
-    yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))
-
 
 @pytest.inlineCallbacks
 def test_sse_init(server, stream):

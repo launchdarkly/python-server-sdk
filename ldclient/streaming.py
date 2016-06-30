@@ -46,11 +46,11 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             feature = payload['data']
             log.debug("Updating feature {}".format(key))
             store.upsert(key, feature)
-        # elif msg.event == "indirect/patch":
-        #     key = payload['data']
-        #     store.upsert(key, requester.get(key))
-        # elif msg.event == "indirect/put":
-        #     store.init(requester.getAll())
+        elif msg.event == "indirect/patch":
+            key = payload['data']
+            store.upsert(key, requester.get(key))
+        elif msg.event == "indirect/put":
+            store.init(requester.getAll())
         elif msg.event == 'delete':
             key = payload['path'][1:]
             # noinspection PyShadowingNames

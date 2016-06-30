@@ -22,40 +22,33 @@ class TwistedHttpFeatureRequester(FeatureRequester):
         self._session = CacheControl(txrequests.Session())
         self._config = config
 
-    def get(self, key, callback):
-        d = self.toggle(key)
-        d.addBoth(callback)
-        return d
-
-    def toggle(self, key):
+    def getAll(self):
         @defer.inlineCallbacks
         def run(should_retry):
             # noinspection PyBroadException
             try:
-                val = yield self._toggle(key)
+                val = yield self._get_all(self)
                 defer.returnValue(val)
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
                     log.warning(
-                        'ProtocolError exception caught while getting flag. Retrying.')
+                        'ProtocolError exception caught while getting flags. Retrying.')
                     d = yield run(False)
                     defer.returnValue(d)
                 else:
-                    log.exception(
-                        'Unhandled exception. Returning default value for flag.')
+                    log.exception('Unhandled exception.')
                     defer.returnValue(None)
             except Exception:
-                log.exception(
-                    'Unhandled exception. Returning default value for flag.')
+                log.exception('Unhandled exception.')
                 defer.returnValue(None)
 
         return run(True)
 
     @defer.inlineCallbacks
-    def _toggle(self, key):
+    def _get_all(self):
         hdrs = _headers(self._api_key)
-        uri = self._config.base_uri + '/api/eval/features/' + key
+        uri = self._config.get_latest_features_uri
         r = yield self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
         r.raise_for_status()
         feature = r.json()
@@ -72,16 +65,18 @@ class TwistedConfig(Config):
 
 
 class TwistedStreamProcessor(UpdateProcessor):
-
     def close(self):
         self.sse_client.stop()
 
-    def __init__(self, api_key, config, store):
+    def __init__(self, api_key, config, store, requester):
         self._store = store
-        self.sse_client = TwistedSSEClient(config.stream_uri + "/", headers=_stream_headers(api_key,
-                                                                                            "PythonTwistedClient"),
+        self._requester = requester
+        self.sse_client = TwistedSSEClient(config.stream_features_uri,
+                                           headers=_stream_headers(api_key, "PythonTwistedClient"),
                                            verify=config.verify,
-                                           on_event=partial(StreamingUpdateProcessor.process_message, self._store))
+                                           on_event=partial(StreamingUpdateProcessor.process_message,
+                                                            self._store,
+                                                            self._requester))
         self.running = False
 
     def start(self):
@@ -90,9 +85,6 @@ class TwistedStreamProcessor(UpdateProcessor):
 
     def stop(self):
         self.sse_client.stop()
-
-    def get_feature(self, key):
-        return self._store.get(key)
 
     def initialized(self):
         return self._store.initialized()

@@ -23,6 +23,8 @@ except:
 from cachecontrol import CacheControl
 from threading import Lock
 
+GET_LATEST_FEATURES_PATH = '/api/eval/latest-features'
+STREAM_FEATURES_PATH = '/features'
 
 class Config(object):
     def __init__(self,
@@ -59,10 +61,10 @@ class Config(object):
             defaults = {}
 
         self.base_uri = base_uri.rstrip('\\')
-        self.get_latest_features_uri = self.base_uri + '/api/eval/latest-features'
+        self.get_latest_features_uri = self.base_uri + GET_LATEST_FEATURES_PATH
         self.events_uri = events_uri.rstrip('\\')
         self.stream_uri = stream_uri.rstrip('\\')
-        self.stream_features_uri = self.stream_uri + '/features'
+        self.stream_features_uri = self.stream_uri + STREAM_FEATURES_PATH
 
         if update_processor_class:
             self.update_processor_class = update_processor_class
