@@ -14,7 +14,7 @@ ch.setFormatter(formatter)
 root.addHandler(ch)
 
 if __name__ == '__main__':
-    apiKey = 'sdk-7c55610f-385f-46c5-a3a6-2fdc9ccf3034'
+    apiKey = 'your api key'
     config = Config(stream=False)
     client = LDClient(apiKey, config)
     user = {u'key': 'userKey'}
