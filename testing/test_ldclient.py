@@ -55,6 +55,7 @@ class MockFeatureStore(FeatureStore):
 
 
 client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
+offline_client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
 
 user = {
     u'key': u'xyz',
@@ -114,7 +115,6 @@ def setup_function(function):
             u'bizzle': u'def'
         }
     }
-    client.set_online()
     client._queue = queue.Queue(10)
     client._consumer = mock_consumer()
 
@@ -129,32 +129,19 @@ def wait_for_event(c, cb):
     return cb(e)
 
 
-def test_set_offline():
-    client.set_offline()
-    assert client.is_offline() == True
-
-
-def test_set_online():
-    client.set_offline()
-    client.set_online()
-    assert client.is_offline() == False
-
-
 def test_toggle():
     assert client.toggle('feature.key', user, default=None) == True
 
 
 def test_toggle_offline():
-    client.set_offline()
-    assert client.toggle('feature.key', user, default=None) == None
+    assert offline_client.toggle('feature.key', user, default=None) == None
 
 
 def test_toggle_event():
     client.toggle('feature.key', user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e[
-                                                                                                                         'default'] == None
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e['default'] == None
 
     assert expected_event(client._queue.get(False))
 
@@ -176,9 +163,8 @@ def test_toggle_event_numeric_user_key():
 
 
 def test_toggle_event_offline():
-    client.set_offline()
-    client.toggle('feature.key', user, default=None)
-    assert client._queue.empty()
+    offline_client.toggle('feature.key', user, default=None)
+    assert offline_client._queue.empty()
 
 
 def test_identify():
@@ -200,9 +186,7 @@ def test_identify_numeric_key_user():
 
 
 def test_identify_offline():
-    client.set_offline()
-    client.identify(user)
-    assert client._queue.empty()
+    assert offline_client._queue.empty()
 
 
 def test_track():
@@ -225,15 +209,13 @@ def test_track_numeric_key_user():
 
 
 def test_track_offline():
-    client.set_offline()
-    client.track('my_event', user, 42)
-    assert client._queue.empty()
+    offline_client.track('my_event', user, 42)
+    assert offline_client._queue.empty()
 
 
 def test_defaults():
     client = LDClient("API_KEY", Config(
-        "http://localhost:3000", defaults={"foo": "bar"}))
-    client.set_offline()
+        "http://localhost:3000", defaults={"foo": "bar"}, offline=True))
     assert "bar" == client.toggle('foo', user, default=None)
 
 
@@ -272,8 +254,7 @@ def test_exception_in_retrieval():
 
 
 def test_no_defaults():
-    client.set_offline()
-    assert "bar" == client.toggle('foo', user, default="bar")
+    assert "bar" == offline_client.toggle('foo', user, default="bar")
 
 
 def drain(queue):
@@ -289,11 +270,3 @@ def test_flush_empties_queue():
     drain(client._queue)
     client.flush()
     assert client._queue.empty()
-
-
-def test_flush_offline_does_not_empty_queue():
-    client.track('my_event', user, 42)
-    client.track('my_event', user, 33)
-    client.set_offline()
-    client.flush()
-    assert not client._queue.empty()

@@ -26,6 +26,7 @@ from threading import Lock
 GET_LATEST_FEATURES_PATH = '/api/eval/latest-features'
 STREAM_FEATURES_PATH = '/features'
 
+
 class Config(object):
     def __init__(self,
                  base_uri='https://app.launchdarkly.com',
@@ -44,7 +45,8 @@ class Config(object):
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=FeatureRequesterImpl,
-                 consumer_class=None):
+                 consumer_class=None,
+                 offline=False):
         """
 
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the api key, config,
@@ -88,6 +90,7 @@ class Config(object):
         self.verify = verify
         self.defaults = defaults
         self.events = events
+        self.offline = offline
 
     def get_default(self, key, default):
         return default if key not in self.defaults else self.defaults[key]
@@ -105,7 +108,6 @@ class LDClient(object):
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.capacity)
         self._consumer = None
-        self._offline = False
         self._lock = Lock()
 
         self._store = self._config.feature_store
@@ -118,6 +120,10 @@ class LDClient(object):
         self._update_processor = self._config.update_processor_class(
             api_key, self._config, self._feature_requester, self._store)
         """ :type: UpdateProcessor """
+
+        if self._config.offline:
+            log.info("Started LaunchDarkly Client in offline mode")
+            return
 
         self._update_processor.start()
         log.info("Started LaunchDarkly Client")
@@ -140,7 +146,7 @@ class LDClient(object):
             self._update_processor.stop()
 
     def _send(self, event):
-        if self._offline or not self._config.events:
+        if self._config.offline or not self._config.events:
             return
         self._check_consumer()
         event['creationDate'] = int(time.time() * 1000)
@@ -158,19 +164,11 @@ class LDClient(object):
         self._sanitize_user(user)
         self._send({'kind': 'identify', 'key': user['key'], 'user': user})
 
-    def set_offline(self):
-        self._offline = True
-        self._stop_consumers()
-
-    def set_online(self):
-        self._offline = False
-        self._check_consumer()
-
     def is_offline(self):
-        return self._offline
+        return self._config.offline
 
     def flush(self):
-        if self._offline:
+        if self._config.offline:
             return
         self._check_consumer()
         return self._consumer.flush()
@@ -185,8 +183,7 @@ class LDClient(object):
             self._send({'kind': 'feature', 'key': key,
                         'user': user, 'value': value, 'default': default})
 
-        if self._offline:
-            send_event(default)
+        if self._config.offline:
             return default
 
         self._sanitize_user(user)
