@@ -119,7 +119,6 @@ class LDClient(object):
             api_key, self._config, self._feature_requester, self._store)
         """ :type: UpdateProcessor """
 
-        # TODO: block until intialized..
         self._update_processor.start()
         log.info("Started LaunchDarkly Client")
 
@@ -170,9 +169,6 @@ class LDClient(object):
     def is_offline(self):
         return self._offline
 
-    def is_initialized(self):
-        return self._offline or self._config.use_ldd or self._update_processor.initialized
-
     def flush(self):
         if self._offline:
             return
@@ -183,7 +179,6 @@ class LDClient(object):
         return self.toggle(key, user, default)
 
     def toggle(self, key, user, default=False):
-        log.info("togglin..")
         default = self._config.get_default(key, default)
 
         def send_event(value):
@@ -191,7 +186,6 @@ class LDClient(object):
                         'user': user, 'value': value, 'default': default})
 
         if self._offline:
-            # log warning?
             send_event(default)
             return default
 
@@ -216,6 +210,5 @@ class LDClient(object):
     def _sanitize_user(self, user):
         if 'key' in user:
             user['key'] = str(user['key'])
-
 
 __all__ = ['LDClient', 'Config']
