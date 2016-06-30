@@ -192,11 +192,19 @@ class LDClient(object):
             feature = self._store.get(key)
         else:
             send_event(default)
+            log.warning("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
             return default
 
-        val = _evaluate(feature, user)
+        if feature:
+            val = _evaluate(feature, user)
+        else:
+            log.warning("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
+            send_event(default)
+            return default
+
         if val is None:
             send_event(default)
+            log.warning("Feature Flag key: " + key + " evaluation returned None. Returning default.")
             return default
 
         send_event(val)
