@@ -50,7 +50,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             key = payload['data']
             store.upsert(key, requester.get(key))
         elif msg.event == "indirect/put":
-            store.init(requester.getAll())
+            store.init(requester.get_all())
         elif msg.event == 'delete':
             key = payload['path'][1:]
             # noinspection PyShadowingNames

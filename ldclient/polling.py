@@ -21,7 +21,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
             self._running = True
             while self._running:
                 start_time = time.time()
-                self._store.init(self._requester.getAll())
+                self._store.init(self._requester.get_all())
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:
                     time.sleep(self._config.poll_interval - elapsed)

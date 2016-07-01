@@ -5,11 +5,11 @@ import time
 import requests
 from builtins import object
 
+from ldclient.event_consumer import EventConsumerImpl
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
-from ldclient.requester import RequestsEventConsumer, FeatureRequesterImpl
-
+from ldclient.requester import FeatureRequesterImpl
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, _evaluate, log
 
@@ -81,7 +81,7 @@ class Config(object):
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
         self.feature_store = feature_store
-        self.event_consumer_class = RequestsEventConsumer if not event_consumer_class else event_consumer_class
+        self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
         self.feature_requester_class = FeatureRequesterImpl if not feature_requester_class else feature_requester_class
         self.connect = connect_timeout
         self.read_timeout = read_timeout

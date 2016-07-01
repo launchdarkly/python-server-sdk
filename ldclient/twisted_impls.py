@@ -22,7 +22,7 @@ class TwistedHttpFeatureRequester(FeatureRequester):
         self._session = CacheControl(txrequests.Session())
         self._config = config
 
-    def getAll(self):
+    def get_all(self):
         @defer.inlineCallbacks
         def run(should_retry):
             # noinspection PyBroadException

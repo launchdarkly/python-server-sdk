@@ -120,12 +120,12 @@ class FeatureRequester(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def getAll(self):
+    def get_all(self):
         """
         Gets all feature flags.
         """
 
-    def getOne(self, key):
+    def get_one(self, key):
         """
         Gets one Feature flag
         :return:

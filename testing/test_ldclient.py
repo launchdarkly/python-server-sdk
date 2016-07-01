@@ -95,7 +95,7 @@ class MockFeatureRequester(FeatureRequester):
     def __init__(self, *_):
         pass
 
-    def getAll(self):
+    def get_all(self):
         pass
 
 
@@ -242,7 +242,7 @@ def test_exception_in_retrieval():
         def __init__(self, *_):
             pass
 
-        def getAll(self):
+        def get_all(self):
             raise Exception("blah")
 
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
