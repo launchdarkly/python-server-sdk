@@ -45,7 +45,7 @@ class Config(object):
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=FeatureRequesterImpl,
-                 consumer_class=None,
+                 event_consumer_class=None,
                  offline=False):
         """
 
@@ -56,8 +56,8 @@ class Config(object):
         :type feature_store: FeatureStore
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the api key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
-        :param consumer_class: A factory for an EventConsumer implementation taking the event queue, api key, and config
-        :type consumer_class: (queue.Queue, str, Config) -> EventConsumer
+        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, api key, and config
+        :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
         """
         if defaults is None:
             defaults = {}
@@ -81,7 +81,7 @@ class Config(object):
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
         self.feature_store = feature_store
-        self.consumer_class = RequestsEventConsumer if not consumer_class else consumer_class
+        self.event_consumer_class = RequestsEventConsumer if not event_consumer_class else event_consumer_class
         self.feature_requester_class = FeatureRequesterImpl if not feature_requester_class else feature_requester_class
         self.connect = connect_timeout
         self.read_timeout = read_timeout
@@ -107,7 +107,7 @@ class LDClient(object):
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.capacity)
-        self._consumer = None
+        self._event_consumer = None
         self._lock = Lock()
 
         self._store = self._config.feature_store
@@ -134,14 +134,14 @@ class LDClient(object):
 
     def _check_consumer(self):
         with self._lock:
-            if not self._consumer or not self._consumer.is_alive():
-                self._consumer = self._config.consumer_class(
+            if not self._event_consumer or not self._event_consumer.is_alive():
+                self._event_consumer = self._config.event_consumer_class(
                     self._queue, self._api_key, self._config)
-                self._consumer.start()
+                self._event_consumer.start()
 
     def _stop_consumers(self):
-        if self._consumer and self._consumer.is_alive():
-            self._consumer.stop()
+        if self._event_consumer and self._event_consumer.is_alive():
+            self._event_consumer.stop()
         if self._update_processor and self._update_processor.is_alive():
             self._update_processor.stop()
 
@@ -171,7 +171,7 @@ class LDClient(object):
         if self._config.offline:
             return
         self._check_consumer()
-        return self._consumer.flush()
+        return self._event_consumer.flush()
 
     def get_flag(self, key, user, default=False):
         return self.toggle(key, user, default)

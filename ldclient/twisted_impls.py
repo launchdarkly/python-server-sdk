@@ -59,7 +59,7 @@ class TwistedConfig(Config):
 
     def __init__(self, *args, **kwargs):
         self.update_processor_class = TwistedStreamProcessor
-        self.consumer_class = TwistedEventConsumer
+        self.event_consumer_class = TwistedEventConsumer
         self.feature_requester_class = TwistedHttpFeatureRequester
         super(TwistedConfig, self).__init__(*args, **kwargs)
 

@@ -116,7 +116,7 @@ def setup_function(function):
         }
     }
     client._queue = queue.Queue(10)
-    client._consumer = mock_consumer()
+    client._event_consumer = mock_consumer()
 
 
 @pytest.fixture(autouse=True)
@@ -222,7 +222,7 @@ def test_defaults():
 def test_defaults_and_online():
     expected = "bar"
     my_client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": expected},
-                                           consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester,
+                                           event_consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester,
                                            feature_store=InMemoryFeatureStore()))
     actual = my_client.toggle('foo', user, default="originalDefault")
     print(str(actual))
@@ -232,7 +232,7 @@ def test_defaults_and_online():
 
 def test_defaults_and_online_no_default():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester))
+                                        event_consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester))
     assert "jim" == client.toggle('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
 
@@ -248,7 +248,7 @@ def test_exception_in_retrieval():
     client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
                                         feature_store=InMemoryFeatureStore(),
                                         feature_requester_class=ExceptionFeatureRequester,
-                                        consumer_class=MockConsumer))
+                                        event_consumer_class=MockConsumer))
     assert "bar" == client.toggle('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
