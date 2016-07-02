@@ -17,7 +17,7 @@ class FeatureRequesterImpl(FeatureRequester):
         hdrs = _headers(self._api_key)
         uri = self._config.get_latest_features_uri
         r = self._session.get(uri, headers=hdrs, timeout=(
-            self._config.connect, self._config.read_timeout))
+            self._config.connect_timeout, self._config.read_timeout))
         r.raise_for_status()
         features = r.json()
         return features

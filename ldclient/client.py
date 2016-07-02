@@ -101,7 +101,7 @@ class Config(object):
 
 
 class LDClient(object):
-    def __init__(self, api_key, config=None):
+    def __init__(self, api_key, config=None, start_wait=5):
         check_uwsgi()
         self._api_key = api_key
         self._config = config or Config.default()
@@ -125,7 +125,14 @@ class LDClient(object):
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
+        start_time = time.time()
         self._update_processor.start()
+        while not self._update_processor.initialized():
+            if time.time() - start_time > start_wait:
+                log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
+                return
+            time.sleep(0.1)
+
         log.info("Started LaunchDarkly Client")
 
     @property

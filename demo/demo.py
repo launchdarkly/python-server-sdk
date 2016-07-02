@@ -18,7 +18,6 @@ if __name__ == '__main__':
     config = Config(stream=False)
     client = LDClient(apiKey, config)
     user = {u'key': 'userKey'}
-    time.sleep(5)
     print(client.toggle("update-app", user, False))
     print(client.api_key)
 
