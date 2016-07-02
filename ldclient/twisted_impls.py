@@ -73,7 +73,7 @@ class TwistedStreamProcessor(UpdateProcessor):
         self._requester = requester
         self.sse_client = TwistedSSEClient(config.stream_features_uri,
                                            headers=_stream_headers(api_key, "PythonTwistedClient"),
-                                           verify=config.verify,
+                                           verify_ssl=config.verify_ssl,
                                            on_event=partial(StreamingUpdateProcessor.process_message,
                                                             self._store,
                                                             self._requester))

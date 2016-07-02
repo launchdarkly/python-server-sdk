@@ -6,10 +6,10 @@ import requests
 from builtins import object
 
 from ldclient.event_consumer import EventConsumerImpl
+from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
-from ldclient.requester import FeatureRequesterImpl
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, _evaluate, log
 
@@ -33,13 +33,13 @@ class Config(object):
                  events_uri='https://events.launchdarkly.com',
                  connect_timeout=2,
                  read_timeout=10,
-                 upload_limit=100,
-                 capacity=10000,
+                 events_upload_max_batch_size=100,
+                 events_max_pending=10000,
                  stream_uri='https://stream.launchdarkly.com',
                  stream=True,
-                 verify=True,
+                 verify_ssl=True,
                  defaults=None,
-                 events=True,
+                 events_enabled=True,
                  update_processor_class=None,
                  poll_interval=1,
                  use_ldd=False,
@@ -83,13 +83,13 @@ class Config(object):
         self.feature_store = feature_store
         self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
         self.feature_requester_class = FeatureRequesterImpl if not feature_requester_class else feature_requester_class
-        self.connect = connect_timeout
+        self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
-        self.upload_limit = upload_limit
-        self.capacity = capacity
-        self.verify = verify
+        self.events_enabled = events_enabled
+        self.events_upload_max_batch_size = events_upload_max_batch_size
+        self.events_max_pending = events_max_pending
+        self.verify_ssl = verify_ssl
         self.defaults = defaults
-        self.events = events
         self.offline = offline
 
     def get_default(self, key, default):
@@ -106,7 +106,7 @@ class LDClient(object):
         self._api_key = api_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
-        self._queue = queue.Queue(self._config.capacity)
+        self._queue = queue.Queue(self._config.events_max_pending)
         self._event_consumer = None
         self._lock = Lock()
 
@@ -146,7 +146,7 @@ class LDClient(object):
             self._update_processor.stop()
 
     def _send(self, event):
-        if self._config.offline or not self._config.events:
+        if self._config.offline or not self._config.events_enabled:
             return
         self._check_consumer()
         event['creationDate'] = int(time.time() * 1000)

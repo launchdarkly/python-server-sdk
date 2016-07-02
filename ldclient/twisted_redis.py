@@ -1,7 +1,9 @@
 import json
-from ldclient.interfaces import StreamProcessor, UpdateProcessor
+
 from twisted.internet import task, defer, protocol, reactor
 from txredis.client import RedisClient
+
+from ldclient.interfaces import UpdateProcessor
 
 
 # noinspection PyUnusedLocal
