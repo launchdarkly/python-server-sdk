@@ -150,7 +150,6 @@ class SSEServer(GenericServer):
                     if event:
                         lines = "event: {event}\ndata: {data}\n\n".format(event=event.event,
                                                                           data=json.dumps(event.data))
-                        print("returning {}".format(lines))
                         handler.wfile.write(lines.encode('utf-8'))
                 except Empty:
                     pass

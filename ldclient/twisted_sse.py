@@ -18,7 +18,7 @@ class NoValidationContextFactory(ClientContextFactory):
 class TwistedSSEClient(object):
 
     def __init__(self, url, headers, verify_ssl, on_event):
-        self.url = url + "/features"
+        self.url = url
         self.verify_ssl = verify_ssl
         self.headers = headers
         self.on_event = on_event

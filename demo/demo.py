@@ -15,10 +15,11 @@ root.addHandler(ch)
 
 if __name__ == '__main__':
     apiKey = 'your api key'
-    config = Config(stream=False)
-    client = LDClient(apiKey, config)
-    user = {u'key': 'userKey'}
-    print(client.toggle("update-app", user, False))
+    client = LDClient(apiKey)
     print(client.api_key)
 
-    client._stop_consumers()
+    user = {u'key': 'userKey'}
+    print(client.toggle("update-app", user, False))
+
+    time.sleep(10)
+    client.close()

@@ -25,8 +25,10 @@ class FeatureRequesterImpl(FeatureRequester):
     def get(self, key):
         hdrs = _headers(self._api_key)
         uri = self._config.get_latest_features_uri + '/' + key
-        r = self._session.get(uri, headers=hdrs, timeout=(
-            self._config.connect, self._config.read_timeout))
+        r = self._session.get(uri,
+                              headers=hdrs,
+                              timeout=(self._config.connect_timeout,
+                                       self._config.read_timeout))
         r.raise_for_status()
         feature = r.json()
         return feature

@@ -44,7 +44,9 @@ class EventConsumerImpl(Thread, EventConsumer):
                     body = events
                 hdrs = _headers(self._api_key)
                 uri = self._config.events_uri
-                r = self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read_timeout),
+                r = self._session.post(uri,
+                                       headers=hdrs,
+                                       timeout=(self._config.connect_timeout, self._config.read_timeout),
                                        data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:
@@ -83,7 +85,7 @@ class EventConsumerImpl(Thread, EventConsumer):
             return items
 
         items.append(item)
-        while len(items) < self._config.upload_limit and not q.empty():
+        while len(items) < self._config.events_upload_max_batch_size and not q.empty():
             item = self.next_item()
             if item:
                 items.append(item)

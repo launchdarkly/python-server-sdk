@@ -225,7 +225,6 @@ def test_defaults_and_online():
                                            event_consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester,
                                            feature_store=InMemoryFeatureStore()))
     actual = my_client.toggle('foo', user, default="originalDefault")
-    print(str(actual))
     assert actual == expected
     assert wait_for_event(my_client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 

@@ -124,6 +124,13 @@ class LDClient(object):
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
+        if self._config.use_ldd:
+            if self._store.__class__ == "RedisFeatureStore":
+                log.info("Started LaunchDarkly Client in LDD mode")
+                return
+            log.error("LDD mode requires a RedisFeatureStore.")
+            return
+
         start_time = time.time()
         self._update_processor.start()
         while not self._update_processor.initialized():
@@ -145,7 +152,10 @@ class LDClient(object):
                     self._queue, self._api_key, self._config)
                 self._event_consumer.start()
 
-    def _stop_consumers(self):
+    def close(self):
+        log.info("Closing LaunchDarkly client..")
+        if self.is_offline():
+            return
         if self._event_consumer and self._event_consumer.is_alive():
             self._event_consumer.stop()
         if self._update_processor and self._update_processor.is_alive():
