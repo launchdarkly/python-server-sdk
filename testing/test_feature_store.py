@@ -1,14 +1,11 @@
+import pytest
 import redis
 
 from ldclient.feature_store import InMemoryFeatureStore
-import pytest
-
-from ldclient.redis_feature_store import RedisFeatureStore, INIT_KEY
+from ldclient.redis_feature_store import RedisFeatureStore
 
 
 class TestFeatureStore:
-    params = [InMemoryFeatureStore()]
-    test_redis = True
     redis_host = 'localhost'
     redis_port = 6379
 
@@ -26,14 +23,6 @@ class TestFeatureStore:
         return RedisFeatureStore(host=self.redis_host, port=self.redis_port, expiration=0)
 
     params = [in_memory, redis_with_local_cache, redis_no_local_cache]
-
-    # @classmethod
-    # def setup_class(cls):
-    #     # test_redis = True
-    #     # if test_redis:
-    #     cls.redis_host = 'localhost'
-    #     cls.redis_port = 6379
-    #     cls.params = [InMemoryFeatureStore(), RedisFeatureStore(host=cls.redis_host, port=cls.redis_port)]
 
     @pytest.fixture(params=params)
     def store(self, request):
