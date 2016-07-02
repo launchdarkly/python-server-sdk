@@ -71,7 +71,7 @@ class TwistedStreamProcessor(UpdateProcessor):
     def __init__(self, api_key, config, store, requester):
         self._store = store
         self._requester = requester
-        self.sse_client = TwistedSSEClient(config.stream_features_uri,
+        self.sse_client = TwistedSSEClient(config.stream_uri,
                                            headers=_stream_headers(api_key, "PythonTwistedClient"),
                                            verify_ssl=config.verify_ssl,
                                            on_event=partial(StreamingUpdateProcessor.process_message,
@@ -144,8 +144,9 @@ class TwistedEventConsumer(EventConsumer):
                 else:
                     body = events
                 hdrs = _headers(self._api_key)
-                uri = self._config.events_uri + '/bulk'
-                r = yield self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read),
+                r = yield self._session.post(self._config.events_uri,
+                                             headers=hdrs,
+                                             timeout=(self._config.connect, self._config.read),
                                              data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:

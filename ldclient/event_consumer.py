@@ -43,7 +43,7 @@ class EventConsumerImpl(Thread, EventConsumer):
                 else:
                     body = events
                 hdrs = _headers(self._api_key)
-                uri = self._config.events_uri + '/bulk'
+                uri = self._config.events_uri
                 r = self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read_timeout),
                                        data=json.dumps(body))
                 r.raise_for_status()

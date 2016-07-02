@@ -22,7 +22,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         log.debug("Starting StreamingUpdateProcessor")
         self._running = True
         hdrs = _stream_headers(self._api_key)
-        uri = self._config.stream_features_uri
+        uri = self._config.stream_uri
         messages = SSEClient(uri, verify=self._config.verify_ssl, headers=hdrs)
         for msg in messages:
             if not self._running:

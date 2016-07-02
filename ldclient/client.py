@@ -64,9 +64,8 @@ class Config(object):
 
         self.base_uri = base_uri.rstrip('\\')
         self.get_latest_features_uri = self.base_uri + GET_LATEST_FEATURES_PATH
-        self.events_uri = events_uri.rstrip('\\')
-        self.stream_uri = stream_uri.rstrip('\\')
-        self.stream_features_uri = self.stream_uri + STREAM_FEATURES_PATH
+        self.events_uri = events_uri.rstrip('\\') + '/bulk'
+        self.stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
 
         if update_processor_class:
             self.update_processor_class = update_processor_class
