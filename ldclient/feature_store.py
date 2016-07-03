@@ -14,7 +14,11 @@ class InMemoryFeatureStore(FeatureStore):
         try:
             self._lock.rlock()
             f = self._features.get(key)
-            if f is None or 'deleted' in f and f['deleted']:
+            if f is None:
+                log.debug("Attempted to get missing feature: " + str(key) + ". Returning None")
+                return None
+            if 'deleted' in f and f['deleted']:
+                log.debug("Attempted to retrieve deleted feature: " + str(key) + ". Returning None")
                 return None
             return f
         finally:
