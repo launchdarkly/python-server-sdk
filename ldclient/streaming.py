@@ -9,13 +9,12 @@ from ldclient.util import _stream_headers, log
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
-    def __init__(self, api_key, config, requester, store):
+    def __init__(self, api_key, config, requester):
         Thread.__init__(self)
         self.daemon = True
         self._api_key = api_key
         self._config = config
         self._requester = requester
-        self._store = store
         self._running = False
 
     def run(self):
@@ -27,14 +26,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         for msg in messages:
             if not self._running:
                 break
-            self.process_message(self._store, self._requester, msg)
+            self.process_message(self._config.feature_store, self._requester, msg)
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
 
     def initialized(self):
-        return self._running and self._store.initialized
+        return self._running and self._config.feature_store.initialized
 
     @staticmethod
     def process_message(store, requester, msg):

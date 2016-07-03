@@ -102,15 +102,12 @@ class LDClient(object):
         self._event_consumer = None
         self._lock = Lock()
 
-        self._store = self._config.feature_store
-        """ :type: FeatureStore """
-
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
         if self._config.use_ldd:
-            if self._store.__class__ == "RedisFeatureStore":
+            if self._config.feature_store.__class__ == "RedisFeatureStore":
                 log.info("Started LaunchDarkly Client in LDD mode")
                 return
             log.error("LDD mode requires a RedisFeatureStore.")
@@ -125,14 +122,14 @@ class LDClient(object):
 
         if self._config.update_processor_class:
             self._update_processor = self._config.update_processor_class(
-                api_key, self._config, self._feature_requester, self._store)
+                api_key, self._config, self._feature_requester)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store)
+                    api_key, self._config, self._feature_requester)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store)
+                    api_key, self._config, self._feature_requester)
         """ :type: UpdateProcessor """
 
         start_time = time.time()
@@ -209,7 +206,7 @@ class LDClient(object):
         self._sanitize_user(user)
 
         if 'key' in user and user['key']:
-            feature = self._store.get(key)
+            feature = self._config.feature_store.get(key)
         else:
             send_event(default)
             log.warning("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
