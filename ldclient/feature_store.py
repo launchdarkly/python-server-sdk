@@ -13,6 +13,7 @@ class InMemoryFeatureStore(FeatureStore):
     def get(self, key):
         try:
             self._lock.rlock()
+            log.debug("All keys in feature store: " + str(self._features.keys()))
             f = self._features.get(key)
             if f is None:
                 log.debug("Attempted to get missing feature: " + str(key) + ". Returning None")
