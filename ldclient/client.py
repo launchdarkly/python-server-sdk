@@ -134,11 +134,11 @@ class LDClient(object):
 
         start_time = time.time()
         self._update_processor.start()
-        while not self._update_processor.initialized():
-            if time.time() - start_time > start_wait:
-                log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
-                return
-            time.sleep(0.1)
+        # while not self._update_processor.initialized():
+        #     if time.time() - start_time > start_wait:
+        #         log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
+        #         return
+        #     time.sleep(0.1)
 
         log.info("Started LaunchDarkly Client")
 
