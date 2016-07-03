@@ -99,6 +99,12 @@ class UpdateProcessor(BackgroundOperation):
     """
     __metaclass__ = ABCMeta
 
+    def initialized(self):
+        """
+        Returns whether the update processor has received feature flags and has initialized its feature store.
+        :rtype: bool
+        """
+
 
 class EventConsumer(BackgroundOperation):
     """
@@ -119,14 +125,15 @@ class FeatureRequester(object):
     """
     __metaclass__ = ABCMeta
 
-    @abstractmethod
     def get_all(self):
         """
         Gets all feature flags.
         """
+        pass
 
     def get_one(self, key):
         """
         Gets one Feature flag
         :return:
         """
+        pass

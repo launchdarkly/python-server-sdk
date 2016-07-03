@@ -1,10 +1,12 @@
 from functools import partial
 import sys
+
+from ldclient.redis_feature_store import RedisFeatureStore
+
 sys.path.append("..")
 sys.path.append("../testing")
 
 from ldclient.util import Event
-from ldclient.redis_requester import create_redis_ldd_requester
 import logging
 from ldclient.client import Config, LDClient
 import pytest
@@ -27,7 +29,8 @@ def stream(request):
 
 def test_sse_init(stream):
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-    client = LDClient("apikey", Config(feature_requester_class=partial(create_redis_ldd_requester, expiration=0),
+    client = LDClient("apikey", Config(use_ldd=True,
+                                       feature_store=RedisFeatureStore(),
                                        events_enabled=False))
     wait_until(lambda: client.toggle(
         "foo", user('xyz'), "blah") == "jim", timeout=10)

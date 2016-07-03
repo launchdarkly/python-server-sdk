@@ -17,7 +17,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
 
     def run(self):
         if not self._running:
-            log.debug("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
+            log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
             self._running = True
             while self._running:
                 start_time = time.time()
@@ -30,5 +30,5 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
         return self._running and self._store.initialized
 
     def stop(self):
-        log.debug("Stopping PollingUpdateProcessor")
+        log.info("Stopping PollingUpdateProcessor")
         self._running = False

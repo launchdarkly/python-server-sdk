@@ -90,7 +90,7 @@ class TwistedStreamProcessor(UpdateProcessor):
         return self._store.initialized()
 
     def is_alive(self):
-        return self.running
+        return self.running and self._store.initialized()
 
 
 class TwistedEventConsumer(EventConsumer):

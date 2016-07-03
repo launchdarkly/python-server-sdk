@@ -19,7 +19,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
 
     def run(self):
-        log.debug("Starting StreamingUpdateProcessor")
+        log.info("Starting StreamingUpdateProcessor")
         self._running = True
         hdrs = _stream_headers(self._api_key)
         uri = self._config.stream_uri
@@ -30,10 +30,11 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             self.process_message(self._store, self._requester, msg)
 
     def stop(self):
+        log.info("Stopping StreamingUpdateProcessor")
         self._running = False
 
     def initialized(self):
-        return self._running
+        return self._running and self._store.initialized
 
     @staticmethod
     def process_message(store, requester, msg):

@@ -44,7 +44,7 @@ class Config(object):
                  poll_interval=1,
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
-                 feature_requester_class=FeatureRequesterImpl,
+                 feature_requester_class=None,
                  event_consumer_class=None,
                  offline=False):
         """
@@ -66,22 +66,15 @@ class Config(object):
         self.get_latest_features_uri = self.base_uri + GET_LATEST_FEATURES_PATH
         self.events_uri = events_uri.rstrip('\\') + '/bulk'
         self.stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
-
-        if update_processor_class:
-            self.update_processor_class = update_processor_class
-        else:
-            if stream:
-                self.update_processor_class = StreamingUpdateProcessor
-            else:
-                self.update_processor_class = PollingUpdateProcessor
-
+        self.update_processor_class = update_processor_class
+        self.stream = stream
         if poll_interval < 1:
             poll_interval = 1
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
         self.feature_store = feature_store
         self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
-        self.feature_requester_class = FeatureRequesterImpl if not feature_requester_class else feature_requester_class
+        self.feature_requester_class = feature_requester_class
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
         self.events_enabled = events_enabled
@@ -112,14 +105,6 @@ class LDClient(object):
         self._store = self._config.feature_store
         """ :type: FeatureStore """
 
-        self._feature_requester = self._config.feature_requester_class(
-            api_key, self._config)
-        """ :type: FeatureRequester """
-
-        self._update_processor = self._config.update_processor_class(
-            api_key, self._config, self._feature_requester, self._store)
-        """ :type: UpdateProcessor """
-
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
             return
@@ -130,6 +115,25 @@ class LDClient(object):
                 return
             log.error("LDD mode requires a RedisFeatureStore.")
             return
+
+        if self._config.feature_requester_class:
+            self._feature_requester = self._config.feature_requester_class(
+                api_key, self._config)
+        else:
+            self._feature_requester = FeatureRequesterImpl(api_key, self._config)
+        """ :type: FeatureRequester """
+
+        if self._config.update_processor_class:
+            self._update_processor = self._config.update_processor_class(
+                api_key, self._config, self._feature_requester, self._store)
+        else:
+            if self._config.stream:
+                self._update_processor = StreamingUpdateProcessor(
+                    api_key, self._config, self._feature_requester, self._store)
+            else:
+                self._update_processor = PollingUpdateProcessor(
+                    api_key, self._config, self._feature_requester, self._store)
+        """ :type: UpdateProcessor """
 
         start_time = time.time()
         self._update_processor.start()
@@ -229,5 +233,6 @@ class LDClient(object):
     def _sanitize_user(self, user):
         if 'key' in user:
             user['key'] = str(user['key'])
+
 
 __all__ = ['LDClient', 'Config']
