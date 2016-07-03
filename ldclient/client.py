@@ -7,7 +7,7 @@ from builtins import object
 
 from ldclient.event_consumer import EventConsumerImpl
 from ldclient.feature_requester import FeatureRequesterImpl
-from ldclient.feature_store import InMemoryFeatureStore
+# from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
