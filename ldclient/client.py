@@ -102,6 +102,8 @@ class LDClient(object):
         self._event_consumer = None
         self._lock = Lock()
 
+        log.debug("store id: " + str(id(self._config.feature_store)))
+
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
             return
@@ -206,6 +208,7 @@ class LDClient(object):
         self._sanitize_user(user)
 
         if 'key' in user and user['key']:
+            log.debug("store id: " + str(id(self._config.feature_store)))
             feature = self._config.feature_store.get(key)
         else:
             send_event(default)

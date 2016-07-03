@@ -26,6 +26,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         for msg in messages:
             if not self._running:
                 break
+            log.debug("store id: " + str(id(self._config.feature_store)))
             self.process_message(self._config.feature_store, self._requester, msg)
 
     def stop(self):
@@ -37,6 +38,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     @staticmethod
     def process_message(store, requester, msg):
+        log.debug("store id: " + str(id(store)))
         payload = json.loads(msg.data)
         log.debug("Received stream event {}".format(msg.event))
         if msg.event == 'put':
