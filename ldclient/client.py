@@ -43,7 +43,7 @@ class Config(object):
                  update_processor_class=None,
                  poll_interval=1,
                  use_ldd=False,
-                 feature_store=InMemoryFeatureStore(),
+                 feature_store=None,
                  feature_requester_class=None,
                  event_consumer_class=None,
                  offline=False):
@@ -72,7 +72,7 @@ class Config(object):
             poll_interval = 1
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
-        self.feature_store = feature_store
+        self.feature_store = InMemoryFeatureStore()
         self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
         self.feature_requester_class = feature_requester_class
         self.connect_timeout = connect_timeout
@@ -209,6 +209,8 @@ class LDClient(object):
 
         if 'key' in user and user['key']:
             log.debug("store id: " + str(id(self._config.feature_store)))
+            log.debug("Feature store contents: " + str(self._config.feature_store._features))
+
             feature = self._config.feature_store.get(key)
         else:
             send_event(default)
