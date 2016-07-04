@@ -119,11 +119,6 @@ def setup_function(function):
     client._event_consumer = mock_consumer()
 
 
-@pytest.fixture(autouse=True)
-def noop_check_consumer(monkeypatch):
-    monkeypatch.setattr(client, '_check_consumer', noop_consumer)
-
-
 def wait_for_event(c, cb):
     e = c._queue.get(False)
     return cb(e)

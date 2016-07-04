@@ -109,6 +109,11 @@ class LDClient(object):
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
+        if self._config.events_enabled:
+            self._event_consumer = self._config.event_consumer_class(
+                self._queue, self._api_key, self._config)
+            self._event_consumer.start()
+
         if self._config.use_ldd:
             if self._store.__class__ == "RedisFeatureStore":
                 log.info("Started LaunchDarkly Client in LDD mode")
@@ -137,24 +142,18 @@ class LDClient(object):
 
         start_time = time.time()
         self._update_processor.start()
-        while not self._update_processor.initialized():
-            if time.time() - start_time > start_wait:
-                log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
-                return
-            time.sleep(0.1)
+        #TODO: fix- it seems to always time out.
+        # while not self._update_processor.initialized():
+        #     if time.time() - start_time > start_wait:
+        #         log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
+        #         return
+        #     time.sleep(0.5)
 
         log.info("Started LaunchDarkly Client")
 
     @property
     def api_key(self):
         return self._api_key
-
-    def _check_consumer(self):
-        with self._lock:
-            if not self._event_consumer or not self._event_consumer.is_alive():
-                self._event_consumer = self._config.event_consumer_class(
-                    self._queue, self._api_key, self._config)
-                self._event_consumer.start()
 
     def close(self):
         log.info("Closing LaunchDarkly client..")
@@ -165,10 +164,9 @@ class LDClient(object):
         if self._update_processor and self._update_processor.is_alive():
             self._update_processor.stop()
 
-    def _send(self, event):
+    def _send_event(self, event):
         if self._config.offline or not self._config.events_enabled:
             return
-        self._check_consumer()
         event['creationDate'] = int(time.time() * 1000)
         if self._queue.full():
             log.warning("Event queue is full-- dropped an event")
@@ -177,20 +175,19 @@ class LDClient(object):
 
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
-        self._send({'kind': 'custom', 'key': event_name,
+        self._send_event({'kind': 'custom', 'key': event_name,
                     'user': user, 'data': data})
 
     def identify(self, user):
         self._sanitize_user(user)
-        self._send({'kind': 'identify', 'key': user['key'], 'user': user})
+        self._send_event({'kind': 'identify', 'key': user['key'], 'user': user})
 
     def is_offline(self):
         return self._config.offline
 
     def flush(self):
-        if self._config.offline:
+        if self._config.offline or not self._config.events_enabled:
             return
-        self._check_consumer()
         return self._event_consumer.flush()
 
     def get_flag(self, key, user, default=False):
@@ -200,7 +197,7 @@ class LDClient(object):
         default = self._config.get_default(key, default)
 
         def send_event(value):
-            self._send({'kind': 'feature', 'key': key,
+            self._send_event({'kind': 'feature', 'key': key,
                         'user': user, 'value': value, 'default': default})
 
         if self._config.offline:
