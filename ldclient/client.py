@@ -209,9 +209,9 @@ class LDClient(object):
 
         if 'key' in user and user['key']:
             log.debug("store id: " + str(id(self._config.feature_store)))
-            log.debug("Feature store contents: " + str(self._config.feature_store._features))
+            # log.debug("Feature store contents: " + str(self._config.feature_store._features))
 
-            feature = self._config.feature_store.get(key)
+            feature = self._update_processor.get(key)
         else:
             send_event(default)
             log.warning("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")

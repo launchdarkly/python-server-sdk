@@ -36,6 +36,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def initialized(self):
         return self._running and self._config.feature_store.initialized
 
+    def get(self, key):
+        return self._config.feature_store.get(key)
+
     @staticmethod
     def process_message(store, requester, msg):
         log.debug("store id: " + str(id(store)))
