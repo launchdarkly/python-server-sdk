@@ -40,7 +40,7 @@ class PyTest(Command):
 
 setup(
     name='ldclient-py',
-    version='1.0.0',
+    version='0.20.3',
     author='Catamorphic Co.',
     author_email='team@catamorphic.com',
     packages=['ldclient'],

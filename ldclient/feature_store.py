@@ -13,7 +13,6 @@ class InMemoryFeatureStore(FeatureStore):
     def get(self, key):
         try:
             self._lock.rlock()
-            log.debug("Feature store contents: " + str(self._features))
             f = self._features.get(key)
             if f is None:
                 log.debug("Attempted to get missing feature: " + str(key) + ". Returning None")
@@ -38,7 +37,6 @@ class InMemoryFeatureStore(FeatureStore):
             self._features = dict(features)
             self._initialized = True
             log.debug("Initialized feature store with " + str(len(features)) + " features")
-            log.debug("Feature store contents: " + str(self._features))
         finally:
             self._lock.unlock()
 
@@ -63,7 +61,6 @@ class InMemoryFeatureStore(FeatureStore):
             if f is None or f['version'] < feature['version']:
                 self._features[key] = feature
                 log.debug("Updated feature {} to version {}".format(key, feature['version']))
-                log.debug("Feature store contents: " + str(self._features))
         finally:
             self._lock.unlock()
 

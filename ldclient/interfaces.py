@@ -104,8 +104,6 @@ class UpdateProcessor(BackgroundOperation):
         Returns whether the update processor has received feature flags and has initialized its feature store.
         :rtype: bool
         """
-    def get(self, key):
-       pass
 
 
 class EventConsumer(BackgroundOperation):

@@ -43,7 +43,7 @@ class Config(object):
                  update_processor_class=None,
                  poll_interval=1,
                  use_ldd=False,
-                 feature_store=None,
+                 feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
                  event_consumer_class=None,
                  offline=False):
@@ -72,7 +72,7 @@ class Config(object):
             poll_interval = 1
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
-        self.feature_store = InMemoryFeatureStore()
+        self.feature_store = feature_store
         self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
         self.feature_requester_class = feature_requester_class
         self.connect_timeout = connect_timeout
@@ -102,14 +102,15 @@ class LDClient(object):
         self._event_consumer = None
         self._lock = Lock()
 
-        log.debug("store id: " + str(id(self._config.feature_store)))
+        self._store = self._config.feature_store
+        """ :type: FeatureStore """
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
         if self._config.use_ldd:
-            if self._config.feature_store.__class__ == "RedisFeatureStore":
+            if self._store.__class__ == "RedisFeatureStore":
                 log.info("Started LaunchDarkly Client in LDD mode")
                 return
             log.error("LDD mode requires a RedisFeatureStore.")
@@ -124,23 +125,23 @@ class LDClient(object):
 
         if self._config.update_processor_class:
             self._update_processor = self._config.update_processor_class(
-                api_key, self._config, self._feature_requester)
+                api_key, self._config, self._feature_requester, self._store)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    api_key, self._config, self._feature_requester)
+                    api_key, self._config, self._feature_requester, self._store)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    api_key, self._config, self._feature_requester)
+                    api_key, self._config, self._feature_requester, self._store)
         """ :type: UpdateProcessor """
 
         start_time = time.time()
         self._update_processor.start()
-        # while not self._update_processor.initialized():
-        #     if time.time() - start_time > start_wait:
-        #         log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
-        #         return
-        #     time.sleep(0.1)
+        while not self._update_processor.initialized():
+            if time.time() - start_time > start_wait:
+                log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
+                return
+            time.sleep(0.1)
 
         log.info("Started LaunchDarkly Client")
 
@@ -208,10 +209,7 @@ class LDClient(object):
         self._sanitize_user(user)
 
         if 'key' in user and user['key']:
-            log.debug("store id: " + str(id(self._config.feature_store)))
-            # log.debug("Feature store contents: " + str(self._config.feature_store._features))
-
-            feature = self._update_processor.get(key)
+            feature = self._store.get(key)
         else:
             send_event(default)
             log.warning("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
