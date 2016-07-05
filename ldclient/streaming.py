@@ -49,7 +49,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             store.upsert(key, feature)
         elif msg.event == "indirect/patch":
             key = payload['data']
-            store.upsert(key, requester.get(key))
+            store.upsert(key, requester.get_one(key))
         elif msg.event == "indirect/put":
             store.init(requester.get_all())
         elif msg.event == 'delete':

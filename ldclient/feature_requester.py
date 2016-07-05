@@ -22,7 +22,7 @@ class FeatureRequesterImpl(FeatureRequester):
         features = r.json()
         return features
 
-    def get(self, key):
+    def get_one(self, key):
         hdrs = _headers(self._api_key)
         uri = self._config.get_latest_features_uri + '/' + key
         r = self._session.get(uri,
