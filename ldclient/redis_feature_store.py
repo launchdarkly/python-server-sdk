@@ -15,8 +15,7 @@ class ForgetfulDict(dict):
 
 class RedisFeatureStore(FeatureStore):
     def __init__(self,
-                 host='localhost',
-                 port=6379,
+                 url='redis://localhost:6379/0',
                  prefix='launchdarkly',
                  max_connections=16,
                  expiration=15,
@@ -25,10 +24,7 @@ class RedisFeatureStore(FeatureStore):
         self._features_key = "{}:features".format(prefix)
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
-        self._pool = redis.ConnectionPool(max_connections=max_connections,
-                                          host=host,
-                                          port=port,
-                                          db=0)
+        self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
 
     def init(self, features):
         pipe = redis.Redis(connection_pool=self._pool).pipeline()
@@ -116,4 +112,3 @@ class RedisFeatureStore(FeatureStore):
         r.hset(self._features_key, key, feature_json)
         self._cache[key] = feature
         r.unwatch()
-

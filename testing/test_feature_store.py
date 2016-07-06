@@ -15,12 +15,12 @@ class TestFeatureStore:
     def redis_with_local_cache(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.delete("launchdarkly:features")
-        return RedisFeatureStore(host=self.redis_host, port=self.redis_port)
+        return RedisFeatureStore()
 
     def redis_no_local_cache(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.delete("launchdarkly:features")
-        return RedisFeatureStore(host=self.redis_host, port=self.redis_port, expiration=0)
+        return RedisFeatureStore(expiration=0)
 
     params = [in_memory, redis_with_local_cache, redis_no_local_cache]
 
