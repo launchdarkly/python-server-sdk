@@ -37,7 +37,7 @@ class RedisFeatureStore(FeatureStore):
         self._cache.clear()
 
         for k, f in features.items():
-            f_json = json.dumps(f, encoding='utf-8')
+            f_json = json.dumps(f)
             pipe.hset(self._features_key, k, f_json)
             self._cache[k] = f
         pipe.execute()
@@ -84,7 +84,7 @@ class RedisFeatureStore(FeatureStore):
                 f['version'] = version
             elif f is None:
                 f = {'deleted': True, 'version': version}
-            f_json = json.dumps(f, encoding='utf-8')
+            f_json = json.dumps(f)
             r.hset(self._features_key, key, f_json)
             self._cache[key] = f
         r.unwatch()
@@ -112,7 +112,7 @@ class RedisFeatureStore(FeatureStore):
                 r.unwatch()
                 return
 
-        feature_json = json.dumps(feature, encoding='utf-8')
+        feature_json = json.dumps(feature)
         r.hset(self._features_key, key, feature_json)
         self._cache[key] = feature
         r.unwatch()
