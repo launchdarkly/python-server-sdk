@@ -1,8 +1,9 @@
 from __future__ import print_function
-from ldclient import LDClient, Config
+
 import logging
 import sys
-import time
+
+from ldclient import LDClient
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
@@ -14,12 +15,11 @@ ch.setFormatter(formatter)
 root.addHandler(ch)
 
 if __name__ == '__main__':
-    apiKey = 'your api key'
-    client = LDClient(apiKey)
+    api_key = 'api_key'
+    client = LDClient(api_key, start_wait=10)
     print(client.api_key)
 
     user = {u'key': 'userKey'}
     print(client.toggle("update-app", user, False))
 
-    time.sleep(10)
     client.close()

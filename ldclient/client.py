@@ -1,5 +1,6 @@
 from __future__ import division, with_statement, absolute_import
 
+import threading
 import time
 
 import requests
@@ -128,28 +129,28 @@ class LDClient(object):
             self._feature_requester = FeatureRequesterImpl(api_key, self._config)
         """ :type: FeatureRequester """
 
+        update_processor_ready = threading.Event()
+
         if self._config.update_processor_class:
             self._update_processor = self._config.update_processor_class(
-                api_key, self._config, self._feature_requester, self._store)
+                api_key, self._config, self._feature_requester, self._store, update_processor_ready)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store)
+                    api_key, self._config, self._feature_requester, self._store, update_processor_ready)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store)
+                    api_key, self._config, self._feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """
 
-        start_time = time.time()
         self._update_processor.start()
-        #TODO: fix- it seems to always time out.
-        # while not self._update_processor.initialized():
-        #     if time.time() - start_time > start_wait:
-        #         log.warn("Timeout encountered waiting for LaunchDarkly Client initialization")
-        #         return
-        #     time.sleep(0.5)
+        log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
+        update_processor_ready.wait(start_wait)
 
-        log.info("Started LaunchDarkly Client")
+        if self._update_processor.initialized:
+            log.info("Started LaunchDarkly Client: OK")
+        else:
+            log.info("Initialization timeout exceeded for LaunchDarkly Client. Feature Flags may not yet be available.")
 
     @property
     def api_key(self):

@@ -68,15 +68,17 @@ class TwistedStreamProcessor(UpdateProcessor):
     def close(self):
         self.sse_client.stop()
 
-    def __init__(self, api_key, config, store, requester):
+    def __init__(self, api_key, config, store, requester, ready):
         self._store = store
         self._requester = requester
+        self._ready = ready
         self.sse_client = TwistedSSEClient(config.stream_uri,
                                            headers=_stream_headers(api_key, "PythonTwistedClient"),
                                            verify_ssl=config.verify_ssl,
                                            on_event=partial(StreamingUpdateProcessor.process_message,
                                                             self._store,
-                                                            self._requester))
+                                                            self._requester,
+                                                            self._ready))
         self.running = False
 
     def start(self):
@@ -87,7 +89,7 @@ class TwistedStreamProcessor(UpdateProcessor):
         self.sse_client.stop()
 
     def initialized(self):
-        return self._store.initialized()
+        return self._ready.is_set() and self._store.initialized()
 
     def is_alive(self):
         return self.running and self._store.initialized()

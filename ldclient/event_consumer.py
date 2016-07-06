@@ -20,7 +20,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         self._api_key = api_key
         self._config = config
         self._queue = event_queue
-        self._running = False
+        self._running = True
 
     def run(self):
         log.debug("Starting event consumer")

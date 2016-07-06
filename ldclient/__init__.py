@@ -1,3 +1,5 @@
+import threading
+
 from .client import *
 from ldclient.version import VERSION
 from .util import log
@@ -9,6 +11,27 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
+
+
+"""Settings."""
+client = None
+api_key = None
+start_wait = 5
+config = Config()
+
+_lock = threading.Lock()
+
+
+def get():
+    try:
+        _lock.acquire()
+        global client
+        if not client:
+            log.debug("Initializing LaunchDarkly Client")
+            client = LDClient(api_key, config, start_wait)
+        return client
+    finally:
+        _lock.release()
 
 
 # Add a NullHandler for Python < 2.7 compatibility

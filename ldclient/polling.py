@@ -6,14 +6,15 @@ import time
 
 
 class PollingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, api_key, config, requester, store):
+    def __init__(self, api_key, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
         self._api_key = api_key
         self._config = config
         self._requester = requester
         self._store = store
-        self._running = False
+        self._running = True
+        self._ready = ready
 
     def run(self):
         if not self._running:
@@ -22,12 +23,15 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
             while self._running:
                 start_time = time.time()
                 self._store.init(self._requester.get_all())
+                if not self._ready.is_set() and self._store.initialized:
+                    self._ready.set()
+                    log.info("StreamingUpdateProcessor initialized ok")
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:
                     time.sleep(self._config.poll_interval - elapsed)
 
     def initialized(self):
-        return self._running and self._store.initialized
+        return self._running and self._ready.is_set() and self._store.initialized
 
     def stop(self):
         log.info("Stopping PollingUpdateProcessor")

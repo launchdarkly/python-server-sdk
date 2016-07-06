@@ -1,4 +1,3 @@
 CacheControl>=0.10.2
-requests>=2.4.0
-future>=0.14.3
-sseclient>=0.0.9
+requests>=2.10.0
+sseclient>=0.0.12
