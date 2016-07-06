@@ -73,7 +73,7 @@ class Config(object):
             poll_interval = 1
         self.poll_interval = poll_interval
         self.use_ldd = use_ldd
-        self.feature_store = feature_store
+        self.feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
         self.feature_requester_class = feature_requester_class
         self.connect_timeout = connect_timeout
