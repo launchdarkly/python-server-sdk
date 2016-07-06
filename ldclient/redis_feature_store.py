@@ -35,7 +35,8 @@ class RedisFeatureStore(FeatureStore):
         pipe.delete(self._features_key)
 
         self._cache.clear()
-        for k, f in features.iteritems():
+
+        for k, f in features.items():
             f_json = json.dumps(f, encoding='utf-8')
             pipe.hset(self._features_key, k, f_json)
             self._cache[k] = f
