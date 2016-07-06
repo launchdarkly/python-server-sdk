@@ -16,7 +16,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._config = config
         self._requester = requester
         self._store = store
-        self._running = True
+        self._running = False
         self._ready = ready
 
     def run(self):

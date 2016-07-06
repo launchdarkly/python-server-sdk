@@ -13,7 +13,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
         self._config = config
         self._requester = requester
         self._store = store
-        self._running = True
+        self._running = False
         self._ready = ready
 
     def run(self):
@@ -24,8 +24,8 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                 start_time = time.time()
                 self._store.init(self._requester.get_all())
                 if not self._ready.is_set() and self._store.initialized:
-                    self._ready.set()
                     log.info("StreamingUpdateProcessor initialized ok")
+                    self._ready.set()
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:
                     time.sleep(self._config.poll_interval - elapsed)
