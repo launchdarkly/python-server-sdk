@@ -13,9 +13,14 @@ Quick setup
 
         pip install ldclient-py
 
-2. Create a new LDClient with your API key:
+2. Configure the library with your api key:
 
-        client = LDClient("your_api_key")
+        import ldclient
+        ldclient.api_key = "your api key"
+
+3. Get the client:
+
+        client = ldclient.get()
 
 Your first feature flag
 -----------------------
