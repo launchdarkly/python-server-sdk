@@ -15,10 +15,10 @@ class InMemoryFeatureStore(FeatureStore):
             self._lock.rlock()
             f = self._features.get(key)
             if f is None:
-                log.warn("Attempted to get missing feature: " + str(key) + " Returning None")
+                log.debug("Attempted to get missing feature: " + str(key) + " Returning None")
                 return None
             if 'deleted' in f and f['deleted']:
-                log.warn("Attempted to get deleted feature: " + str(key) + " Returning None")
+                log.debug("Attempted to get deleted feature: " + str(key) + " Returning None")
                 return None
             return f
         finally:
