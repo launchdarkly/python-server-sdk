@@ -136,7 +136,8 @@ def test_toggle_event():
     client.toggle('feature.key', user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True and e['default'] == None
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True \
+               and e['default'] == None
 
     assert expected_event(client._queue.get(False))
 
@@ -150,9 +151,8 @@ def test_toggle_event_numeric_user_key():
     client.toggle('feature.key', numeric_key_user, default=None)
 
     def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user and e[
-                                                                                                                        'value'] == True and \
-               e['default'] == None
+        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user \
+               and e['value'] == True and e['default'] == None
 
     assert expected_event(client._queue.get(False))
 
@@ -197,8 +197,8 @@ def test_track_numeric_key_user():
     client.track('my_event', numeric_key_user, 42)
 
     def expected_event(e):
-        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user and e[
-                                                                                                                    'data'] == 42
+        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user \
+               and e['data'] == 42
 
     assert expected_event(client._queue.get(False))
 
@@ -216,8 +216,10 @@ def test_defaults():
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": expected},
-                                           event_consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester,
+    my_client = LDClient("API_KEY", Config("http://localhost:3000",
+                                           defaults={"foo": expected},
+                                           event_consumer_class=MockConsumer,
+                                           feature_requester_class=MockFeatureRequester,
                                            feature_store=InMemoryFeatureStore()))
     actual = my_client.toggle('foo', user, default="originalDefault")
     assert actual == expected
@@ -225,8 +227,10 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
-                                        event_consumer_class=MockConsumer, feature_requester_class=MockFeatureRequester))
+    client = LDClient("API_KEY", Config("http://localhost:3000",
+                                        defaults={"foo": "bar"},
+                                        event_consumer_class=MockConsumer,
+                                        feature_requester_class=MockFeatureRequester))
     assert "jim" == client.toggle('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
 

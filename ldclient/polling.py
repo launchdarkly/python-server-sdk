@@ -24,7 +24,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                 start_time = time.time()
                 self._store.init(self._requester.get_all())
                 if not self._ready.is_set() and self._store.initialized:
-                    log.info("StreamingUpdateProcessor initialized ok")
+                    log.info("PollingUpdateProcessor initialized ok")
                     self._ready.set()
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:
