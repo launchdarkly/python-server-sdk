@@ -18,6 +18,6 @@ Development information (for developing this module itself)
         pip install -r test-requirements.txt
         pip install -r twisted-requirements.txt
 
-1. Run tests:
+1. Run tests: You'll need redis running locally on its default port of 6379.
 
         $ py.test testing

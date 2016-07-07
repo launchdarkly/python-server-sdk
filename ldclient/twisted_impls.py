@@ -6,8 +6,8 @@ import errno
 
 from cachecontrol import CacheControl
 from ldclient.client import Config, LDClient
-from ldclient.interfaces import FeatureRequester, StreamProcessor, EventConsumer
-from ldclient.requests import RequestsStreamProcessor
+from ldclient.interfaces import FeatureRequester, EventConsumer, UpdateProcessor
+from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.twisted_sse import TwistedSSEClient
 from ldclient.util import _headers, _stream_headers, log
 from requests.packages.urllib3.exceptions import ProtocolError
@@ -22,40 +22,33 @@ class TwistedHttpFeatureRequester(FeatureRequester):
         self._session = CacheControl(txrequests.Session())
         self._config = config
 
-    def get(self, key, callback):
-        d = self.toggle(key)
-        d.addBoth(callback)
-        return d
-
-    def toggle(self, key):
+    def get_all(self):
         @defer.inlineCallbacks
         def run(should_retry):
             # noinspection PyBroadException
             try:
-                val = yield self._toggle(key)
+                val = yield self._get_all(self)
                 defer.returnValue(val)
             except ProtocolError as e:
                 inner = e.args[1]
                 if inner.errno == errno.ECONNRESET and should_retry:
                     log.warning(
-                        'ProtocolError exception caught while getting flag. Retrying.')
+                        'ProtocolError exception caught while getting flags. Retrying.')
                     d = yield run(False)
                     defer.returnValue(d)
                 else:
-                    log.exception(
-                        'Unhandled exception. Returning default value for flag.')
+                    log.exception('Unhandled exception.')
                     defer.returnValue(None)
             except Exception:
-                log.exception(
-                    'Unhandled exception. Returning default value for flag.')
+                log.exception('Unhandled exception.')
                 defer.returnValue(None)
 
         return run(True)
 
     @defer.inlineCallbacks
-    def _toggle(self, key):
+    def _get_all(self):
         hdrs = _headers(self._api_key)
-        uri = self._config.base_uri + '/api/eval/features/' + key
+        uri = self._config.get_latest_features_uri
         r = yield self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
         r.raise_for_status()
         feature = r.json()
@@ -65,20 +58,27 @@ class TwistedHttpFeatureRequester(FeatureRequester):
 class TwistedConfig(Config):
 
     def __init__(self, *args, **kwargs):
-        self.stream_processor_class = TwistedStreamProcessor
-        self.consumer_class = TwistedEventConsumer
+        self.update_processor_class = TwistedStreamProcessor
+        self.event_consumer_class = TwistedEventConsumer
         self.feature_requester_class = TwistedHttpFeatureRequester
         super(TwistedConfig, self).__init__(*args, **kwargs)
 
 
-class TwistedStreamProcessor(StreamProcessor):
+class TwistedStreamProcessor(UpdateProcessor):
+    def close(self):
+        self.sse_client.stop()
 
-    def __init__(self, api_key, config, store):
+    def __init__(self, api_key, config, store, requester, ready):
         self._store = store
-        self.sse_client = TwistedSSEClient(config.stream_uri + "/", headers=_stream_headers(api_key,
-                                                                                            "PythonTwistedClient"),
-                                           verify=config.verify,
-                                           on_event=partial(RequestsStreamProcessor.process_message, self._store))
+        self._requester = requester
+        self._ready = ready
+        self.sse_client = TwistedSSEClient(config.stream_uri,
+                                           headers=_stream_headers(api_key, "PythonTwistedClient"),
+                                           verify_ssl=config.verify_ssl,
+                                           on_event=partial(StreamingUpdateProcessor.process_message,
+                                                            self._store,
+                                                            self._requester,
+                                                            self._ready))
         self.running = False
 
     def start(self):
@@ -88,14 +88,11 @@ class TwistedStreamProcessor(StreamProcessor):
     def stop(self):
         self.sse_client.stop()
 
-    def get_feature(self, key):
-        return self._store.get(key)
-
     def initialized(self):
-        return self._store.initialized()
+        return self._ready.is_set() and self._store.initialized()
 
     def is_alive(self):
-        return self.running
+        return self.running and self._store.initialized()
 
 
 class TwistedEventConsumer(EventConsumer):
@@ -149,8 +146,9 @@ class TwistedEventConsumer(EventConsumer):
                 else:
                     body = events
                 hdrs = _headers(self._api_key)
-                uri = self._config.events_uri + '/bulk'
-                r = yield self._session.post(uri, headers=hdrs, timeout=(self._config.connect, self._config.read),
+                r = yield self._session.post(self._config.events_uri,
+                                             headers=hdrs,
+                                             timeout=(self._config.connect, self._config.read),
                                              data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:

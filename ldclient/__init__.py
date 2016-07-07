@@ -1,7 +1,9 @@
-from .client import *
-from ldclient.version import VERSION
-from .util import log
 import logging
+
+from ldclient.rwlock import ReadWriteLock
+from ldclient.version import VERSION
+from .client import *
+from .util import log
 
 __version__ = VERSION
 
@@ -9,6 +11,34 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
+
+
+"""Settings."""
+client = None
+api_key = None
+start_wait = 5
+config = Config()
+
+_lock = ReadWriteLock()
+
+
+def get():
+    try:
+        _lock.rlock()
+        if client:
+            return client
+    finally:
+        _lock.runlock()
+
+    try:
+        global client
+        _lock.lock()
+        if not client:
+            log.debug("Initializing LaunchDarkly Client")
+            client = LDClient(api_key, config, start_wait)
+        return client
+    finally:
+        _lock.unlock()
 
 
 # Add a NullHandler for Python < 2.7 compatibility

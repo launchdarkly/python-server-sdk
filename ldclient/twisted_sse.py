@@ -17,9 +17,9 @@ class NoValidationContextFactory(ClientContextFactory):
 
 class TwistedSSEClient(object):
 
-    def __init__(self, url, headers, verify, on_event):
-        self.url = url + "/features"
-        self.verify = verify
+    def __init__(self, url, headers, verify_ssl, on_event):
+        self.url = url
+        self.verify_ssl = verify_ssl
         self.headers = headers
         self.on_event = on_event
         self.on_error_retry = 30
@@ -53,7 +53,7 @@ class TwistedSSEClient(object):
         headers = dict([(x, [y.encode('utf-8')]) for x, y in headers.items()])
         url = self.url.encode('utf-8')
         from twisted.internet import reactor
-        if self.verify:
+        if self.verify_ssl:
             agent = Agent(reactor)
         else:
             agent = Agent(reactor, NoValidationContextFactory())

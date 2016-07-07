@@ -29,7 +29,7 @@ def stream(request):
 @pytest.inlineCallbacks
 def test_sse_init(stream):
     stream.queue.put(Event(event="put", data=feature("foo", "jim")))
-    client = LDClient("apikey", TwistedConfig(stream=True, stream_processor_class=create_redis_ldd_processor,
+    client = LDClient("apikey", TwistedConfig(stream=True, update_processor_class=create_redis_ldd_processor,
                                               feature_requester_class=NoOpFeatureRequester,
                                               events=False))
     yield wait_until(is_equal(lambda: client.toggle("foo", user('xyz'), "blah"), "jim"))

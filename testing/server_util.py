@@ -91,14 +91,14 @@ class GenericServer:
         self.post_paths["/bulk"] = do_nothing
         return q
 
-    def add_feature(self, key, data):
+    def add_feature(self, data):
         def handle(handler):
             handler.send_response(200)
             handler.send_header('Content-type', 'application/json')
             handler.end_headers()
             handler.wfile.write(json.dumps(data).encode('utf-8'))
 
-        self.get("/api/eval/features/{}".format(key), handle)
+        self.get("/api/eval/latest-features", handle)
 
     def get(self, path, func):
         """
@@ -150,7 +150,6 @@ class SSEServer(GenericServer):
                     if event:
                         lines = "event: {event}\ndata: {data}\n\n".format(event=event.event,
                                                                           data=json.dumps(event.data))
-                        print("returning {}".format(lines))
                         handler.wfile.write(lines.encode('utf-8'))
                 except Empty:
                     pass

@@ -29,7 +29,7 @@ class FeatureStore(object):
     @abstractmethod
     def init(self, features):
         """
-        Initializes the store with a set of feature flags.  Meant to be called by the optional StreamProcessor
+        Initializes the store with a set of feature flags.  Meant to be called by the UpdateProcessor
 
         :param features: The features and their data as provided by LD
         :type features: dict[str, dict]
@@ -93,11 +93,17 @@ class BackgroundOperation(object):
         return True
 
 
-class StreamProcessor(BackgroundOperation):
+class UpdateProcessor(BackgroundOperation):
     """
-    Populates a store from an external data source
+    Responsible for retrieving Feature Flag updates from LaunchDarkly and saving them to the feature store
     """
     __metaclass__ = ABCMeta
+
+    def initialized(self):
+        """
+        Returns whether the update processor has received feature flags and has initialized its feature store.
+        :rtype: bool
+        """
 
 
 class EventConsumer(BackgroundOperation):
@@ -115,18 +121,19 @@ class EventConsumer(BackgroundOperation):
 
 class FeatureRequester(object):
     """
-    Requests features if they aren't in the store
+    Requests features.
     """
     __metaclass__ = ABCMeta
 
-    @abstractmethod
-    def get(self, key, callback):
+    def get_all(self):
         """
-        Gets a feature and calls the callback with the feature data to return the result
+        Gets all feature flags.
+        """
+        pass
 
-        :param key: The feature key
-        :type key: str
-        :param callback: The function that accepts the feature data and returns the feature value
-        :type callback: function
-        :return: The feature value. None if not found
+    def get_one(self, key):
         """
+        Gets one Feature flag
+        :return:
+        """
+        pass
