@@ -34,7 +34,7 @@ def get():
         global client
         _lock.lock()
         if not client:
-            log.debug("Initializing LaunchDarkly Client")
+            log.info("Initializing LaunchDarkly Client")
             client = LDClient(api_key, config, start_wait)
         return client
     finally:

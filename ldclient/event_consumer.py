@@ -23,7 +23,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         self._running = True
 
     def run(self):
-        log.debug("Starting event consumer")
+        log.info("Starting event consumer")
         self._running = True
         while self._running:
             self.send()

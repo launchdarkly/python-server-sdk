@@ -41,7 +41,6 @@ def _parse_time(input):
     if isinstance(input, six.string_types):
         try:
             timestamp = strict_rfc3339.rfc3339_to_timestamp(input)
-            log.debug("got timestamp: " + str(timestamp))
             return timestamp * 1000.0
         except Exception as e:
             log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + e.message)
@@ -99,7 +98,6 @@ def _greater_than_or_equal(u, c):
 
 
 def _before(u, c):
-    log.debug("before: u: " + str(u) + " c: " + str(c))
     return _time_operator(u, c, lambda u, c: u < c)
 
 

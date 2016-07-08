@@ -19,19 +19,15 @@ def _evaluate(flag, user, store, prereq_events=[]):
     for prereq in flag.get('prerequisites', []):
         prereq_flag = store.get(prereq.get('key'))
         if prereq_flag is None:
-            log.debug("Missing prereq flag: " + prereq.get('key'))
+            log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
             break
         if prereq_flag.get('on', False) is True:
             prereq_value, prereq_events = _evaluate(prereq_flag, user, store, prereq_events)
             event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user, 'value': prereq_value}
-            log.debug("Adding event: " + str(event))
             prereq_events.append(event)
             variation = _get_variation(prereq_flag, prereq.get('variation'))
-            log.debug("Prereq value: " + str(prereq_value))
-            log.debug("variation: " + str(variation))
             if prereq_value is None or not prereq_value == variation:
-                log.debug("Failed prereq: " + prereq.get('key'))
                 failed_prereq = prereq
         else:
             failed_prereq = prereq
@@ -40,7 +36,6 @@ def _evaluate(flag, user, store, prereq_events=[]):
         return None, prereq_events
 
     index = _evaluate_index(flag, user)
-    log.debug("Got index: " + str(index))
     return _get_variation(flag, index), prereq_events
 
 
@@ -128,7 +123,6 @@ def _rule_matches_user(rule, user):
 
 def _clause_matches_user(clause, user):
     u_value, should_pass = _get_user_attribute(user, clause.get('attribute'))
-    log.debug("got user attr: " + str(clause.get('attribute')) + " value: " + str(u_value))
     if should_pass is True:
         return False
     if u_value is None:
@@ -136,7 +130,6 @@ def _clause_matches_user(clause, user):
     # is the attr an array?
     op_fn = operators.ops[clause['op']]
     if isinstance(u_value, (list, tuple)):
-        log.debug("array..")
         for u in u_value:
             if _match_any(op_fn, u, clause.get('values', [])):
                 return _maybe_negate(clause, True)
@@ -148,9 +141,7 @@ def _clause_matches_user(clause, user):
 def _match_any(op_fn, u, vals):
     for v in vals:
         if op_fn(u, v):
-            log.debug("Matched: u: " + str(u) + " with v: " + str(v))
             return True
-    log.debug("Didn't match: u: " + str(u) + " with v: " + str(vals))
     return False
 
 

@@ -196,7 +196,6 @@ class LDClient(object):
         return self._event_consumer.flush()
 
     def toggle(self, key, user, default):
-        log.debug("Toggle for key: " + key + " user: " + str(user) + " default: " + str(default))
         default = self._config.get_default(key, default)
         self._sanitize_user(user)
 
@@ -224,14 +223,10 @@ class LDClient(object):
             send_event(default)
             return default
 
-        log.debug("Feature Flag: " + str(flag))
-
         if flag.get('on', False):
             value, prereq_events = _evaluate(flag, user, self._store)
             if not self._config.offline:
-                log.debug("Sending " + str(len(prereq_events)) + " prereq events")
                 for e in prereq_events:
-                    log.debug("Sending " + str(e))
                     self._send_event(e)
 
             if value is not None:
