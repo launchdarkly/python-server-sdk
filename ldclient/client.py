@@ -182,10 +182,7 @@ class LDClient(object):
 
     def identify(self, user):
         self._sanitize_user(user)
-        if not user or 'key' not in user:
-            log.warn("Attempted to call identify with a missing user key. Doing nothing.")
-            return
-        self._send_event({'kind': 'identify', 'key': user['key'], 'user': user})
+        self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
 
     def is_offline(self):
         return self._config.offline
@@ -230,7 +227,12 @@ class LDClient(object):
         log.debug("Feature Flag: " + str(flag))
 
         if flag.get('on', False):
-            value = _evaluate(flag, user, self._store)
+            value, prereq_events = _evaluate(flag, user, self._store)
+            if not self._config.offline:
+                log.debug("Sending " + str(len(prereq_events)) + " prereq events")
+                for e in prereq_events:
+                    log.debug("Sending " + str(e))
+                    self._send_event(e)
 
             if value is not None:
                 send_event(value)
