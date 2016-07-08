@@ -124,37 +124,13 @@ def wait_for_event(c, cb):
     return cb(e)
 
 
-def test_toggle():
-    assert client.toggle('feature.key', user, default=None) == True
-
-
 def test_toggle_offline():
-    assert offline_client.toggle('feature.key', user, default=None) == None
-
-
-def test_toggle_event():
-    client.toggle('feature.key', user, default=None)
-
-    def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == user and e['value'] == True \
-               and e['default'] == None
-
-    assert expected_event(client._queue.get(False))
+    assert offline_client.toggle('feature.key', user, default=None) is None
 
 
 def test_sanitize_user():
     client._sanitize_user(numeric_key_user)
     assert numeric_key_user == sanitized_numeric_key_user
-
-
-def test_toggle_event_numeric_user_key():
-    client.toggle('feature.key', numeric_key_user, default=None)
-
-    def expected_event(e):
-        return e['kind'] == 'feature' and e['key'] == 'feature.key' and e['user'] == sanitized_numeric_key_user \
-               and e['value'] == True and e['default'] == None
-
-    assert expected_event(client._queue.get(False))
 
 
 def test_toggle_event_offline():

@@ -22,5 +22,5 @@ dependencies:
 test:
   override:
     - pyenv shell 2.7.10; $(pyenv which py.test) testing
-    - pyenv shell 3.3.3; $(pyenv which py.test) --ignore=testing/test_integration_twisted.py -s testing
-    - pyenv shell 3.4.2; $(pyenv which py.test) --ignore=testing/test_integration_twisted.py -s testing
+    - pyenv shell 3.3.3; $(pyenv which py.test) -s testing
+    - pyenv shell 3.4.2; $(pyenv which py.test) -s testing
