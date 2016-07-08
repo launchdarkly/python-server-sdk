@@ -43,7 +43,7 @@ def _parse_time(input):
             timestamp = strict_rfc3339.rfc3339_to_timestamp(input)
             return timestamp * 1000.0
         except Exception as e:
-            log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + e.message)
+            log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + str(e))
             return None
 
     log.warn("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
