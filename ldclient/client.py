@@ -221,19 +221,28 @@ class LDClient(object):
             send_event(default)
             return default
 
-        feature = self._store.get(key)
-        if not feature:
+        flag = self._store.get(key)
+        if not flag:
             log.warn("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
             send_event(default)
             return default
 
-        log.debug("Feature Flag: " + str(feature))
-        value = _evaluate(feature, user)
-        if value is None:
-            log.warn("Feature Flag key: " + key + " evaluation returned None. Returning default: " + default)
-            value = default
-        send_event(value)
-        return value
+        log.debug("Feature Flag: " + str(flag))
+
+        if flag.get('on', False):
+            value = _evaluate(flag, user, self._store)
+
+            if value is not None:
+                send_event(value)
+                return value
+
+        if 'offVariation' in flag and flag['offVariation']:
+                value = _get_variation(flag, flag['offVariation'])
+                send_event(value)
+                return value
+
+        send_event(default)
+        return default
 
 
     def _sanitize_user(self, user):

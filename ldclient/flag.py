@@ -14,19 +14,31 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
-def _evaluate(feature, user):
-    if feature is None:
-        return None
-    if feature.get('on', False):
-        #TODO: prereqs
-        index = _evaluate_index(feature, user)
-        log.debug("Got index: " + str(index))
-        return _get_variation(feature, index)
-    else:
-        if 'offVariation' in feature and feature['offVariation']:
-            return _get_variation(feature, feature['offVariation'])
+def _evaluate(flag, user, store):
+    prereq_events = []
+    failed_prereq = None
+    for prereq in flag.get('prerequisites', []):
+        prereq_flag = store.get(prereq.get('key'))
+        if prereq_flag is None:
+            log.debug("Missing prereq flag: " + prereq.get('key'))
+            failed_prereq = prereq
+            break
+        if prereq_flag.get('on', False) is True:
+            prereq_value = _evaluate(prereq_flag, user, store)
+            # events
+            variation = _get_variation(prereq_flag, prereq.get('variation'))
+            if prereq_value is None or prereq.get('variation') != variation:
+                log.debug("Failed prereq: " + prereq.get('key'))
+                failed_prereq = prereq
+        else:
+            failed_prereq = prereq
 
-    return None
+    if failed_prereq is not None:
+        return None
+
+    index = _evaluate_index(flag, user)
+    log.debug("Got index: " + str(index))
+    return _get_variation(flag, index)
 
 
 def _evaluate_index(feature, user):

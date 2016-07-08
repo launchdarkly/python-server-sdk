@@ -1,11 +1,11 @@
 import logging
 import re
-from numbers import Number
+import sys
 from collections import defaultdict
+from numbers import Number
 
 import six
 import strict_rfc3339
-import sys
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
