@@ -9,10 +9,11 @@ from builtins import object
 from ldclient.event_consumer import EventConsumerImpl
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.flag import _get_off_variation, _evaluate_index, _get_variation, _evaluate
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
-from ldclient.util import check_uwsgi, _evaluate, log
+from ldclient.util import check_uwsgi, log
 
 # noinspection PyBroadException
 try:
@@ -24,8 +25,8 @@ except:
 from cachecontrol import CacheControl
 from threading import Lock
 
-GET_LATEST_FEATURES_PATH = '/api/eval/latest-features'
-STREAM_FEATURES_PATH = '/features'
+GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
+STREAM_FEATURES_PATH = '/flags'
 
 
 class Config(object):
@@ -177,56 +178,63 @@ class LDClient(object):
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
         self._send_event({'kind': 'custom', 'key': event_name,
-                    'user': user, 'data': data})
+                          'user': user, 'data': data})
 
     def identify(self, user):
         self._sanitize_user(user)
+        if not user or 'key' not in user:
+            log.warn("Attempted to call identify with a missing user key. Doing nothing.")
+            return
         self._send_event({'kind': 'identify', 'key': user['key'], 'user': user})
 
     def is_offline(self):
         return self._config.offline
+
+    def is_initialized(self):
+        return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
     def flush(self):
         if self._config.offline or not self._config.events_enabled:
             return
         return self._event_consumer.flush()
 
-    def get_flag(self, key, user, default=False):
-        return self.toggle(key, user, default)
-
-    def toggle(self, key, user, default=False):
+    def toggle(self, key, user, default):
+        log.debug("Toggle for key: " + key + " user: " + str(user) + " default: " + str(default))
         default = self._config.get_default(key, default)
-
-        def send_event(value):
-            self._send_event({'kind': 'feature', 'key': key,
-                        'user': user, 'value': value, 'default': default})
+        self._sanitize_user(user)
 
         if self._config.offline:
             return default
 
-        self._sanitize_user(user)
+        def send_event(value):
+            self._send_event({'kind': 'feature', 'key': key,
+                              'user': user, 'value': value, 'default': default})
 
-        if 'key' in user and user['key']:
-            feature = self._store.get(key)
-        else:
-            send_event(default)
-            log.warning("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
-            return default
-
-        if feature:
-            val = _evaluate(feature, user)
-        else:
-            log.warning("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
+        if not self.is_initialized():
+            log.warn("Feature Flag evaluation attempted before client has finished initializing! Returning default: "
+                     + str(default) + " for feature key: " + key)
             send_event(default)
             return default
 
-        if val is None:
+        if user.get('key', "") == "":
+            log.warn("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
             send_event(default)
-            log.warning("Feature Flag key: " + key + " evaluation returned None. Returning default.")
             return default
 
-        send_event(val)
-        return val
+        feature = self._store.get(key)
+        if not feature:
+            log.warn("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
+            send_event(default)
+            return default
+
+        log.debug("Feature Flag: " + str(feature))
+        value = _evaluate(feature, user)
+        if value is None:
+            log.warn("Feature Flag key: " + key + " evaluation returned None. Returning default: " + default)
+            value = default
+        send_event(value)
+        return value
+
 
     def _sanitize_user(self, user):
         if 'key' in user:
