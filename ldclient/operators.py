@@ -1,8 +1,13 @@
+import logging
 import re
 from numbers import Number
 from collections import defaultdict
 
 import six
+import strict_rfc3339
+import sys
+
+log = logging.getLogger(sys.modules[__name__].__name__)
 
 
 def _string_operator(u, c, fn):
@@ -16,6 +21,42 @@ def _numeric_operator(u, c, fn):
     if isinstance(u, Number):
         if isinstance(c, Number):
             return fn(u, c)
+    return False
+
+
+def _parse_time(input):
+    """
+    :param input: Either a number as milliseconds since Unix Epoch, or a string as a valid RFC3339 timestamp
+    :return: milliseconds since Unix epoch, or None if input was invalid.
+    """
+
+    # bool is a subtype of int, and we don't want to try and compare it as a time.
+    if isinstance(input, bool):
+        log.warn("Got unexpected bool type when attempting to parse time")
+        return None
+
+    if isinstance(input, Number):
+        return float(input)
+
+    if isinstance(input, six.string_types):
+        try:
+            timestamp = strict_rfc3339.rfc3339_to_timestamp(input)
+            log.debug("got timestamp: " + str(timestamp))
+            return timestamp * 1000.0
+        except Exception as e:
+            log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + e.message)
+            return None
+
+    log.warn("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
+    return None
+
+
+def _time_operator(u, c, fn):
+    u_time = _parse_time(u)
+    if u_time is not None:
+        c_time = _parse_time(c)
+        if c_time is not None:
+            return fn(u_time, c_time)
     return False
 
 
@@ -58,11 +99,13 @@ def _greater_than_or_equal(u, c):
 
 
 def _before(u, c):
-    return False
+    log.debug("before: u: " + str(u) + " c: " + str(c))
+    return _time_operator(u, c, lambda u, c: u < c)
 
 
 def _after(u, c):
-    return False
+    return _time_operator(u, c, lambda u, c: u > c)
+
 
 ops = {
     "in": _in,

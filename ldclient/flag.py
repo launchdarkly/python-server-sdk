@@ -76,7 +76,9 @@ def _variation_index_for_user(feature, rule, user):
         return rule['variation']
 
     if rule.get('rollout') is not None:
-        bucket_by = rule['rollout'].get('bucketBy') or 'key'
+        bucket_by = 'key'
+        if rule['rollout'].get('bucketBy') is not None:
+            bucket_by = rule['rollout']['bucketBy']
         bucket = _bucket_user(user, feature, bucket_by)
         sum = 0.0
         for wv in rule['rollout'].get('variations', []):
@@ -88,17 +90,17 @@ def _variation_index_for_user(feature, rule, user):
 
 
 def _bucket_user(user, feature, bucket_by):
-    u_value = _get_user_attribute(user, bucket_by)
-    if isinstance(u_value, six.string_types):
-        id_hash = u_value
-        if user.get('secondary') is not None:
-            id_hash += "." + user['secondary']
-        hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], id_hash)
-        hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
-        result = hash_val / __LONG_SCALE__
-        return result
+    u_value, should_pass = _get_user_attribute(user, bucket_by)
+    if should_pass is True or not isinstance(u_value, six.string_types):
+        return 0.0
 
-    return 0.0
+    id_hash = u_value
+    if user.get('secondary') is not None:
+        id_hash = id_hash + '.' + user['secondary']
+    hash_key = '%s.%s.%s' % (feature['key'], feature['salt'], id_hash)
+    hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
+    result = hash_val / __LONG_SCALE__
+    return result
 
 
 def _rule_matches_user(rule, user):
