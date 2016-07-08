@@ -27,7 +27,9 @@ def _evaluate(flag, user, store):
             prereq_value = _evaluate(prereq_flag, user, store)
             # events
             variation = _get_variation(prereq_flag, prereq.get('variation'))
-            if prereq_value is None or prereq.get('variation') != variation:
+            log.debug("Prereq value: " + str(prereq_value))
+            log.debug("variation: " + str(variation))
+            if prereq_value is None or not prereq_value == variation:
                 log.debug("Failed prereq: " + prereq.get('key'))
                 failed_prereq = prereq
         else:
