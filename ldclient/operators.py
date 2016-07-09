@@ -18,6 +18,11 @@ def _string_operator(u, c, fn):
 
 
 def _numeric_operator(u, c, fn):
+    # bool is a subtype of int, and we don't want to try and compare it as a number.
+    if isinstance(input, bool):
+        log.warn("Got unexpected bool type when attempting to parse time")
+        return None
+
     if isinstance(u, Number):
         if isinstance(c, Number):
             return fn(u, c)

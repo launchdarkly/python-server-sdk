@@ -9,7 +9,7 @@ from builtins import object
 from ldclient.event_consumer import EventConsumerImpl
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.flag import _get_off_variation, _evaluate_index, _get_variation, _evaluate
+from ldclient.flag import _get_off_variation, _evaluate_index, _get_variation, evaluate
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
@@ -177,8 +177,7 @@ class LDClient(object):
 
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
-        self._send_event({'kind': 'custom', 'key': event_name,
-                          'user': user, 'data': data})
+        self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
         self._sanitize_user(user)
@@ -224,7 +223,7 @@ class LDClient(object):
             return default
 
         if flag.get('on', False):
-            value, prereq_events = _evaluate(flag, user, self._store)
+            value, prereq_events = evaluate(flag, user, self._store)
             if not self._config.offline:
                 for e in prereq_events:
                     self._send_event(e)
