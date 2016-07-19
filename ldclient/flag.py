@@ -16,7 +16,7 @@ log = logging.getLogger(sys.modules[__name__].__name__)
 
 def evaluate(flag, user, store, prereq_events=[]):
     failed_prereq = None
-    for prereq in flag.get('prerequisites', []):
+    for prereq in flag.get('prerequisites') or []:
         prereq_flag = store.get(prereq.get('key'))
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
@@ -41,13 +41,13 @@ def evaluate(flag, user, store, prereq_events=[]):
 
 def _evaluate_index(feature, user):
     # Check to see if any user targets match:
-    for target in feature.get('targets', []):
-        for value in target.get('values', []):
+    for target in feature.get('targets') or []:
+        for value in target.get('values') or []:
             if value == user['key']:
                 return target.get('variation')
 
     # Now walk through the rules to see if any match
-    for rule in feature.get('rules', []):
+    for rule in feature.get('rules') or []:
         if _rule_matches_user(rule, user):
             return _variation_index_for_user(feature, rule, user)
 
@@ -91,7 +91,7 @@ def _variation_index_for_user(feature, rule, user):
             bucket_by = rule['rollout']['bucketBy']
         bucket = _bucket_user(user, feature, bucket_by)
         sum = 0.0
-        for wv in rule['rollout'].get('variations', []):
+        for wv in rule['rollout'].get('variations') or []:
             sum += wv.get('weight', 0.0) / 100000.0
             if bucket < sum:
                 return wv.get('variation')
@@ -114,7 +114,7 @@ def _bucket_user(user, feature, bucket_by):
 
 
 def _rule_matches_user(rule, user):
-    for clause in rule.get('clauses', []):
+    for clause in rule.get('clauses') or []:
         if clause.get('attribute') is not None:
             if not _clause_matches_user(clause, user):
                 return False
@@ -131,11 +131,11 @@ def _clause_matches_user(clause, user):
     op_fn = operators.ops[clause['op']]
     if isinstance(u_value, (list, tuple)):
         for u in u_value:
-            if _match_any(op_fn, u, clause.get('values', [])):
+            if _match_any(op_fn, u, clause.get('values') or []):
                 return _maybe_negate(clause, True)
             return _maybe_negate(clause, True)
     else:
-        return _maybe_negate(clause, _match_any(op_fn, u_value, clause.get('values', [])))
+        return _maybe_negate(clause, _match_any(op_fn, u_value, clause.get('values') or []))
 
 
 def _match_any(op_fn, u, vals):
