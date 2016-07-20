@@ -133,7 +133,7 @@ def _clause_matches_user(clause, user):
         for u in u_value:
             if _match_any(op_fn, u, clause.get('values') or []):
                 return _maybe_negate(clause, True)
-            return _maybe_negate(clause, True)
+        return _maybe_negate(clause, False)
     else:
         return _maybe_negate(clause, _match_any(op_fn, u_value, clause.get('values') or []))
 
@@ -146,6 +146,6 @@ def _match_any(op_fn, u, vals):
 
 
 def _maybe_negate(clause, val):
-    if clause.get('negate', False):
+    if clause.get('negate', False) is True:
         return not val
     return val
