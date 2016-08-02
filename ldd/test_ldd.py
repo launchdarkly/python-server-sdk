@@ -32,7 +32,7 @@ def test_sse_init(stream):
     client = LDClient("apikey", Config(use_ldd=True,
                                        feature_store=RedisFeatureStore(),
                                        events_enabled=False))
-    wait_until(lambda: client.toggle(
+    wait_until(lambda: client.variation(
         "foo", user('xyz'), "blah") == "jim", timeout=10)
 
 

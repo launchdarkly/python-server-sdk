@@ -108,6 +108,7 @@ class LDClient(object):
         """ :type: FeatureStore """
 
         if self._config.offline:
+            self._config.events_enabled = False
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
@@ -177,10 +178,14 @@ class LDClient(object):
 
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
+        if user.get('key', "") == "":
+            log.warn("Missing or empty User key when calling track().")
         self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
         self._sanitize_user(user)
+        if user.get('key', "") == "":
+            log.warn("Missing or empty User key when calling identify().")
         self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
 
     def is_offline(self):
@@ -195,15 +200,19 @@ class LDClient(object):
         return self._event_consumer.flush()
 
     def toggle(self, key, user, default):
+        log.warn("Deprecated method: toggle() called. Use variation() instead.")
+        return self.variation(key, user, default)
+
+    def variation(self, key, user, default):
         default = self._config.get_default(key, default)
         self._sanitize_user(user)
 
         if self._config.offline:
             return default
 
-        def send_event(value):
+        def send_event(value, version=None):
             self._send_event({'kind': 'feature', 'key': key,
-                              'user': user, 'value': value, 'default': default})
+                              'user': user, 'value': value, 'default': default, 'version': version})
 
         if not self.is_initialized():
             log.warn("Feature Flag evaluation attempted before client has finished initializing! Returning default: "
@@ -229,17 +238,16 @@ class LDClient(object):
                     self._send_event(e)
 
             if value is not None:
-                send_event(value)
+                send_event(value, flag.get('version'))
                 return value
 
         if 'offVariation' in flag and flag['offVariation']:
-                value = _get_variation(flag, flag['offVariation'])
-                send_event(value)
-                return value
+            value = _get_variation(flag, flag['offVariation'])
+            send_event(value, flag.get('version'))
+            return value
 
-        send_event(default)
+        send_event(default, flag.get('version'))
         return default
-
 
     def _sanitize_user(self, user):
         if 'key' in user:

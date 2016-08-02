@@ -20,6 +20,6 @@ if __name__ == '__main__':
     client = ldclient.get()
 
     user = {u'key': 'userKey'}
-    print(client.toggle("update-app", user, False))
+    print(client.variation("update-app", user, False))
 
     client.close()

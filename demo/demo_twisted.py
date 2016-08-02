@@ -13,7 +13,7 @@ def main(_):
             u'bizzle': u'def'
         }
     }
-    val = yield client.toggle('foo', user)
+    val = yield client.variation('foo', user)
     yield client.flush()
     print("Value: {}".format(val))
 
