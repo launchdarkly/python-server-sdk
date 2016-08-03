@@ -15,7 +15,7 @@ ch.setFormatter(formatter)
 root.addHandler(ch)
 
 if __name__ == '__main__':
-    ldclient._api_key = 'api_key'
+    ldclient.api_key = 'api_key'
     ldclient.start_wait = 10
     client = ldclient.get()
 

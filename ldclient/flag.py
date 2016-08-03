@@ -14,7 +14,21 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
-def evaluate(flag, user, store, prereq_events=[]):
+def evaluate(flag, user, store):
+    prereq_events = []
+    if flag.get('on', False):
+        value, prereq_events = _evaluate(flag, user, store)
+        if value is not None:
+            return value, prereq_events
+
+    if 'offVariation' in flag and flag['offVariation']:
+        value = _get_variation(flag, flag['offVariation'])
+        return value, prereq_events
+    return None, prereq_events
+
+
+def _evaluate(flag, user, store, prereq_events=None):
+    events = prereq_events or []
     failed_prereq = None
     prereq_value = None
     for prereq in flag.get('prerequisites') or []:
@@ -24,7 +38,7 @@ def evaluate(flag, user, store, prereq_events=[]):
             failed_prereq = prereq
             break
         if prereq_flag.get('on', False) is True:
-            prereq_value, prereq_events = evaluate(prereq_flag, user, store, prereq_events)
+            prereq_value, events = _evaluate(prereq_flag, user, store, events)
             variation = _get_variation(prereq_flag, prereq.get('variation'))
             if prereq_value is None or not prereq_value == variation:
                 failed_prereq = prereq
@@ -33,13 +47,13 @@ def evaluate(flag, user, store, prereq_events=[]):
 
         event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
                  'value': prereq_value, 'version': prereq_flag.get('version'), 'prereqOf': prereq.get('key')}
-        prereq_events.append(event)
+        events.append(event)
 
     if failed_prereq is not None:
-        return None, prereq_events
+        return None, events
 
     index = _evaluate_index(flag, user)
-    return _get_variation(flag, index), prereq_events
+    return _get_variation(flag, index), events
 
 
 def _evaluate_index(feature, user):

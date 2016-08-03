@@ -55,7 +55,7 @@ class MockFeatureStore(FeatureStore):
 
 
 client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
-offline_client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
+offline_client = LDClient("secret", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
 
 user = {
     u'key': u'xyz',
@@ -229,6 +229,11 @@ def test_exception_in_retrieval():
 
 def test_no_defaults():
     assert "bar" == offline_client.variation('foo', user, default="bar")
+
+
+def test_secure_mode_hash():
+    user = {'key': 'Message'}
+    assert offline_client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
 
 
 def drain(queue):

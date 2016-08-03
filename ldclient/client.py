@@ -1,5 +1,7 @@
 from __future__ import division, with_statement, absolute_import
 
+import hashlib
+import hmac
 import threading
 import time
 
@@ -9,7 +11,7 @@ from builtins import object
 from ldclient.event_consumer import EventConsumerImpl
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.flag import _get_off_variation, _evaluate_index, _get_variation, evaluate
+from ldclient.flag import evaluate
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
@@ -231,25 +233,29 @@ class LDClient(object):
             send_event(default)
             return default
 
-        if flag.get('on', False):
-            value, prereq_events = evaluate(flag, user, self._store)
-            if not self._config.offline:
-                for e in prereq_events:
-                    self._send_event(e)
+        value, events = evaluate(flag, user, self._store)
+        log.debug("Got " + str(len(events)) + " prereq events for feature key: " + key)
+        for event in events or []:
+            self._send_event(event)
+            log.debug("Sending event: " + str(event))
 
-            if value is not None:
-                send_event(value, flag.get('version'))
-                return value
-
-        if 'offVariation' in flag and flag['offVariation']:
-            value = _get_variation(flag, flag['offVariation'])
+        if value is not None:
             send_event(value, flag.get('version'))
             return value
 
         send_event(default, flag.get('version'))
         return default
 
-    def _sanitize_user(self, user):
+    def all_flags(self, user):
+        return {k: evaluate(v, user, self._store)[0] for k, v in self._store.all().items() or {}}
+
+    def secure_mode_hash(self, user):
+        if user.get('key', "") == "":
+            return ""
+        return hmac.new(self._api_key, user.get('key'), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _sanitize_user(user):
         if 'key' in user:
             user['key'] = str(user['key'])
 
