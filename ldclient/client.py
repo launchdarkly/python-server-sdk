@@ -234,7 +234,6 @@ class LDClient(object):
             return default
 
         value, events = evaluate(flag, user, self._store)
-        log.debug("Got " + str(len(events)) + " prereq events for feature key: " + key)
         for event in events or []:
             self._send_event(event)
             log.debug("Sending event: " + str(event))
