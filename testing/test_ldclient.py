@@ -54,7 +54,7 @@ class MockFeatureStore(FeatureStore):
             return None
 
 
-client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
+client = LDClient("SDK_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
 offline_client = LDClient("secret", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
 
 user = {
@@ -185,14 +185,14 @@ def test_track_offline():
 
 
 def test_defaults():
-    client = LDClient("API_KEY", Config(
+    client = LDClient("SDK_KEY", Config(
         "http://localhost:3000", defaults={"foo": "bar"}, offline=True))
     assert "bar" == client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient("API_KEY", Config("http://localhost:3000",
+    my_client = LDClient("SDK_KEY", Config("http://localhost:3000",
                                            defaults={"foo": expected},
                                            event_consumer_class=MockConsumer,
                                            feature_requester_class=MockFeatureRequester,
@@ -203,7 +203,7 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    client = LDClient("API_KEY", Config("http://localhost:3000",
+    client = LDClient("SDK_KEY", Config("http://localhost:3000",
                                         defaults={"foo": "bar"},
                                         event_consumer_class=MockConsumer,
                                         feature_requester_class=MockFeatureRequester))
@@ -219,7 +219,7 @@ def test_exception_in_retrieval():
         def get_all(self):
             raise Exception("blah")
 
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+    client = LDClient("SDK_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
                                         feature_store=InMemoryFeatureStore(),
                                         feature_requester_class=ExceptionFeatureRequester,
                                         event_consumer_class=MockConsumer))

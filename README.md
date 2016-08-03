@@ -13,10 +13,10 @@ Quick setup
 
         pip install ldclient-py
 
-2. Configure the library with your api key:
+2. Configure the library with your sdk key:
 
         import ldclient
-        ldclient.api_key = "your api key"
+        ldclient.sdk_key = "your sdk key"
 
 3. Get the client:
 

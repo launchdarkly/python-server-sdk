@@ -53,14 +53,14 @@ class Config(object):
                  offline=False):
         """
 
-        :param update_processor_class: A factory for an UpdateProcessor implementation taking the api key, config,
+        :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key, config,
                                        and FeatureStore implementation
         :type update_processor_class: (str, Config, FeatureStore) -> UpdateProcessor
         :param feature_store: A FeatureStore implementation
         :type feature_store: FeatureStore
-        :param feature_requester_class: A factory for a FeatureRequester implementation taking the api key and config
+        :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
-        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, api key, and config
+        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
         :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
         """
         if defaults is None:
@@ -97,9 +97,9 @@ class Config(object):
 
 
 class LDClient(object):
-    def __init__(self, api_key, config=None, start_wait=5):
+    def __init__(self, sdk_key, config=None, start_wait=5):
         check_uwsgi()
-        self._api_key = api_key
+        self._sdk_key = sdk_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.events_max_pending)
@@ -116,7 +116,7 @@ class LDClient(object):
 
         if self._config.events_enabled:
             self._event_consumer = self._config.event_consumer_class(
-                self._queue, self._api_key, self._config)
+                self._queue, self._sdk_key, self._config)
             self._event_consumer.start()
 
         if self._config.use_ldd:
@@ -128,23 +128,23 @@ class LDClient(object):
 
         if self._config.feature_requester_class:
             self._feature_requester = self._config.feature_requester_class(
-                api_key, self._config)
+                sdk_key, self._config)
         else:
-            self._feature_requester = FeatureRequesterImpl(api_key, self._config)
+            self._feature_requester = FeatureRequesterImpl(sdk_key, self._config)
         """ :type: FeatureRequester """
 
         update_processor_ready = threading.Event()
 
         if self._config.update_processor_class:
             self._update_processor = self._config.update_processor_class(
-                api_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    api_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """
 
         self._update_processor.start()
@@ -157,8 +157,8 @@ class LDClient(object):
             log.info("Initialization timeout exceeded for LaunchDarkly Client. Feature Flags may not yet be available.")
 
     @property
-    def api_key(self):
-        return self._api_key
+    def sdk_key(self):
+        return self._sdk_key
 
     def close(self):
         log.info("Closing LaunchDarkly client..")
@@ -251,7 +251,7 @@ class LDClient(object):
     def secure_mode_hash(self, user):
         if user.get('key', "") == "":
             return ""
-        return hmac.new(self._api_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
+        return hmac.new(self._sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
 
     @staticmethod
     def _sanitize_user(user):

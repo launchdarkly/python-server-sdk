@@ -10,10 +10,10 @@ from ldclient.util import _stream_headers, log
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
-    def __init__(self, api_key, config, requester, store, ready):
+    def __init__(self, sdk_key, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._api_key = api_key
+        self._sdk_key = sdk_key
         self._config = config
         self._requester = requester
         self._store = store
@@ -23,7 +23,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._config.stream_uri)
         self._running = True
-        hdrs = _stream_headers(self._api_key)
+        hdrs = _stream_headers(self._sdk_key)
         uri = self._config.stream_uri
         while self._running:
             try:

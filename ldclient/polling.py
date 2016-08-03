@@ -6,10 +6,10 @@ import time
 
 
 class PollingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, api_key, config, requester, store, ready):
+    def __init__(self, sdk_key, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._api_key = api_key
+        self._sdk_key = sdk_key
         self._config = config
         self._requester = requester
         self._store = store

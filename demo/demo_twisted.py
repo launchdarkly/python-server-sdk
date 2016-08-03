@@ -5,8 +5,8 @@ from twisted.internet import task, defer
 
 @defer.inlineCallbacks
 def main(_):
-    api_key = 'whatever'
-    client = TwistedLDClient(api_key)
+    sdk_key = 'whatever'
+    client = TwistedLDClient(sdk_key)
     user = {
         u'key': u'xyz',
         u'custom': {

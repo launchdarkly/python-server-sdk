@@ -17,8 +17,8 @@ import txrequests
 
 class TwistedHttpFeatureRequester(FeatureRequester):
 
-    def __init__(self, api_key, config):
-        self._api_key = api_key
+    def __init__(self, sdk_key, config):
+        self._sdk_key = sdk_key
         self._session = CacheControl(txrequests.Session())
         self._config = config
 
@@ -47,7 +47,7 @@ class TwistedHttpFeatureRequester(FeatureRequester):
 
     @defer.inlineCallbacks
     def _get_all(self):
-        hdrs = _headers(self._api_key)
+        hdrs = _headers(self._sdk_key)
         uri = self._config.get_latest_features_uri
         r = yield self._session.get(uri, headers=hdrs, timeout=(self._config.connect, self._config.read))
         r.raise_for_status()
@@ -68,12 +68,12 @@ class TwistedStreamProcessor(UpdateProcessor):
     def close(self):
         self.sse_client.stop()
 
-    def __init__(self, api_key, config, store, requester, ready):
+    def __init__(self, sdk_key, config, store, requester, ready):
         self._store = store
         self._requester = requester
         self._ready = ready
         self.sse_client = TwistedSSEClient(config.stream_uri,
-                                           headers=_stream_headers(api_key, "PythonTwistedClient"),
+                                           headers=_stream_headers(sdk_key, "PythonTwistedClient"),
                                            verify_ssl=config.verify_ssl,
                                            on_event=partial(StreamingUpdateProcessor.process_message,
                                                             self._store,
@@ -97,14 +97,14 @@ class TwistedStreamProcessor(UpdateProcessor):
 
 class TwistedEventConsumer(EventConsumer):
 
-    def __init__(self, queue, api_key, config):
+    def __init__(self, queue, sdk_key, config):
         self._queue = queue
         """ @type: queue.Queue """
 
         self._session = CacheControl(txrequests.Session())
         """ :type: txrequests.Session """
 
-        self._api_key = api_key
+        self._sdk_key = sdk_key
         self._config = config
         """ :type: ldclient.twisted.TwistedConfig """
 
@@ -145,7 +145,7 @@ class TwistedEventConsumer(EventConsumer):
                     body = [events]
                 else:
                     body = events
-                hdrs = _headers(self._api_key)
+                hdrs = _headers(self._sdk_key)
                 r = yield self._session.post(self._config.events_uri,
                                              headers=hdrs,
                                              timeout=(self._config.connect, self._config.read),
@@ -172,10 +172,10 @@ class TwistedEventConsumer(EventConsumer):
 
 class TwistedLDClient(LDClient):
 
-    def __init__(self, api_key, config=None):
+    def __init__(self, sdk_key, config=None):
         if config is None:
             config = TwistedConfig()
-        LDClient.__init__(self, api_key, config)
+        LDClient.__init__(self, sdk_key, config)
 
 
 __all__ = ['TwistedConfig', 'TwistedLDClient']
