@@ -251,7 +251,7 @@ class LDClient(object):
     def secure_mode_hash(self, user):
         if user.get('key', "") == "":
             return ""
-        return hmac.new(bytes(self._api_key), bytes(user.get('key')), hashlib.sha256).hexdigest()
+        return hmac.new(self._api_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
 
     @staticmethod
     def _sanitize_user(user):
