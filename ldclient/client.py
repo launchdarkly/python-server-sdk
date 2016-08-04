@@ -246,6 +246,18 @@ class LDClient(object):
         return default
 
     def all_flags(self, user):
+        if self._config.offline:
+            log.warn("all_flags() called, but client is in offline mode. Returning None")
+            return None
+
+        if not self.is_initialized():
+            log.warn("all_flags() called before client has finished initializing! Returning None")
+            return None
+
+        if user.get('key', "") == "":
+            log.warn("Missing or empty User key when calling all_flags(). Returning None.")
+            return None
+
         return {k: evaluate(v, user, self._store)[0] for k, v in self._store.all().items() or {}}
 
     def secure_mode_hash(self, user):
