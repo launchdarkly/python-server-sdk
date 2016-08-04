@@ -8,13 +8,13 @@ from ldclient.util import _headers
 
 
 class FeatureRequesterImpl(FeatureRequester):
-    def __init__(self, api_key, config):
-        self._api_key = api_key
+    def __init__(self, sdk_key, config):
+        self._sdk_key = sdk_key
         self._session = CacheControl(requests.Session())
         self._config = config
 
     def get_all(self):
-        hdrs = _headers(self._api_key)
+        hdrs = _headers(self._sdk_key)
         uri = self._config.get_latest_features_uri
         r = self._session.get(uri, headers=hdrs, timeout=(
             self._config.connect_timeout, self._config.read_timeout))
@@ -23,7 +23,7 @@ class FeatureRequesterImpl(FeatureRequester):
         return features
 
     def get_one(self, key):
-        hdrs = _headers(self._api_key)
+        hdrs = _headers(self._sdk_key)
         uri = self._config.get_latest_features_uri + '/' + key
         r = self._session.get(uri,
                               headers=hdrs,

@@ -13,10 +13,10 @@ Quick setup
 
         pip install ldclient-py
 
-2. Configure the library with your api key:
+2. Configure the library with your sdk key:
 
         import ldclient
-        ldclient.api_key = "your api key"
+        ldclient.sdk_key = "your sdk key"
 
 3. Get the client:
 
@@ -28,7 +28,7 @@ Your first feature flag
 1. Create a new feature flag on your [dashboard](https://app.launchdarkly.com)
 2. In your application code, use the feature's key to check wthether the flag is on for each user:
 
-        if client.toggle("your.flag.key", {"key": "user@test.com"}, False):
+        if client.variation("your.flag.key", {"key": "user@test.com"}, False):
             # application code to show the feature
         else:
             # the code to run if the feature is off

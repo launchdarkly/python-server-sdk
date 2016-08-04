@@ -48,7 +48,7 @@ host = "localhost"
 port = 6379
 
 [main]
-apiKey = "YOUR_API_KEY"
+sdkKey = "YOUR_SDK_KEY"
 prefix = "launchdarkly"
 streamUri = "http://localhost:8000"
 EOF

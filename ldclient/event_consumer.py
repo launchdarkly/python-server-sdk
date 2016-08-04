@@ -13,11 +13,11 @@ from ldclient.util import log
 
 
 class EventConsumerImpl(Thread, EventConsumer):
-    def __init__(self, event_queue, api_key, config):
+    def __init__(self, event_queue, sdk_key, config):
         Thread.__init__(self)
         self._session = requests.Session()
         self.daemon = True
-        self._api_key = api_key
+        self.sdk_key = sdk_key
         self._config = config
         self._queue = event_queue
         self._running = True
@@ -42,7 +42,7 @@ class EventConsumerImpl(Thread, EventConsumer):
                     body = [events]
                 else:
                     body = events
-                hdrs = _headers(self._api_key)
+                hdrs = _headers(self.sdk_key)
                 uri = self._config.events_uri
                 r = self._session.post(uri,
                                        headers=hdrs,

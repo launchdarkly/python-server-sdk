@@ -2,6 +2,7 @@ import json
 
 import redis
 
+from ldclient import log
 from ldclient.expiringdict import ExpiringDict
 from ldclient.interfaces import FeatureStore
 
@@ -25,6 +26,7 @@ class RedisFeatureStore(FeatureStore):
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
+        log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + prefix)
 
     def init(self, features):
         pipe = redis.Redis(connection_pool=self._pool).pipeline()
@@ -50,24 +52,26 @@ class RedisFeatureStore(FeatureStore):
 
     def get(self, key):
         f = self._cache.get(key)
-        if f:
+        if f is not None:
             # reset ttl
             self._cache[key] = f
-            if 'deleted' in f and f['deleted']:
+            if f.get('deleted', False) is True:
+                log.warn("RedisFeatureStore: get returned deleted flag from in-memory cache. Returning None.")
                 return None
             return f
 
         r = redis.Redis(connection_pool=self._pool)
         f_json = r.hget(self._features_key, key)
-        if f_json:
-            f = json.loads(f_json.decode('utf-8'))
-            if f:
-                if 'deleted' in f and f['deleted']:
-                    return None
-            self._cache[key] = f
-            return f
+        if f_json is None or f_json is "":
+            log.warn("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
+            return None
 
-        return None
+        f = json.loads(f_json.decode('utf-8'))
+        if f.get('deleted', False) is True:
+            log.warn("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+            return None
+        self._cache[key] = f
+        return f
 
     def delete(self, key, version):
         r = redis.Redis(connection_pool=self._pool)

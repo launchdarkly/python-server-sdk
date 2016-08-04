@@ -31,13 +31,13 @@ else:
     __BASE_TYPES__ = (str, float, int, bool, unicode)
 
 
-def _headers(api_key):
-    return {'Authorization': 'api_key ' + api_key, 'User-Agent': 'PythonClient/' + VERSION,
+def _headers(sdk_key):
+    return {'Authorization': sdk_key, 'User-Agent': 'PythonClient/' + VERSION,
             'Content-Type': "application/json"}
 
 
-def _stream_headers(api_key, client="PythonClient"):
-    return {'Authorization': 'api_key ' + api_key,
+def _stream_headers(sdk_key, client="PythonClient"):
+    return {'Authorization': sdk_key,
             'User-Agent': '{}/{}'.format(client, VERSION),
             'Cache-Control': 'no-cache',
             'Accept': "text/event-stream"}

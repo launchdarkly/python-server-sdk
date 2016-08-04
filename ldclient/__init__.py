@@ -15,7 +15,7 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 
 """Settings."""
 client = None
-api_key = None
+sdk_key = None
 start_wait = 5
 config = Config()
 
@@ -35,7 +35,7 @@ def get():
         _lock.lock()
         if not client:
             log.info("Initializing LaunchDarkly Client")
-            client = LDClient(api_key, config, start_wait)
+            client = LDClient(sdk_key, config, start_wait)
         return client
     finally:
         _lock.unlock()

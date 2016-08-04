@@ -54,8 +54,8 @@ class MockFeatureStore(FeatureStore):
             return None
 
 
-client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
-offline_client = LDClient("API_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
+client = LDClient("SDK_KEY", Config("http://localhost:3000", feature_store=MockFeatureStore()))
+offline_client = LDClient("secret", Config("http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
 
 user = {
     u'key': u'xyz',
@@ -125,7 +125,7 @@ def wait_for_event(c, cb):
 
 
 def test_toggle_offline():
-    assert offline_client.toggle('feature.key', user, default=None) is None
+    assert offline_client.variation('feature.key', user, default=None) is None
 
 
 def test_sanitize_user():
@@ -134,7 +134,7 @@ def test_sanitize_user():
 
 
 def test_toggle_event_offline():
-    offline_client.toggle('feature.key', user, default=None)
+    offline_client.variation('feature.key', user, default=None)
     assert offline_client._queue.empty()
 
 
@@ -185,29 +185,29 @@ def test_track_offline():
 
 
 def test_defaults():
-    client = LDClient("API_KEY", Config(
+    client = LDClient("SDK_KEY", Config(
         "http://localhost:3000", defaults={"foo": "bar"}, offline=True))
-    assert "bar" == client.toggle('foo', user, default=None)
+    assert "bar" == client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient("API_KEY", Config("http://localhost:3000",
+    my_client = LDClient("SDK_KEY", Config("http://localhost:3000",
                                            defaults={"foo": expected},
                                            event_consumer_class=MockConsumer,
                                            feature_requester_class=MockFeatureRequester,
                                            feature_store=InMemoryFeatureStore()))
-    actual = my_client.toggle('foo', user, default="originalDefault")
+    actual = my_client.variation('foo', user, default="originalDefault")
     assert actual == expected
     assert wait_for_event(my_client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
 
 def test_defaults_and_online_no_default():
-    client = LDClient("API_KEY", Config("http://localhost:3000",
+    client = LDClient("SDK_KEY", Config("http://localhost:3000",
                                         defaults={"foo": "bar"},
                                         event_consumer_class=MockConsumer,
                                         feature_requester_class=MockFeatureRequester))
-    assert "jim" == client.toggle('baz', user, default="jim")
+    assert "jim" == client.variation('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
 
 
@@ -219,16 +219,21 @@ def test_exception_in_retrieval():
         def get_all(self):
             raise Exception("blah")
 
-    client = LDClient("API_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
+    client = LDClient("SDK_KEY", Config("http://localhost:3000", defaults={"foo": "bar"},
                                         feature_store=InMemoryFeatureStore(),
                                         feature_requester_class=ExceptionFeatureRequester,
                                         event_consumer_class=MockConsumer))
-    assert "bar" == client.toggle('foo', user, default="jim")
+    assert "bar" == client.variation('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
 
 def test_no_defaults():
-    assert "bar" == offline_client.toggle('foo', user, default="bar")
+    assert "bar" == offline_client.variation('foo', user, default="bar")
+
+
+def test_secure_mode_hash():
+    user = {'key': 'Message'}
+    assert offline_client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
 
 
 def drain(queue):

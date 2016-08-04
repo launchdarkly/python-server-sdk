@@ -1,6 +1,7 @@
 import json
 from threading import Thread
 
+import time
 from sseclient import SSEClient
 
 from ldclient.interfaces import UpdateProcessor
@@ -9,10 +10,10 @@ from ldclient.util import _stream_headers, log
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
-    def __init__(self, api_key, config, requester, store, ready):
+    def __init__(self, sdk_key, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._api_key = api_key
+        self._sdk_key = sdk_key
         self._config = config
         self._requester = requester
         self._store = store
@@ -22,13 +23,19 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._config.stream_uri)
         self._running = True
-        hdrs = _stream_headers(self._api_key)
+        hdrs = _stream_headers(self._sdk_key)
         uri = self._config.stream_uri
-        messages = SSEClient(uri, verify=self._config.verify_ssl, headers=hdrs)
-        for msg in messages:
-            if not self._running:
-                break
-            self.process_message(self._store, self._requester, msg, self._ready)
+        while self._running:
+            try:
+                messages = SSEClient(uri, verify=self._config.verify_ssl, headers=hdrs)
+                for msg in messages:
+                    if not self._running:
+                        break
+                    self.process_message(self._store, self._requester, msg, self._ready)
+            except Exception as e:
+                log.error("Could not connect to LaunchDarkly stream: " + str(e.message) +
+                          " waiting 1 second before trying again.")
+                time.sleep(1)
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")
