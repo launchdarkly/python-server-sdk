@@ -5,6 +5,7 @@ import time
 from ldclient.interfaces import FeatureStore
 from ldclient.requests import RequestsStreamProcessor, RequestsEventConsumer, RequestsFeatureRequester
 from ldclient.util import check_uwsgi, _evaluate, log
+from ldclient.newrelicwrapper import annotate_newrelic
 import requests
 
 
@@ -225,6 +226,7 @@ class LDClient(object):
     def get_flag(self, key, user, default=False):
         return self.toggle(key, user, default)
 
+    @annotate_newrelic
     def toggle(self, key, user, default=False):
         self._sanitize_user(user)
         default = self._config.get_default(key, default)

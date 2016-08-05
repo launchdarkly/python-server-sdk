@@ -1,6 +1,7 @@
 from builtins import object
 from ldclient.client import LDClient, Config
 from ldclient.interfaces import FeatureRequester
+from mock import patch
 import pytest
 from testing.sync_util import wait_until
 
@@ -152,6 +153,12 @@ def test_toggle_event_offline():
     client.set_offline()
     client.toggle('feature.key', user, default=None)
     assert client._queue.empty()
+
+
+@patch('ldclient.newrelicwrapper.annotate_transaction')
+def test_toggle_newrelic(annotate_mock):
+    client.toggle('feature.key', user, default=None)
+    annotate_mock.assert_called_once_with('feature.key', True)
 
 
 def test_identify():
