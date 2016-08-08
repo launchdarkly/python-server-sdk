@@ -180,14 +180,14 @@ class LDClient(object):
 
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
-        if user.get('key', "") == "":
-            log.warn("Missing or empty User key when calling track().")
+        if user is None or user.get('key') is None:
+            log.warn("Missing user or user key when calling track().")
         self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
         self._sanitize_user(user)
-        if user.get('key', "") == "":
-            log.warn("Missing or empty User key when calling identify().")
+        if user is None or user.get('key') is None:
+            log.warn("Missing user or user key when calling identify().")
         self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
 
     def is_offline(self):
@@ -222,10 +222,13 @@ class LDClient(object):
             send_event(default)
             return default
 
-        if user.get('key', "") == "":
-            log.warn("Missing or empty User key when evaluating Feature Flag key: " + key + ". Returning default.")
+        if user is None or user.get('key') is None:
+            log.warn("Missing user or user key when evaluating Feature Flag key: " + key + ". Returning default.")
             send_event(default)
             return default
+
+        if user.get('key', "") == "":
+            log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
         flag = self._store.get(key)
         if not flag:
@@ -254,14 +257,14 @@ class LDClient(object):
             log.warn("all_flags() called before client has finished initializing! Returning None")
             return None
 
-        if user.get('key', "") == "":
-            log.warn("Missing or empty User key when calling all_flags(). Returning None.")
+        if user is None or user.get('key') is None:
+            log.warn("User or user key is None when calling all_flags(). Returning None.")
             return None
 
         return {k: evaluate(v, user, self._store)[0] for k, v in self._store.all().items() or {}}
 
     def secure_mode_hash(self, user):
-        if user.get('key', "") == "":
+        if user.get('key') is None:
             return ""
         return hmac.new(self._sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
 
