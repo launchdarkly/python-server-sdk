@@ -1,4 +1,5 @@
 import json
+from pprint import pprint
 
 import redis
 
@@ -43,8 +44,12 @@ class RedisFeatureStore(FeatureStore):
     def all(self):
         r = redis.Redis(connection_pool=self._pool)
         all_features = r.hgetall(self._features_key)
+        if all_features is None or all_features is "":
+            log.warn("RedisFeatureStore: call to get all flags returned no results. Returning None.")
+            return None
+
         results = {}
-        for f_json in all_features:
+        for k, f_json in all_features.items() or {}:
             f = json.loads(f_json.decode('utf-8'))
             if 'deleted' in f and f['deleted'] is False:
                 results[f['key']] = f
