@@ -88,10 +88,10 @@ class TwistedStreamProcessor(UpdateProcessor):
                                                             self._requester,
                                                             self._ready))
         self.running = False
-        log.info("Created TwistedStreamProcessor with FeatureStore: " + str(self._store))
+        log.info("Created TwistedStreamProcessor connecting to uri: " + self._uri + " using feature store: " + str(self._store))
 
     def start(self):
-        log.info("Starting TwistedStreamProcessor connecting to uri: " + self._uri)
+        log.info("Starting TwistedStreamProcessor")
         self.sse_client.start()
         self.running = True
 
@@ -99,8 +99,8 @@ class TwistedStreamProcessor(UpdateProcessor):
         self.sse_client.stop()
 
     def initialized(self):
-        # return self._ready.is_set() and self._store.initialized()
-        return self._store.initialized()
+        return self._ready.is_set() and self._store.initialized()
+        #return self._store.initialized()
 
     def is_alive(self):
         return self.running and self._store.initialized()
@@ -159,7 +159,7 @@ class TwistedEventConsumer(EventConsumer):
                 hdrs = _headers(self._sdk_key)
                 r = yield self._session.post(self._config.events_uri,
                                              headers=hdrs,
-                                             timeout=(self._config.connect, self._config.read),
+                                             timeout=(self._config.connect_timeout, self._config.read_timeout),
                                              data=json.dumps(body))
                 r.raise_for_status()
             except ProtocolError as e:

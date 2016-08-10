@@ -47,6 +47,7 @@ class TwistedSSEClient(object):
         """
         Connect to the event source URL
         """
+        log.info("Connecting to event source: " + self.url)
         headers = deepcopy(self.headers)
         if last_id:
             headers['Last-Event-ID'] = last_id

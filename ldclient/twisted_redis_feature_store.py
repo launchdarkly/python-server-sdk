@@ -26,23 +26,31 @@ class TwistedRedisFeatureStore(FeatureStore):
         self._features_key = "{}:features".format(redis_prefix)
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
-        log.info("Created TwistedRedisFeatureStore with url: " + url)
+        log.info("Created TwistedRedisFeatureStore with url: " + url + " using key: " + self._features_key)
 
     def _get_connection(self):
         client_creator = protocol.ClientCreator(reactor, RedisClient)
         return client_creator.connectTCP(self._redis_host, self._redis_port)
 
-    # @property
     def initialized(self):
-        i = self._initialized()
-        return i
+        initialized = self._cache.get(INIT_KEY)
+        if initialized:
+            # reset ttl
+            self._cache[INIT_KEY] = True
+            return True
 
-    @defer.inlineCallbacks
-    def _initialized(self):
-        r = yield self._get_connection()
-        """ :type: RedisClient """
-        i = yield r.exists(self._features_key)
-        defer.returnValue(i)
+        @defer.inlineCallbacks
+        def redis_initialized():
+            r = yield self._get_connection()
+            """ :type: RedisClient """
+            i = yield r.exists(self._features_key)
+            if i:
+                # reset ttl
+                self._cache[INIT_KEY] = True
+            defer.returnValue(i)
+
+        initialized = redis_initialized()
+        return initialized
 
     @defer.inlineCallbacks
     def upsert(self, key, feature):
