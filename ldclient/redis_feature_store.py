@@ -40,6 +40,7 @@ class RedisFeatureStore(FeatureStore):
             pipe.hset(self._features_key, k, f_json)
             self._cache[k] = f
         pipe.execute()
+        log.info("Initialized RedisFeatureStore with " + str(len(features)) + " feature flags")
 
     def all(self):
         r = redis.Redis(connection_pool=self._pool)

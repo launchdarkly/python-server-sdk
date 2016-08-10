@@ -136,6 +136,7 @@ class LDClient(object):
         update_processor_ready = threading.Event()
 
         if self._config.update_processor_class:
+            log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
             self._update_processor = self._config.update_processor_class(
                 sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
         else:

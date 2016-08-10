@@ -16,7 +16,6 @@ import txrequests
 
 
 class TwistedHttpFeatureRequester(FeatureRequester):
-
     def __init__(self, sdk_key, config):
         self._sdk_key = sdk_key
         self._session = CacheControl(txrequests.Session())
@@ -56,7 +55,6 @@ class TwistedHttpFeatureRequester(FeatureRequester):
 
 
 class TwistedConfig(Config):
-
     def __init__(self, *args, **kwargs):
         self.update_processor_class = TwistedStreamProcessor
         self.event_consumer_class = TwistedEventConsumer
@@ -68,10 +66,20 @@ class TwistedStreamProcessor(UpdateProcessor):
     def close(self):
         self.sse_client.stop()
 
-    def __init__(self, sdk_key, config, store, requester, ready):
+    def __init__(self, sdk_key, config, requester, store, ready):
+        self._uri = config.stream_uri
         self._store = store
         self._requester = requester
         self._ready = ready
+
+        def process():
+            init_ok = partial(StreamingUpdateProcessor.process_message,
+                              self._store,
+                              self._requester,
+                              self._ready)
+            if init_ok is True:
+                self._ready.set()
+
         self.sse_client = TwistedSSEClient(config.stream_uri,
                                            headers=_stream_headers(sdk_key, "PythonTwistedClient"),
                                            verify_ssl=config.verify_ssl,
@@ -80,8 +88,10 @@ class TwistedStreamProcessor(UpdateProcessor):
                                                             self._requester,
                                                             self._ready))
         self.running = False
+        log.info("Created TwistedStreamProcessor with FeatureStore: " + str(self._store))
 
     def start(self):
+        log.info("Starting TwistedStreamProcessor connecting to uri: " + self._uri)
         self.sse_client.start()
         self.running = True
 
@@ -89,14 +99,14 @@ class TwistedStreamProcessor(UpdateProcessor):
         self.sse_client.stop()
 
     def initialized(self):
-        return self._ready.is_set() and self._store.initialized()
+        # return self._ready.is_set() and self._store.initialized()
+        return self._store.initialized()
 
     def is_alive(self):
         return self.running and self._store.initialized()
 
 
 class TwistedEventConsumer(EventConsumer):
-
     def __init__(self, queue, sdk_key, config):
         self._queue = queue
         """ @type: queue.Queue """
@@ -112,6 +122,7 @@ class TwistedEventConsumer(EventConsumer):
         """ :type: LoopingCall"""
 
     def start(self):
+        log.info("Starting TwistedEventConsumer")
         self._looping_call = task.LoopingCall(self._consume)
         self._looping_call.start(5)
 
@@ -163,6 +174,7 @@ class TwistedEventConsumer(EventConsumer):
             except:
                 log.exception(
                     'Unhandled exception in event consumer. Analytics events were not processed.')
+
         try:
             yield do_send(True)
         finally:
@@ -171,7 +183,6 @@ class TwistedEventConsumer(EventConsumer):
 
 
 class TwistedLDClient(LDClient):
-
     def __init__(self, sdk_key, config=None):
         if config is None:
             config = TwistedConfig()
