@@ -8,8 +8,9 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 - New `all_flags` method returns all flag values for a specified user.
 - New `secure_mode_hash` function computes a hash suitable for the new LaunchDarkly [JavaScript client's secure mode feature](https://github.com/launchdarkly/js-client#secure-mode).
 
-### Changed
-- Twisted support has temporarily been removed.
-
 ### Deprecated
 - The `toggle` call has been deprecated in favor of `variation`.
+ 
+### Removed
+- Twisted support has temporarily been removed.
+
