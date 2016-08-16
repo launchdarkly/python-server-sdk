@@ -42,42 +42,42 @@ class RedisFeatureStore(FeatureStore):
         pipe.execute()
         log.info("Initialized RedisFeatureStore with " + str(len(features)) + " feature flags")
 
-    def all(self):
+    def all(self, callback):
         r = redis.Redis(connection_pool=self._pool)
         all_features = r.hgetall(self._features_key)
         if all_features is None or all_features is "":
             log.warn("RedisFeatureStore: call to get all flags returned no results. Returning None.")
-            return None
+            return callback(None)
 
         results = {}
         for k, f_json in all_features.items() or {}:
             f = json.loads(f_json.decode('utf-8'))
             if 'deleted' in f and f['deleted'] is False:
                 results[f['key']] = f
-        return results
+        return callback(results)
 
-    def get(self, key):
+    def get(self, key, callback):
         f = self._cache.get(key)
         if f is not None:
             # reset ttl
             self._cache[key] = f
             if f.get('deleted', False) is True:
                 log.warn("RedisFeatureStore: get returned deleted flag from in-memory cache. Returning None.")
-                return None
-            return f
+                return callback(None)
+            return callback(f)
 
         r = redis.Redis(connection_pool=self._pool)
         f_json = r.hget(self._features_key, key)
         if f_json is None or f_json is "":
             log.warn("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
-            return None
+            return callback(None)
 
         f = json.loads(f_json.decode('utf-8'))
         if f.get('deleted', False) is True:
             log.warn("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
-            return None
+            return callback(None)
         self._cache[key] = f
-        return f
+        return callback(f)
 
     def delete(self, key, version):
         r = redis.Redis(connection_pool=self._pool)
@@ -112,7 +112,7 @@ class RedisFeatureStore(FeatureStore):
     def upsert(self, key, feature):
         r = redis.Redis(connection_pool=self._pool)
         r.watch(self._features_key)
-        old = self.get(key)
+        old = self.get(key, lambda x: x)
         if old:
             if old['version'] >= feature['version']:
                 r.unwatch()

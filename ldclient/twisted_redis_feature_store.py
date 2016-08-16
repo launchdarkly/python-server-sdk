@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 import json
-from urlparse import urlparse
+import urlparse
 
 from twisted.internet import defer
 from twisted.internet import protocol, reactor
@@ -20,7 +20,7 @@ class TwistedRedisFeatureStore(FeatureStore):
                  capacity=1000,
                  redis_prefix='launchdarkly'):
         self._url = url
-        parsed_url = urlparse(url)
+        parsed_url = urlparse.urlparse(url)
         self._redis_host = parsed_url.hostname
         self._redis_port = parsed_url.port
         self._features_key = "{}:features".format(redis_prefix)
@@ -52,90 +52,82 @@ class TwistedRedisFeatureStore(FeatureStore):
         initialized = redis_initialized()
         return initialized
 
-    @defer.inlineCallbacks
     def upsert(self, key, feature):
-        r = yield self._get_connection()
-        """ :type: RedisClient """
-        r.watch(self._features_key)
-        old = yield self.get(key)
-        if old:
-            if old['version'] >= feature['version']:
-                r.unwatch()
-                return
+        raise NotImplementedError()
 
-        feature_json = json.dumps(feature)
-        r.hset(self._features_key, key, feature_json)
-        self._cache[key] = feature
-        r.unwatch()
+    def all(self, callback):
+        @defer.inlineCallbacks
+        def redis_get_all():
+            r = None
+            try:
+                r = yield self._get_connection()
+                """ :type: RedisClient """
+                all_features = yield r.hgetall(self._features_key)
+                if all_features is None or all_features is "":
+                    log.warn("TwistedRedisFeatureStore: call to get all flags returned no results. Returning None.")
+                    defer.returnValue(None)
 
-    @defer.inlineCallbacks
-    def all(self):
-        r = yield self._get_connection()
-        """ :type: RedisClient """
-        all_features = yield r.hgetall(self._features_key)
-        if all_features is None or all_features is "":
-            log.warn("TwistedRedisFeatureStore: call to get all flags returned no results. Returning None.")
+                results = {}
+                for k, f_json in all_features.items() or {}:
+                    f = json.loads(f_json.decode('utf-8'))
+                    if 'deleted' in f and f['deleted'] is False:
+                        results[f['key']] = f
+                defer.returnValue(results)
+            except Exception as e:
+                log.error("Could not connect to Redis using url: " + self._url + " with error message: " + e.message)
+                defer.returnValue(None)
+            finally:
+                if r:
+                    r.quit()
             defer.returnValue(None)
 
-        results = {}
-        for k, f_json in all_features.items() or {}:
-            f = json.loads(f_json.decode('utf-8'))
-            if 'deleted' in f and f['deleted'] is False:
-                results[f['key']] = f
-        defer.returnValue(results)
+        all_flags = redis_get_all()
+        all_flags.addBoth(callback)
+        return all_flags
 
-    @defer.inlineCallbacks
     def delete(self, key, version):
-        r = yield self._get_connection()
-        """ :type: RedisClient """
-        r.watch(self._features_key)
-        f_json = yield r.hget(self._features_key, key)
-        if f_json:
-            f = json.loads(f_json.decode('utf-8'))
-            if f is not None and f['version'] < version:
-                f['deleted'] = True
-                f['version'] = version
-            elif f is None:
-                f = {'deleted': True, 'version': version}
-            f_json = json.dumps(f)
-            r.hset(self._features_key, key, f_json)
-            self._cache[key] = f
-        r.unwatch()
+        raise NotImplementedError()
 
-    @defer.inlineCallbacks
     def init(self, features):
-        r = yield self._get_connection()
-        """ :type: RedisClient """
+        raise NotImplementedError()
 
-        r.multi()
-        r.delete(self._features_key)
-        self._cache.clear()
+    def get(self, key, callback):
+        @defer.inlineCallbacks
+        def redis_get():
+            r = None
+            try:
+                r = yield self._get_connection()
+                """ :type: RedisClient """
+                get_result = yield r.hget(self._features_key, key)
+                if not get_result:
+                    log.warn("Didn't get response from redis for key: " + key + " Returning None.")
+                    defer.returnValue(None)
+                f_json = get_result.get(key)
+                if f_json is None or f_json is "":
+                    log.warn(
+                        "TwistedRedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
+                    defer.returnValue(None)
 
-        for k, f in features.items():
-            f_json = json.dumps(f)
-            r.hset(self._features_key, k, f_json)
-            self._cache[k] = f
-        r.execute()
-        log.info("Initialized TwistedRedisFeatureStore with " + str(len(features)) + " feature flags")
+                f = json.loads(f_json.decode('utf-8'))
+                if f.get('deleted', False) is True:
+                    log.warn("TwistedRedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+                    defer.returnValue(None)
+                self._cache[key] = f
+                defer.returnValue(f)
+            except Exception as e:
+                log.error("Could not connect to Redis using url: " + self._url + " with error message: " + e.message)
+                defer.returnValue(None)
+            finally:
+                if r:
+                    r.quit()
+            defer.returnValue(None)
 
-    @defer.inlineCallbacks
-    def get(self, key):
         cached = self._cache.get(key)
         if cached is not None:
-            defer.returnValue(cached)
-        else:
-            r = yield self._get_connection()
-            """ :type: RedisClient """
-            f_json = yield r.hget(self._features_key, key)
-            if f_json is None or f_json is "":
-                log.warn(
-                    "TwistedRedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
-                defer.returnValue(None)
+            # reset ttl
+            self._cache[key] = cached
+            return callback(cached)
 
-            f = json.loads(f_json.decode('utf-8'))
-            if f.get('deleted', False) is True:
-                log.warn("TwistedRedisFeatureStore: get returned deleted flag from Redis. Returning None.")
-                defer.returnValue(None)
-
-            self._cache[key] = f
-            defer.returnValue(f)
+        f = redis_get()
+        f.addBoth(callback)
+        return f

@@ -59,9 +59,3 @@ except NameError:
 else:
     # noinspection PyUnresolvedReferences
     __BASE_TYPES__ = (str, float, int, bool, unicode)
-
-
-try:
-    from .twisted_impls import *
-except ImportError:
-    pass

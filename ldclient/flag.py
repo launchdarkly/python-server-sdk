@@ -21,10 +21,7 @@ def evaluate(flag, user, store):
         if value is not None:
             return value, prereq_events
 
-    if 'offVariation' in flag and flag['offVariation']:
-        value = _get_variation(flag, flag['offVariation'])
-        return value, prereq_events
-    return None, prereq_events
+    return _get_off_variation(flag), prereq_events
 
 
 def _evaluate(flag, user, store, prereq_events=None):
@@ -32,7 +29,7 @@ def _evaluate(flag, user, store, prereq_events=None):
     failed_prereq = None
     prereq_value = None
     for prereq in flag.get('prerequisites') or []:
-        prereq_flag = store.get(prereq.get('key'))
+        prereq_flag = store.get(prereq.get('key'), lambda x: x)
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
