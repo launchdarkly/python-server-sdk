@@ -94,7 +94,7 @@ class TestFeatureStore:
     def test_delete_with_newer_version(self, store):
         store = self.base_initialized_store(store)
         store.delete('foo', 11)
-        assert store.get('foo') is None
+        assert store.get('foo', lambda x: x) is None
 
     def test_delete_unknown_feature(self, store):
         store = self.base_initialized_store(store)
