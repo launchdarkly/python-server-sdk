@@ -35,8 +35,8 @@ class TwistedLDClient(LDClient):
     def _evaluate_internal(self, flag, user):
         def check_prereq_results(result):
             prereq_ok = True
-            for r in result:  # r is a tuple of 2 booleans: (error, prereqMatches)
-                if r[0] is False or r[1] is False:
+            for (success, prereq_ok) in result:
+                if success is False or prereq_ok is False:
                     prereq_ok = False
 
             if prereq_ok is True:

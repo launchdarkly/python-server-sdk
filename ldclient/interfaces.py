@@ -14,16 +14,17 @@ class FeatureStore(object):
         :param key: The feature key
         :type key: str
         :param callback: The function that accepts the feature data and returns the feature value
-        :type callback: function
-        :return: The feature value. None if not found
+        :type callback: Function that processes the feature flag once received.
+        :return: The result of executing callback.
         """
 
     @abstractmethod
     def all(self, callback):
         """
         Returns all feature flags and their data
-
-        :rtype: dict[str, dict]
+        :param callback: The function that accepts the feature data and returns the feature value
+        :type callback: Function that processes the feature flags once received.
+        :rtype: The result of executing callback.
         """
 
     @abstractmethod

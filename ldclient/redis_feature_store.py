@@ -56,7 +56,7 @@ class RedisFeatureStore(FeatureStore):
                 results[f['key']] = f
         return callback(results)
 
-    def get(self, key, callback):
+    def get(self, key, callback=lambda x: x):
         f = self._cache.get(key)
         if f is not None:
             # reset ttl
@@ -112,7 +112,7 @@ class RedisFeatureStore(FeatureStore):
     def upsert(self, key, feature):
         r = redis.Redis(connection_pool=self._pool)
         r.watch(self._features_key)
-        old = self.get(key, lambda x: x)
+        old = self.get(key)
         if old:
             if old['version'] >= feature['version']:
                 r.unwatch()

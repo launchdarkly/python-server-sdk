@@ -17,7 +17,7 @@ class TwistedEventConsumer(EventConsumer):
 
     def __init__(self, queue, sdk_key, config):
         self._queue = queue
-        """ @type: queue.Queue """
+        """ :type: queue.Queue """
 
         self._session = CacheControl(txrequests.Session())
         """ :type: txrequests.Session """
