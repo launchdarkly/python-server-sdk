@@ -66,43 +66,43 @@ class TestFeatureStore:
     def test_get_existing_feature(self, store):
         store = self.base_initialized_store(store)
         expected = self.make_feature('foo', 10)
-        assert store.get('foo') == expected
+        assert store.get('foo', lambda x: x) == expected
 
     def test_get_nonexisting_feature(self, store):
         store = self.base_initialized_store(store)
-        assert store.get('biz') is None
+        assert store.get('biz', lambda x: x) is None
 
     def test_upsert_with_newer_version(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('foo', 11)
         store.upsert('foo', new_ver)
-        assert store.get('foo') == new_ver
+        assert store.get('foo', lambda x: x) == new_ver
 
     def test_upsert_with_older_version(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('foo', 9)
         expected = self.make_feature('foo', 10)
         store.upsert('foo', new_ver)
-        assert store.get('foo') == expected
+        assert store.get('foo', lambda x: x) == expected
 
     def test_upsert_with_new_feature(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('biz', 1)
         store.upsert('biz', new_ver)
-        assert store.get('biz') == new_ver
+        assert store.get('biz', lambda x: x) == new_ver
 
     def test_delete_with_newer_version(self, store):
         store = self.base_initialized_store(store)
         store.delete('foo', 11)
-        assert store.get('foo') is None
+        assert store.get('foo', lambda x: x) is None
 
     def test_delete_unknown_feature(self, store):
         store = self.base_initialized_store(store)
         store.delete('biz', 11)
-        assert store.get('biz') is None
+        assert store.get('biz', lambda x: x) is None
 
     def test_delete_with_older_version(self, store):
         store = self.base_initialized_store(store)
         store.delete('foo', 9)
         expected = self.make_feature('foo', 10)
-        assert store.get('foo') == expected
+        assert store.get('foo', lambda x: x) == expected

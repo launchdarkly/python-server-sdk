@@ -10,24 +10,24 @@ class InMemoryFeatureStore(FeatureStore):
         self._initialized = False
         self._features = {}
 
-    def get(self, key):
+    def get(self, key, callback):
         try:
             self._lock.rlock()
             f = self._features.get(key)
             if f is None:
                 log.debug("Attempted to get missing feature: " + str(key) + " Returning None")
-                return None
+                return callback(None)
             if 'deleted' in f and f['deleted']:
                 log.debug("Attempted to get deleted feature: " + str(key) + " Returning None")
-                return None
-            return f
+                return callback(None)
+            return callback(f)
         finally:
             self._lock.runlock()
 
-    def all(self):
+    def all(self, callback):
         try:
             self._lock.rlock()
-            return dict((k, f) for k, f in self._features.items() if ('deleted' not in f) or not f['deleted'])
+            return callback(dict((k, f) for k, f in self._features.items() if ('deleted' not in f) or not f['deleted']))
         finally:
             self._lock.runlock()
 

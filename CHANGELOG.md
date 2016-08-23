@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.0] - 2016-08-22
+### Added
+- Twisted support for LDD mode only.
+
+### Changed
+- FeatureStore interface get() and all() methods now take an additional callback parameter.
+
 ## [2.0.0] - 2016-08-10
 ### Added
 - Support for multivariate feature flags. `variation` replaces `toggle` and can return a string, number, dict, or boolean value depending on how the flag is defined.

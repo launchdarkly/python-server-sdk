@@ -120,10 +120,7 @@ class LDClient(object):
             self._event_consumer.start()
 
         if self._config.use_ldd:
-            if self._store.__class__ == "RedisFeatureStore":
-                log.info("Started LaunchDarkly Client in LDD mode")
-                return
-            log.error("LDD mode requires a RedisFeatureStore.")
+            log.info("Started LaunchDarkly Client in LDD mode")
             return
 
         if self._config.feature_requester_class:
@@ -136,6 +133,7 @@ class LDClient(object):
         update_processor_ready = threading.Event()
 
         if self._config.update_processor_class:
+            log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
             self._update_processor = self._config.update_processor_class(
                 sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
         else:
@@ -230,23 +228,35 @@ class LDClient(object):
         if user.get('key', "") == "":
             log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
-        flag = self._store.get(key)
-        if not flag:
-            log.warn("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
-            send_event(default)
+        def cb(flag):
+            try:
+                if not flag:
+                    log.warn("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
+                    send_event(default)
+                    return default
+
+                return self._evaluate_and_send_events(flag, user, default)
+
+            except Exception as e:
+                log.error("Exception caught in variation: " + e.message + " for flag key: " + key + " and user: " + str(user))
+
             return default
 
-        value, events = evaluate(flag, user, self._store)
+        return self._store.get(key, cb)
+
+    def _evaluate(self, flag, user):
+        return evaluate(flag, user, self._store)
+
+    def _evaluate_and_send_events(self, flag, user, default):
+        value, events = self._evaluate(flag, user)
         for event in events or []:
             self._send_event(event)
-            log.debug("Sending event: " + str(event))
 
-        if value is not None:
-            send_event(value, flag.get('version'))
-            return value
-
-        send_event(default, flag.get('version'))
-        return default
+        if value is None:
+            value = default
+        self._send_event({'kind': 'feature', 'key': flag.get('key'),
+                          'user': user, 'value': value, 'default': default, 'version': flag.get('version')})
+        return value
 
     def all_flags(self, user):
         if self._config.offline:
@@ -261,7 +271,17 @@ class LDClient(object):
             log.warn("User or user key is None when calling all_flags(). Returning None.")
             return None
 
-        return {k: evaluate(v, user, self._store)[0] for k, v in self._store.all().items() or {}}
+        def cb(all_flags):
+            try:
+                return self._evaluate_multi(user, all_flags)
+            except Exception as e:
+                log.error("Exception caught in all_flags: " + e.message + " for user: " + str(user))
+            return {}
+
+        return self._store.all(cb)
+
+    def _evaluate_multi(self, user, flags):
+        return {k: self._evaluate(v, user)[0] for k, v in flags.items() or {}}
 
     def secure_mode_hash(self, user):
         if user.get('key') is None:

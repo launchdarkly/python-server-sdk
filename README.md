@@ -26,12 +26,37 @@ Your first feature flag
 -----------------------
 
 1. Create a new feature flag on your [dashboard](https://app.launchdarkly.com)
-2. In your application code, use the feature's key to check wthether the flag is on for each user:
+2. In your application code, use the feature's key to check whether the flag is on for each user:
 
         if client.variation("your.flag.key", {"key": "user@test.com"}, False):
             # application code to show the feature
         else:
             # the code to run if the feature is off
+
+Twisted
+-------
+Twisted is supported for LDD mode only. To run in Twisted/LDD mode, 
+
+1. Use this dependency:
+
+	```
+	ldclient-py[twisted]==3.0.0
+	```
+2. Configure the client:
+
+	```
+	feature_store = TwistedRedisFeatureStore(url='YOUR_REDIS_URL', redis_prefix="ldd-restwrapper", expiration=0)
+	ldclient.config.feature_store = feature_store
+	
+	ldclient.config = ldclient.Config(
+	    use_ldd=use_ldd,
+	    event_consumer_class=TwistedEventConsumer,
+	)
+	ldclient.sdk_key = 'YOUR_SDK_KEY'
+	```
+3. Get the client:
+
+	```client = ldclient.get()```
 
 Learn more
 -----------

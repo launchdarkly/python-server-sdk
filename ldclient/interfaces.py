@@ -8,22 +8,23 @@ class FeatureStore(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, key):
+    def get(self, key, callback):
         """
-        Gets the data for a feature flag for evaluation
-
-        :param key: The feature flag key
+        Gets a feature and calls the callback with the feature data to return the result
+        :param key: The feature key
         :type key: str
-        :return: The feature flag data
-        :rtype: dict
+        :param callback: The function that accepts the feature data and returns the feature value
+        :type callback: Function that processes the feature flag once received.
+        :return: The result of executing callback.
         """
 
     @abstractmethod
-    def all(self):
+    def all(self, callback):
         """
         Returns all feature flags and their data
-
-        :rtype: dict[str, dict]
+        :param callback: The function that accepts the feature data and returns the feature value
+        :type callback: Function that processes the feature flags once received.
+        :rtype: The result of executing callback.
         """
 
     @abstractmethod

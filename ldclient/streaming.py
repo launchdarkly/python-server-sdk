@@ -9,7 +9,6 @@ from ldclient.util import _stream_headers, log
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
-
     def __init__(self, sdk_key, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
@@ -31,7 +30,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 for msg in messages:
                     if not self._running:
                         break
-                    self.process_message(self._store, self._requester, msg, self._ready)
+                    if self.process_message(self._store, self._requester, msg, self._ready) is True:
+                        self._ready.set()
             except Exception as e:
                 log.error("Could not connect to LaunchDarkly stream: " + str(e.message) +
                           " waiting 1 second before trying again.")
@@ -51,8 +51,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         if msg.event == 'put':
             store.init(payload)
             if not ready.is_set() and store.initialized:
-                ready.set()
                 log.info("StreamingUpdateProcessor initialized ok")
+                return True
         elif msg.event == 'patch':
             key = payload['path'][1:]
             feature = payload['data']
@@ -64,8 +64,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         elif msg.event == "indirect/put":
             store.init(requester.get_all())
             if not ready.is_set() and store.initialized:
-                ready.set()
                 log.info("StreamingUpdateProcessor initialized ok")
+                return True
         elif msg.event == 'delete':
             key = payload['path'][1:]
             # noinspection PyShadowingNames
@@ -73,3 +73,4 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             store.delete(key, version)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
+        return False
