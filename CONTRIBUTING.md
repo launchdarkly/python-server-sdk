@@ -20,3 +20,10 @@ Development information (for developing this module itself)
 1. Run tests: You'll need redis running locally on its default port of 6379.
 
         $ py.test testing
+
+Developing with different python versions
+-----------------------------------------
+
+Example for switching to python 3:
+
+```virtualenv -p `which python3` ~/.virtualenvs/python-client```
