@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
 import errno
-import json
 from threading import Thread
 
+import jsonpickle
 import requests
 from requests.packages.urllib3.exceptions import ProtocolError
 
@@ -42,12 +42,15 @@ class EventConsumerImpl(Thread, EventConsumer):
                     body = [events]
                 else:
                     body = events
+
+                json_body = jsonpickle.encode(body, unpicklable=False)
+                log.debug('Sending events payload: ' + json_body)
                 hdrs = _headers(self.sdk_key)
                 uri = self._config.events_uri
                 r = self._session.post(uri,
                                        headers=hdrs,
                                        timeout=(self._config.connect_timeout, self._config.read_timeout),
-                                       data=json.dumps(body))
+                                       data=json_body)
                 r.raise_for_status()
             except ProtocolError as e:
                 inner = e.args[1]

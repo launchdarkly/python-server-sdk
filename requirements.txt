@@ -3,3 +3,4 @@ requests>=2.10.0
 sseclient>=0.0.12
 future>=0.15.2
 strict-rfc3339>=0.7
+jsonpickle==0.9.3
