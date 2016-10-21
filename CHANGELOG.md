@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.1] - 2016-10-21
+### Changed
+- Now using jsonpickle to serialize analytics events. Addresses https://github.com/launchdarkly/python-client/issues/57
+- Better handling of indirect/put and indirect/patch messages in streaming connection.
+
 ## [3.0.0] - 2016-08-22
 ### Added
 - Twisted support for LDD mode only.

@@ -40,7 +40,7 @@ Twisted is supported for LDD mode only. To run in Twisted/LDD mode,
 1. Use this dependency:
 
 	```
-	ldclient-py[twisted]==3.0.0
+	ldclient-py[twisted]==3.0.1
 	```
 2. Configure the client:
 
