@@ -46,20 +46,20 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     @staticmethod
     def process_message(store, requester, msg, ready):
-        payload = json.loads(msg.data)
-        log.debug("Received stream event {}".format(msg.event))
+        log.debug("Received stream event {} with data: {}".format(msg.event, msg.data))
         if msg.event == 'put':
+            payload = json.loads(msg.data)
             store.init(payload)
             if not ready.is_set() and store.initialized:
                 log.info("StreamingUpdateProcessor initialized ok")
                 return True
         elif msg.event == 'patch':
+            payload = json.loads(msg.data)
             key = payload['path'][1:]
             feature = payload['data']
-            log.debug("Updating feature {}".format(key))
             store.upsert(key, feature)
         elif msg.event == "indirect/patch":
-            key = payload['data']
+            key = msg.data
             store.upsert(key, requester.get_one(key))
         elif msg.event == "indirect/put":
             store.init(requester.get_all())
@@ -67,6 +67,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 log.info("StreamingUpdateProcessor initialized ok")
                 return True
         elif msg.event == 'delete':
+            payload = json.loads(msg.data)
             key = payload['path'][1:]
             # noinspection PyShadowingNames
             version = payload['version']

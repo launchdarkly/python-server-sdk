@@ -34,7 +34,7 @@ def get():
         global client
         _lock.lock()
         if not client:
-            log.info("Initializing LaunchDarkly Client")
+            log.info("Initializing LaunchDarkly Client " + version.VERSION)
             client = LDClient(sdk_key, config, start_wait)
         return client
     finally:
