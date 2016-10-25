@@ -26,7 +26,11 @@ class EventConsumerImpl(Thread, EventConsumer):
         log.info("Starting event consumer")
         self._running = True
         while self._running:
-            self.send()
+            try:
+                self.send()
+            except Exception as e:
+                log.exception(
+                    'Unhandled exception in event consumer')
 
     def stop(self):
         self._running = False
@@ -53,11 +57,12 @@ class EventConsumerImpl(Thread, EventConsumer):
                                        data=json_body)
                 r.raise_for_status()
             except ProtocolError as e:
-                inner = e.args[1]
-                if inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning(
-                        'ProtocolError exception caught while sending events. Retrying.')
-                    do_send(False)
+                if e.args is not None and len(e.args) > 1 and e.args[1] is not None:
+                    inner = e.args[1]
+                    if inner.errno is not None and inner.errno == errno.ECONNRESET and should_retry:
+                        log.warning(
+                            'ProtocolError exception caught while sending events. Retrying.')
+                        do_send(False)
                 else:
                     log.exception(
                         'Unhandled exception in event consumer. Analytics events were not processed.')
