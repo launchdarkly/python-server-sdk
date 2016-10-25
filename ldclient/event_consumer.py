@@ -28,7 +28,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         while self._running:
             try:
                 self.send()
-            except Exception as e:
+            except Exception:
                 log.exception(
                     'Unhandled exception in event consumer')
 
