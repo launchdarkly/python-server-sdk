@@ -39,9 +39,9 @@ class PyTest(Command):
 
 setup(
     name='ldclient-py',
-    version='3.0.1',
-    author='Catamorphic Co.',
-    author_email='team@catamorphic.com',
+    version='3.0.2',
+    author='LaunchDarkly',
+    author_email='team@launchdarkly.com',
     packages=['ldclient'],
     url='https://github.com/launchdarkly/python-client',
     description='LaunchDarkly SDK for Python',
