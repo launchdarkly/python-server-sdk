@@ -35,8 +35,8 @@ class Config(object):
     def __init__(self,
                  base_uri='https://app.launchdarkly.com',
                  events_uri='https://events.launchdarkly.com',
-                 connect_timeout=2,
-                 read_timeout=10,
+                 connect_timeout=10,
+                 read_timeout=15,
                  events_upload_max_batch_size=100,
                  events_max_pending=10000,
                  stream_uri='https://stream.launchdarkly.com',
@@ -149,10 +149,11 @@ class LDClient(object):
         log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
         update_processor_ready.wait(start_wait)
 
-        if self._update_processor.initialized:
+        if self._update_processor.initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
-            log.info("Initialization timeout exceeded for LaunchDarkly Client. Feature Flags may not yet be available.")
+            log.warn("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
+                     "Feature Flags may not yet be available.")
 
     @property
     def sdk_key(self):
@@ -215,7 +216,7 @@ class LDClient(object):
                               'user': user, 'value': value, 'default': default, 'version': version})
 
         if not self.is_initialized():
-            log.warn("Feature Flag evaluation attempted before client has finished initializing! Returning default: "
+            log.warn("Feature Flag evaluation attempted before client has initialized! Returning default: "
                      + str(default) + " for feature key: " + key)
             send_event(default)
             return default
