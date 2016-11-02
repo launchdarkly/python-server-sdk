@@ -3,9 +3,8 @@ from __future__ import absolute_import
 import json
 from threading import Thread
 
-import time
-
-from requests import HTTPError
+import backoff
+import requests
 from sseclient import SSEClient
 from ldclient.interfaces import UpdateProcessor
 from ldclient.util import _stream_headers, log
@@ -16,38 +15,32 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         Thread.__init__(self)
         self.daemon = True
         self._sdk_key = sdk_key
+        self._uri = config.stream_uri
         self._config = config
         self._requester = requester
         self._store = store
         self._running = False
         self._ready = ready
+        self._headers = _stream_headers(self._sdk_key)
 
     def run(self):
-        log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._config.stream_uri)
+        log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
-        hdrs = _stream_headers(self._sdk_key)
-        uri = self._config.stream_uri
         while self._running:
-            try:
-                messages = SSEClient(uri, verify=self._config.verify_ssl, headers=hdrs)
-                for msg in messages:
-                    if not self._running:
-                        break
-                    message_ok = self.process_message(self._store, self._requester, msg, self._ready)
-                    if message_ok is True and self._ready.is_set() is False:
-                        self._ready.set()
-            except HTTPError as e:
-                if e.response is not None and e.response.status_code is not None:
-                    if 400 <= e.response.status_code < 500:
-                        log.error("StreamingUpdateProcessor response: " + str(e) + ". Retries will not be attempted.")
-                        if self._ready.is_set() is False:
-                            self._ready.set()
-                        self._running = False
-                        return
-            except Exception as e:
-                log.error("Could not connect to LaunchDarkly stream: " + str(e.message) +
-                          " waiting 1 second before trying again.")
-                time.sleep(1)
+            self._connect()
+
+    def _backoff_expo():
+        return backoff.expo(max_value=30)
+
+    @backoff.on_exception(_backoff_expo, requests.exceptions.RequestException, max_tries=None, jitter=backoff.full_jitter)
+    def _connect(self):
+        messages = SSEClient(self._uri, verify=self._config.verify_ssl, headers=self._headers)
+        for msg in messages:
+            if not self._running:
+                break
+            message_ok = self.process_message(self._store, self._requester, msg, self._ready)
+            if message_ok is True and self._ready.is_set() is False:
+                self._ready.set()
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")
