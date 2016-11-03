@@ -23,7 +23,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
             while self._running:
                 start_time = time.time()
                 self._store.init(self._requester.get_all())
-                if not self._ready.is_set() and self._store.initialized:
+                if not self._ready.is_set() is True and self._store.initialized is True:
                     log.info("PollingUpdateProcessor initialized ok")
                     self._ready.set()
                 elapsed = time.time() - start_time
@@ -31,7 +31,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                     time.sleep(self._config.poll_interval - elapsed)
 
     def initialized(self):
-        return self._running and self._ready.is_set() and self._store.initialized
+        return self._running and self._ready.is_set() is True and self._store.initialized is True
 
     def stop(self):
         log.info("Stopping PollingUpdateProcessor")
