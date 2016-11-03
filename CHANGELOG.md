@@ -2,7 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.3] - 2016-11-03
+### Changed
+- Add backoff when retryign stream connection.
+- More correct initialized state.
+
 ## [3.0.2] - 2016-10-26
+### Changed
 - Better error handling when sending events.
 
 ## [3.0.1] - 2016-10-21
