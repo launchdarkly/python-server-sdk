@@ -13,11 +13,10 @@ from ldclient.util import log
 
 
 class EventConsumerImpl(Thread, EventConsumer):
-    def __init__(self, event_queue, sdk_key, config):
+    def __init__(self, event_queue, config):
         Thread.__init__(self)
         self._session = requests.Session()
         self.daemon = True
-        self.sdk_key = sdk_key
         self._config = config
         self._queue = event_queue
         self._running = True
@@ -49,7 +48,7 @@ class EventConsumerImpl(Thread, EventConsumer):
 
                 json_body = jsonpickle.encode(body, unpicklable=False)
                 log.debug('Sending events payload: ' + json_body)
-                hdrs = _headers(self.sdk_key)
+                hdrs = _headers(self._config.sdk_key)
                 uri = self._config.events_uri
                 r = self._session.post(uri,
                                        headers=hdrs,

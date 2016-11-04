@@ -15,14 +15,13 @@ from ldclient.util import _headers, log
 
 class TwistedEventConsumer(EventConsumer):
 
-    def __init__(self, queue, sdk_key, config):
+    def __init__(self, queue, config):
         self._queue = queue
         """ :type: queue.Queue """
 
         self._session = CacheControl(txrequests.Session())
         """ :type: txrequests.Session """
 
-        self._sdk_key = sdk_key
         self._config = config
         """ :type: ldclient.twisted.TwistedConfig """
 
@@ -63,7 +62,7 @@ class TwistedEventConsumer(EventConsumer):
                     body = [events]
                 else:
                     body = events
-                hdrs = _headers(self._sdk_key)
+                hdrs = _headers(self._config.sdk_key)
                 r = yield self._session.post(self._config.events_uri,
                                              headers=hdrs,
                                              timeout=(self._config.connect_timeout, self._config.read_timeout),

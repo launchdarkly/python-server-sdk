@@ -15,17 +15,18 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 
 """Settings."""
 client = None
-sdk_key = None
 start_wait = 5
 config = Config()
 
 _lock = ReadWriteLock()
 
 
-def get():
+def get(sdk_key=None):
     try:
         _lock.rlock()
         if client:
+            if sdk_key is not None:
+                client.set_sdk_key(sdk_key)
             return client
     finally:
         _lock.runlock()
@@ -35,7 +36,8 @@ def get():
         _lock.lock()
         if not client:
             log.info("Initializing LaunchDarkly Client " + version.VERSION)
-            client = LDClient(sdk_key, config, start_wait)
+            config.sdk_key = sdk_key
+            client = LDClient(config, start_wait)
         return client
     finally:
         _lock.unlock()

@@ -18,8 +18,8 @@ Development information (for developing this module itself)
         pip install -r test-requirements.txt
 
 1. Run tests: You'll need redis running locally on its default port of 6379.
-
-        $ py.test testing
+1. If you want integration tests to run, set the ```LD_SDK_KEY``` environment variable to a valid production SDK Key.
+1. ```$ py.test testing```
 
 Developing with different python versions
 -----------------------------------------

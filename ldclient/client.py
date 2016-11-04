@@ -33,6 +33,7 @@ STREAM_FEATURES_PATH = '/flags'
 
 class Config(object):
     def __init__(self,
+                 sdk_key=None,
                  base_uri='https://app.launchdarkly.com',
                  events_uri='https://events.launchdarkly.com',
                  connect_timeout=10,
@@ -63,6 +64,7 @@ class Config(object):
         :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
         :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
         """
+        self.sdk_key = sdk_key
         if defaults is None:
             defaults = {}
 
@@ -95,11 +97,20 @@ class Config(object):
     def default(cls):
         return cls()
 
+    @property
+    def sdk_key(self):
+        return self._sdk_key
+
+    @sdk_key.setter
+    def sdk_key(self, value):
+        if value is None or value is '':
+            log.warn("Missing or blank sdk_key")
+        self._sdk_key = value
+
 
 class LDClient(object):
-    def __init__(self, sdk_key, config=None, start_wait=5):
+    def __init__(self, config=None, start_wait=5):
         check_uwsgi()
-        self._sdk_key = sdk_key
         self._config = config or Config.default()
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.events_max_pending)
@@ -115,8 +126,7 @@ class LDClient(object):
             return
 
         if self._config.events_enabled:
-            self._event_consumer = self._config.event_consumer_class(
-                self._queue, self._sdk_key, self._config)
+            self._event_consumer = self._config.event_consumer_class(self._queue, self._config)
             self._event_consumer.start()
 
         if self._config.use_ldd:
@@ -124,10 +134,9 @@ class LDClient(object):
             return
 
         if self._config.feature_requester_class:
-            self._feature_requester = self._config.feature_requester_class(
-                sdk_key, self._config)
+            self._feature_requester = self._config.feature_requester_class(self._config)
         else:
-            self._feature_requester = FeatureRequesterImpl(sdk_key, self._config)
+            self._feature_requester = FeatureRequesterImpl(self._config)
         """ :type: FeatureRequester """
 
         update_processor_ready = threading.Event()
@@ -135,14 +144,14 @@ class LDClient(object):
         if self._config.update_processor_class:
             log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
             self._update_processor = self._config.update_processor_class(
-                sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                self._config, self._feature_requester, self._store, update_processor_ready)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, self._feature_requester, self._store, update_processor_ready)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, self._feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """
 
         self._update_processor.start()
@@ -157,7 +166,12 @@ class LDClient(object):
 
     @property
     def sdk_key(self):
-        return self._sdk_key
+        return self._config.sdk_key
+
+    def set_sdk_key(self, value):
+        if value is None or value is '':
+            log.warn("Missing or blank sdk_key")
+        self._config.sdk_key = value
 
     def close(self):
         log.info("Closing LaunchDarkly client..")
@@ -285,9 +299,9 @@ class LDClient(object):
         return {k: self._evaluate(v, user)[0] for k, v in flags.items() or {}}
 
     def secure_mode_hash(self, user):
-        if user.get('key') is None:
+        if user.get('key') is None or self._config.sdk_key is None:
             return ""
-        return hmac.new(self._sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
+        return hmac.new(self._config.sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
 
     @staticmethod
     def _sanitize_user(user):

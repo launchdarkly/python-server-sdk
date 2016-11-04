@@ -16,11 +16,13 @@ Quick setup
 2. Configure the library with your sdk key:
 
         import ldclient
-        ldclient.sdk_key = "your sdk key"
 
 3. Get the client:
 
-        client = ldclient.get()
+        client = ldclient.get("your sdk key")
+
+Note: you only need to call ldclient.get() with the sdk key once, or if you need to change the sdk key for some reason.
+Subsequent calls to get the client can simply be: ldclient.get()
 
 Your first feature flag
 -----------------------
