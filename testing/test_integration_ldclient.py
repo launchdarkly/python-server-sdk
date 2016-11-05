@@ -1,7 +1,7 @@
 import pytest
 import ldclient
 import os
-from sync_util import wait_until
+from testing.sync_util import wait_until
 
 import logging
 
