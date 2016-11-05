@@ -164,8 +164,7 @@ class LDClient(object):
             log.warn("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
-    @property
-    def sdk_key(self):
+    def get_sdk_key(self):
         return self._config.sdk_key
 
     def set_sdk_key(self, value):
