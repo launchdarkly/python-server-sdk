@@ -39,45 +39,133 @@ class Config(object):
         :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
         :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
         """
-        self.sdk_key = sdk_key
+        if offline is False and sdk_key is None or sdk_key is '':
+            log.warn("Missing or blank sdk_key.")
+        self.__sdk_key = sdk_key
+
         if defaults is None:
             defaults = {}
 
-        self.base_uri = base_uri.rstrip('\\')
-        self.get_latest_features_uri = self.base_uri + GET_LATEST_FEATURES_PATH
-        self.events_uri = events_uri.rstrip('\\') + '/bulk'
-        self.stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
-        self.update_processor_class = update_processor_class
-        self.stream = stream
+        self.__base_uri = base_uri.rstrip('\\')
+        self.__get_latest_flags_uri = self.__base_uri + GET_LATEST_FEATURES_PATH
+        self.__events_uri = events_uri.rstrip('\\') + '/bulk'
+        self.__stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
+        self.__update_processor_class = update_processor_class
+        self.__stream = stream
         if poll_interval < 1:
             poll_interval = 1
-        self.poll_interval = poll_interval
-        self.use_ldd = use_ldd
-        self.feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
-        self.feature_requester_class = feature_requester_class
-        self.connect_timeout = connect_timeout
-        self.read_timeout = read_timeout
-        self.events_enabled = events_enabled
-        self.events_upload_max_batch_size = events_upload_max_batch_size
-        self.events_max_pending = events_max_pending
-        self.verify_ssl = verify_ssl
-        self.defaults = defaults
-        self.offline = offline
-
-    def get_default(self, key, default):
-        return default if key not in self.defaults else self.defaults[key]
+        self.__poll_interval = poll_interval
+        self.__use_ldd = use_ldd
+        self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
+        self.__event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
+        self.__feature_requester_class = feature_requester_class
+        self.__connect_timeout = connect_timeout
+        self.__read_timeout = read_timeout
+        self.__events_upload_max_batch_size = events_upload_max_batch_size
+        self.__events_max_pending = events_max_pending
+        self.__verify_ssl = verify_ssl
+        self.__defaults = defaults
+        if offline is True:
+            events_enabled = False
+        self.__events_enabled = events_enabled
+        self.__offline = offline
 
     @classmethod
     def default(cls):
         return cls()
 
+    def copy_with_new_sdk_key(self, new_sdk_key):
+        return Config(sdk_key=new_sdk_key,
+                      base_uri=self.__base_uri,
+                      events_uri=self.events_uri,
+                      connect_timeout=self.connect_timeout,
+                      read_timeout=self.read_timeout,
+                      events_upload_max_batch_size=self.events_upload_max_batch_size,
+                      events_max_pending=self.events_max_pending,
+                      stream_uri=self.stream_uri,
+                      stream=self.stream,
+                      verify_ssl=self.verify_ssl,
+                      defaults=self.__defaults,
+                      events_enabled=self.events_enabled,
+                      update_processor_class=self.update_processor_class,
+                      poll_interval=self.poll_interval,
+                      use_ldd=self.use_ldd,
+                      feature_store=self.feature_store,
+                      feature_requester_class=self.feature_requester_class,
+                      event_consumer_class=self.event_consumer_class,
+                      offline=self.offline)
+
+    def get_default(self, key, default):
+        return default if key not in self.__defaults else self.__defaults[key]
+
     @property
     def sdk_key(self):
-        return self._sdk_key
+        return self.__sdk_key
 
-    @sdk_key.setter
-    def sdk_key(self, value):
-        if value is None or value is '':
-            log.warn("Missing or blank sdk_key")
-        self._sdk_key = value
+    @property
+    def get_latest_flags_uri(self):
+        return self.__get_latest_flags_uri
+
+    @property
+    def events_uri(self):
+        return self.__events_uri
+
+    @property
+    def stream_uri(self):
+        return self.__stream_uri
+
+    @property
+    def update_processor_class(self):
+        return self.__update_processor_class
+
+    @property
+    def stream(self):
+        return self.__stream
+
+    @property
+    def poll_interval(self):
+        return self.__poll_interval
+
+    @property
+    def use_ldd(self):
+        return self.__use_ldd
+
+    @property
+    def feature_store(self):
+        return self.__feature_store
+
+    @property
+    def event_consumer_class(self):
+        return self.__event_consumer_class
+
+    @property
+    def feature_requester_class(self):
+        return self.__feature_requester_class
+
+    @property
+    def connect_timeout(self):
+        return self.__connect_timeout
+
+    @property
+    def read_timeout(self):
+        return self.__read_timeout
+
+    @property
+    def events_enabled(self):
+        return self.__events_enabled
+
+    @property
+    def events_upload_max_batch_size(self):
+        return self.__events_upload_max_batch_size
+
+    @property
+    def events_max_pending(self):
+        return self.__events_max_pending
+
+    @property
+    def verify_ssl(self):
+        return self.__verify_ssl
+
+    @property
+    def offline(self):
+        return self.__offline

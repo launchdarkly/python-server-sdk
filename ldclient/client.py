@@ -26,7 +26,6 @@ from cachecontrol import CacheControl
 from threading import Lock
 
 
-
 class LDClient(object):
     def __init__(self, config=None, start_wait=5):
         check_uwsgi()
@@ -40,7 +39,6 @@ class LDClient(object):
         """ :type: FeatureStore """
 
         if self._config.offline:
-            self._config.events_enabled = False
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
@@ -85,11 +83,6 @@ class LDClient(object):
 
     def get_sdk_key(self):
         return self._config.sdk_key
-
-    def set_sdk_key(self, value):
-        if value is None or value is '':
-            log.warn("Missing or blank sdk_key")
-        self._config.sdk_key = value
 
     def close(self):
         log.info("Closing LaunchDarkly client..")

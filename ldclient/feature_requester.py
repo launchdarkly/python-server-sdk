@@ -15,7 +15,7 @@ class FeatureRequesterImpl(FeatureRequester):
 
     def get_all(self):
         hdrs = _headers(self._config.sdk_key)
-        uri = self._config.get_latest_features_uri
+        uri = self._config.get_latest_flags_uri
         log.debug("Getting all flags using uri: " + uri)
         r = self._session.get(uri, headers=hdrs, timeout=(
             self._config.connect_timeout, self._config.read_timeout))
@@ -25,7 +25,7 @@ class FeatureRequesterImpl(FeatureRequester):
 
     def get_one(self, key):
         hdrs = _headers(self._config.sdk_key)
-        uri = self._config.get_latest_features_uri + '/' + key
+        uri = self._config.get_latest_flags_uri + '/' + key
         log.debug("Getting one feature flag using uri: " + uri)
         r = self._session.get(uri,
                               headers=hdrs,
