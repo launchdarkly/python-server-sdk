@@ -54,9 +54,10 @@ class MockFeatureStore(FeatureStore):
             return None
 
 
-client = LDClient(Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore()))
-offline_client = LDClient(
-    Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(), offline=True))
+client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore()))
+offline_client = LDClient(config=
+                          Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                                 offline=True))
 
 user = {
     u'key': u'xyz',
@@ -186,15 +187,15 @@ def test_track_offline():
 
 
 def test_defaults():
-    client = LDClient(Config(base_uri="http://localhost:3000",
-                             defaults={"foo": "bar"},
-                             offline=True))
+    client = LDClient(config=Config(base_uri="http://localhost:3000",
+                                    defaults={"foo": "bar"},
+                                    offline=True))
     assert "bar" == client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient(Config(base_uri="http://localhost:3000",
+    my_client = LDClient(config=Config(base_uri="http://localhost:3000",
                                 defaults={"foo": expected},
                                 event_consumer_class=MockConsumer,
                                 feature_requester_class=MockFeatureRequester,
@@ -205,7 +206,7 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    client = LDClient(Config(base_uri="http://localhost:3000",
+    client = LDClient(config=Config(base_uri="http://localhost:3000",
                              defaults={"foo": "bar"},
                              event_consumer_class=MockConsumer,
                              feature_requester_class=MockFeatureRequester))
@@ -221,7 +222,7 @@ def test_exception_in_retrieval():
         def get_all(self):
             raise Exception("blah")
 
-    client = LDClient(Config(base_uri="http://localhost:3000",
+    client = LDClient(config=Config(base_uri="http://localhost:3000",
                              defaults={"foo": "bar"},
                              feature_store=InMemoryFeatureStore(),
                              feature_requester_class=ExceptionFeatureRequester,

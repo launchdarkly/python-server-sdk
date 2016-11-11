@@ -8,7 +8,7 @@ import time
 import requests
 from builtins import object
 
-from ldclient.config import Config
+from ldclient.config import Config as Config
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.flag import evaluate
 from ldclient.polling import PollingUpdateProcessor
@@ -27,9 +27,19 @@ from threading import Lock
 
 
 class LDClient(object):
-    def __init__(self, config=None, start_wait=5):
+    def __init__(self, sdk_key=None, config=None, start_wait=5):
         check_uwsgi()
-        self._config = config or Config.default()
+
+        if config is not None and sdk_key is not None:
+            raise Exception("LaunchDarkly client init received both sdk_key and config args, "
+                            "but only one of either is expected")
+
+        if sdk_key is not None:
+            log.warn("Deprecated sdk_key argument was passed to init. Use config object instead.")
+            self._config = Config(sdk_key=sdk_key)
+        else:
+            self._config = config or Config.default()
+
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.events_max_pending)
         self._event_consumer = None

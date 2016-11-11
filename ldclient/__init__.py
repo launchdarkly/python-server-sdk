@@ -20,7 +20,11 @@ __config = Config()
 __lock = ReadWriteLock()
 
 
-# sets config.
+# 2 Use Cases:
+# 1. Initial setup: sets the config for the uninitialized client
+# 2. Allows on-the-fly changing of the config. When this function is called after the client has been initialized
+#    the client will get re-initialized with the new config. In order for this to work, the return value of
+#    ldclient.get() should never be assigned
 def set_config(config):
     global __config
     global __client
@@ -29,7 +33,7 @@ def set_config(config):
         __lock.lock()
         if __client:
             log.info("Reinitializing LaunchDarkly Client " + version.VERSION + " with new config")
-            new_client = LDClient(config, start_wait)
+            new_client = LDClient(config=config, start_wait=start_wait)
             old_client = __client
             __client = new_client
             old_client.close()
@@ -38,7 +42,7 @@ def set_config(config):
         __lock.unlock()
 
 
-# 2 use cases:
+# 2 Use Cases:
 # 1. Initial setup: sets the sdk key for the uninitialized client
 # 2. Allows on-the-fly changing of the sdk key. When this function is called after the client has been initialized
 #    the client will get re-initialized with the new sdk key. In order for this to work, the return value of
@@ -47,15 +51,23 @@ def set_sdk_key(sdk_key):
     global __config
     global __client
     global __lock
-    if sdk_key is __config.sdk_key:
-        log.info("New sdk_key is the same as the existing one. doing nothing.")
-    else:
+    sdk_key_changed = False
+    try:
+        __lock.rlock()
+        if sdk_key is __config.sdk_key:
+            log.info("New sdk_key is the same as the existing one. doing nothing.")
+        else:
+            sdk_key_changed = True
+    finally:
+        __lock.runlock()
+
+    if sdk_key_changed:
         new_config = __config.copy_with_new_sdk_key(new_sdk_key=sdk_key)
         try:
             __lock.lock()
             if __client:
                 log.info("Reinitializing LaunchDarkly Client " + version.VERSION + " with new sdk key")
-                new_client = LDClient(new_config, start_wait)
+                new_client = LDClient(config=new_config, start_wait=start_wait)
                 old_client = __client
                 __config = new_config
                 __client = new_client
@@ -64,7 +76,6 @@ def set_sdk_key(sdk_key):
             __lock.unlock()
 
 
-# the return value should not be assigned.
 def get():
     global __config
     global __client
@@ -77,18 +88,13 @@ def get():
         __lock.runlock()
 
     try:
-        global __client
         __lock.lock()
         if not __client:
             log.info("Initializing LaunchDarkly Client " + version.VERSION)
-            __client = LDClient(__config, start_wait)
+            __client = LDClient(config=__config, start_wait=start_wait)
         return __client
     finally:
         __lock.unlock()
-
-
-def init():
-    return get()
 
 
 # Add a NullHandler for Python < 2.7 compatibility

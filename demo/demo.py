@@ -17,7 +17,6 @@ root.addHandler(ch)
 if __name__ == '__main__':
     ldclient.start_wait = 10
     ldclient.set_sdk_key('YOUR_SDK_KEY')
-    ldclient.init()
 
     user = {u'key': 'userKey'}
     print(ldclient.get().variation("update-app", user, False))

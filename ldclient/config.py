@@ -3,7 +3,7 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
-STREAM_FEATURES_PATH = '/flags'
+STREAM_FLAGS_PATH = '/flags'
 
 
 class Config(object):
@@ -47,9 +47,8 @@ class Config(object):
             defaults = {}
 
         self.__base_uri = base_uri.rstrip('\\')
-        self.__get_latest_flags_uri = self.__base_uri + GET_LATEST_FEATURES_PATH
-        self.__events_uri = events_uri.rstrip('\\') + '/bulk'
-        self.__stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
+        self.__events_uri = events_uri.rstrip('\\')
+        self.__stream_uri = stream_uri.rstrip('\\')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
         if poll_interval < 1:
@@ -77,23 +76,23 @@ class Config(object):
     def copy_with_new_sdk_key(self, new_sdk_key):
         return Config(sdk_key=new_sdk_key,
                       base_uri=self.__base_uri,
-                      events_uri=self.events_uri,
-                      connect_timeout=self.connect_timeout,
-                      read_timeout=self.read_timeout,
-                      events_upload_max_batch_size=self.events_upload_max_batch_size,
-                      events_max_pending=self.events_max_pending,
-                      stream_uri=self.stream_uri,
-                      stream=self.stream,
-                      verify_ssl=self.verify_ssl,
+                      events_uri=self.__events_uri,
+                      connect_timeout=self.__connect_timeout,
+                      read_timeout=self.__read_timeout,
+                      events_upload_max_batch_size=self.__events_upload_max_batch_size,
+                      events_max_pending=self.__events_max_pending,
+                      stream_uri=self.__stream_uri,
+                      stream=self.__stream,
+                      verify_ssl=self.__verify_ssl,
                       defaults=self.__defaults,
-                      events_enabled=self.events_enabled,
-                      update_processor_class=self.update_processor_class,
-                      poll_interval=self.poll_interval,
-                      use_ldd=self.use_ldd,
-                      feature_store=self.feature_store,
-                      feature_requester_class=self.feature_requester_class,
-                      event_consumer_class=self.event_consumer_class,
-                      offline=self.offline)
+                      events_enabled=self.__events_enabled,
+                      update_processor_class=self.__update_processor_class,
+                      poll_interval=self.__poll_interval,
+                      use_ldd=self.__use_ldd,
+                      feature_store=self.__feature_store,
+                      feature_requester_class=self.__feature_requester_class,
+                      event_consumer_class=self.__event_consumer_class,
+                      offline=self.__offline)
 
     def get_default(self, key, default):
         return default if key not in self.__defaults else self.__defaults[key]
@@ -104,15 +103,15 @@ class Config(object):
 
     @property
     def get_latest_flags_uri(self):
-        return self.__get_latest_flags_uri
+        return self.__base_uri + GET_LATEST_FEATURES_PATH
 
     @property
     def events_uri(self):
-        return self.__events_uri
+        return self.__events_uri + '/bulk'
 
     @property
     def stream_uri(self):
-        return self.__stream_uri
+        return self.__stream_uri + STREAM_FLAGS_PATH
 
     @property
     def update_processor_class(self):
