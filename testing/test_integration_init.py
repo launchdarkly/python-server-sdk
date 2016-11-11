@@ -1,12 +1,11 @@
-import pytest
-import ldclient
-from ldclient import Config
-import os
-from testing.sync_util import wait_until
-
 import logging
 
-sdk_key = os.environ.get('LD_SDK_KEY')
+import pytest
+
+import ldclient
+from ldclient import Config
+from testing import sdk_key
+from testing.sync_util import wait_until
 
 logging.basicConfig(level=logging.DEBUG)
 

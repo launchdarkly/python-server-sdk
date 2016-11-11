@@ -30,9 +30,9 @@ class LDClient(object):
     def __init__(self, sdk_key=None, config=None, start_wait=5):
         check_uwsgi()
 
-        if config is not None and sdk_key is not None:
-            raise Exception("LaunchDarkly client init received both sdk_key and config args, "
-                            "but only one of either is expected")
+        if config is not None and config.sdk_key is not None and sdk_key is not None:
+            raise Exception("LaunchDarkly client init received both sdk_key and config with sdk_key. "
+                            "Only one of either is expected")
 
         if sdk_key is not None:
             log.warn("Deprecated sdk_key argument was passed to init. Use config object instead.")

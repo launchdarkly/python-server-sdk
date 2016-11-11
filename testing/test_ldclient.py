@@ -126,6 +126,12 @@ def wait_for_event(c, cb):
     return cb(e)
 
 
+def test_ctor_both_sdk_keys_set():
+    with pytest.raises(Exception):
+        config = Config(sdk_key="sdk key a", offline=True)
+        LDClient(sdk_key="sdk key b", config=config)
+
+
 def test_toggle_offline():
     assert offline_client.variation('feature.key', user, default=None) is None
 
@@ -196,10 +202,10 @@ def test_defaults():
 def test_defaults_and_online():
     expected = "bar"
     my_client = LDClient(config=Config(base_uri="http://localhost:3000",
-                                defaults={"foo": expected},
-                                event_consumer_class=MockConsumer,
-                                feature_requester_class=MockFeatureRequester,
-                                feature_store=InMemoryFeatureStore()))
+                                       defaults={"foo": expected},
+                                       event_consumer_class=MockConsumer,
+                                       feature_requester_class=MockFeatureRequester,
+                                       feature_store=InMemoryFeatureStore()))
     actual = my_client.variation('foo', user, default="originalDefault")
     assert actual == expected
     assert wait_for_event(my_client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
@@ -207,9 +213,9 @@ def test_defaults_and_online():
 
 def test_defaults_and_online_no_default():
     client = LDClient(config=Config(base_uri="http://localhost:3000",
-                             defaults={"foo": "bar"},
-                             event_consumer_class=MockConsumer,
-                             feature_requester_class=MockFeatureRequester))
+                                    defaults={"foo": "bar"},
+                                    event_consumer_class=MockConsumer,
+                                    feature_requester_class=MockFeatureRequester))
     assert "jim" == client.variation('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
 
@@ -223,10 +229,10 @@ def test_exception_in_retrieval():
             raise Exception("blah")
 
     client = LDClient(config=Config(base_uri="http://localhost:3000",
-                             defaults={"foo": "bar"},
-                             feature_store=InMemoryFeatureStore(),
-                             feature_requester_class=ExceptionFeatureRequester,
-                             event_consumer_class=MockConsumer))
+                                    defaults={"foo": "bar"},
+                                    feature_store=InMemoryFeatureStore(),
+                                    feature_requester_class=ExceptionFeatureRequester,
+                                    event_consumer_class=MockConsumer))
     assert "bar" == client.variation('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
 
