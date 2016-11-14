@@ -15,7 +15,7 @@ def test_set_sdk_key_before_init():
     ldclient.set_config(Config.default())
 
     ldclient.set_sdk_key(sdk_key)
-    wait_until(ldclient.get().is_initialized, timeout=10)
+    wait_until(ldclient.get().is_initialized, timeout=30)
 
     ldclient.get().close()
 
@@ -25,7 +25,7 @@ def test_set_sdk_key_after_init():
     ldclient.set_config(Config.default())
     assert ldclient.get().is_initialized() is False
     ldclient.set_sdk_key(sdk_key)
-    wait_until(ldclient.get().is_initialized, timeout=10)
+    wait_until(ldclient.get().is_initialized, timeout=30)
 
     ldclient.get().close()
 
@@ -40,7 +40,7 @@ def test_set_config():
 
     ldclient.set_config(online_config)
     assert ldclient.get().is_offline() is False
-    wait_until(ldclient.get().is_initialized, timeout=10)
+    wait_until(ldclient.get().is_initialized, timeout=30)
 
     ldclient.get().close()
 
