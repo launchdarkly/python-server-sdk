@@ -62,14 +62,13 @@ def set_sdk_key(sdk_key):
         __lock.runlock()
 
     if sdk_key_changed:
-        new_config = __config.copy_with_new_sdk_key(new_sdk_key=sdk_key)
         try:
             __lock.lock()
+            __config = __config.copy_with_new_sdk_key(new_sdk_key=sdk_key)
             if __client:
                 log.info("Reinitializing LaunchDarkly Client " + version.VERSION + " with new sdk key")
-                new_client = LDClient(config=new_config, start_wait=start_wait)
+                new_client = LDClient(config=__config, start_wait=start_wait)
                 old_client = __client
-                __config = new_config
                 __client = new_client
                 old_client.close()
         finally:

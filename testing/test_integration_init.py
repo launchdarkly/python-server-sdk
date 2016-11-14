@@ -11,7 +11,17 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 @pytest.mark.skipif(sdk_key is None, reason="requires LD_SDK_KEY environment variable to be set")
-def test_set_sdk_key():
+def test_set_sdk_key_before_init():
+    ldclient.set_config(Config.default())
+
+    ldclient.set_sdk_key(sdk_key)
+    wait_until(ldclient.get().is_initialized, timeout=10)
+
+    ldclient.get().close()
+
+
+@pytest.mark.skipif(sdk_key is None, reason="requires LD_SDK_KEY environment variable to be set")
+def test_set_sdk_key_after_init():
     ldclient.set_config(Config.default())
     assert ldclient.get().is_initialized() is False
     ldclient.set_sdk_key(sdk_key)
