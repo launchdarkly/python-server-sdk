@@ -5,8 +5,8 @@ from threading import Thread
 
 import backoff
 import requests
-from sseclient import SSEClient
 from ldclient.interfaces import UpdateProcessor
+from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
 
 
