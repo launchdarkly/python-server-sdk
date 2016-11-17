@@ -16,10 +16,10 @@ Quick setup
 2. Configure the library with your sdk key:
 
         import ldclient
-        ldclient.sdk_key = "your sdk key"
 
 3. Get the client:
 
+        ldclient.set_sdk_key("your sdk key")
         client = ldclient.get()
 
 Your first feature flag
@@ -40,7 +40,7 @@ Twisted is supported for LDD mode only. To run in Twisted/LDD mode,
 1. Use this dependency:
 
 	```
-	ldclient-py[twisted]==3.0.1
+	ldclient-py[twisted]>=3.0.1
 	```
 2. Configure the client:
 

@@ -8,11 +8,9 @@ import time
 import requests
 from builtins import object
 
-from ldclient.event_consumer import EventConsumerImpl
+from ldclient.config import Config as Config
 from ldclient.feature_requester import FeatureRequesterImpl
-from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.flag import evaluate
-from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -27,80 +25,21 @@ except:
 from cachecontrol import CacheControl
 from threading import Lock
 
-GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
-STREAM_FEATURES_PATH = '/flags'
-
-
-class Config(object):
-    def __init__(self,
-                 base_uri='https://app.launchdarkly.com',
-                 events_uri='https://events.launchdarkly.com',
-                 connect_timeout=10,
-                 read_timeout=15,
-                 events_upload_max_batch_size=100,
-                 events_max_pending=10000,
-                 stream_uri='https://stream.launchdarkly.com',
-                 stream=True,
-                 verify_ssl=True,
-                 defaults=None,
-                 events_enabled=True,
-                 update_processor_class=None,
-                 poll_interval=1,
-                 use_ldd=False,
-                 feature_store=InMemoryFeatureStore(),
-                 feature_requester_class=None,
-                 event_consumer_class=None,
-                 offline=False):
-        """
-
-        :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key, config,
-                                       and FeatureStore implementation
-        :type update_processor_class: (str, Config, FeatureStore) -> UpdateProcessor
-        :param feature_store: A FeatureStore implementation
-        :type feature_store: FeatureStore
-        :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
-        :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
-        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
-        :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
-        """
-        if defaults is None:
-            defaults = {}
-
-        self.base_uri = base_uri.rstrip('\\')
-        self.get_latest_features_uri = self.base_uri + GET_LATEST_FEATURES_PATH
-        self.events_uri = events_uri.rstrip('\\') + '/bulk'
-        self.stream_uri = stream_uri.rstrip('\\') + STREAM_FEATURES_PATH
-        self.update_processor_class = update_processor_class
-        self.stream = stream
-        if poll_interval < 1:
-            poll_interval = 1
-        self.poll_interval = poll_interval
-        self.use_ldd = use_ldd
-        self.feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
-        self.feature_requester_class = feature_requester_class
-        self.connect_timeout = connect_timeout
-        self.read_timeout = read_timeout
-        self.events_enabled = events_enabled
-        self.events_upload_max_batch_size = events_upload_max_batch_size
-        self.events_max_pending = events_max_pending
-        self.verify_ssl = verify_ssl
-        self.defaults = defaults
-        self.offline = offline
-
-    def get_default(self, key, default):
-        return default if key not in self.defaults else self.defaults[key]
-
-    @classmethod
-    def default(cls):
-        return cls()
-
 
 class LDClient(object):
-    def __init__(self, sdk_key, config=None, start_wait=5):
+    def __init__(self, sdk_key=None, config=None, start_wait=5):
         check_uwsgi()
-        self._sdk_key = sdk_key
-        self._config = config or Config.default()
+
+        if config is not None and config.sdk_key is not None and sdk_key is not None:
+            raise Exception("LaunchDarkly client init received both sdk_key and config with sdk_key. "
+                            "Only one of either is expected")
+
+        if sdk_key is not None:
+            log.warn("Deprecated sdk_key argument was passed to init. Use config object instead.")
+            self._config = Config(sdk_key=sdk_key)
+        else:
+            self._config = config or Config.default()
+
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.events_max_pending)
         self._event_consumer = None
@@ -110,13 +49,11 @@ class LDClient(object):
         """ :type: FeatureStore """
 
         if self._config.offline:
-            self._config.events_enabled = False
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
         if self._config.events_enabled:
-            self._event_consumer = self._config.event_consumer_class(
-                self._queue, self._sdk_key, self._config)
+            self._event_consumer = self._config.event_consumer_class(self._queue, self._config)
             self._event_consumer.start()
 
         if self._config.use_ldd:
@@ -124,10 +61,9 @@ class LDClient(object):
             return
 
         if self._config.feature_requester_class:
-            self._feature_requester = self._config.feature_requester_class(
-                sdk_key, self._config)
+            self._feature_requester = self._config.feature_requester_class(self._config)
         else:
-            self._feature_requester = FeatureRequesterImpl(sdk_key, self._config)
+            self._feature_requester = FeatureRequesterImpl(self._config)
         """ :type: FeatureRequester """
 
         update_processor_ready = threading.Event()
@@ -135,14 +71,14 @@ class LDClient(object):
         if self._config.update_processor_class:
             log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
             self._update_processor = self._config.update_processor_class(
-                sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                self._config, self._feature_requester, self._store, update_processor_ready)
         else:
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, self._feature_requester, self._store, update_processor_ready)
             else:
                 self._update_processor = PollingUpdateProcessor(
-                    sdk_key, self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, self._feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """
 
         self._update_processor.start()
@@ -155,9 +91,8 @@ class LDClient(object):
             log.warn("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
-    @property
-    def sdk_key(self):
-        return self._sdk_key
+    def get_sdk_key(self):
+        return self._config.sdk_key
 
     def close(self):
         log.info("Closing LaunchDarkly client..")
@@ -285,9 +220,9 @@ class LDClient(object):
         return {k: self._evaluate(v, user)[0] for k, v in flags.items() or {}}
 
     def secure_mode_hash(self, user):
-        if user.get('key') is None:
+        if user.get('key') is None or self._config.sdk_key is None:
             return ""
-        return hmac.new(self._sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
+        return hmac.new(self._config.sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
 
     @staticmethod
     def _sanitize_user(user):

@@ -5,23 +5,21 @@ from threading import Thread
 
 import backoff
 import requests
-from sseclient import SSEClient
 from ldclient.interfaces import UpdateProcessor
+from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, sdk_key, config, requester, store, ready):
+    def __init__(self, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._sdk_key = sdk_key
         self._uri = config.stream_uri
         self._config = config
         self._requester = requester
         self._store = store
         self._running = False
         self._ready = ready
-        self._headers = _stream_headers(self._sdk_key)
 
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
@@ -34,7 +32,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     @backoff.on_exception(_backoff_expo, requests.exceptions.RequestException, max_tries=None, jitter=backoff.full_jitter)
     def _connect(self):
-        messages = SSEClient(self._uri, verify=self._config.verify_ssl, headers=self._headers)
+        messages = SSEClient(self._uri, verify=self._config.verify_ssl, headers=_stream_headers(self._config.sdk_key))
         for msg in messages:
             if not self._running:
                 break

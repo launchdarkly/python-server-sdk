@@ -15,11 +15,10 @@ ch.setFormatter(formatter)
 root.addHandler(ch)
 
 if __name__ == '__main__':
-    ldclient.sdk_key = 'sdk_key'
     ldclient.start_wait = 10
-    client = ldclient.get()
+    ldclient.set_sdk_key('YOUR_SDK_KEY')
 
     user = {u'key': 'userKey'}
-    print(client.variation("update-app", user, False))
+    print(ldclient.get().variation("update-app", user, False))
 
-    client.close()
+    ldclient.get().close()

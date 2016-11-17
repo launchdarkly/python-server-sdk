@@ -9,14 +9,13 @@ from ldclient.util import log
 
 
 class FeatureRequesterImpl(FeatureRequester):
-    def __init__(self, sdk_key, config):
-        self._sdk_key = sdk_key
+    def __init__(self, config):
         self._session = CacheControl(requests.Session())
         self._config = config
 
     def get_all(self):
-        hdrs = _headers(self._sdk_key)
-        uri = self._config.get_latest_features_uri
+        hdrs = _headers(self._config.sdk_key)
+        uri = self._config.get_latest_flags_uri
         log.debug("Getting all flags using uri: " + uri)
         r = self._session.get(uri, headers=hdrs, timeout=(
             self._config.connect_timeout, self._config.read_timeout))
@@ -25,8 +24,8 @@ class FeatureRequesterImpl(FeatureRequester):
         return features
 
     def get_one(self, key):
-        hdrs = _headers(self._sdk_key)
-        uri = self._config.get_latest_features_uri + '/' + key
+        hdrs = _headers(self._config.sdk_key)
+        uri = self._config.get_latest_flags_uri + '/' + key
         log.debug("Getting one feature flag using uri: " + uri)
         r = self._session.get(uri,
                               headers=hdrs,

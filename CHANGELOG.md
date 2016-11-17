@@ -4,7 +4,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ## [3.0.3] - 2016-11-03
 ### Changed
-- Add backoff when retryign stream connection.
+- Add backoff when retrying stream connection.
 - More correct initialized state.
 
 ## [3.0.2] - 2016-10-26
