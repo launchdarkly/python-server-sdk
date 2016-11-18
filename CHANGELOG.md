@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.0] - 2016-11-18
+### Changed
+- Changing the config and SDK key is now supported after initialization. The client will be restarted with the new configuration
+- Breaking api change: `ldclient.sdk_key = <KEY>` replaced with: `ldclient.set_sdk_key('<KEY>')`
+- Breaking api change: `ldclient.config = config` replaced with: `ldclient.set_config(config)`
+- No longer depend on sseclient library, instead include our own sse client
+
 ## [3.0.3] - 2016-11-03
 ### Changed
 - Add backoff when retrying stream connection.
