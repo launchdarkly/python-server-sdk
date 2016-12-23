@@ -16,7 +16,7 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient(object):
-    def __init__(self, url, last_id=None, retry=3000, connect_timeout=5, read_timeout=300, session=None, **kwargs):
+    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, session=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry

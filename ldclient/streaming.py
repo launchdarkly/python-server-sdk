@@ -9,7 +9,6 @@ from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
 
-stream_connect_timeout = 20
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
@@ -41,7 +40,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             self._uri,
             verify=self._config.verify_ssl,
             headers=_stream_headers(self._config.sdk_key),
-            connect_timeout=stream_connect_timeout,
+            connect_timeout=self._config.connect_timeout,
             read_timeout=stream_read_timeout)
         for msg in messages:
             if not self._running:
