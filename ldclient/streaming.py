@@ -4,10 +4,14 @@ import json
 from threading import Thread
 
 import backoff
-import requests
+
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
+
+# allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
+# stream will keep this from triggering
+stream_read_timeout = 5 * 60
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
@@ -30,9 +34,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _backoff_expo():
         return backoff.expo(max_value=30)
 
-    @backoff.on_exception(_backoff_expo, requests.exceptions.RequestException, max_tries=None, jitter=backoff.full_jitter)
+    @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter)
     def _connect(self):
-        messages = SSEClient(self._uri, verify=self._config.verify_ssl, headers=_stream_headers(self._config.sdk_key))
+        messages = SSEClient(
+            self._uri,
+            verify=self._config.verify_ssl,
+            headers=_stream_headers(self._config.sdk_key),
+            connect_timeout=self._config.connect_timeout,
+            read_timeout=stream_read_timeout)
         for msg in messages:
             if not self._running:
                 break

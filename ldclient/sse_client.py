@@ -16,10 +16,12 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient(object):
-    def __init__(self, url, last_id=None, retry=3000, session=None, **kwargs):
+    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, session=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
 
         # Optional support for passing in a requests.Session()
         self.session = session
@@ -46,7 +48,12 @@ class SSEClient(object):
 
         # Use session if set.  Otherwise fall back to requests module.
         requester = self.session or requests
-        self.resp = requester.get(self.url, stream=True, **self.requests_kwargs)
+        self.resp = requester.get(
+            self.url,
+            stream=True,
+            timeout=(self._connect_timeout, self._read_timeout),
+            **self.requests_kwargs)
+
         self.resp_file = self.resp.raw
 
         # TODO: Ensure we're handling redirects.  Might also stick the 'origin'
