@@ -44,7 +44,13 @@ class RedisFeatureStore(FeatureStore):
 
     def all(self, callback):
         r = redis.Redis(connection_pool=self._pool)
-        all_features = r.hgetall(self._features_key)
+        try:
+            all_features = r.hgetall(self._features_key)
+        except BaseException as e:
+            log.error("RedisFeatureStore: Could not retrieve all flags from Redis with error: "
+                      + e.message + " Returning None")
+            return callback(None)
+
         if all_features is None or all_features is "":
             log.warn("RedisFeatureStore: call to get all flags returned no results. Returning None.")
             return callback(None)
@@ -66,8 +72,14 @@ class RedisFeatureStore(FeatureStore):
                 return callback(None)
             return callback(f)
 
-        r = redis.Redis(connection_pool=self._pool)
-        f_json = r.hget(self._features_key, key)
+        try:
+            r = redis.Redis(connection_pool=self._pool)
+            f_json = r.hget(self._features_key, key)
+        except BaseException as e:
+            log.error("RedisFeatureStore: Could not retrieve flag from redis with error: " + e.message
+                      + ". Returning None for key: " + key)
+            return callback(None)
+
         if f_json is None or f_json is "":
             log.warn("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
             return callback(None)
