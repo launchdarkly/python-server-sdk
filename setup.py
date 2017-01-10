@@ -39,7 +39,7 @@ class PyTest(Command):
 
 setup(
     name='ldclient-py',
-    version='4.0.0',
+    version='4.0.1',
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=['ldclient'],

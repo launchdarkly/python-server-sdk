@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.1] - 2017-01-10
+### Changed
+- RedisFeatureStore now returns default when Redis errors occur
+- Better detection of stream connection issues.
+
 ## [4.0.0] - 2016-11-18
 ### Changed
 - Changing the config and SDK key is now supported after initialization. The client will be restarted with the new configuration
