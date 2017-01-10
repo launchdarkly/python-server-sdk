@@ -137,11 +137,6 @@ class Event(object):
         and return a Event object.
         """
         msg = cls()
-        if raw.startswith(':'):
-            msg.event = 'comment'
-            msg.data = raw[1:]
-            return msg
-
         for line in raw.split('\n'):
             m = cls.sse_line_pattern.match(line)
             if m is None:
@@ -151,6 +146,9 @@ class Event(object):
 
             name = m.groupdict()['name']
             value = m.groupdict()['value']
+            if name == '':
+                # line began with a ":", so is a comment.  Ignore
+                continue
 
             if name == 'data':
                 # If we already have some data, then join to it with a newline.
