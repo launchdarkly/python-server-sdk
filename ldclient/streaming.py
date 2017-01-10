@@ -84,6 +84,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # noinspection PyShadowingNames
             version = payload['version']
             store.delete(key, version)
-        elif msg.event != 'comment':
-            log.warning('Unhandled event in stream processor: ' + msg.event + ' with data: ' + msg.data)
+        else:
+            log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
