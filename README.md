@@ -40,7 +40,9 @@ Python 2.6 is supported for polling mode only and requires an extra dependency. 
 1. Use the `python2.6` extra  in your requirements.txt:
     `ldclient-py[python2.6]`
 
-1. Due to Python 2.6's lack of SNI support, LaunchDarkly's streaming flag updates are not available. Set the `stream=False` option in the client config to disable it. You'll still receive flag updates, but via a polling mechanism with efficient caching.
+1. Due to Python 2.6's lack of SNI support, LaunchDarkly's streaming flag updates are not available. Set the `stream=False` option in the client config to disable it. You'll still receive flag updates, but via a polling mechanism with efficient caching. Here's an example:
+	`config = ldclient.Config(stream=False, sdk_key="SDK_KEY")`
+
 
 Twisted
 -------
