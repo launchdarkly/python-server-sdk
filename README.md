@@ -33,6 +33,15 @@ Your first feature flag
         else:
             # the code to run if the feature is off
 
+Python 2.6
+----------
+Python 2.6 is supported for polling mode only and requires an extra dependency. Here's how to set it up:
+
+1. Use the `python2.6` extra  in your requirements.txt:
+    `ldclient-py[python2.6]`
+
+1. Due to Python 2.6's lack of SNI support, LaunchDarkly's streaming flag updates are not available. Set the `stream=False` option in the client config to disable it. You'll still receive flag updates, but via a polling mechanism with efficient caching.
+
 Twisted
 -------
 Twisted is supported for LDD mode only. To run in Twisted/LDD mode, 

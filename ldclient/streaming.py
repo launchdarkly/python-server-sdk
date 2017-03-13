@@ -58,7 +58,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     @staticmethod
     def process_message(store, requester, msg, ready):
-        log.debug("Received stream event {} with data: {}".format(msg.event, msg.data))
+        log.debug("Received stream event {0} with data: {1}".format(msg.event, msg.data))
         if msg.event == 'put':
             payload = json.loads(msg.data)
             store.init(payload)
