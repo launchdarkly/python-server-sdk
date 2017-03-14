@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.3] - 2017-03-14
+### Changed
+- Fixed missing python2.6-requirements.txt in manifest
+
 ## [4.0.2] - 2017-03-13
 ### Added
 - Support for Python 2.6.

@@ -3,3 +3,4 @@ include README.txt
 include test-requirements.txt
 include twisted-requirements.txt
 include redis-requirements.txt
+include python2.6-requirements.txt
