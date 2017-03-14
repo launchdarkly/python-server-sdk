@@ -23,7 +23,7 @@ class RedisFeatureStore(FeatureStore):
                  expiration=15,
                  capacity=1000):
 
-        self._features_key = "{}:features".format(prefix)
+        self._features_key = "{0}:features".format(prefix)
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)

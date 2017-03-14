@@ -217,7 +217,7 @@ class LDClient(object):
         return self._store.all(cb)
 
     def _evaluate_multi(self, user, flags):
-        return {k: self._evaluate(v, user)[0] for k, v in flags.items() or {}}
+        return dict([(k, self._evaluate(v, user)[0]) for k, v in flags.items() or {}])
 
     def secure_mode_hash(self, user):
         if user.get('key') is None or self._config.sdk_key is None:

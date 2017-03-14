@@ -23,7 +23,7 @@ class TwistedRedisFeatureStore(FeatureStore):
         parsed_url = urlparse.urlparse(url)
         self._redis_host = parsed_url.hostname
         self._redis_port = parsed_url.port
-        self._features_key = "{}:features".format(redis_prefix)
+        self._features_key = "{0}:features".format(redis_prefix)
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
         log.info("Created TwistedRedisFeatureStore with url: " + url + " using key: " + self._features_key)

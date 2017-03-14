@@ -3,12 +3,14 @@ try:
 except ImportError:
     from distutils.core import setup
 
+import sys
 import uuid
 
 from pip.req import parse_requirements
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
+python26_reqs = parse_requirements('python2.6-requirements.txt', session=uuid.uuid1())
 test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
 twisted_reqs = parse_requirements(
     'twisted-requirements.txt', session=uuid.uuid1())
@@ -17,6 +19,7 @@ redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 reqs = [str(ir.req) for ir in install_reqs]
+python26reqs = [str(ir.req) for ir in python26_reqs]
 testreqs = [str(ir.req) for ir in test_reqs]
 txreqs = [str(ir.req) for ir in twisted_reqs]
 redisreqs = [str(ir.req) for ir in redis_reqs]
@@ -39,7 +42,7 @@ class PyTest(Command):
 
 setup(
     name='ldclient-py',
-    version='4.0.1',
+    version='4.0.2',
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=['ldclient'],
@@ -54,7 +57,8 @@ setup(
     ],
     extras_require={
         "twisted": txreqs,
-        "redis": redisreqs
+        "redis": redisreqs,
+        "python2.6": python26reqs
     },
     tests_require=testreqs,
     cmdclass={'test': PyTest},

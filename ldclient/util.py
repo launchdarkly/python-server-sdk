@@ -38,7 +38,7 @@ def _headers(sdk_key):
 
 def _stream_headers(sdk_key, client="PythonClient"):
     return {'Authorization': sdk_key,
-            'User-Agent': '{}/{}'.format(client, VERSION),
+            'User-Agent': '{0}/{1}'.format(client, VERSION),
             'Cache-Control': 'no-cache',
             'Accept': "text/event-stream"}
 
