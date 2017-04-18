@@ -1,13 +1,5 @@
 ---
 engines:
-  duplication:
-    enabled: false
-    config:
-      languages:
-      - ruby
-      - javascript
-      - python
-      - php
   fixme:
     enabled: true
   radon:
