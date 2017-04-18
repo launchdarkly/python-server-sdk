@@ -4,7 +4,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ## [4.0.4] - 2017-04-18
 ### Fixed
-- #65 Ensure that no warning is logged about a missing SDK key when the `ldclient` package is imported.
+- [#65](https://github.com/launchdarkly/python-client/issues/65) Ensure that no warning is logged about a missing SDK key when the `ldclient` package is imported.
 
 ## [4.0.3] - 2017-03-14
 ### Changed
