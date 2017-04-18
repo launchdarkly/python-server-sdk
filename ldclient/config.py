@@ -39,8 +39,6 @@ class Config(object):
         :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
         :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
         """
-        if offline is False and sdk_key is None or sdk_key is '':
-            log.warn("Missing or blank sdk_key.")
         self.__sdk_key = sdk_key
 
         if defaults is None:
@@ -168,3 +166,7 @@ class Config(object):
     @property
     def offline(self):
         return self.__offline
+
+    def _validate(self):
+        if self.offline is False and self.sdk_key is None or self.sdk_key is '':
+            log.warn("Missing or blank sdk_key.")
