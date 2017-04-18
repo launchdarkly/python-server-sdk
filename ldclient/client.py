@@ -39,6 +39,7 @@ class LDClient(object):
             self._config = Config(sdk_key=sdk_key)
         else:
             self._config = config or Config.default()
+        self._config._validate()
 
         self._session = CacheControl(requests.Session())
         self._queue = queue.Queue(self._config.events_max_pending)
