@@ -83,7 +83,7 @@ def _contains(u, c):
 
 
 def _matches(u, c):
-    return _string_operator(u, c, lambda u, c: re.match(c, u))
+    return _string_operator(u, c, lambda u, c: re.search(c, u))
 
 
 def _less_than(u, c):
