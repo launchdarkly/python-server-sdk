@@ -26,5 +26,5 @@ test:
     - pyenv shell 3.3.3; $(pyenv which py.test) -s testing
     - pyenv shell 3.4.2; $(pyenv which py.test) -s testing
   post:
-    - mv .coverage $CIRCLE_ARTIFCTS/.coverage
+    - cp .coverage $CIRCLE_ARTIFACTS/.coverage
     - sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'
