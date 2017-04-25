@@ -80,6 +80,8 @@ Testing
 
 We run integration tests for all our SDKs using a centralized test harness. This approach gives us the ability to test for consistency across SDKs, as well as test networking behavior in a long-running application. These tests cover each method in the SDK, and verify that event sending, flag evaluation, stream reconnection, and other aspects of the SDK all behave correctly.
 
+![Code Climate coverage report](https://img.shields.io/codeclimate/coverage/github/launchdarkly/python-client.svg) The Code Climate coverage does not include the coverage provided by this integration test harness.
+
 Contributing
 ------------
 

@@ -2,6 +2,15 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.5] - 2017-04-25
+### Fixed
+- [#70](https://github.com/launchdarkly/python-client/issues/70) Regex `matches` targeting rules now include the user if
+a match is found anywhere in the attribute.  Before fixing this bug, the beginning of the attribute needed to match the pattern.
+### Changed
+- [#43](https://github.com/launchdarkly/python-client/issues/43) Started publishing code coverage metrics to Code Climate. 
+Bear in mind that the Code Climate coverage report only shows the unit test coverage, while the bulk of our SDK test coverage comes
+from a [separate integration test suite](https://github.com/launchdarkly/python-client#testing).
+
 ## [4.0.4] - 2017-04-18
 ### Fixed
 - [#65](https://github.com/launchdarkly/python-client/issues/65) Ensure that no warning is logged about a missing SDK key when the `ldclient` package is imported.
