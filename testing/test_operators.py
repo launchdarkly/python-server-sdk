@@ -10,4 +10,8 @@ def test_date_operator():
     assert operators.ops.get("after")("1970-01-01T00:00:02.500Z", 1000)
     assert not operators.ops.get("after")("1970-01-01 00:00:02.500Z", 1000)
 
-
+def test_regex_operator():
+    assert operators.ops.get("matches")("hello world", "hello.*rld")
+    assert operators.ops.get("matches")("hello world", "hello.*rl")
+    assert operators.ops.get("matches")("hello world", "l+")
+    assert operators.ops.get("matches")("hello world", "(world|planet)")
