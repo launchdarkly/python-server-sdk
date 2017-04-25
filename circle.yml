@@ -22,6 +22,9 @@ dependencies:
 test:
   override:
     - pyenv shell 2.6.6; $(pyenv which py.test) testing
-    - pyenv shell 2.7.10; $(pyenv which py.test) testing
+    - pyenv shell 2.7.10; $(pyenv which py.test) --cov=ldclient testing
     - pyenv shell 3.3.3; $(pyenv which py.test) -s testing
     - pyenv shell 3.4.2; $(pyenv which py.test) -s testing
+  post:
+    - cp .coverage $CIRCLE_ARTIFACTS/.coverage
+    - sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'

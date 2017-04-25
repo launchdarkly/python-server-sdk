@@ -51,9 +51,17 @@ setup(
     long_description='LaunchDarkly SDK for Python',
     install_requires=reqs,
     classifiers=[
+        'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2 :: Only',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Topic :: Software Development',
+        'Topic :: Software Development :: Libraries',
     ],
     extras_require={
         "twisted": txreqs,
