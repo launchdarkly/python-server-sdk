@@ -21,10 +21,15 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
             self._running = True
             while self._running:
                 start_time = time.time()
-                self._store.init(self._requester.get_all())
-                if not self._ready.is_set() is True and self._store.initialized is True:
-                    log.info("PollingUpdateProcessor initialized ok")
-                    self._ready.set()
+                try:
+                    self._store.init(self._requester.get_all())
+                    if not self._ready.is_set() is True and self._store.initialized is True:
+                        log.info("PollingUpdateProcessor initialized ok")
+                        self._ready.set()
+                except:
+                    log.exception(
+                        'Error: Exception encountered when updating flags.')
+
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:
                     time.sleep(self._config.poll_interval - elapsed)
