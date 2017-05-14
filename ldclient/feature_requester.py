@@ -16,9 +16,10 @@ class FeatureRequesterImpl(FeatureRequester):
     def get_all(self):
         hdrs = _headers(self._config.sdk_key)
         uri = self._config.get_latest_flags_uri
-        log.debug("Getting all flags using uri: " + uri)
         r = self._session.get(uri, headers=hdrs, timeout=(
             self._config.connect_timeout, self._config.read_timeout))
+        log.debug("All flags response status: " + str(r.status_code) + ". From cache? " + str(r.from_cache) +
+                  ". ETag: " + str(r.headers.get('ETag')))
         r.raise_for_status()
         features = r.json()
         return features
