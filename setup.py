@@ -8,6 +8,8 @@ import uuid
 
 from pip.req import parse_requirements
 
+ldclient_version='4.0.5'
+
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 python26_reqs = parse_requirements('python2.6-requirements.txt', session=uuid.uuid1())
@@ -42,7 +44,7 @@ class PyTest(Command):
 
 setup(
     name='ldclient-py',
-    version='4.0.5',
+    version=ldclient_version,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=['ldclient'],
