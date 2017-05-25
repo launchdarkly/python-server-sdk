@@ -1,11 +1,12 @@
 import logging
 import re
 import sys
+import calendar
 from collections import defaultdict
 from numbers import Number
 
 import six
-import strict_rfc3339
+import pyrfc3339
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
@@ -45,7 +46,8 @@ def _parse_time(input):
 
     if isinstance(input, six.string_types):
         try:
-            timestamp = strict_rfc3339.rfc3339_to_timestamp(input)
+            parsed_time = pyrfc3339.parse(input)
+            timestamp = calendar.timegm(parsed_time.timetuple())
             return timestamp * 1000.0
         except Exception as e:
             log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + str(e))
