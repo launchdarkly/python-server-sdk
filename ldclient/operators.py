@@ -1,7 +1,7 @@
 import logging
 import re
 import sys
-import calendar
+from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
 from numbers import Number
 
@@ -47,7 +47,7 @@ def _parse_time(input):
     if isinstance(input, six.string_types):
         try:
             parsed_time = pyrfc3339.parse(input)
-            timestamp = calendar.timegm(parsed_time.timetuple())
+            timestamp = (parsed_time - epoch).total_seconds()
             return timestamp * 1000.0
         except Exception as e:
             log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + str(e))
@@ -55,7 +55,6 @@ def _parse_time(input):
 
     log.warn("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
     return None
-
 
 def _time_operator(u, c, fn):
     u_time = _parse_time(u)
@@ -111,6 +110,24 @@ def _before(u, c):
 def _after(u, c):
     return _time_operator(u, c, lambda u, c: u > c)
 
+_ZERO = timedelta(0)
+_HOUR = timedelta(hours=1)
+
+# A UTC class.
+
+class _UTC(tzinfo):
+    """UTC"""
+
+    def utcoffset(self, dt):
+        return _ZERO
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def dst(self, dt):
+        return _ZERO
+
+epoch = datetime.utcfromtimestamp(0).replace(tzinfo=_UTC())
 
 ops = {
     "in": _in,
