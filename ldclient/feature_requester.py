@@ -27,7 +27,6 @@ class FeatureRequesterImpl(FeatureRequester):
         return flags
 
     def get_one(self, key):
-        #TODO: Do we ever want to cache this response?
         hdrs = _headers(self._config.sdk_key)
         uri = self._config.get_latest_flags_uri + '/' + key
         log.debug("Getting one feature flag using uri: " + uri)

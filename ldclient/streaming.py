@@ -4,6 +4,7 @@ import json
 from threading import Thread
 
 import backoff
+import time
 
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
@@ -25,6 +26,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
         self._ready = ready
 
+    # Retry/backoff logic:
+    # Upon any error establishing the stream connection we retry with backoff + jitter.
+    # Upon any error processing the results of the stream we reconnect after one second.
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
@@ -39,7 +43,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             except Exception:
-                log.warning("Caught exception. Restarting stream connection.", exc_info=True)
+                log.warning("Caught exception. Restarting stream connection after one second.",
+                            exc_info=True)
+                time.sleep(1)
 
     def _backoff_expo():
         return backoff.expo(max_value=30)
