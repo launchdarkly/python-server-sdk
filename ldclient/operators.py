@@ -50,7 +50,7 @@ def _parse_time(input):
             timestamp = (parsed_time - epoch).total_seconds()
             return timestamp * 1000.0
         except Exception as e:
-            log.warn("Couldn't parse timestamp:" + str(input) + " with error: " + str(e))
+            log.warn("Couldn't parse timestamp:" + str(input) + " with message: " + str(e))
             return None
 
     log.warn("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
