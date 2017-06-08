@@ -17,9 +17,11 @@ class FeatureRequesterImpl(FeatureRequester):
     def get_all(self):
         hdrs = _headers(self._config.sdk_key)
         uri = self._config.get_latest_flags_uri
-        r = self._session_cache.get(uri, headers=hdrs,
-                                    timeout=(self._config.connect_timeout,
-                                       self._config.read_timeout))
+        r = self._session_cache.get(uri,
+                                    headers=hdrs,
+                                    timeout=(
+                                        self._config.connect_timeout,
+                                        self._config.read_timeout))
         r.raise_for_status()
         flags = r.json()
         versions_summary = list(map(lambda f: "{0}:{1}".format(f.get("key"), f.get("version")), flags.values()))
@@ -32,11 +34,12 @@ class FeatureRequesterImpl(FeatureRequester):
         uri = self._config.get_latest_flags_uri + '/' + key
         log.debug("Getting one feature flag using uri: " + uri)
         r = self._session_no_cache.get(uri,
-                                    headers=hdrs,
-                                    timeout=(self._config.connect_timeout,
-                                       self._config.read_timeout))
+                                       headers=hdrs,
+                                       timeout=(
+                                           self._config.connect_timeout,
+                                           self._config.read_timeout))
         r.raise_for_status()
         flag = r.json()
-        log.debug("Get one flag response status:[{0}] From cache?[{1}] Flag key:[{2}] version:[{3}]"
-                  .format(r.status_code, r.from_cache, key, flag.get("version")))
+        log.debug("Get one flag response status:[{0}] Flag key:[{1}] version:[{2}]"
+                  .format(r.status_code, key, flag.get("version")))
         return flag
