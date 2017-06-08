@@ -16,15 +16,18 @@ class FeatureRequesterImpl(FeatureRequester):
     def get_all(self):
         hdrs = _headers(self._config.sdk_key)
         uri = self._config.get_latest_flags_uri
-        r = self._session.get(uri, headers=hdrs, timeout=(
-            self._config.connect_timeout, self._config.read_timeout))
-        log.debug("All flags response status: " + str(r.status_code) + ". From cache? " + str(r.from_cache) +
-                  ". ETag: " + str(r.headers.get('ETag')))
+        r = self._session.get(uri, headers=hdrs,
+                              timeout=(self._config.connect_timeout,
+                                       self._config.read_timeout))
         r.raise_for_status()
-        features = r.json()
-        return features
+        flags = r.json()
+        versions_summary = list(map(lambda f: "{0}:{1}".format(f.get("key"), f.get("version")), flags.values()))
+        log.debug("Get All flags response status:[{0}] From cache?[{1}] ETag:[{2}] flag versions: {3}"
+                  .format(r.status_code, r.from_cache, r.headers.get('ETag'), versions_summary))
+        return flags
 
     def get_one(self, key):
+        #TODO: Do we ever want to cache this response?
         hdrs = _headers(self._config.sdk_key)
         uri = self._config.get_latest_flags_uri + '/' + key
         log.debug("Getting one feature flag using uri: " + uri)
@@ -33,5 +36,7 @@ class FeatureRequesterImpl(FeatureRequester):
                               timeout=(self._config.connect_timeout,
                                        self._config.read_timeout))
         r.raise_for_status()
-        feature = r.json()
-        return feature
+        flag = r.json()
+        log.debug("Get one flag response status:[{0}] From cache?[{1}] Flag key:[{2}] version:[{3}]"
+                  .format(r.status_code, r.from_cache, key, flag.get("version")))
+        return flag

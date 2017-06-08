@@ -28,7 +28,7 @@ class EventConsumerImpl(Thread, EventConsumer):
             try:
                 self.send()
             except Exception:
-                log.exception(
+                log.warning(
                     'Unhandled exception in event consumer')
 
     def stop(self):
@@ -63,11 +63,13 @@ class EventConsumerImpl(Thread, EventConsumer):
                             'ProtocolError exception caught while sending events. Retrying.')
                         do_send(False)
                 else:
-                    log.exception(
-                        'Unhandled exception in event consumer. Analytics events were not processed.')
+                    log.warning(
+                        'Unhandled exception in event consumer. Analytics events were not processed.',
+                        exc_info=True)
             except:
-                log.exception(
-                    'Unhandled exception in event consumer. Analytics events were not processed.')
+                log.warning(
+                    'Unhandled exception in event consumer. Analytics events were not processed.',
+                    exc_info=True)
 
         try:
             do_send(True)
