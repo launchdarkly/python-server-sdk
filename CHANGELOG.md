@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.0.6] - 2017-06-09
+### Changed
+- Improved error handling when processing stream events
+- Replaced 3rd party rfc3339 library for license compliance
+- No longer caching `get_one()` responses
+
+
 ## [4.0.5] - 2017-04-25
 ### Fixed
 - [#70](https://github.com/launchdarkly/python-client/issues/70) Regex `matches` targeting rules now include the user if
