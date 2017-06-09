@@ -18,6 +18,12 @@ dependencies:
     - pyenv shell 2.7.10; $(pyenv which python) setup.py install
     - pyenv shell 3.3.3; $(pyenv which python) setup.py install
     - pyenv shell 3.4.2; $(pyenv which python) setup.py install 
+    
+    - pyenv shell 2.6.6; $(pyenv which pip) freeze
+    - pyenv shell 2.6.6; $(pyenv which pip) freeze
+    - pyenv shell 2.7.10; $(pyenv which pip) freeze
+    - pyenv shell 3.3.3; $(pyenv which pip) freeze
+    - pyenv shell 3.4.2; $(pyenv which pip) freeze
 
 test:
   override:
