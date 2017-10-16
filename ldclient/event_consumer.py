@@ -3,10 +3,10 @@ from __future__ import absolute_import
 import errno
 from threading import Thread
 
-import jsonpickle
 import requests
 from requests.packages.urllib3.exceptions import ProtocolError
 
+from ldclient.event_serializer import EventSerializer
 from ldclient.interfaces import EventConsumer
 from ldclient.util import _headers
 from ldclient.util import log
@@ -19,6 +19,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         self.daemon = True
         self._config = config
         self._queue = event_queue
+        self._serializer = EventSerializer(config)
         self._running = True
 
     def run(self):
@@ -41,12 +42,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         def do_send(should_retry):
             # noinspection PyBroadException
             try:
-                if isinstance(events, dict):
-                    body = [events]
-                else:
-                    body = events
-
-                json_body = jsonpickle.encode(body, unpicklable=False)
+                json_body = self._serializer.serialize_events(events)
                 log.debug('Sending events payload: ' + json_body)
                 hdrs = _headers(self._config.sdk_key)
                 uri = self._config.events_uri

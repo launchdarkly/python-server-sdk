@@ -26,6 +26,8 @@ class Config(object):
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
                  event_consumer_class=None,
+                 private_attr_names=(),
+                 all_attrs_private=False,
                  offline=False):
         """
 
@@ -65,6 +67,8 @@ class Config(object):
         if offline is True:
             events_enabled = False
         self.__events_enabled = events_enabled
+        self.__private_attr_names = private_attr_names
+        self.__all_attrs_private = all_attrs_private
         self.__offline = offline
 
     @classmethod
@@ -90,6 +94,8 @@ class Config(object):
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
                       event_consumer_class=self.__event_consumer_class,
+                      private_attr_names=self.__private_attr_names,
+                      all_attrs_private=self.__all_attrs_private,
                       offline=self.__offline)
 
     def get_default(self, key, default):
@@ -162,6 +168,14 @@ class Config(object):
     @property
     def verify_ssl(self):
         return self.__verify_ssl
+
+    @property
+    def private_attr_names(self):
+        return list(self.__private_attr_names)
+
+    @property
+    def all_attrs_private(self):
+        return self.__all_attrs_private
 
     @property
     def offline(self):
