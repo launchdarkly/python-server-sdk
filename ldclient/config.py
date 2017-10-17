@@ -19,6 +19,7 @@ class Config(object):
                  stream=True,
                  verify_ssl=True,
                  defaults=None,
+                 send_events=None,
                  events_enabled=True,
                  update_processor_class=None,
                  poll_interval=1,
@@ -65,8 +66,8 @@ class Config(object):
         self.__verify_ssl = verify_ssl
         self.__defaults = defaults
         if offline is True:
-            events_enabled = False
-        self.__events_enabled = events_enabled
+            send_events = False
+        self.__send_events = events_enabled if send_events is None else send_events
         self.__private_attr_names = private_attr_names
         self.__all_attrs_private = all_attrs_private
         self.__offline = offline
@@ -87,7 +88,7 @@ class Config(object):
                       stream=self.__stream,
                       verify_ssl=self.__verify_ssl,
                       defaults=self.__defaults,
-                      events_enabled=self.__events_enabled,
+                      send_events=self.__send_events,
                       update_processor_class=self.__update_processor_class,
                       poll_interval=self.__poll_interval,
                       use_ldd=self.__use_ldd,
@@ -155,7 +156,11 @@ class Config(object):
 
     @property
     def events_enabled(self):
-        return self.__events_enabled
+        return self.__send_events
+
+    @property
+    def send_events(self):
+        return self.__send_events
 
     @property
     def events_upload_max_batch_size(self):

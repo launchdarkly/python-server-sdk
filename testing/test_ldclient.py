@@ -58,6 +58,9 @@ client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=
 offline_client = LDClient(config=
                           Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
                                  offline=True))
+no_send_events_client = LDClient(config=
+                                 Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                                 send_events=False))
 
 user = {
     u'key': u'xyz',
@@ -146,6 +149,11 @@ def test_toggle_event_offline():
     assert offline_client._queue.empty()
 
 
+def test_toggle_event_with_send_events_off():
+    no_send_events_client.variation('feature.key', user, default=None)
+    assert no_send_events_client._queue.empty()
+
+
 def test_identify():
     client.identify(user)
 
@@ -165,7 +173,13 @@ def test_identify_numeric_key_user():
 
 
 def test_identify_offline():
+    offline_client.identify(numeric_key_user)
     assert offline_client._queue.empty()
+
+
+def test_identify_with_send_events_off():
+    no_send_events_client.identify(numeric_key_user)
+    assert no_send_events_client._queue.empty()
 
 
 def test_track():
@@ -190,6 +204,11 @@ def test_track_numeric_key_user():
 def test_track_offline():
     offline_client.track('my_event', user, 42)
     assert offline_client._queue.empty()
+
+
+def test_track_with_send_events_off():
+    no_send_events_client.track('my_event', user, 42)
+    assert no_send_events_client._queue.empty()
 
 
 def test_defaults():

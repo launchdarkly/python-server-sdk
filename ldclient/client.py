@@ -53,7 +53,7 @@ class LDClient(object):
             log.info("Started LaunchDarkly Client in offline mode")
             return
 
-        if self._config.events_enabled:
+        if self._config.send_events:
             self._event_consumer = self._config.event_consumer_class(self._queue, self._config)
             self._event_consumer.start()
 
@@ -105,7 +105,7 @@ class LDClient(object):
             self._update_processor.stop()
 
     def _send_event(self, event):
-        if self._config.offline or not self._config.events_enabled:
+        if self._config.offline or not self._config.send_events:
             return
         event['creationDate'] = int(time.time() * 1000)
         if self._queue.full():
@@ -132,7 +132,7 @@ class LDClient(object):
         return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
     def flush(self):
-        if self._config.offline or not self._config.events_enabled:
+        if self._config.offline or not self._config.send_events:
             return
         return self._event_consumer.flush()
 
