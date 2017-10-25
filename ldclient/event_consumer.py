@@ -50,6 +50,10 @@ class EventConsumerImpl(Thread, EventConsumer):
                                        headers=hdrs,
                                        timeout=(self._config.connect_timeout, self._config.read_timeout),
                                        data=json_body)
+                if r.status_code == 401:
+                    log.error('Received 401 error, no further events will be posted since SDK key is invalid')
+                    self.stop()
+                    return
                 r.raise_for_status()
             except ProtocolError as e:
                 if e.args is not None and len(e.args) > 1 and e.args[1] is not None:

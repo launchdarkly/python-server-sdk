@@ -4,6 +4,7 @@ import json
 from threading import Thread
 
 import backoff
+from requests import HTTPError
 import time
 
 from ldclient.interfaces import UpdateProcessor
@@ -42,15 +43,27 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     if message_ok is True and self._ready.is_set() is False:
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
+            except HTTPError as e:
+                log.error("Received unexpected status code %d for stream connection" % e.response.status_code)
+                if e.response.status_code == 401:
+                    log.error("Received 401 error, no further streaming connection will be made since SDK key is invalid")
+                    self.stop()
+                    break
+                else:
+                    log.warning("Restarting stream connection after one second.")
             except Exception:
                 log.warning("Caught exception. Restarting stream connection after one second.",
                             exc_info=True)
-                time.sleep(1)
+            time.sleep(1)
 
     def _backoff_expo():
         return backoff.expo(max_value=30)
 
-    @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter)
+    def should_not_retry(e):
+        return isinstance(e, HTTPError) and (e.response.status_code == 401)
+
+    @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter,
+                          giveup=should_not_retry)
     def _connect(self):
         return SSEClient(
             self._uri,

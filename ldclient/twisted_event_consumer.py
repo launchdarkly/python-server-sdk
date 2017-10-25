@@ -67,6 +67,10 @@ class TwistedEventConsumer(EventConsumer):
                                              headers=hdrs,
                                              timeout=(self._config.connect_timeout, self._config.read_timeout),
                                              data=json.dumps(body))
+                if r.status_code == 401
+                    log.error('Received 401 error, no further events will be posted since SDK key is invalid')
+                    self.stop()
+                    return
                 r.raise_for_status()
             except ProtocolError as e:
                 inner = e.args[1]
