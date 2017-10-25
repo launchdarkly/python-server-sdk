@@ -3,11 +3,12 @@ import six
 
 
 class EventSerializer:
-    IGNORE_ATTRS = ('key', 'custom', 'privateAttrs')
+    IGNORE_ATTRS = frozenset(['key', 'custom'])
+    STRIP_ATTRS = frozenset(['privateAttributeNames'])
 
     def __init__(self, config):
-        self._private_attr_names = config.private_attr_names
-        self._all_attrs_private = config.all_attrs_private
+        self._private_attribute_names = config.private_attribute_names
+        self._all_attributes_private = config.all_attributes_private
         
     def serialize_events(self, events):
         body = [events] if isinstance(events, dict) else events
@@ -17,22 +18,23 @@ class EventSerializer:
     def _is_private_attr(self, name, user_private_attrs):
         if name in EventSerializer.IGNORE_ATTRS:
             return False
-        elif self._all_attrs_private:
+        elif self._all_attributes_private:
             return True
         else:
-            return (name in self._private_attr_names) or (name in user_private_attrs)
+            return (name in self._private_attribute_names) or (name in user_private_attrs)
 
     def _filter_event(self, e):
         def filter_user_props(user_props):
             all_private_attrs = set()
-            user_private_attrs = user_props.get('privateAttrs', [])
+            user_private_attrs = user_props.get('privateAttributeNames', [])
 
             def filter_private_attrs(attrs):
                 for key, value in six.iteritems(attrs):
-                    if self._is_private_attr(key, user_private_attrs):
-                        all_private_attrs.add(key)
-                    else:
-                        yield key, value
+                    if not (key in EventSerializer.STRIP_ATTRS):
+                        if self._is_private_attr(key, user_private_attrs):
+                            all_private_attrs.add(key)
+                        else:
+                            yield key, value
 
             ret = dict(filter_private_attrs(user_props))
             if 'custom' in user_props:

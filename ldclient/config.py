@@ -27,8 +27,8 @@ class Config(object):
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
                  event_consumer_class=None,
-                 private_attr_names=(),
-                 all_attrs_private=False,
+                 private_attribute_names=(),
+                 all_attributes_private=False,
                  offline=False):
         """
 
@@ -68,8 +68,8 @@ class Config(object):
         if offline is True:
             send_events = False
         self.__send_events = events_enabled if send_events is None else send_events
-        self.__private_attr_names = private_attr_names
-        self.__all_attrs_private = all_attrs_private
+        self.__private_attribute_names = private_attribute_names
+        self.__all_attributes_private = all_attributes_private
         self.__offline = offline
 
     @classmethod
@@ -95,8 +95,8 @@ class Config(object):
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
                       event_consumer_class=self.__event_consumer_class,
-                      private_attr_names=self.__private_attr_names,
-                      all_attrs_private=self.__all_attrs_private,
+                      private_attribute_names=self.__private_attribute_names,
+                      all_attributes_private=self.__all_attributes_private,
                       offline=self.__offline)
 
     def get_default(self, key, default):
@@ -175,12 +175,12 @@ class Config(object):
         return self.__verify_ssl
 
     @property
-    def private_attr_names(self):
-        return list(self.__private_attr_names)
+    def private_attribute_names(self):
+        return list(self.__private_attribute_names)
 
     @property
-    def all_attrs_private(self):
-        return self.__all_attrs_private
+    def all_attributes_private(self):
+        return self.__all_attributes_private
 
     @property
     def offline(self):

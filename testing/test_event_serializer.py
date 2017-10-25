@@ -5,8 +5,8 @@ from ldclient.event_serializer import EventSerializer
 
 
 base_config = Config()
-config_with_all_attrs_private = Config(all_attrs_private = True)
-config_with_some_attrs_private = Config(private_attr_names=[u'firstName', u'bizzle'])
+config_with_all_attrs_private = Config(all_attributes_private = True)
+config_with_some_attrs_private = Config(private_attribute_names=[u'firstName', u'bizzle'])
 
 # users to serialize
 
@@ -26,7 +26,7 @@ user_specifying_own_private_attr = {
         u'bizzle': u'def',
         u'dizzle': u'ghi'
     },
-    u'privateAttrs': [ u'dizzle', u'unused' ]
+    u'privateAttributeNames': [ u'dizzle', u'unused' ]
 }
 
 # expected results from serializing user
