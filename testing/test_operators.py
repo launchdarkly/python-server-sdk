@@ -48,6 +48,7 @@ from ldclient import operators
     [ "matches", "hello world", "hello.*rl",      True ],
     [ "matches", "hello world", "l+",             True ],
     [ "matches", "hello world", "(world|planet)", True ],
+    [ "matches", "hello world", "aloha",          False ],
     # [ "matches", "hello world", "***not a regex", False ],   # currently throws an exception
 
     # dates
