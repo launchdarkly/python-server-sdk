@@ -83,7 +83,7 @@ def _parse_semver(input):
                 return None
 
 def _add_zero_version_component(input):
-    m = re.search("([0-9.]*)(.*)", input)
+    m = re.search("^([0-9.]*)(.*)", input)
     if m is None:
         return input + ".0"
     return m.group(1) + ".0" + m.group(2)
