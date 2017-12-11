@@ -5,3 +5,4 @@ future>=0.16.0
 six>=1.10.0
 pyRFC3339>=1.0
 jsonpickle==0.9.3
+semver>=2.7.9

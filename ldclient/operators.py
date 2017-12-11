@@ -1,5 +1,6 @@
 import logging
 import re
+import semver
 import sys
 from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
@@ -64,6 +65,28 @@ def _time_operator(u, c, fn):
             return fn(u_time, c_time)
     return False
 
+def _parse_semver(input):
+    try:
+        semver.parse(input)
+        return input
+    except ValueError as e:
+        try:
+            semver.parse(input + ".0")
+            return input + ".0"
+        except ValueError as e:
+            try:
+                semver.parse(input + ".0.0")
+                return input + ".0.0"
+            except ValueError as e:
+                return None
+
+def _semver_operator(u, c, fn):
+    u_ver = _parse_semver(u)
+    c_ver = _parse_semver(c)
+    if u_ver is not None and c_ver is not None:
+        return fn(u_ver, c_ver)
+    return False
+
 
 def _in(u, c):
     if u == c:
@@ -84,7 +107,7 @@ def _contains(u, c):
 
 
 def _matches(u, c):
-    return _string_operator(u, c, lambda u, c: re.search(c, u))
+    return _string_operator(u, c, lambda u, c: re.search(c, u) is not None)
 
 
 def _less_than(u, c):
@@ -109,6 +132,19 @@ def _before(u, c):
 
 def _after(u, c):
     return _time_operator(u, c, lambda u, c: u > c)
+
+
+def _semver_equal(u, c):
+    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) == 0)
+
+
+def _semver_less_than(u, c):
+    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) < 0)
+
+
+def _semver_greater_than(u, c):
+    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) > 0)
+
 
 _ZERO = timedelta(0)
 _HOUR = timedelta(hours=1)
@@ -140,7 +176,10 @@ ops = {
     "greaterThan": _greater_than,
     "greaterThanOrEqual": _greater_than_or_equal,
     "before": _before,
-    "after": _after
+    "after": _after,
+    "semVerEqual": _semver_equal,
+    "semVerLessThan": _semver_less_than,
+    "semVerGreaterThan": _semver_greater_than
 }
 
 ops = defaultdict(lambda: False, ops)
