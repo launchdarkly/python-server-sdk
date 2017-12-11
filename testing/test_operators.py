@@ -67,6 +67,8 @@ from ldclient import operators
     # semver
     [ "semVerEqual",       "2.0.1", "2.0.1",    True ],
     [ "semVerEqual",       "2.0",   "2.0.0",    True ],
+    [ "semVerEqual",       "2",     "2.0.0",    True ],
+    [ "semVerEqual",       "2.0-rc1", "2.0.0-rc1", True ],
     [ "semVerLessThan",    "2.0.0", "2.0.1",    True ],
     [ "semVerLessThan",    "2.0",   "2.0.1",    True ],
     [ "semVerLessThan",    "2.0.1", "2.0.0",    False ],

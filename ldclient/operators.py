@@ -71,14 +71,22 @@ def _parse_semver(input):
         return input
     except ValueError as e:
         try:
-            semver.parse(input + ".0")
-            return input + ".0"
+            input = _add_zero_version_component(input)
+            semver.parse(input)
+            return input
         except ValueError as e:
             try:
-                semver.parse(input + ".0.0")
-                return input + ".0.0"
+                input = _add_zero_version_component(input)
+                semver.parse(input)
+                return input
             except ValueError as e:
                 return None
+
+def _add_zero_version_component(input):
+    m = re.search("([0-9.]*)(.*)", input)
+    if m is None:
+        return input + ".0"
+    return m.group(1) + ".0" + m.group(2)
 
 def _semver_operator(u, c, fn):
     u_ver = _parse_semver(u)
