@@ -78,6 +78,8 @@ class LDClient(object):
                 self._update_processor = StreamingUpdateProcessor(
                     self._config, self._feature_requester, self._store, update_processor_ready)
             else:
+                log.info("Disabling streaming API")
+                log.warn("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
                 self._update_processor = PollingUpdateProcessor(
                     self._config, self._feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """

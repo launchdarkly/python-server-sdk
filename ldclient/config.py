@@ -22,7 +22,7 @@ class Config(object):
                  send_events=None,
                  events_enabled=True,
                  update_processor_class=None,
-                 poll_interval=1,
+                 poll_interval=30,
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
@@ -31,16 +31,47 @@ class Config(object):
                  all_attributes_private=False,
                  offline=False):
         """
-
-        :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key, config,
-                                       and FeatureStore implementation
+        :param string sdk_key: The SDK key for your LaunchDarkly account.
+        :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
+          value.
+        :param string events_uri: The URL for the LaunchDarkly events server. Most users should use the
+          default value.
+        :param float connect_timeout: The connect timeout for network connections in seconds.
+        :param float read_timeout: The read timeout for network connections in seconds.
+        :param int events_upload_max_batch_size: The maximum number of analytics events that the client will
+          send at once.
+        :param int events_max_pending: The capacity of the events buffer. The client buffers up to this many
+          events in memory before flushing. If the capacity is exceeded before the buffer is flushed, events
+          will be discarded.
+        :param string stream_uri: The URL for the LaunchDarkly streaming events server. Most users should
+          use the default value.
+        :param bool stream: Whether or not the streaming API should be used to receive flag updates. By
+          default, it is enabled. Streaming should only be disabled on the advice of LaunchDarkly support.
+        :param bool send_events: Whether or not to send events back to LaunchDarkly. This differs from
+          `offline` in that it affects only the sending of client-side events, not streaming or polling for
+          events from the server. By default, events will be sent.
+        :param bool events_enabled: Obsolete name for `send_events`.
+        :param bool offline: Whether the client should be initialized in offline mode. In offline mode,
+          default values are returned for all flags and no remote network requests are made. By default,
+          this is false.
         :type update_processor_class: (str, Config, FeatureStore) -> UpdateProcessor
+        :param float poll_interval: The number of seconds between polls for flag updates if streaming is off.
+        :param bool use_ldd: Whether you are using the LaunchDarkly relay proxy in daemon mode. In this
+          configuration, the client will not use a streaming connection to listen for updates, but instead
+          will get feature state from a Redis instance. The `stream` and `poll_interval` options will be
+          ignored if this option is set to true. By default, this is false.
+        :param array private_attribute_names: Marks a set of attribute names private. Any users sent to
+          LaunchDarkly with this configuration active will have attributes with these names removed.
+        :param bool all_attributes_private: If true, all user attributes (other than the key) will be
+          private, not just the attributes specified in `private_attribute_names`.
         :param feature_store: A FeatureStore implementation
         :type feature_store: FeatureStore
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
         :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
         :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
+        :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
+          config, and FeatureStore implementation
         """
         self.__sdk_key = sdk_key
 
@@ -52,9 +83,7 @@ class Config(object):
         self.__stream_uri = stream_uri.rstrip('\\')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
-        if poll_interval < 1:
-            poll_interval = 1
-        self.__poll_interval = poll_interval
+        self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.__event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
