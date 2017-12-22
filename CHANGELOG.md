@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.1.0] - 2017-12-21
+
+### Added
+- Allow user to stop user attributes from being sent in analytics events back to LaunchDarkly.  Set `private_attribute_names` on each
+  request and/or on `Config` to a list of strings matching the names of the attributes you wish to exclude.  Set
+  `all_attributes_private` on the `Config` object to hide all attributes. 
+
+### Changed
+- Stop reattempting connections when receiving a 401 (unauthorized) response from LaunchDarkly.  This should only be caused by invalid SDK key so retrying is pointless.
+
+### Deprecated 
+- `events_enabled` is deprecated and `send_events` should be used instead.  `events_enabled` may be removed in a future minor revision.
+
+
 ## [4.0.6] - 2017-06-09
 ### Changed
 - Improved error handling when processing stream events
