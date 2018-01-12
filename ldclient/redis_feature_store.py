@@ -6,8 +6,7 @@ import redis
 from ldclient import log
 from ldclient.expiringdict import ExpiringDict
 from ldclient.interfaces import FeatureStore
-
-INIT_KEY = "$initialized$"
+from ldclient.memoized_value import MemoizedValue
 
 
 class ForgetfulDict(dict):
@@ -27,6 +26,7 @@ class RedisFeatureStore(FeatureStore):
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
+        self._inited = MemoizedValue(lambda: self._query_init())
         log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + prefix)
 
     def init(self, features):
@@ -41,6 +41,7 @@ class RedisFeatureStore(FeatureStore):
             self._cache[k] = f
         pipe.execute()
         log.info("Initialized RedisFeatureStore with " + str(len(features)) + " feature flags")
+        self._inited.set(True)
 
     def all(self, callback):
         r = redis.Redis(connection_pool=self._pool)
@@ -109,17 +110,11 @@ class RedisFeatureStore(FeatureStore):
 
     @property
     def initialized(self):
-        initialized = self._cache.get(INIT_KEY)
-        if initialized:
-            # reset ttl
-            self._cache[INIT_KEY] = True
-            return True
+        return self._inited.get()
 
+    def _query_init(self):
         r = redis.Redis(connection_pool=self._pool)
-        if r.exists(self._features_key):
-            self._cache[INIT_KEY] = True
-            return True
-        return False
+        return r.exists(self._features_key)
 
     def upsert(self, key, feature):
         r = redis.Redis(connection_pool=self._pool)

@@ -154,10 +154,13 @@ class LDClient(object):
                               'user': user, 'value': value, 'default': default, 'version': version})
 
         if not self.is_initialized():
-            log.warn("Feature Flag evaluation attempted before client has initialized! Returning default: "
-                     + str(default) + " for feature key: " + key)
-            send_event(default)
-            return default
+            if self._store.initialized:
+                log.warn("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
+            else:
+                log.warn("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
+                         + str(default) + " for feature key: " + key)
+                send_event(default)
+                return default
 
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when evaluating Feature Flag key: " + key + ". Returning default.")
@@ -203,8 +206,11 @@ class LDClient(object):
             return None
 
         if not self.is_initialized():
-            log.warn("all_flags() called before client has finished initializing! Returning None")
-            return None
+            if self._store.initialized:
+                log.warn("all_flags() called before client has finished initializing! Using last known values from feature store")
+            else:
+                log.warn("all_flags() called before client has finished initializing! Feature store unavailable - returning None")
+                return None
 
         if user is None or user.get('key') is None:
             log.warn("User or user key is None when calling all_flags(). Returning None.")
