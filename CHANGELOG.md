@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.2.0] - 2018-01-12
+## Changed
+- Will use feature store if already initialized even if connection to service could not be established.  This is useful when flags have been initialized in redis.
+
 ## [4.1.0] - 2017-12-21
 
 ### Added
