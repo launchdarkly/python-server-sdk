@@ -3,8 +3,9 @@ import six
 
 
 class EventSerializer:
-    IGNORE_ATTRS = frozenset(['key', 'custom'])
-    STRIP_ATTRS = frozenset(['privateAttributeNames'])
+    IGNORE_ATTRS = frozenset(['key', 'custom', 'anonymous'])
+    ALLOWED_TOP_LEVEL_ATTRS = frozenset(['key', 'secondary', 'ip', 'country', 'email',
+        'firstName', 'lastName', 'avatar', 'name', 'anonymous', 'custom'])
 
     def __init__(self, config):
         self._private_attribute_names = config.private_attribute_names
@@ -28,15 +29,15 @@ class EventSerializer:
             all_private_attrs = set()
             user_private_attrs = user_props.get('privateAttributeNames', [])
 
-            def filter_private_attrs(attrs):
+            def filter_private_attrs(attrs, allowed_attrs = frozenset()):
                 for key, value in six.iteritems(attrs):
-                    if not (key in EventSerializer.STRIP_ATTRS):
+                    if (not allowed_attrs) or (key in allowed_attrs):
                         if self._is_private_attr(key, user_private_attrs):
                             all_private_attrs.add(key)
                         else:
                             yield key, value
 
-            ret = dict(filter_private_attrs(user_props))
+            ret = dict(filter_private_attrs(user_props, EventSerializer.ALLOWED_TOP_LEVEL_ATTRS))
             if 'custom' in user_props:
                 ret['custom'] = dict(filter_private_attrs(user_props['custom']))
 

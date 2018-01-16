@@ -14,5 +14,10 @@ def test_copy_config():
     assert new_config.sdk_key is new_sdk_key
     assert new_config.stream is False
 
+def test_can_set_valid_poll_interval():
+	config = Config(sdk_key = "SDK_KEY", poll_interval = 31)
+	assert config.poll_interval is 31
 
-
+def test_minimum_poll_interval_is_enforced():
+	config = Config(sdk_key = "SDK_KEY", poll_interval = 29)
+	assert config.poll_interval is 30

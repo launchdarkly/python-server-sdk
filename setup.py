@@ -8,7 +8,7 @@ import uuid
 
 from pip.req import parse_requirements
 
-ldclient_version='4.0.6'
+ldclient_version='4.2.0'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())

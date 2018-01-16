@@ -29,6 +29,26 @@ user_specifying_own_private_attr = {
     u'privateAttributeNames': [ u'dizzle', u'unused' ]
 }
 
+user_with_unknown_top_level_attrs = {
+    u'key': u'abc',
+    u'firstName': u'Sue',
+    u'species': u'human',
+    u'hatSize': 6,
+    u'custom': {
+        u'bizzle': u'def',
+        u'dizzle': u'ghi'
+    }
+}
+
+anon_user = {    
+    u'key': u'abc',
+    u'anonymous': True,
+    u'custom': {
+        u'bizzle': u'def',
+        u'dizzle': u'ghi'
+    }
+}
+
 # expected results from serializing user
 
 user_with_all_attrs_hidden = {
@@ -52,6 +72,13 @@ user_with_own_specified_attr_hidden = {
         u'bizzle': u'def'
     },
     u'privateAttrs': [ u'dizzle' ]
+}
+
+anon_user_with_all_attrs_hidden = {
+    u'key': u'abc',
+    u'anonymous': True,
+    u'custom': { },
+    u'privateAttrs': [ u'bizzle', u'dizzle' ]
 }
 
 def make_event(u, key = u'xyz'):
@@ -105,3 +132,17 @@ def test_all_events_serialized():
     filtered1 = make_event(user_with_all_attrs_hidden, 'key1')
     j = es.serialize_events([event0, event1])
     assert json.loads(j) == [filtered0, filtered1]
+
+def test_unknown_top_level_attrs_stripped():
+    es = EventSerializer(base_config)
+    event = make_event(user_with_unknown_top_level_attrs)
+    filtered_event = make_event(user)
+    j = es.serialize_events(event)
+    assert json.loads(j) == [filtered_event]
+
+def test_leave_anonymous_attr_as_is():
+    es = EventSerializer(config_with_all_attrs_private)
+    event = make_event(anon_user)
+    filtered_event = make_event(anon_user_with_all_attrs_hidden)
+    j = es.serialize_events(event)
+    assert json.loads(j) == [filtered_event]
