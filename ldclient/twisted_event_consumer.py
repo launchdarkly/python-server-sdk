@@ -9,6 +9,7 @@ from queue import Empty
 from requests.packages.urllib3.exceptions import ProtocolError
 from twisted.internet import task, defer
 
+from ldclient.event_serializer import EventSerializer
 from ldclient.interfaces import EventConsumer
 from ldclient.util import _headers, log
 
@@ -24,6 +25,8 @@ class TwistedEventConsumer(EventConsumer):
 
         self._config = config
         """ :type: ldclient.twisted.TwistedConfig """
+
+        self._serializer = EventSerializer(config)
 
         self._looping_call = None
         """ :type: LoopingCall"""
@@ -58,15 +61,12 @@ class TwistedEventConsumer(EventConsumer):
         def do_send(should_retry):
             # noinspection PyBroadException
             try:
-                if isinstance(events, dict):
-                    body = [events]
-                else:
-                    body = events
+                json_body = self._serializer.serialize_events(events)
                 hdrs = _headers(self._config.sdk_key)
                 r = yield self._session.post(self._config.events_uri,
                                              headers=hdrs,
                                              timeout=(self._config.connect_timeout, self._config.read_timeout),
-                                             data=json.dumps(body))
+                                             data=json_body)
                 if r.status_code == 401
                     log.error('Received 401 error, no further events will be posted since SDK key is invalid')
                     self.stop()
