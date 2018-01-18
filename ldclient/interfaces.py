@@ -52,9 +52,75 @@ class FeatureStore(object):
         """
         Inserts a feature flag if its version is newer or missing
 
-        :param key: The feature flag
+        :param key: The feature flag key
         :type key: str
         :param feature: The feature information
+        :type feature: dict
+        """
+
+    @abstractproperty
+    def initialized(self):
+        """
+        Returns whether the store has been initialized yet or not
+
+        :rtype: bool
+        """
+
+
+class SegmentStore(object):
+    """
+    Stores and retrieves the state of user segments
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def get(self, key, callback):
+        """
+        Gets a segment and calls the callback with the segment data to return the result
+        :param key: The segment key
+        :type key: str
+        :param callback: The function that accepts the segment data and returns the segment value
+        :type callback: Function that processes the segment flag once received.
+        :return: The result of executing callback.
+        """
+
+    @abstractmethod
+    def all(self, callback):
+        """
+        Returns all user segments and their data
+        :param callback: The function that accepts the segment data
+        :type callback: Function that processes the segments once received.
+        :rtype: The result of executing callback.
+        """
+
+    @abstractmethod
+    def init(self, features):
+        """
+        Initializes the store with a set of user segments.  Meant to be called by the UpdateProcessor
+
+        :param features: The segments and their data as provided by LD
+        :type features: dict[str, dict]
+        """
+
+    @abstractmethod
+    def delete(self, key, version):
+        """
+        Marks a segment as deleted
+
+        :param key: The segment key
+        :type key: str
+        :param version: The version of the segment to mark as deleted
+        :type version: str
+        """
+
+    @abstractmethod
+    def upsert(self, key, feature):
+        """
+        Inserts a segment if its version is newer or missing
+
+        :param key: The segment key
+        :type key: str
+        :param feature: The segment information
         :type feature: dict
         """
 

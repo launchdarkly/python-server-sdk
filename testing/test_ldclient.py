@@ -1,6 +1,6 @@
 from builtins import object
 from ldclient.client import LDClient, Config
-from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.in_memory_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureRequester, FeatureStore
 import pytest
 from testing.sync_util import wait_until

@@ -1,5 +1,5 @@
 from ldclient.event_consumer import EventConsumerImpl
-from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.in_memory_store import InMemoryFeatureStore
 from ldclient.util import log
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
