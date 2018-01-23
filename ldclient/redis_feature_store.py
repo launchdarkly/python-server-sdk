@@ -91,6 +91,7 @@ class RedisFeatureStore(FeatureStore):
             return None
 
         f = json.loads(f_json.decode('utf-8'))
+        self._cache[key] = f
         return f
 
     def delete(self, key, version):
