@@ -69,7 +69,7 @@ class RedisFeatureStore(FeatureStore):
             # reset ttl
             self._cache[key] = f
             if f.get('deleted', False) is True:
-                log.warn("RedisFeatureStore: get returned deleted flag from in-memory cache. Returning None.")
+                log.debug("RedisFeatureStore: get returned deleted flag from in-memory cache. Returning None.")
                 return callback(None)
             return callback(f)
 
@@ -82,12 +82,12 @@ class RedisFeatureStore(FeatureStore):
             return callback(None)
 
         if f_json is None or f_json is "":
-            log.warn("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
+            log.debug("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
             return callback(None)
 
         f = json.loads(f_json.decode('utf-8'))
         if f.get('deleted', False) is True:
-            log.warn("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+            log.debug("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
             return callback(None)
         self._cache[key] = f
         return callback(f)
