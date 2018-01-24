@@ -173,7 +173,7 @@ class LDClient(object):
         def cb(flag):
             try:
                 if not flag:
-                    log.warn("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
+                    log.info("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
                     send_event(default)
                     return default
 

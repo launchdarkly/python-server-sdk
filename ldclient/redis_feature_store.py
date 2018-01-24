@@ -67,7 +67,7 @@ class RedisFeatureStore(FeatureStore):
         f = self._get_even_if_deleted(key)
         if f is not None:
             if f.get('deleted', False) is True:
-                log.warn("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+                log.debug("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
                 return callback(None)
         return callback(f)
 
@@ -87,7 +87,7 @@ class RedisFeatureStore(FeatureStore):
             return None
 
         if f_json is None or f_json is "":
-            log.warn("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
+            log.debug("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
             return None
 
         f = json.loads(f_json.decode('utf-8'))
