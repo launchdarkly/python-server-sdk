@@ -64,14 +64,19 @@ class RedisFeatureStore(FeatureStore):
         return callback(results)
 
     def get(self, key, callback=lambda x: x):
+        f = self._get_even_if_deleted(key)
+        if f is not None:
+            if f.get('deleted', False) is True:
+                log.debug("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+                return callback(None)
+        return callback(f)
+
+    def _get_even_if_deleted(self, key):
         f = self._cache.get(key)
         if f is not None:
             # reset ttl
             self._cache[key] = f
-            if f.get('deleted', False) is True:
-                log.debug("RedisFeatureStore: get returned deleted flag from in-memory cache. Returning None.")
-                return callback(None)
-            return callback(f)
+            return f
 
         try:
             r = redis.Redis(connection_pool=self._pool)
@@ -79,18 +84,15 @@ class RedisFeatureStore(FeatureStore):
         except BaseException as e:
             log.error("RedisFeatureStore: Could not retrieve flag from redis with error: " + e.message
                       + ". Returning None for key: " + key)
-            return callback(None)
+            return None
 
         if f_json is None or f_json is "":
             log.debug("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
-            return callback(None)
+            return None
 
         f = json.loads(f_json.decode('utf-8'))
-        if f.get('deleted', False) is True:
-            log.debug("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
-            return callback(None)
         self._cache[key] = f
-        return callback(f)
+        return f
 
     def delete(self, key, version):
         r = redis.Redis(connection_pool=self._pool)
@@ -119,7 +121,7 @@ class RedisFeatureStore(FeatureStore):
     def upsert(self, key, feature):
         r = redis.Redis(connection_pool=self._pool)
         r.watch(self._features_key)
-        old = self.get(key)
+        old = self._get_even_if_deleted(key)
         if old:
             if old['version'] >= feature['version']:
                 r.unwatch()
