@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+
+## [4.2.1] - 2018-01-31
+
+### Changed
+- Reduced WARN-level logging for a feature flag not being found to INFO level.
+
+### Fixed
+- Fixed a bug where a previously deleted feature flag might be considered still available.
+- The private attributes feature added in v4.1.0 was not available in Twisted mode; now it is.
+
+
 ## [4.2.0] - 2018-01-12
 ## Changed
 - Will use feature store if already initialized even if connection to service could not be established.  This is useful when flags have been initialized in redis.
