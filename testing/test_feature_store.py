@@ -106,3 +106,10 @@ class TestFeatureStore:
         store.delete('foo', 9)
         expected = self.make_feature('foo', 10)
         assert store.get('foo', lambda x: x) == expected
+
+    def test_upsert_older_version_after_delete(self, store):
+        store = self.base_initialized_store(store)
+        store.delete('foo', 11)
+        old_ver = self.make_feature('foo', 9)
+        store.upsert('foo', old_ver)
+        assert store.get('foo', lambda x: x) is None
