@@ -165,11 +165,11 @@ def _clause_matches_user_no_segments(clause, user):
 def _segment_matches_user(segment, user):
     if user.get('key'):
         key = user['key']
-        if key in (segment.get('included') or []):
+        if key in segment.get('included', []):
             return True
-        if key in (segment.get('excluded') or []):
+        if key in segment.get('excluded', []):
             return False
-        for rule in segment.get('rules') or []:
+        for rule in segment.get('rules', []):
             if _segment_rule_matches_user(rule, user, segment.get('key'), segment.get('salt')):
                 return True
     return False
@@ -180,7 +180,7 @@ def _segment_rule_matches_user(rule, user, segment_key, salt):
             return False
 
     # If the weight is absent, this rule matches
-    if not rule.get('weight'):
+    if not 'weight' in rule:
         return True
 
     # All of the clauses are met. See if the user buckets in
