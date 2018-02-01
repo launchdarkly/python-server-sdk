@@ -5,6 +5,7 @@ import six
 import sys
 
 from ldclient import operators
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -24,18 +25,18 @@ def evaluate(flag, user, store):
     return _get_off_variation(flag), prereq_events
 
 
-def _evaluate(flag, user, feature_store, segment_store, prereq_events=None):
+def _evaluate(flag, user, feature_store, prereq_events=None):
     events = prereq_events or []
     failed_prereq = None
     prereq_value = None
     for prereq in flag.get('prerequisites') or []:
-        prereq_flag = feature_store.get(prereq.get('key'), lambda x: x)
+        prereq_flag = feature_store.get(FEATURES, prereq.get('key'), lambda x: x)
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
             break
         if prereq_flag.get('on', False) is True:
-            prereq_value, events = _evaluate(prereq_flag, user, feature_store, segment_store, events)
+            prereq_value, events = _evaluate(prereq_flag, user, feature_store, events)
             variation = _get_variation(prereq_flag, prereq.get('variation'))
             if prereq_value is None or not prereq_value == variation:
                 failed_prereq = prereq
@@ -49,11 +50,11 @@ def _evaluate(flag, user, feature_store, segment_store, prereq_events=None):
     if failed_prereq is not None:
         return None, events
 
-    index = _evaluate_index(flag, user, segment_store)
+    index = _evaluate_index(flag, user, feature_store)
     return _get_variation(flag, index), events
 
 
-def _evaluate_index(feature, user, segment_store):
+def _evaluate_index(feature, user, store):
     # Check to see if any user targets match:
     for target in feature.get('targets') or []:
         for value in target.get('values') or []:
@@ -62,7 +63,7 @@ def _evaluate_index(feature, user, segment_store):
 
     # Now walk through the rules to see if any match
     for rule in feature.get('rules') or []:
-        if _rule_matches_user(rule, user, segment_store):
+        if _rule_matches_user(rule, user, store):
             return _variation_index_for_user(feature, rule, user)
 
     # Walk through fallthrough and see if it matches
@@ -127,21 +128,21 @@ def _bucket_user(user, key, salt, bucket_by):
     return result
 
 
-def _rule_matches_user(rule, user, segment_store):
+def _rule_matches_user(rule, user, store):
     for clause in rule.get('clauses') or []:
         if clause.get('attribute') is not None:
-            if not _clause_matches_user(clause, user, segment_store):
+            if not _clause_matches_user(clause, user, store):
                 return False
     return True
 
 
-def _clause_matches_user(clause, user, segment_store):
+def _clause_matches_user(clause, user, store):
     if clause.get('op') == 'segmentMatch':
         for seg_key in clause.get('values') or []:
-            segment = segment_store.get(seg_key)
+            segment = store.get(SEGMENTS, seg_key, lambda x: x)
             if segment and _segment_matches_user(segment, user):
-                return _maybe_negate(clause, true)
-        return _maybe_negate(clause, false)
+                return _maybe_negate(clause, True)
+        return _maybe_negate(clause, False)
     else:
         return _clause_matches_user_no_segments(clause, user)
 
@@ -165,22 +166,22 @@ def _segment_matches_user(segment, user):
     if user.get('key'):
         key = user['key']
         if key in (segment.get('included') or []):
-            return true
+            return True
         if key in (segment.get('excluded') or []):
-            return false
+            return False
         for rule in segment.get('rules') or []:
             if _segment_rule_matches_user(rule, user, segment.get('key'), segment.get('salt')):
-                return true
-    return false
+                return True
+    return False
 
 def _segment_rule_matches_user(rule, user, segment_key, salt):
     for clause in rule.get('clauses') or []:
         if not _clause_matches_user_no_segments(clause, user):
-            return false
+            return False
 
     # If the weight is absent, this rule matches
     if not rule.get('weight'):
-        return true
+        return True
 
     # All of the clauses are met. See if the user buckets in
     bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']

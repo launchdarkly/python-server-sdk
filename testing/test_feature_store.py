@@ -3,6 +3,7 @@ import redis
 
 from ldclient.in_memory_store import InMemoryFeatureStore
 from ldclient.redis_store import RedisFeatureStore
+from ldclient.versioned_data_kind import FEATURES
 
 
 class TestFeatureStore:
@@ -51,13 +52,12 @@ class TestFeatureStore:
 
     def base_initialized_store(self, store):
         store.init({
-            'foo': self.make_feature('foo', 10),
-            'bar': self.make_feature('bar', 10),
+            FEATURES: {
+                'foo': self.make_feature('foo', 10),
+                'bar': self.make_feature('bar', 10),
+            }
         })
         return store
-
-    def test_not_initially_initialized(self, store):
-        assert store.initialized is False
 
     def test_initialized(self, store):
         store = self.base_initialized_store(store)
@@ -66,50 +66,57 @@ class TestFeatureStore:
     def test_get_existing_feature(self, store):
         store = self.base_initialized_store(store)
         expected = self.make_feature('foo', 10)
-        assert store.get('foo', lambda x: x) == expected
+        assert store.get(FEATURES, 'foo', lambda x: x) == expected
 
     def test_get_nonexisting_feature(self, store):
         store = self.base_initialized_store(store)
-        assert store.get('biz', lambda x: x) is None
+        assert store.get(FEATURES, 'biz', lambda x: x) is None
+
+    def test_get_all_versions(self, store):
+        store = self.base_initialized_store(store)
+        result = store.all(FEATURES, lambda x: x)
+        assert len(result) is 2
+        assert result.get('foo') == self.make_feature('foo', 10)
+        assert result.get('bar') == self.make_feature('bar', 10)
 
     def test_upsert_with_newer_version(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('foo', 11)
-        store.upsert('foo', new_ver)
-        assert store.get('foo', lambda x: x) == new_ver
+        store.upsert(FEATURES, new_ver)
+        assert store.get(FEATURES, 'foo', lambda x: x) == new_ver
 
     def test_upsert_with_older_version(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('foo', 9)
         expected = self.make_feature('foo', 10)
-        store.upsert('foo', new_ver)
-        assert store.get('foo', lambda x: x) == expected
+        store.upsert(FEATURES, new_ver)
+        assert store.get(FEATURES, 'foo', lambda x: x) == expected
 
     def test_upsert_with_new_feature(self, store):
         store = self.base_initialized_store(store)
         new_ver = self.make_feature('biz', 1)
-        store.upsert('biz', new_ver)
-        assert store.get('biz', lambda x: x) == new_ver
+        store.upsert(FEATURES, new_ver)
+        assert store.get(FEATURES, 'biz', lambda x: x) == new_ver
 
     def test_delete_with_newer_version(self, store):
         store = self.base_initialized_store(store)
-        store.delete('foo', 11)
-        assert store.get('foo', lambda x: x) is None
+        store.delete(FEATURES, 'foo', 11)
+        assert store.get(FEATURES, 'foo', lambda x: x) is None
 
     def test_delete_unknown_feature(self, store):
         store = self.base_initialized_store(store)
-        store.delete('biz', 11)
-        assert store.get('biz', lambda x: x) is None
+        store.delete(FEATURES, 'biz', 11)
+        assert store.get(FEATURES, 'biz', lambda x: x) is None
 
     def test_delete_with_older_version(self, store):
         store = self.base_initialized_store(store)
-        store.delete('foo', 9)
+        store.delete(FEATURES, 'foo', 9)
         expected = self.make_feature('foo', 10)
-        assert store.get('foo', lambda x: x) == expected
+        assert store.get(FEATURES, 'foo', lambda x: x) == expected
 
     def test_upsert_older_version_after_delete(self, store):
         store = self.base_initialized_store(store)
-        store.delete('foo', 11)
+        store.delete(FEATURES, 'foo', 11)
         old_ver = self.make_feature('foo', 9)
-        store.upsert('foo', old_ver)
-        assert store.get('foo', lambda x: x) is None
+        store.upsert(FEATURES, old_ver)
+        assert store.get(FEATURES, 'foo', lambda x: x) is None

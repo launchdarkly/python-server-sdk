@@ -1,72 +1,78 @@
-from abc import ABCMeta, abstractmethod
-
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore, SegmentStore
 from ldclient.rwlock import ReadWriteLock
 
 
-class InMemoryStoreBase(object):
+class InMemoryFeatureStore(object):
     """
-    Abstract base class for in-memory data stores.
+    In-memory implementation of a store that holds feature flags and related data received from the streaming API.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self):
         self._lock = ReadWriteLock()
         self._initialized = False
         self._items = {}
 
-    def get(self, key, callback):
+    def get(self, kind, key, callback):
         try:
             self._lock.rlock()
-            item = self._items.get(key)
+            itemsOfKind = self._items.get(kind, {})
+            item = itemsOfKind.get(key)
             if item is None:
-                log.debug("Attempted to get missing %s: %s, returning None", self.item_name(), key)
+                log.debug("Attempted to get missing key %s in '%s', returning None", key, kind.namespace)
                 return callback(None)
             if 'deleted' in item and item['deleted']:
-                log.debug("Attempted to get deleted %s: %s, returning None", self.item_name(), key)
+                log.debug("Attempted to get deleted key %s in '%s', returning None", key, kind.namespace)
                 return callback(None)
             return callback(item)
         finally:
             self._lock.runlock()
 
-    def all(self, callback):
+    def all(self, kind, callback):
         try:
             self._lock.rlock()
-            return callback(dict((k, i) for k, i in self._items.items() if ('deleted' not in i) or not i['deleted']))
+            itemsOfKind = self._items.get(kind, {})
+            return callback(dict((k, i) for k, i in itemsOfKind.items() if ('deleted' not in i) or not i['deleted']))
         finally:
             self._lock.runlock()
 
-    def init(self, items):
+    def init(self, allData):
         try:
             self._lock.lock()
-            self._items = dict(items)
+            self._items = dict(allData)
             self._initialized = True
-            log.debug("Initialized %s store with %d items", self.item_name(), len(items))
+            for k in allData:
+                log.debug("Initialized '%s' store with %d items", k.namespace, len(allData[k]))
         finally:
             self._lock.unlock()
 
     # noinspection PyShadowingNames
-    def delete(self, key, version):
+    def delete(self, kind, key, version):
         try:
             self._lock.lock()
-            i = self._items.get(key)
-            if i is not None and i['version'] < version:
-                i['deleted'] = True
-                i['version'] = version
-            elif i is None:
+            itemsOfKind = self._items.get(kind)
+            if itemsOfKind is None:
+                itemsOfKind = dict()
+                self._items[kind] = itemsOfKind
+            i = itemsOfKind.get(key)
+            if i is None or i['version'] < version:
                 i = {'deleted': True, 'version': version}
-                self._items[key] = i
+                itemsOfKind[key] = i
         finally:
             self._lock.unlock()
 
-    def upsert(self, key, item):
+    def upsert(self, kind, item):
+        key = item['key']
         try:
             self._lock.lock()
-            i = self._items.get(key)
+            itemsOfKind = self._items.get(kind)
+            if itemsOfKind is None:
+                itemsOfKind = dict()
+                self._items[kind] = itemsOfKind
+            i = itemsOfKind.get(key)
             if i is None or i['version'] < item['version']:
-                self._items[key] = item
-                log.debug("Updated %s %s to version %d", self.item_name(), key, item['version'])
+                itemsOfKind[key] = item
+                log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
         finally:
             self._lock.unlock()
 
@@ -77,25 +83,3 @@ class InMemoryStoreBase(object):
             return self._initialized
         finally:
             self._lock.runlock()
-
-    @abstractmethod
-    def item_name(self):
-        """
-        Returns a description of the kind of item held in this store (feature or segment).
-        """
-
-
-class InMemoryFeatureStore(InMemoryStoreBase, FeatureStore):
-    def __init__(self):
-        InMemoryStoreBase.__init__(self)
-
-    def item_name(self):
-        return 'feature'
-
-
-class InMemorySegmentStore(InMemoryStoreBase, SegmentStore):
-    def __init__(self):
-        InMemoryStoreBase.__init__(self)
-
-    def item_name(self):
-        return 'segment'

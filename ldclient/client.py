@@ -14,6 +14,7 @@ from ldclient.flag import evaluate
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # noinspection PyBroadException
 try:
@@ -184,7 +185,7 @@ class LDClient(object):
 
             return default
 
-        return self._store.get(key, cb)
+        return self._store.get(FEATURES, key, cb)
 
     def _evaluate(self, flag, user):
         return evaluate(flag, user, self._store)
@@ -223,7 +224,7 @@ class LDClient(object):
                 log.error("Exception caught in all_flags: " + e.message + " for user: " + str(user))
             return {}
 
-        return self._store.all(cb)
+        return self._store.all(FEATURES, cb)
 
     def _evaluate_multi(self, user, flags):
         return dict([(k, self._evaluate(v, user)[0]) for k, v in flags.items() or {}])

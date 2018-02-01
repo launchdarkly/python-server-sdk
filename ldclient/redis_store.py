@@ -7,6 +7,7 @@ from ldclient import log
 from ldclient.expiringdict import ExpiringDict
 from ldclient.interfaces import FeatureStore
 from ldclient.memoized_value import MemoizedValue
+from ldclient.versioned_data_kind import FEATURES
 
 
 class ForgetfulDict(dict):
@@ -22,92 +23,100 @@ class RedisFeatureStore(FeatureStore):
                  expiration=15,
                  capacity=1000):
 
-        self._features_key = "{0}:features".format(prefix)
+        self._prefix = prefix
         self._cache = ForgetfulDict() if expiration == 0 else ExpiringDict(max_len=capacity,
                                                                            max_age_seconds=expiration)
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
         self._inited = MemoizedValue(lambda: self._query_init())
         log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + prefix)
 
-    def init(self, features):
+    def _items_key(self, kind):
+        return "{0}:{1}".format(self._prefix, kind.namespace)
+
+    def _cache_key(self, kind, key):
+        return "{0}:{1}".format(kind.namespace, key)
+
+    def init(self, allData):
         pipe = redis.Redis(connection_pool=self._pool).pipeline()
-        pipe.delete(self._features_key)
-
+        
         self._cache.clear()
+        all_count = 0
 
-        for k, f in features.items():
-            f_json = json.dumps(f)
-            pipe.hset(self._features_key, k, f_json)
-            self._cache[k] = f
+        for kind, items in allData.items():
+            base_key = self._items_key(kind)
+            pipe.delete(base_key)
+            for key, item in items.items():
+                item_json = json.dumps(item)
+                pipe.hset(base_key, key, item_json)
+                self._cache[self._cache_key(kind, key)] = item
+            all_count = all_count + len(items)
         pipe.execute()
-        log.info("Initialized RedisFeatureStore with " + str(len(features)) + " feature flags")
+        log.info("Initialized RedisFeatureStore with %d items", all_count)
         self._inited.set(True)
 
-    def all(self, callback):
+    def all(self, kind, callback):
         r = redis.Redis(connection_pool=self._pool)
         try:
-            all_features = r.hgetall(self._features_key)
+            all_items = r.hgetall(self._items_key(kind))
         except BaseException as e:
-            log.error("RedisFeatureStore: Could not retrieve all flags from Redis with error: "
-                      + e.message + " Returning None")
+            log.error("RedisFeatureStore: Could not retrieve '%s' from Redis with error: %s. Returning None.",
+                kind.namespace, e.message)
             return callback(None)
 
-        if all_features is None or all_features is "":
-            log.warn("RedisFeatureStore: call to get all flags returned no results. Returning None.")
+        if all_items is None or all_items is "":
+            log.warn("RedisFeatureStore: call to get all '%s' returned no results. Returning None.", kind.namespace)
             return callback(None)
 
         results = {}
-        for k, f_json in all_features.items() or {}:
-            f = json.loads(f_json.decode('utf-8'))
-            if 'deleted' in f and f['deleted'] is False:
-                results[f['key']] = f
+        for key, item_json in all_items.items():
+            item = json.loads(item_json.decode('utf-8'))
+            if item.get('deleted', False) is False:
+                results[key] = item
         return callback(results)
 
-    def get(self, key, callback=lambda x: x):
-        f = self._get_even_if_deleted(key)
-        if f is not None:
-            if f.get('deleted', False) is True:
-                log.debug("RedisFeatureStore: get returned deleted flag from Redis. Returning None.")
+    def get(self, kind, key, callback=lambda x: x):
+        item = self._get_even_if_deleted(kind, key)
+        if item is not None:
+            if item.get('deleted', False) is True:
+                log.debug("RedisFeatureStore: get returned deleted item %s in '%s'. Returning None.", key, kind.namespace)
                 return callback(None)
-        return callback(f)
+        return callback(item)
 
-    def _get_even_if_deleted(self, key):
-        f = self._cache.get(key)
-        if f is not None:
+    def _get_even_if_deleted(self, kind, key):
+        cacheKey = self._cache_key(kind, key)
+        item = self._cache.get(cacheKey)
+        if item is not None:
             # reset ttl
-            self._cache[key] = f
-            return f
+            self._cache[cacheKey] = item
+            return item
 
         try:
             r = redis.Redis(connection_pool=self._pool)
-            f_json = r.hget(self._features_key, key)
+            item_json = r.hget(self._items_key(kind), key)
         except BaseException as e:
-            log.error("RedisFeatureStore: Could not retrieve flag from redis with error: " + e.message
-                      + ". Returning None for key: " + key)
+            log.error("RedisFeatureStore: Could not retrieve key %s from '%s' with error: %s",
+                key, kind.namespace, e.message)
             return None
 
-        if f_json is None or f_json is "":
-            log.debug("RedisFeatureStore: feature flag with key: " + key + " not found in Redis. Returning None.")
+        if item_json is None or item_json is "":
+            log.debug("RedisFeatureStore: key %s not found in '%s'. Returning None.", key, kind.namespace)
             return None
 
-        f = json.loads(f_json.decode('utf-8'))
-        self._cache[key] = f
-        return f
+        item = json.loads(item_json.decode('utf-8'))
+        self._cache[cacheKey] = item
+        return item
 
-    def delete(self, key, version):
+    def delete(self, kind, key, version):
         r = redis.Redis(connection_pool=self._pool)
-        r.watch(self._features_key)
-        f_json = r.hget(self._features_key, key)
-        if f_json:
-            f = json.loads(f_json.decode('utf-8'))
-            if f is not None and f['version'] < version:
-                f['deleted'] = True
-                f['version'] = version
-            elif f is None:
-                f = {'deleted': True, 'version': version}
-            f_json = json.dumps(f)
-            r.hset(self._features_key, key, f_json)
-            self._cache[key] = f
+        baseKey = self._items_key(kind)
+        r.watch(baseKey)
+        item_json = r.hget(baseKey, key)
+        item = None if item_json is None else json.loads(item_json.decode('utf-8'))
+        if item is None or item['version'] < version:
+            deletedItem = { "deleted": True, "version": version }
+            item_json = json.dumps(deletedItem)
+            r.hset(baseKey, key, item_json)
+            self._cache[self._cache_key(kind, key)] = deletedItem
         r.unwatch()
 
     @property
@@ -116,18 +125,20 @@ class RedisFeatureStore(FeatureStore):
 
     def _query_init(self):
         r = redis.Redis(connection_pool=self._pool)
-        return r.exists(self._features_key)
+        return r.exists(self._items_key(FEATURES))
 
-    def upsert(self, key, feature):
+    def upsert(self, kind, item):
         r = redis.Redis(connection_pool=self._pool)
-        r.watch(self._features_key)
-        old = self._get_even_if_deleted(key)
+        baseKey = self._items_key(kind)
+        key = item['key']
+        r.watch(baseKey)
+        old = self._get_even_if_deleted(kind, key)
         if old:
-            if old['version'] >= feature['version']:
+            if old['version'] >= item['version']:
                 r.unwatch()
                 return
 
-        feature_json = json.dumps(feature)
-        r.hset(self._features_key, key, feature_json)
-        self._cache[key] = feature
+        item_json = json.dumps(item)
+        r.hset(baseKey, key, item_json)
+        self._cache[self._cache_key(kind, key)] = item
         r.unwatch()

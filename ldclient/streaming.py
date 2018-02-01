@@ -10,17 +10,20 @@ import time
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
+
+STREAM_ALL_PATH = '/all'
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def __init__(self, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._uri = config.stream_uri
+        self._uri = config.stream_base_uri + STREAM_ALL_PATH
         self._config = config
         self._requester = requester
         self._store = store
@@ -83,34 +86,50 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     @staticmethod
     def process_message(store, requester, msg):
         if msg.event == 'put':
-            flags = json.loads(msg.data)
-            versions_summary = list(map(lambda f: "{0}:{1}".format(f.get("key"), f.get("version")), flags.values()))
-            log.debug("Received put event with {0} flags and versions: {1}".format(len(flags), versions_summary))
-            store.init(flags)
+            allData = json.loads(msg.data)
+            initData = {
+                FEATURES: allData['data']['flags'],
+                SEGMENTS: allData['data']['segments']
+            }
+            log.debug("Received put event with %d flags and %d segments",
+                len(initData[FEATURES]), len(initData[SEGMENTS]))
+            store.init(initData)
             return True
         elif msg.event == 'patch':
             payload = json.loads(msg.data)
-            key = payload['path'][1:]
-            flag = payload['data']
-            log.debug("Received patch event for flag key: [{0}] New version: [{1}]"
-                      .format(flag.get("key"), str(flag.get("version"))))
-            store.upsert(key, flag)
+            path = payload['path']
+            obj = payload['data']
+            log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
+            for kind in [FEATURES, SEGMENTS]:
+                key = _get_key_from_path(kind, path)
+                if key:
+                    store.upsert(kind, obj)
         elif msg.event == "indirect/patch":
-            key = msg.data
-            log.debug("Received indirect/patch event for flag key: " + key)
-            store.upsert(key, requester.get_one(key))
+            path = msg.data
+            log.debug("Received indirect/patch event for %s", path)
+            for kind in [FEATURES, SEGMENTS]:
+                key = _get_key_from_path(kind, path)
+                if key:
+                    store.upsert(kind, requester.get_one(kind, key))
         elif msg.event == "indirect/put":
             log.debug("Received indirect/put event")
-            store.init(requester.get_all())
+            store.init(requester.get_all_data())
             return True
         elif msg.event == 'delete':
             payload = json.loads(msg.data)
-            key = payload['path'][1:]
+            path = payload['path']
             # noinspection PyShadowingNames
             version = payload['version']
-            log.debug("Received delete event for flag key: [{0}] New version: [{1}]"
-                      .format(key, version))
-            store.delete(key, version)
+            log.debug("Received delete event for %s, New version: [%d]", path, version)
+            for kind in [FEATURES, SEGMENTS]:
+                key = _get_key_from_path(kind, path)
+                if key:
+                    store.delete(kind, key, version)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
+
+    def _get_key_from_path(self, kind, path):
+        if path.startsWith(kind.stream_api_path):
+            return path.substring(len(kind.stream_api_path))
+        return None

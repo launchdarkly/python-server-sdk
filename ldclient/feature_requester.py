@@ -6,6 +6,10 @@ from cachecontrol import CacheControl
 from ldclient.interfaces import FeatureRequester
 from ldclient.util import _headers
 from ldclient.util import log
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+
+
+LATEST_ALL_URI = '/sdk/latest-all'
 
 
 class FeatureRequesterImpl(FeatureRequester):
@@ -14,32 +18,35 @@ class FeatureRequesterImpl(FeatureRequester):
         self._session_no_cache = requests.Session()
         self._config = config
 
-    def get_all(self):
+    def get_all_data(self):
         hdrs = _headers(self._config.sdk_key)
-        uri = self._config.get_latest_flags_uri
+        uri = self._config.base_uri + LATEST_ALL_URI
         r = self._session_cache.get(uri,
                                     headers=hdrs,
                                     timeout=(
                                         self._config.connect_timeout,
                                         self._config.read_timeout))
         r.raise_for_status()
-        flags = r.json()
-        versions_summary = list(map(lambda f: "{0}:{1}".format(f.get("key"), f.get("version")), flags.values()))
-        log.debug("Get All flags response status:[{0}] From cache?[{1}] ETag:[{2}] flag versions: {3}"
-                  .format(r.status_code, r.from_cache, r.headers.get('ETag'), versions_summary))
-        return flags
+        allData = r.json()
+        log.debug("Get All flags response status:[%d] From cache?[%s] ETag:[%s]",
+                  r.status_code, r.from_cache, r.headers.get('ETag'))
+        return {
+            FEATURES: allData['flags'],
+            SEGMENTS: allData['segments']
+        }
 
-    def get_one(self, key):
+    def get_one(self, kind, key):
         hdrs = _headers(self._config.sdk_key)
-        uri = self._config.get_latest_flags_uri + '/' + key
-        log.debug("Getting one feature flag using uri: " + uri)
+        path = kind.request_api_path + '/' + key
+        uri = config.base_uri + path
+        log.debug("Getting %s from %s using uri: %s", key, kind['namespace'], uri)
         r = self._session_no_cache.get(uri,
                                        headers=hdrs,
                                        timeout=(
                                            self._config.connect_timeout,
                                            self._config.read_timeout))
         r.raise_for_status()
-        flag = r.json()
-        log.debug("Get one flag response status:[{0}] Flag key:[{1}] version:[{2}]"
-                  .format(r.status_code, key, flag.get("version")))
-        return flag
+        obj = r.json()
+        log.debug("%s response status:[%d] key:[%s] version:[%d]",
+                  path, r.status_code, key, segment.get("version"))
+        return obj
