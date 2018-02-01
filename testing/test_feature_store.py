@@ -1,8 +1,8 @@
 import pytest
 import redis
 
-from ldclient.in_memory_store import InMemoryFeatureStore
-from ldclient.redis_store import RedisFeatureStore
+from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 

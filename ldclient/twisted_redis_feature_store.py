@@ -9,7 +9,7 @@ from txredis.client import RedisClient
 
 from ldclient.expiringdict import ExpiringDict
 from ldclient.interfaces import FeatureStore
-from ldclient.redis_store import ForgetfulDict, INIT_KEY
+from ldclient.redis_feature_store import ForgetfulDict, INIT_KEY
 from ldclient.util import log
 
 
