@@ -115,7 +115,9 @@ def _variation_index_for_user(feature, rule, user):
 
 def _bucket_user(user, feature, bucket_by):
     u_value, should_pass = _get_user_attribute(user, bucket_by)
-    if should_pass is True or not isinstance(u_value, six.string_types):
+    bucket_by_value = _bucketable_string_value(u_value)
+
+    if should_pass is True or bucket_by_value is None:
         return 0.0
 
     id_hash = u_value
@@ -125,6 +127,14 @@ def _bucket_user(user, feature, bucket_by):
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
+
+
+def _bucketable_string_value(u_value):
+    if isinstance(u_value, six.string_types):
+        return u_value
+    if isinstance(u_value, (int, long)):
+        return str(u_value)
+    return None
 
 
 def _rule_matches_user(rule, user):
