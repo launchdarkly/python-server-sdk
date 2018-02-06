@@ -3,7 +3,7 @@ from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
 
 
-class InMemoryFeatureStore(object):
+class InMemoryFeatureStore(FeatureStore):
     """
     In-memory implementation of a store that holds feature flags and related data received from the streaming API.
     """
