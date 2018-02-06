@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from collections import namedtuple
 
 import json
 from threading import Thread
@@ -17,6 +18,8 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 stream_read_timeout = 5 * 60
 
 STREAM_ALL_PATH = '/all'
+
+KindAndKey = namedtuple('KindAndKey', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
@@ -101,16 +104,16 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             obj = payload['data']
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
             target = _parse_path(path)
-            if target:
-                store.upsert(target[0], obj)
+            if target is not None:
+                store.upsert(target.kind, obj)
             else:
                 log.warning("Patch for unknown path: %s", path)
         elif msg.event == "indirect/patch":
             path = msg.data
             log.debug("Received indirect/patch event for %s", path)
             target = _parse_path(path)
-            if target:
-                store.upsert(target[0], requester.get_one(target[0], target[1]))
+            if target is not None:
+                store.upsert(target.kind, requester.get_one(target.kind, target.key))
             else:
                 log.warning("Indirect patch for unknown path: %s", path)
         elif msg.event == "indirect/put":
@@ -124,8 +127,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             version = payload['version']
             log.debug("Received delete event for %s, New version: [%d]", path, version)
             target = _parse_path(path)
-            if target:
-                store.delete(target[0], target[1], version)
+            if target is not None:
+                store.delete(target.kind, target.key, version)
             else:
                 log.warning("Delete for unknown path: %s", path)
         else:
@@ -135,5 +138,5 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _parse_path(self, path):
         for kind in [FEATURES, SEGMENTS]:
             if path.startsWith(kind.stream_api_path):
-                return (kind, path.substring(len(kind.stream_api_path)))
+                return KindAndKey(kind = kind, key = path.substring(len(kind.stream_api_path)))
         return None
