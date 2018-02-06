@@ -100,17 +100,19 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             path = payload['path']
             obj = payload['data']
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
-            for kind in [FEATURES, SEGMENTS]:
-                key = _get_key_from_path(kind, path)
-                if key:
-                    store.upsert(kind, obj)
+            target = _parse_path(path)
+            if target:
+                store.upsert(target[0], obj)
+            else:
+                log.warning("Patch for unknown path: %s", path)
         elif msg.event == "indirect/patch":
             path = msg.data
             log.debug("Received indirect/patch event for %s", path)
-            for kind in [FEATURES, SEGMENTS]:
-                key = _get_key_from_path(kind, path)
-                if key:
-                    store.upsert(kind, requester.get_one(kind, key))
+            target = _parse_path(path)
+            if target:
+                store.upsert(target[0], requester.get_one(target[0], target[1]))
+            else:
+                log.warning("Indirect patch for unknown path: %s", path)
         elif msg.event == "indirect/put":
             log.debug("Received indirect/put event")
             store.init(requester.get_all_data())
@@ -121,15 +123,17 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # noinspection PyShadowingNames
             version = payload['version']
             log.debug("Received delete event for %s, New version: [%d]", path, version)
-            for kind in [FEATURES, SEGMENTS]:
-                key = _get_key_from_path(kind, path)
-                if key:
-                    store.delete(kind, key, version)
+            target = _parse_path(path)
+            if target:
+                store.delete(target[0], target[1], version)
+            else:
+                log.warning("Delete for unknown path: %s", path)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
 
-    def _get_key_from_path(self, kind, path):
-        if path.startsWith(kind.stream_api_path):
-            return path.substring(len(kind.stream_api_path))
+    def _parse_path(self, path):
+        for kind in [FEATURES, SEGMENTS]:
+            if path.startsWith(kind.stream_api_path):
+                return (kind, path.substring(len(kind.stream_api_path)))
         return None
