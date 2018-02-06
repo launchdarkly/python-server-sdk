@@ -1,4 +1,4 @@
-
+from collections import namedtuple
 
 """
 These objects denote the types of data that can be stored in the feature store and
@@ -7,28 +7,13 @@ follows the same pattern (having "key", "version", and "deleted" properties), we
 to add a corresponding constant here and the existing store should be able to handle it.
 """
 
-class VersionedDataKind(object):
-    def __init__(self, namespace, request_api_path, stream_api_path):
-        self.__namespace = namespace
-        self.__request_api_path = request_api_path
-        self.__stream_api_path = stream_api_path
+VersionedDataKind = namedtuple('VersionedDataKind',
+    ['namespace', 'request_api_path', 'stream_api_path'])
 
-    @property
-    def namespace(self):
-        return self.__namespace
+FEATURES = VersionedDataKind(namespace = "features",
+    request_api_path = "/sdk/latest-flags",
+    stream_api_path = "/flags/")
 
-    @property
-    def request_api_path(self):
-        return self.__request_api_path
-    
-    @property
-    def stream_api_path(self):
-        return self.__stream_api_path
-
-FEATURES = VersionedDataKind("features",
-    "/sdk/latest-flags",
-    "/flags/")
-
-SEGMENTS = VersionedDataKind("segments",
-    "/sdk/latest-segments",
-    "/segments/")
+SEGMENTS = VersionedDataKind(namespace = "segments",
+    request_api_path = "/sdk/latest-segments",
+    stream_api_path = "/segments/")
