@@ -44,7 +44,7 @@ def _evaluate(flag, user, feature_store, prereq_events=None):
             failed_prereq = prereq
 
         event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
-                 'value': prereq_value, 'version': prereq_flag.get('version'), 'prereqOf': prereq.get('key')}
+                 'value': prereq_value, 'version': prereq_flag.get('version'), 'prereqOf': flag.get('key')}
         events.append(event)
 
     if failed_prereq is not None:
