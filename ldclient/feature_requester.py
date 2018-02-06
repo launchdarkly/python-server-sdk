@@ -27,12 +27,12 @@ class FeatureRequesterImpl(FeatureRequester):
                                         self._config.connect_timeout,
                                         self._config.read_timeout))
         r.raise_for_status()
-        allData = r.json()
+        all_data = r.json()
         log.debug("Get All flags response status:[%d] From cache?[%s] ETag:[%s]",
                   r.status_code, r.from_cache, r.headers.get('ETag'))
         return {
-            FEATURES: allData['flags'],
-            SEGMENTS: allData['segments']
+            FEATURES: all_data['flags'],
+            SEGMENTS: all_data['segments']
         }
 
     def get_one(self, kind, key):

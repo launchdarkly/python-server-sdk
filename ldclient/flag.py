@@ -140,7 +140,7 @@ def _clause_matches_user(clause, user, store):
     if clause.get('op') == 'segmentMatch':
         for seg_key in clause.get('values') or []:
             segment = store.get(SEGMENTS, seg_key, lambda x: x)
-            if segment and _segment_matches_user(segment, user):
+            if segment is not None and _segment_matches_user(segment, user):
                 return _maybe_negate(clause, True)
         return _maybe_negate(clause, False)
     else:
@@ -163,8 +163,8 @@ def _clause_matches_user_no_segments(clause, user):
         return _maybe_negate(clause, _match_any(op_fn, u_value, clause.get('values') or []))
 
 def _segment_matches_user(segment, user):
-    if user.get('key'):
-        key = user['key']
+    key = user.get('key')
+    if key is not None:
         if key in segment.get('included', []):
             return True
         if key in segment.get('excluded', []):
@@ -180,7 +180,7 @@ def _segment_rule_matches_user(rule, user, segment_key, salt):
             return False
 
     # If the weight is absent, this rule matches
-    if not 'weight' in rule:
+    if 'weight' not in rule:
         return True
 
     # All of the clauses are met. See if the user buckets in

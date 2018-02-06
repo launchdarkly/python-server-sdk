@@ -86,14 +86,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     @staticmethod
     def process_message(store, requester, msg):
         if msg.event == 'put':
-            allData = json.loads(msg.data)
-            initData = {
-                FEATURES: allData['data']['flags'],
-                SEGMENTS: allData['data']['segments']
+            all_data = json.loads(msg.data)
+            init_data = {
+                FEATURES: all_data['data']['flags'],
+                SEGMENTS: all_data['data']['segments']
             }
             log.debug("Received put event with %d flags and %d segments",
-                len(initData[FEATURES]), len(initData[SEGMENTS]))
-            store.init(initData)
+                len(init_data[FEATURES]), len(init_data[SEGMENTS]))
+            store.init(init_data)
             return True
         elif msg.event == 'patch':
             payload = json.loads(msg.data)

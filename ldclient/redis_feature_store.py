@@ -36,13 +36,13 @@ class RedisFeatureStore(FeatureStore):
     def _cache_key(self, kind, key):
         return "{0}:{1}".format(kind.namespace, key)
 
-    def init(self, allData):
+    def init(self, all_data):
         pipe = redis.Redis(connection_pool=self._pool).pipeline()
         
         self._cache.clear()
         all_count = 0
 
-        for kind, items in allData.items():
+        for kind, items in all_data.items():
             base_key = self._items_key(kind)
             pipe.delete(base_key)
             for key, item in items.items():
@@ -50,7 +50,11 @@ class RedisFeatureStore(FeatureStore):
                 pipe.hset(base_key, key, item_json)
                 self._cache[self._cache_key(kind, key)] = item
             all_count = all_count + len(items)
-        pipe.execute()
+        try:
+            pipe.execute()
+        except:
+            self._cache.clear()
+            raise
         log.info("Initialized RedisFeatureStore with %d items", all_count)
         self._inited.set(True)
 
@@ -76,10 +80,9 @@ class RedisFeatureStore(FeatureStore):
 
     def get(self, kind, key, callback=lambda x: x):
         item = self._get_even_if_deleted(kind, key)
-        if item is not None:
-            if item.get('deleted', False) is True:
-                log.debug("RedisFeatureStore: get returned deleted item %s in '%s'. Returning None.", key, kind.namespace)
-                return callback(None)
+        if item is not None and item.get('deleted', False) is True:
+            log.debug("RedisFeatureStore: get returned deleted item %s in '%s'. Returning None.", key, kind.namespace)
+            return callback(None)
         return callback(item)
 
     def _get_even_if_deleted(self, kind, key):

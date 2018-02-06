@@ -1,5 +1,5 @@
 from ldclient.util import log
-from ldclient.interfaces import FeatureStore, SegmentStore
+from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
 
 
@@ -36,20 +36,20 @@ class InMemoryFeatureStore(object):
         finally:
             self._lock.runlock()
 
-    def init(self, allData):
+    def init(self, all_data):
         try:
-            self._lock.lock()
-            self._items = dict(allData)
+            self._lock.rlock()
+            self._items = dict(all_data)
             self._initialized = True
-            for k in allData:
-                log.debug("Initialized '%s' store with %d items", k.namespace, len(allData[k]))
+            for k in all_data:
+                log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
     # noinspection PyShadowingNames
     def delete(self, kind, key, version):
         try:
-            self._lock.lock()
+            self._lock.rlock()
             itemsOfKind = self._items.get(kind)
             if itemsOfKind is None:
                 itemsOfKind = dict()
@@ -59,12 +59,12 @@ class InMemoryFeatureStore(object):
                 i = {'deleted': True, 'version': version}
                 itemsOfKind[key] = i
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
     def upsert(self, kind, item):
         key = item['key']
         try:
-            self._lock.lock()
+            self._lock.rlock()
             itemsOfKind = self._items.get(kind)
             if itemsOfKind is None:
                 itemsOfKind = dict()
@@ -74,7 +74,7 @@ class InMemoryFeatureStore(object):
                 itemsOfKind[key] = item
                 log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
     @property
     def initialized(self):
