@@ -117,7 +117,7 @@ def _bucket_user(user, feature, bucket_by):
     u_value, should_pass = _get_user_attribute(user, bucket_by)
     bucket_by_value = _bucketable_string_value(u_value)
 
-    if should_pass is True or bucket_by_value is None:
+    if should_pass or bucket_by_value is None:
         return 0.0
 
     id_hash = u_value
