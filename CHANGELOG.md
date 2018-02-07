@@ -2,6 +2,16 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [4.3.0] - 2018-02-07
+
+### Changed
+- Percentage rollouts can now reference an attribute with an integer value, not just string attributes.
+
+### Fixed
+- Fixed a bug that caused unusually slow initialization times when there are large numbers of flags.
+- Fixed reporting of events for prerequisite checks.
+
+
 
 ## [4.2.1] - 2018-01-31
 
