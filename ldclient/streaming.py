@@ -19,7 +19,7 @@ stream_read_timeout = 5 * 60
 
 STREAM_ALL_PATH = '/all'
 
-KindAndKey = namedtuple('KindAndKey', ['kind', 'key'])
+ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
@@ -138,5 +138,5 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _parse_path(self, path):
         for kind in [FEATURES, SEGMENTS]:
             if path.startsWith(kind.stream_api_path):
-                return KindAndKey(kind = kind, key = path.substring(len(kind.stream_api_path)))
+                return ParsedPath(kind = kind, key = path.substring(len(kind.stream_api_path)))
         return None
