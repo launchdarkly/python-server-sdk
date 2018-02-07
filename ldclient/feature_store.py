@@ -1,3 +1,4 @@
+from collections import defaultdict
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
@@ -11,12 +12,12 @@ class InMemoryFeatureStore(FeatureStore):
     def __init__(self):
         self._lock = ReadWriteLock()
         self._initialized = False
-        self._items = {}
+        self._items = defaultdict(dict)
 
     def get(self, kind, key, callback):
         try:
             self._lock.rlock()
-            itemsOfKind = self._items.get(kind, {})
+            itemsOfKind = self._items[kind]
             item = itemsOfKind.get(key)
             if item is None:
                 log.debug("Attempted to get missing key %s in '%s', returning None", key, kind.namespace)
@@ -31,7 +32,7 @@ class InMemoryFeatureStore(FeatureStore):
     def all(self, kind, callback):
         try:
             self._lock.rlock()
-            itemsOfKind = self._items.get(kind, {})
+            itemsOfKind = self._items[kind]
             return callback(dict((k, i) for k, i in itemsOfKind.items() if ('deleted' not in i) or not i['deleted']))
         finally:
             self._lock.runlock()
@@ -39,7 +40,8 @@ class InMemoryFeatureStore(FeatureStore):
     def init(self, all_data):
         try:
             self._lock.rlock()
-            self._items = dict(all_data)
+            self._items.clear()
+            self._items.update(all_data)
             self._initialized = True
             for k in all_data:
                 log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
@@ -50,10 +52,7 @@ class InMemoryFeatureStore(FeatureStore):
     def delete(self, kind, key, version):
         try:
             self._lock.rlock()
-            itemsOfKind = self._items.get(kind)
-            if itemsOfKind is None:
-                itemsOfKind = dict()
-                self._items[kind] = itemsOfKind
+            itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < version:
                 i = {'deleted': True, 'version': version}
@@ -65,10 +64,7 @@ class InMemoryFeatureStore(FeatureStore):
         key = item['key']
         try:
             self._lock.rlock()
-            itemsOfKind = self._items.get(kind)
-            if itemsOfKind is None:
-                itemsOfKind = dict()
-                self._items[kind] = itemsOfKind
+            itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < item['version']:
                 itemsOfKind[key] = item
