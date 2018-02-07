@@ -25,18 +25,18 @@ def evaluate(flag, user, store):
     return _get_off_variation(flag), prereq_events
 
 
-def _evaluate(flag, user, feature_store, prereq_events=None):
+def _evaluate(flag, user, store, prereq_events=None):
     events = prereq_events or []
     failed_prereq = None
     prereq_value = None
     for prereq in flag.get('prerequisites') or []:
-        prereq_flag = feature_store.get(FEATURES, prereq.get('key'), lambda x: x)
+        prereq_flag = store.get(FEATURES, prereq.get('key'), lambda x: x)
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
             break
         if prereq_flag.get('on', False) is True:
-            prereq_value, events = _evaluate(prereq_flag, user, feature_store, events)
+            prereq_value, events = _evaluate(prereq_flag, user, store, events)
             variation = _get_variation(prereq_flag, prereq.get('variation'))
             if prereq_value is None or not prereq_value == variation:
                 failed_prereq = prereq
@@ -50,7 +50,7 @@ def _evaluate(flag, user, feature_store, prereq_events=None):
     if failed_prereq is not None:
         return None, events
 
-    index = _evaluate_index(flag, user, feature_store)
+    index = _evaluate_index(flag, user, store)
     return _get_variation(flag, index), events
 
 
