@@ -236,18 +236,16 @@ def _make_bool_flag_from_clause(clause):
 
 
 def test_bucket_by_user_key():
-    feature = { u'key': u'hashKey', u'salt': u'saltyA' }
-    
     user = { u'key': u'userKeyA' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.42157587)
 
     user = { u'key': u'userKeyB' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.6708485)
 
     user = { u'key': u'userKeyC' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.10343106)
 
 def test_bucket_by_int_attr():
@@ -259,9 +257,9 @@ def test_bucket_by_int_attr():
             u'stringAttr': u'33333'
         }
     }
-    bucket = _bucket_user(user, feature, 'intAttr')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'intAttr')
     assert bucket == pytest.approx(0.54771423)
-    bucket2 = _bucket_user(user, feature, 'stringAttr')
+    bucket2 = _bucket_user(user, 'hashKey', 'saltyA', 'stringAttr')
     assert bucket2 == bucket
 
 def test_bucket_by_float_attr_not_allowed():
@@ -272,5 +270,5 @@ def test_bucket_by_float_attr_not_allowed():
             u'floatAttr': 33.5
         }
     }
-    bucket = _bucket_user(user, feature, 'floatAttr')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'floatAttr')
     assert bucket == 0.0
