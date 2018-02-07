@@ -16,12 +16,13 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient(object):
-    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, session=None, **kwargs):
+    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000, session=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
+        self._chunk_size = chunk_size
 
         # Optional support for passing in a requests.Session()
         self.session = session
@@ -54,14 +55,17 @@ class SSEClient(object):
             timeout=(self._connect_timeout, self._read_timeout),
             **self.requests_kwargs)
 
-        self.resp_file = self.resp.raw
+        # Raw readlines doesn't work because we may be missing newline characters until the next chunk
+        # For some reason, we also need to specify a chunk size because stream=True doesn't seem to guarantee
+        # that we get the newlines in a timeline manner
+        self.resp_file = self.resp.iter_content(chunk_size=self._chunk_size, decode_unicode=True)
 
         # TODO: Ensure we're handling redirects.  Might also stick the 'origin'
         # attribute on Events like the Javascript spec requires.
         self.resp.raise_for_status()
 
     def _event_complete(self):
-        return re.search(end_of_field, self.buf) is not None
+        return re.search(end_of_field, self.buf[len(self.buf)-self._chunk_size-10:]) is not None  # Just search the last chunk plus a bit
 
     def __iter__(self):
         return self
@@ -69,10 +73,11 @@ class SSEClient(object):
     def __next__(self):
         while not self._event_complete():
             try:
-                nextline = self.resp_file.readline()
+                nextline = next(self.resp_file)
+                # There are some bad cases where we don't always get a line: https://github.com/requests/requests/pull/2431
                 if not nextline:
                     raise EOFError()
-                self.buf += nextline.decode("utf-8")
+                self.buf += nextline
             except (StopIteration, requests.RequestException, EOFError) as e:
                 time.sleep(self.retry / 1000.0)
                 self._connect()
