@@ -190,7 +190,7 @@ def _segment_rule_matches_user(rule, user, segment_key, salt):
             return False
 
     # If the weight is absent, this rule matches
-    if 'weight' not in rule:
+    if 'weight' not in rule or rule['weight'] is None:
         return True
 
     # All of the clauses are met. See if the user buckets in

@@ -31,6 +31,43 @@ def test_explicit_include_has_precedence():
     u = { "key": "foo" }
     assert _segment_matches_user(s, u) is True
 
+def test_matching_rule_with_no_weight():
+    s = {
+        "key": "test",
+        "rules": [
+            {
+                "clauses": [
+                    {
+                        "attribute": "email",
+                        "op": "in",
+                        "values": [ "test@example.com" ]
+                    }
+                ]
+            }
+        ]
+    }
+    u = { "key": "foo", "email": "test@example.com" }
+    assert _segment_matches_user(s, u) is True
+
+def test_matching_rule_with_none_weight():
+    s = {
+        "key": "test",
+        "rules": [
+            {
+                "clauses": [
+                    {
+                        "attribute": "email",
+                        "op": "in",
+                        "values": [ "test@example.com" ]
+                    }
+                ],
+                "weight": None
+            }
+        ]
+    }
+    u = { "key": "foo", "email": "test@example.com" }
+    assert _segment_matches_user(s, u) is True
+
 def test_matching_rule_with_full_rollout():
     s = {
         "key": "test",
