@@ -3,18 +3,20 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 
 class FeatureStore(object):
     """
-    Stores and retrieves the state of feature flags
+    Stores and retrieves the state of feature flags and related data
     """
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, key, callback):
+    def get(self, kind, key, callback):
         """
         Gets a feature and calls the callback with the feature data to return the result
-        :param key: The feature key
+        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :type kind: VersionedDataKind
+        :param key: The key of the object
         :type key: str
-        :param callback: The function that accepts the feature data and returns the feature value
-        :type callback: Function that processes the feature flag once received.
+        :param callback: The function that accepts the retrieved data and returns a transformed value
+        :type callback: Function that processes the retrieved object once received.
         :return: The result of executing callback.
         """
 
@@ -22,39 +24,43 @@ class FeatureStore(object):
     def all(self, callback):
         """
         Returns all feature flags and their data
-        :param callback: The function that accepts the feature data and returns the feature value
-        :type callback: Function that processes the feature flags once received.
+        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :type kind: VersionedDataKind
+        :param callback: The function that accepts the retrieved data and returns a transformed value
+        :type callback: Function that processes the retrieved objects once received.
         :rtype: The result of executing callback.
         """
 
     @abstractmethod
-    def init(self, features):
+    def init(self, all_data):
         """
-        Initializes the store with a set of feature flags.  Meant to be called by the UpdateProcessor
+        Initializes the store with a set of objects.  Meant to be called by the UpdateProcessor
 
-        :param features: The features and their data as provided by LD
-        :type features: dict[str, dict]
-        """
-
-    @abstractmethod
-    def delete(self, key, version):
-        """
-        Marks a feature flag as deleted
-
-        :param key: The feature flag key
-        :type key: str
-        :param version: The version of the flag to mark as deleted
-        :type version: str
+        :param all_data: The features and their data as provided by LD
+        :type all_data: dict[VersionedDataKind, dict[str, dict]]
         """
 
     @abstractmethod
-    def upsert(self, key, feature):
+    def delete(self, kind, key, version):
         """
-        Inserts a feature flag if its version is newer or missing
+        Marks an object as deleted
 
-        :param key: The feature flag
+        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :type kind: VersionedDataKind
+        :param key: The object key
         :type key: str
-        :param feature: The feature information
+        :param version: The version of the object to mark as deleted
+        :type version: int
+        """
+
+    @abstractmethod
+    def upsert(self, kind, item):
+        """
+        Inserts an object if its version is newer or missing
+
+        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :type kind: VersionedDataKind
+        :param item: The object to be inserted or updated - must have key and version properties
         :type feature: dict
         """
 

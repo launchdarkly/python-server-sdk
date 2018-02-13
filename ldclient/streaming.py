@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from collections import namedtuple
 
 import json
 from threading import Thread
@@ -10,17 +11,22 @@ import time
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
 from ldclient.util import _stream_headers, log
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
+
+STREAM_ALL_PATH = '/all'
+
+ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def __init__(self, config, requester, store, ready):
         Thread.__init__(self)
         self.daemon = True
-        self._uri = config.stream_uri
+        self._uri = config.stream_base_uri + STREAM_ALL_PATH
         self._config = config
         self._requester = requester
         self._store = store
@@ -83,34 +89,54 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     @staticmethod
     def process_message(store, requester, msg):
         if msg.event == 'put':
-            flags = json.loads(msg.data)
-            versions_summary = list(map(lambda f: "{0}:{1}".format(f.get("key"), f.get("version")), flags.values()))
-            log.debug("Received put event with {0} flags and versions: {1}".format(len(flags), versions_summary))
-            store.init(flags)
+            all_data = json.loads(msg.data)
+            init_data = {
+                FEATURES: all_data['data']['flags'],
+                SEGMENTS: all_data['data']['segments']
+            }
+            log.debug("Received put event with %d flags and %d segments",
+                len(init_data[FEATURES]), len(init_data[SEGMENTS]))
+            store.init(init_data)
             return True
         elif msg.event == 'patch':
             payload = json.loads(msg.data)
-            key = payload['path'][1:]
-            flag = payload['data']
-            log.debug("Received patch event for flag key: [{0}] New version: [{1}]"
-                      .format(flag.get("key"), str(flag.get("version"))))
-            store.upsert(key, flag)
+            path = payload['path']
+            obj = payload['data']
+            log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
+            target = _parse_path(path)
+            if target is not None:
+                store.upsert(target.kind, obj)
+            else:
+                log.warning("Patch for unknown path: %s", path)
         elif msg.event == "indirect/patch":
-            key = msg.data
-            log.debug("Received indirect/patch event for flag key: " + key)
-            store.upsert(key, requester.get_one(key))
+            path = msg.data
+            log.debug("Received indirect/patch event for %s", path)
+            target = _parse_path(path)
+            if target is not None:
+                store.upsert(target.kind, requester.get_one(target.kind, target.key))
+            else:
+                log.warning("Indirect patch for unknown path: %s", path)
         elif msg.event == "indirect/put":
             log.debug("Received indirect/put event")
-            store.init(requester.get_all())
+            store.init(requester.get_all_data())
             return True
         elif msg.event == 'delete':
             payload = json.loads(msg.data)
-            key = payload['path'][1:]
+            path = payload['path']
             # noinspection PyShadowingNames
             version = payload['version']
-            log.debug("Received delete event for flag key: [{0}] New version: [{1}]"
-                      .format(key, version))
-            store.delete(key, version)
+            log.debug("Received delete event for %s, New version: [%d]", path, version)
+            target = _parse_path(path)
+            if target is not None:
+                store.delete(target.kind, target.key, version)
+            else:
+                log.warning("Delete for unknown path: %s", path)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
+
+    def _parse_path(self, path):
+        for kind in [FEATURES, SEGMENTS]:
+            if path.startsWith(kind.stream_api_path):
+                return ParsedPath(kind = kind, key = path.substring(len(kind.stream_api_path)))
+        return None
