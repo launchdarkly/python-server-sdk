@@ -48,32 +48,6 @@ Python 2.6 is supported for polling mode only and requires an extra dependency. 
 1. Due to Python 2.6's lack of SNI support, LaunchDarkly's streaming flag updates are not available. Set the `stream=False` option in the client config to disable it. You'll still receive flag updates, but via a polling mechanism with efficient caching. Here's an example:
 	`config = ldclient.Config(stream=False, sdk_key="SDK_KEY")`
 
-
-Twisted
--------
-Twisted is supported for LDD mode only. To run in Twisted/LDD mode, 
-
-1. Use this dependency:
-
-	```
-	ldclient-py[twisted]>=3.0.1
-	```
-2. Configure the client:
-
-	```
-	feature_store = TwistedRedisFeatureStore(url='YOUR_REDIS_URL', redis_prefix="ldd-restwrapper", expiration=0)
-	ldclient.config.feature_store = feature_store
-	
-	ldclient.config = ldclient.Config(
-	    use_ldd=use_ldd,
-	    event_consumer_class=TwistedEventConsumer,
-	)
-	ldclient.sdk_key = 'YOUR_SDK_KEY'
-	```
-3. Get the client:
-
-	```client = ldclient.get()```
-
 Learn more
 -----------
 
@@ -104,7 +78,6 @@ About LaunchDarkly
     * [JavaScript](http://docs.launchdarkly.com/docs/js-sdk-reference "LaunchDarkly JavaScript SDK")
     * [PHP](http://docs.launchdarkly.com/docs/php-sdk-reference "LaunchDarkly PHP SDK")
     * [Python](http://docs.launchdarkly.com/docs/python-sdk-reference "LaunchDarkly Python SDK")
-    * [Python Twisted](http://docs.launchdarkly.com/docs/python-twisted-sdk-reference "LaunchDarkly Python Twisted SDK")
     * [Go](http://docs.launchdarkly.com/docs/go-sdk-reference "LaunchDarkly Go SDK")
     * [Node.JS](http://docs.launchdarkly.com/docs/node-sdk-reference "LaunchDarkly Node SDK")
     * [.NET](http://docs.launchdarkly.com/docs/dotnet-sdk-reference "LaunchDarkly .Net SDK")
