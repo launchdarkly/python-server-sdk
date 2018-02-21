@@ -1,6 +1,7 @@
 import pytest
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.flag import _bucket_user, evaluate
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 empty_store = InMemoryFeatureStore()
@@ -57,7 +58,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
         'variations': ['d', 'e'],
         'version': 2
     }
-    store.upsert('feature1', flag1)
+    store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'value': 'd', 'version': 2,
         'user': user, 'prereqOf': 'feature0'}]
@@ -81,7 +82,7 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
         'variations': ['d', 'e'],
         'version': 2
     }
-    store.upsert('feature1', flag1)
+    store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'value': 'e', 'version': 2,
         'user': user, 'prereqOf': 'feature0'}]
@@ -121,6 +122,60 @@ def test_flag_matches_user_from_rules():
     }
     user = { 'key': 'userkey' }
     assert evaluate(flag, user, empty_store) == ('c', [])
+
+def test_segment_match_clause_retrieves_segment_from_store():
+    store = InMemoryFeatureStore()
+    segment = {
+        "key": "segkey",
+        "included": [ "foo" ],
+        "version": 1
+    }
+    store.upsert(SEGMENTS, segment)
+
+    user = { "key": "foo" }
+    flag = {
+        "key": "test",
+        "variations": [ False, True ],
+        "fallthrough": { "variation": 0 },
+        "on": True,
+        "rules": [
+            {
+                "clauses": [
+                    {
+                        "attribute": "",
+                        "op": "segmentMatch",
+                        "values": [ "segkey" ]
+                    }
+                ],
+                "variation": 1
+            }
+        ]
+    }
+
+    assert evaluate(flag, user, store) == (True, [])
+
+def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found():
+    user = { "key": "foo" }
+    flag = {
+        "key": "test",
+        "variations": [ False, True ],
+        "fallthrough": { "variation": 0 },
+        "on": True,
+        "rules": [
+            {
+                "clauses": [
+                    {
+                        "attribute": "",
+                        "op": "segmentMatch",
+                        "values": [ "segkey" ]
+                    }
+                ],
+                "variation": 1
+            }
+        ]
+    }
+
+    assert evaluate(flag, user, empty_store) == (False, [])
 
 def test_clause_matches_builtin_attribute():
     clause = {
@@ -181,18 +236,16 @@ def _make_bool_flag_from_clause(clause):
 
 
 def test_bucket_by_user_key():
-    feature = { u'key': u'hashKey', u'salt': u'saltyA' }
-    
     user = { u'key': u'userKeyA' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.42157587)
 
     user = { u'key': u'userKeyB' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.6708485)
 
     user = { u'key': u'userKeyC' }
-    bucket = _bucket_user(user, feature, 'key')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.10343106)
 
 def test_bucket_by_int_attr():
@@ -204,9 +257,9 @@ def test_bucket_by_int_attr():
             u'stringAttr': u'33333'
         }
     }
-    bucket = _bucket_user(user, feature, 'intAttr')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'intAttr')
     assert bucket == pytest.approx(0.54771423)
-    bucket2 = _bucket_user(user, feature, 'stringAttr')
+    bucket2 = _bucket_user(user, 'hashKey', 'saltyA', 'stringAttr')
     assert bucket2 == bucket
 
 def test_bucket_by_float_attr_not_allowed():
@@ -217,5 +270,5 @@ def test_bucket_by_float_attr_not_allowed():
             u'floatAttr': 33.5
         }
     }
-    bucket = _bucket_user(user, feature, 'floatAttr')
+    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'floatAttr')
     assert bucket == 0.0

@@ -14,8 +14,6 @@ ldclient_version='4.3.0'
 install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
 python26_reqs = parse_requirements('python2.6-requirements.txt', session=uuid.uuid1())
 test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
-twisted_reqs = parse_requirements(
-    'twisted-requirements.txt', session=uuid.uuid1())
 redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
 
 # reqs is a list of requirement
@@ -23,7 +21,6 @@ redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
 reqs = [str(ir.req) for ir in install_reqs]
 python26reqs = [str(ir.req) for ir in python26_reqs]
 testreqs = [str(ir.req) for ir in test_reqs]
-txreqs = [str(ir.req) for ir in twisted_reqs]
 redisreqs = [str(ir.req) for ir in redis_reqs]
 
 
@@ -66,7 +63,6 @@ setup(
         'Topic :: Software Development :: Libraries',
     ],
     extras_require={
-        "twisted": txreqs,
         "redis": redisreqs,
         "python2.6": python26reqs
     },

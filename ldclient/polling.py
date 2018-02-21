@@ -23,7 +23,8 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
             while self._running:
                 start_time = time.time()
                 try:
-                    self._store.init(self._requester.get_all())
+                    all_data = self._requester.get_all_data()
+                    self._store.init(all_data)
                     if not self._ready.is_set() is True and self._store.initialized is True:
                         log.info("PollingUpdateProcessor initialized ok")
                         self._ready.set()

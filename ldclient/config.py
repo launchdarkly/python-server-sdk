@@ -136,12 +136,20 @@ class Config(object):
         return self.__sdk_key
 
     @property
+    def base_uri(self):
+        return self.__base_uri
+
+    @property
     def get_latest_flags_uri(self):
         return self.__base_uri + GET_LATEST_FEATURES_PATH
 
     @property
     def events_uri(self):
         return self.__events_uri + '/bulk'
+
+    @property
+    def stream_base_uri(self):
+        return self.__stream_uri
 
     @property
     def stream_uri(self):

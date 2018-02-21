@@ -1,68 +1,76 @@
+from collections import defaultdict
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
 
 
 class InMemoryFeatureStore(FeatureStore):
+    """
+    In-memory implementation of a store that holds feature flags and related data received from the streaming API.
+    """
 
     def __init__(self):
         self._lock = ReadWriteLock()
         self._initialized = False
-        self._features = {}
+        self._items = defaultdict(dict)
 
-    def get(self, key, callback):
+    def get(self, kind, key, callback):
         try:
             self._lock.rlock()
-            f = self._features.get(key)
-            if f is None:
-                log.debug("Attempted to get missing feature: " + str(key) + " Returning None")
+            itemsOfKind = self._items[kind]
+            item = itemsOfKind.get(key)
+            if item is None:
+                log.debug("Attempted to get missing key %s in '%s', returning None", key, kind.namespace)
                 return callback(None)
-            if 'deleted' in f and f['deleted']:
-                log.debug("Attempted to get deleted feature: " + str(key) + " Returning None")
+            if 'deleted' in item and item['deleted']:
+                log.debug("Attempted to get deleted key %s in '%s', returning None", key, kind.namespace)
                 return callback(None)
-            return callback(f)
+            return callback(item)
         finally:
             self._lock.runlock()
 
-    def all(self, callback):
+    def all(self, kind, callback):
         try:
             self._lock.rlock()
-            return callback(dict((k, f) for k, f in self._features.items() if ('deleted' not in f) or not f['deleted']))
+            itemsOfKind = self._items[kind]
+            return callback(dict((k, i) for k, i in itemsOfKind.items() if ('deleted' not in i) or not i['deleted']))
         finally:
             self._lock.runlock()
 
-    def init(self, features):
+    def init(self, all_data):
         try:
-            self._lock.lock()
-            self._features = dict(features)
+            self._lock.rlock()
+            self._items.clear()
+            self._items.update(all_data)
             self._initialized = True
-            log.debug("Initialized feature store with " + str(len(features)) + " features")
+            for k in all_data:
+                log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
     # noinspection PyShadowingNames
-    def delete(self, key, version):
+    def delete(self, kind, key, version):
         try:
-            self._lock.lock()
-            f = self._features.get(key)
-            if f is not None and f['version'] < version:
-                f['deleted'] = True
-                f['version'] = version
-            elif f is None:
-                f = {'deleted': True, 'version': version}
-                self._features[key] = f
+            self._lock.rlock()
+            itemsOfKind = self._items[kind]
+            i = itemsOfKind.get(key)
+            if i is None or i['version'] < version:
+                i = {'deleted': True, 'version': version}
+                itemsOfKind[key] = i
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
-    def upsert(self, key, feature):
+    def upsert(self, kind, item):
+        key = item['key']
         try:
-            self._lock.lock()
-            f = self._features.get(key)
-            if f is None or f['version'] < feature['version']:
-                self._features[key] = feature
-                log.debug("Updated feature {0} to version {1}".format(key, feature['version']))
+            self._lock.rlock()
+            itemsOfKind = self._items[kind]
+            i = itemsOfKind.get(key)
+            if i is None or i['version'] < item['version']:
+                itemsOfKind[key] = item
+                log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
         finally:
-            self._lock.unlock()
+            self._lock.runlock()
 
     @property
     def initialized(self):
