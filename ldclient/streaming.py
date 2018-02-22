@@ -103,7 +103,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             path = payload['path']
             obj = payload['data']
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
-            target = _parse_path(path)
+            target = StreamingUpdateProcessor._parse_path(path)
             if target is not None:
                 store.upsert(target.kind, obj)
             else:
@@ -111,7 +111,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         elif msg.event == "indirect/patch":
             path = msg.data
             log.debug("Received indirect/patch event for %s", path)
-            target = _parse_path(path)
+            target = StreamingUpdateProcessor._parse_path(path)
             if target is not None:
                 store.upsert(target.kind, requester.get_one(target.kind, target.key))
             else:
@@ -126,7 +126,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # noinspection PyShadowingNames
             version = payload['version']
             log.debug("Received delete event for %s, New version: [%d]", path, version)
-            target = _parse_path(path)
+            target = StreamingUpdateProcessor._parse_path(path)
             if target is not None:
                 store.delete(target.kind, target.key, version)
             else:
@@ -135,8 +135,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
 
-    def _parse_path(self, path):
+    @staticmethod
+    def _parse_path(path):
         for kind in [FEATURES, SEGMENTS]:
-            if path.startsWith(kind.stream_api_path):
-                return ParsedPath(kind = kind, key = path.substring(len(kind.stream_api_path)))
+            if path.startswith(kind.stream_api_path):
+                return ParsedPath(kind = kind, key = path[:len(kind.stream_api_path)])
         return None
