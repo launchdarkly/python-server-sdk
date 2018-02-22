@@ -4,15 +4,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ## [5.0.0] - 2018-02-21
 
-### Added
-- Support for a new LaunchDarkly feature: reusable user segments.
-
-### Changed
-- The `FeatureStore` interface has been changed to support user segment data as well as feature flags. Existing code that uses `InMemoryFeatureStore` or `RedisFeatureStore` should work as before, but custom feature store implementations will need to be updated.
-
-### Removed
-- Twisted is no longer supported.
-
+_This release was broken and has been removed._
 
 ## [4.3.0] - 2018-02-07
 
