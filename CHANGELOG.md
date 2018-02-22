@@ -2,8 +2,7 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
-## [5.0.0] - 2018-02-21
-
+## [5.0.1] - 2018-02-22
 ### Added
 - Support for a new LaunchDarkly feature: reusable user segments.
 
@@ -13,6 +12,10 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 ### Removed
 - Twisted is no longer supported.
 
+
+## [5.0.0] - 2018-02-21
+
+_This release was broken and has been removed._
 
 ## [4.3.0] - 2018-02-07
 
