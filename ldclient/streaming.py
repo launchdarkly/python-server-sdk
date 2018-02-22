@@ -139,5 +139,5 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _parse_path(path):
         for kind in [FEATURES, SEGMENTS]:
             if path.startswith(kind.stream_api_path):
-                return ParsedPath(kind = kind, key = path[:len(kind.stream_api_path)])
+                return ParsedPath(kind = kind, key = path[len(kind.stream_api_path):])
         return None
