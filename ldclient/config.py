@@ -29,7 +29,10 @@ class Config(object):
                  event_consumer_class=None,
                  private_attribute_names=(),
                  all_attributes_private=False,
-                 offline=False):
+                 offline=False,
+                 user_keys_capacity=1000,
+                 user_keys_flush_interval=300,
+                 inline_users_in_events=False):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -66,6 +69,13 @@ class Config(object):
           private, not just the attributes specified in `private_attribute_names`.
         :param feature_store: A FeatureStore implementation
         :type feature_store: FeatureStore
+        :param int user_keys_capacity: The number of user keys that the event processor can remember at any
+          one time, so that duplicate user details will not be sent in analytics events.
+        :param float user_keys_flush_interval: The interval in seconds at which the event processor will
+          reset its set of known user keys.
+        :param bool inline_users_in_events: Whether to include full user details in every analytics event.
+          By default, events will only include the user key, except for one "index" event that provides the
+          full details for the user.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
         :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
@@ -100,6 +110,9 @@ class Config(object):
         self.__private_attribute_names = private_attribute_names
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
+        self.__user_keys_capacity = user_keys_capacity
+        self.__user_keys_flush_interval = user_keys_flush_interval
+        self.__inline_users_in_events = inline_users_in_events
 
     @classmethod
     def default(cls):
@@ -126,7 +139,10 @@ class Config(object):
                       event_consumer_class=self.__event_consumer_class,
                       private_attribute_names=self.__private_attribute_names,
                       all_attributes_private=self.__all_attributes_private,
-                      offline=self.__offline)
+                      offline=self.__offline,
+                      user_keys_capacity=self.__user_keys_capacity,
+                      user_keys_flush_interval=self.__user_keys_flush_interval,
+                      inline_users_in_events=self.__inline_users_in_events)
 
     def get_default(self, key, default):
         return default if key not in self.__defaults else self.__defaults[key]
@@ -223,6 +239,18 @@ class Config(object):
     def offline(self):
         return self.__offline
 
+    @property
+    def user_keys_capacity(self):
+        return self.__user_keys_capacity
+
+    @property
+    def user_keys_flush_interval(self):
+        return self.__user_keys_flush_interval
+
+    @property
+    def inline_users_in_events(self):
+        return self.__inline_users_in_events
+    
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key is '':
             log.warn("Missing or blank sdk_key.")
