@@ -151,8 +151,8 @@ class LDClient(object):
             return default
 
         def send_event(value, version=None):
-            self._send_event({'kind': 'feature', 'key': key,
-                              'user': user, 'value': value, 'default': default, 'version': version})
+            self._send_event({'kind': 'feature', 'key': key, 'user': user, 'variation': None,
+                              'value': value, 'default': default, 'version': version})
 
         if not self.is_initialized():
             if self._store.initialized:
