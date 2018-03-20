@@ -16,7 +16,7 @@ def test_flag_returns_off_variation_if_flag_is_off():
         'variations': ['a', 'b', 'c']
     }
     user = { 'key': 'x' }
-    assert evaluate(flag, user, empty_store) == ('b', [])
+    assert evaluate(flag, user, empty_store) == (1, 'b', [])
 
 def test_flag_returns_none_if_flag_is_off_and_off_variation_is_unspecified():
     flag = {
@@ -26,7 +26,7 @@ def test_flag_returns_none_if_flag_is_off_and_off_variation_is_unspecified():
         'variations': ['a', 'b', 'c']
     }
     user = { 'key': 'x' }
-    assert evaluate(flag, user, empty_store) == (None, [])
+    assert evaluate(flag, user, empty_store) == (None, None, [])
 
 def test_flag_returns_off_variation_if_prerequisite_not_found():
     flag = {
@@ -38,7 +38,7 @@ def test_flag_returns_off_variation_if_prerequisite_not_found():
         'variations': ['a', 'b', 'c']
     }
     user = { 'key': 'x' }
-    assert evaluate(flag, user, empty_store) == ('b', [])
+    assert evaluate(flag, user, empty_store) == (1, 'b', [])
 
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     store = InMemoryFeatureStore()
@@ -60,9 +60,9 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     }
     store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
-    events_should_be = [{'kind': 'feature', 'key': 'feature1', 'value': 'd', 'version': 2,
-        'user': user, 'prereqOf': 'feature0'}]
-    assert evaluate(flag, user, store) == ('b', events_should_be)
+    events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 0, 'value': 'd',
+        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+    assert evaluate(flag, user, store) == (1, 'b', events_should_be)
 
 def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_rules():
     store = InMemoryFeatureStore()
@@ -84,9 +84,9 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
     }
     store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
-    events_should_be = [{'kind': 'feature', 'key': 'feature1', 'value': 'e', 'version': 2,
-        'user': user, 'prereqOf': 'feature0'}]
-    assert evaluate(flag, user, store) == ('a', events_should_be)
+    events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e',
+        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+    assert evaluate(flag, user, store) == (0, 'a', events_should_be)
 
 def test_flag_matches_user_from_targets():
     flag = {
@@ -98,7 +98,7 @@ def test_flag_matches_user_from_targets():
         'variations': ['a', 'b', 'c']
     }
     user = { 'key': 'userkey' }
-    assert evaluate(flag, user, empty_store) == ('c', [])
+    assert evaluate(flag, user, empty_store) == (2, 'c', [])
 
 def test_flag_matches_user_from_rules():
     flag = {
@@ -121,7 +121,7 @@ def test_flag_matches_user_from_rules():
         'variations': ['a', 'b', 'c']
     }
     user = { 'key': 'userkey' }
-    assert evaluate(flag, user, empty_store) == ('c', [])
+    assert evaluate(flag, user, empty_store) == (2, 'c', [])
 
 def test_segment_match_clause_retrieves_segment_from_store():
     store = InMemoryFeatureStore()
@@ -152,7 +152,7 @@ def test_segment_match_clause_retrieves_segment_from_store():
         ]
     }
 
-    assert evaluate(flag, user, store) == (True, [])
+    assert evaluate(flag, user, store) == (1, True, [])
 
 def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found():
     user = { "key": "foo" }
@@ -175,7 +175,7 @@ def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found(
         ]
     }
 
-    assert evaluate(flag, user, empty_store) == (False, [])
+    assert evaluate(flag, user, empty_store) == (0, False, [])
 
 def test_clause_matches_builtin_attribute():
     clause = {
@@ -185,7 +185,7 @@ def test_clause_matches_builtin_attribute():
     }
     user = { 'key': 'x', 'name': 'Bob' }
     flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store) == (True, [])
+    assert evaluate(flag, user, empty_store) == (1, True, [])
 
 def test_clause_matches_custom_attribute():
     clause = {
@@ -195,7 +195,7 @@ def test_clause_matches_custom_attribute():
     }
     user = { 'key': 'x', 'name': 'Bob', 'custom': { 'legs': 4 } }
     flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store) == (True, [])
+    assert evaluate(flag, user, empty_store) == (1, True, [])
 
 def test_clause_returns_false_for_missing_attribute():
     clause = {
@@ -205,7 +205,7 @@ def test_clause_returns_false_for_missing_attribute():
     }
     user = { 'key': 'x', 'name': 'Bob' }
     flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store) == (False, [])
+    assert evaluate(flag, user, empty_store) == (0, False, [])
 
 def test_clause_can_be_negated():
     clause = {
@@ -216,7 +216,7 @@ def test_clause_can_be_negated():
     }
     user = { 'key': 'x', 'name': 'Bob' }
     flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store) == (False, [])
+    assert evaluate(flag, user, empty_store) == (0, False, [])
 
 
 def _make_bool_flag_from_clause(clause):

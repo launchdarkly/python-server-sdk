@@ -18,16 +18,19 @@ log = logging.getLogger(sys.modules[__name__].__name__)
 def evaluate(flag, user, store):
     prereq_events = []
     if flag.get('on', False):
-        value, prereq_events = _evaluate(flag, user, store)
+        variation, value, prereq_events = _evaluate(flag, user, store)
         if value is not None:
-            return value, prereq_events
+            return variation, value, prereq_events
 
-    return _get_off_variation(flag), prereq_events
+    off_var = flag.get('offVariation')
+    off_value = None if off_var is None else _get_variation(flag, off_var)
+    return off_var, off_value, prereq_events
 
 
 def _evaluate(flag, user, store, prereq_events=None):
     events = prereq_events or []
     failed_prereq = None
+    prereq_var = None
     prereq_value = None
     for prereq in flag.get('prerequisites') or []:
         prereq_flag = store.get(FEATURES, prereq.get('key'), lambda x: x)
@@ -36,22 +39,21 @@ def _evaluate(flag, user, store, prereq_events=None):
             failed_prereq = prereq
             break
         if prereq_flag.get('on', False) is True:
-            prereq_value, events = _evaluate(prereq_flag, user, store, events)
-            variation = _get_variation(prereq_flag, prereq.get('variation'))
-            if prereq_value is None or not prereq_value == variation:
+            prereq_var, prereq_value, events = _evaluate(prereq_flag, user, store, events)
+            if prereq_var is None or not prereq_var == prereq.get('variation'):
                 failed_prereq = prereq
         else:
             failed_prereq = prereq
 
-        event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
+        event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user, 'variation': prereq_var,
                  'value': prereq_value, 'version': prereq_flag.get('version'), 'prereqOf': flag.get('key')}
         events.append(event)
 
     if failed_prereq is not None:
-        return None, events
+        return None, None, events
 
     index = _evaluate_index(flag, user, store)
-    return _get_variation(flag, index), events
+    return index, _get_variation(flag, index), events
 
 
 def _evaluate_index(feature, user, store):

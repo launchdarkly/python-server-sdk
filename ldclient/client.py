@@ -191,14 +191,15 @@ class LDClient(object):
         return evaluate(flag, user, self._store)
 
     def _evaluate_and_send_events(self, flag, user, default):
-        value, events = self._evaluate(flag, user)
+        variation, value, events = evaluate(flag, user, self._store)
         for event in events or []:
             self._send_event(event)
 
         if value is None:
             value = default
         self._send_event({'kind': 'feature', 'key': flag.get('key'),
-                          'user': user, 'value': value, 'default': default, 'version': flag.get('version')})
+                          'user': user, 'variation': variation, 'value': value,
+                          'default': default, 'version': flag.get('version')})
         return value
 
     def all_flags(self, user):
