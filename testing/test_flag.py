@@ -56,12 +56,13 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
         'on': True,
         'fallthrough': { 'variation': 0 },
         'variations': ['d', 'e'],
-        'version': 2
+        'version': 2,
+        'trackEvents': False
     }
     store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 0, 'value': 'd',
-        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+        'version': 2, 'user': user, 'prereqOf': 'feature0', 'trackEvents': False, 'debugEventsUntilDate': None}]
     assert evaluate(flag, user, store) == (1, 'b', events_should_be)
 
 def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_rules():
@@ -80,12 +81,13 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
         'on': True,
         'fallthrough': { 'variation': 1 },
         'variations': ['d', 'e'],
-        'version': 2
+        'version': 2,
+        'trackEvents': False
     }
     store.upsert(FEATURES, flag1)
     user = { 'key': 'x' }
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e',
-        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+        'version': 2, 'user': user, 'prereqOf': 'feature0', 'trackEvents': False, 'debugEventsUntilDate': None}]
     assert evaluate(flag, user, store) == (0, 'a', events_should_be)
 
 def test_flag_matches_user_from_targets():

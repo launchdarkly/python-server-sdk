@@ -152,7 +152,8 @@ class LDClient(object):
 
         def send_event(value, version=None):
             self._send_event({'kind': 'feature', 'key': key, 'user': user, 'variation': None,
-                              'value': value, 'default': default, 'version': version})
+                              'value': value, 'default': default, 'version': version,
+                              'trackEvents': False, 'debugEventsUntilDate': None})
 
         if not self.is_initialized():
             if self._store.initialized:
@@ -199,7 +200,9 @@ class LDClient(object):
             value = default
         self._send_event({'kind': 'feature', 'key': flag.get('key'),
                           'user': user, 'variation': variation, 'value': value,
-                          'default': default, 'version': flag.get('version')})
+                          'default': default, 'version': flag.get('version'),
+                          'trackEvents': flag.get('trackEvents'),
+                          'debugEventsUntilDate': flag.get('debugEventsUntilDate')})
         return value
 
     def all_flags(self, user):
