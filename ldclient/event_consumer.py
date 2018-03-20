@@ -6,7 +6,9 @@ from threading import Thread
 import requests
 from requests.packages.urllib3.exceptions import ProtocolError
 
-from ldclient.event_serializer import EventSerializer
+import six
+
+from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventConsumer
 from ldclient.util import _headers
 from ldclient.util import log
@@ -19,7 +21,7 @@ class EventConsumerImpl(Thread, EventConsumer):
         self.daemon = True
         self._config = config
         self._queue = event_queue
-        self._serializer = EventSerializer(config)
+        self._user_filter = UserFilter(config)
         self._running = True
 
     def run(self):
@@ -42,7 +44,8 @@ class EventConsumerImpl(Thread, EventConsumer):
         def do_send(should_retry):
             # noinspection PyBroadException
             try:
-                json_body = self._serializer.serialize_events(events)
+                filtered_events = [ self._filter_event(e) for e in events ]
+                json_body = jsonpickle.encode(filtered_events, unpicklable=False)
                 log.debug('Sending events payload: ' + json_body)
                 hdrs = _headers(self._config.sdk_key)
                 uri = self._config.events_uri
@@ -76,6 +79,9 @@ class EventConsumerImpl(Thread, EventConsumer):
         finally:
             for _ in events:
                 self._queue.task_done()
+
+    def _filter_event(self, e):
+        return dict((key, self._user_filter.filter_user_props(value) if key == 'user' else value) for (key, value) in six.iteritems(e))
 
     def send(self):
         events = self.next()
