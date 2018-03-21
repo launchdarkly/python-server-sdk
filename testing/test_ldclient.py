@@ -3,6 +3,7 @@ from ldclient.client import LDClient, Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor
+from ldclient.versioned_data_kind import FEATURES
 import pytest
 from testing.sync_util import wait_until
 
@@ -10,49 +11,6 @@ try:
     import queue
 except:
     import Queue as queue
-
-
-class MockFeatureStore(FeatureStore):
-    def delete(self, key, version):
-        pass
-
-    @property
-    def initialized(self):
-        pass
-
-    def init(self, features):
-        pass
-
-    def all(self):
-        pass
-
-    def upsert(self, key, feature):
-        pass
-
-    def __init__(self, *_):
-        pass
-
-    def get(self, key):
-        if key == "feature.key":
-            return {
-                u'key': u'feature.key',
-                u'salt': u'abc',
-                u'on': True,
-                u'variations': [
-                    {
-                        u'value': True,
-                        u'weight': 100,
-                        u'targets': []
-                    },
-                    {
-                        u'value': False,
-                        u'weight': 0,
-                        u'targets': []
-                    }
-                ]
-            }
-        else:
-            return None
 
 
 class MockEventProcessor(object):
@@ -77,16 +35,8 @@ class MockEventProcessor(object):
         pass
 
 
-class MockFeatureRequester(FeatureRequester):
-    def __init__(self, *_):
-        pass
-
-    def get_all(self):
-        pass
-
-
 class MockUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, requester, store, ready):
+    def __init__(self, config, store, ready):
         ready.set()
 
     def start(self):
@@ -99,13 +49,37 @@ class MockUpdateProcessor(UpdateProcessor):
         return True
 
 
-client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+feature = {
+    u'key': u'feature.key',
+    u'salt': u'abc',
+    u'on': True,
+    u'variations': [
+        {
+            u'value': True,
+            u'weight': 100,
+            u'targets': []
+        },
+        {
+            u'value': False,
+            u'weight': 0,
+            u'targets': []
+        }
+    ]
+}
+feature_store = InMemoryFeatureStore()
+feature_store.init({
+    FEATURES: {
+        'feature.key': feature
+    }
+})
+
+client = LDClient(config=Config(base_uri="http://localhost:3000",
                                 event_processor_class = MockEventProcessor, update_processor_class = MockUpdateProcessor))
 offline_client = LDClient(config=
-                          Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                          Config(sdk_key="secret", base_uri="http://localhost:3000",
                                  offline=True))
 no_send_events_client = LDClient(config=
-                                 Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                                 Config(sdk_key="secret", base_uri="http://localhost:3000",
                                  update_processor_class = MockUpdateProcessor, send_events=False))
 
 user = {
@@ -203,7 +177,6 @@ def test_defaults_and_online():
     my_client = LDClient(config=Config(base_uri="http://localhost:3000",
                                        defaults={"foo": expected},
                                        event_processor_class=MockEventProcessor,
-                                       feature_requester_class=MockFeatureRequester,
                                        update_processor_class=MockUpdateProcessor,
                                        feature_store=InMemoryFeatureStore()))
     actual = my_client.variation('foo', user, default="originalDefault")
@@ -216,7 +189,6 @@ def test_defaults_and_online_no_default():
     my_client = LDClient(config=Config(base_uri="http://localhost:3000",
                                        defaults={"foo": "bar"},
                                        event_processor_class=MockEventProcessor,
-                                       feature_requester_class=MockFeatureRequester,
                                        update_processor_class=MockUpdateProcessor))
     assert "jim" == my_client.variation('baz', user, default="jim")
     e = get_first_event(my_client)

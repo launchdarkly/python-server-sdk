@@ -64,28 +64,27 @@ class LDClient(object):
             log.info("Started LaunchDarkly Client in LDD mode")
             return
 
-        if self._config.feature_requester_class:
-            self._feature_requester = self._config.feature_requester_class(self._config)
-        else:
-            self._feature_requester = FeatureRequesterImpl(self._config)
-        """ :type: FeatureRequester """
-
         update_processor_ready = threading.Event()
 
         if self._config.update_processor_class:
             log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
             self._update_processor = self._config.update_processor_class(
-                self._config, self._feature_requester, self._store, update_processor_ready)
+                self._config, self._store, update_processor_ready)
         else:
-            raise "*** NOT HERE ***"
+            if self._config.feature_requester_class:
+                _feature_requester = self._config.feature_requester_class(self._config)
+            else:
+                _feature_requester = FeatureRequesterImpl(self._config)
+            """ :type: FeatureRequester """
+
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
-                    self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, _feature_requester, self._store, update_processor_ready)
             else:
                 log.info("Disabling streaming API")
                 log.warn("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
                 self._update_processor = PollingUpdateProcessor(
-                    self._config, self._feature_requester, self._store, update_processor_ready)
+                    self._config, _feature_requester, self._store, update_processor_ready)
         """ :type: UpdateProcessor """
 
         self._update_processor.start()
