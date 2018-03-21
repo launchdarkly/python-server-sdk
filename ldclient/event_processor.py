@@ -3,24 +3,50 @@ from __future__ import absolute_import
 import errno
 from threading import Thread
 
+# noinspection PyBroadException
+try:
+    import queue
+except:
+    # noinspection PyUnresolvedReferences,PyPep8Naming
+    import Queue as queue
+
 import requests
 from requests.packages.urllib3.exceptions import ProtocolError
 
 import six
 
 from ldclient.user_filter import UserFilter
-from ldclient.interfaces import EventConsumer
+from ldclient.interfaces import EventProcessor
 from ldclient.util import _headers
 from ldclient.util import log
 
 
-class EventConsumerImpl(Thread, EventConsumer):
-    def __init__(self, event_queue, config):
+class NullEventProcessor(Thread, EventProcessor):
+    def __init(self, config):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def is_alive(self):
+        return False
+
+    def send_event(self, event):
+        pass
+
+    def flush(self):
+        pass
+
+class DefaultEventProcessor(Thread, EventProcessor):
+    def __init__(self, config):
         Thread.__init__(self)
         self._session = requests.Session()
         self.daemon = True
         self._config = config
-        self._queue = event_queue
+        self._queue = queue.Queue(config.events_max_pending)
         self._user_filter = UserFilter(config)
         self._running = True
 
@@ -37,6 +63,12 @@ class EventConsumerImpl(Thread, EventConsumer):
     def stop(self):
         self._running = False
 
+    def send_event(self, event):
+        if self._queue.full():
+            log.warning("Event queue is full-- dropped an event")
+        else:
+            self._queue.put(event)
+
     def flush(self):
         self._queue.join()
 
@@ -44,8 +76,8 @@ class EventConsumerImpl(Thread, EventConsumer):
         def do_send(should_retry):
             # noinspection PyBroadException
             try:
-                filtered_events = [ self._filter_event(e) for e in events ]
-                json_body = jsonpickle.encode(filtered_events, unpicklable=False)
+                output_events = [ self._make_output_event(e) for e in events ]
+                json_body = jsonpickle.encode(output_events, unpicklable=False)
                 log.debug('Sending events payload: ' + json_body)
                 hdrs = _headers(self._config.sdk_key)
                 uri = self._config.events_uri
@@ -80,8 +112,43 @@ class EventConsumerImpl(Thread, EventConsumer):
             for _ in events:
                 self._queue.task_done()
 
-    def _filter_event(self, e):
-        return dict((key, self._user_filter.filter_user_props(value) if key == 'user' else value) for (key, value) in six.iteritems(e))
+    def _make_output_event(self, e):
+        kind = e['kind']
+        if kind == 'feature':
+            is_debug = (not e['trackEvents']) and (e.get('debugEventsUntilDate') is not None)
+            out = {
+                'kind': 'debug' if is_debug else 'feature',
+                'creationDate': e['creationDate'],
+                'key': e['key'],
+                'version': e.get('version'),
+                'value': e.get('value'),
+                'default': e.get('default'),
+                'prereqOf': e.get('prereqOf')
+            }
+            if self._config.inline_users_in_events:
+                out['user'] = self._user_filter.filter_user_props(e['user'])
+            else:
+                out['userKey'] = e['user'].get('key')
+            return out
+        elif kind == 'identify':
+            return {
+                'kind': 'identify',
+                'creationDate': e['creationDate'],
+                'user': self._user_filter.filter_user_props(e['user'])
+            }
+        elif kind == 'custom':
+            out = {
+                'kind': 'custom',
+                'key': e['key'],
+                'data': e.get('data')
+            }
+            if self._config.inline_users_in_events:
+                out['user'] = self._user_filter.filter_user_props(e['user'])
+            else:
+                out['userKey'] = e['user'].get('key')
+            return out
+        else:
+            return e
 
     def send(self):
         events = self.next()

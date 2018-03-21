@@ -1,4 +1,4 @@
-from ldclient.event_consumer import EventConsumerImpl
+from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
 
@@ -26,7 +26,7 @@ class Config(object):
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
-                 event_consumer_class=None,
+                 event_processor_class=None,
                  private_attribute_names=(),
                  all_attributes_private=False,
                  offline=False,
@@ -78,8 +78,8 @@ class Config(object):
           full details for the user.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
-        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
-        :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
+        :param event_processor_class: A factory for an EventProcessor implementation taking the config
+        :type event_processor_class: (Config) -> EventProcessor
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
         """
@@ -96,7 +96,7 @@ class Config(object):
         self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.__event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
+        self.__event_processor_class = DefaultEventProcessor if not event_processor_class else event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
@@ -136,7 +136,7 @@ class Config(object):
                       use_ldd=self.__use_ldd,
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
-                      event_consumer_class=self.__event_consumer_class,
+                      event_processor_class=self.__event_processor_class,
                       private_attribute_names=self.__private_attribute_names,
                       all_attributes_private=self.__all_attributes_private,
                       offline=self.__offline,
@@ -192,8 +192,8 @@ class Config(object):
         return self.__feature_store
 
     @property
-    def event_consumer_class(self):
-        return self.__event_consumer_class
+    def event_processor_class(self):
+        return self.__event_processor_class
 
     @property
     def feature_requester_class(self):
@@ -250,7 +250,7 @@ class Config(object):
     @property
     def inline_users_in_events(self):
         return self.__inline_users_in_events
-    
+
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key is '':
             log.warn("Missing or blank sdk_key.")

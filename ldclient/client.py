@@ -9,6 +9,7 @@ import requests
 from builtins import object
 
 from ldclient.config import Config as Config
+from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.flag import evaluate
 from ldclient.polling import PollingUpdateProcessor
@@ -43,20 +44,21 @@ class LDClient(object):
         self._config._validate()
 
         self._session = CacheControl(requests.Session())
-        self._queue = queue.Queue(self._config.events_max_pending)
-        self._event_consumer = None
+        self._event_processor = None
         self._lock = Lock()
 
         self._store = self._config.feature_store
         """ :type: FeatureStore """
 
+        if self._config.offline or not self._config.send_events:
+            self._event_processor = NullEventProcessor()
+        else:
+            self._event_processor = self._config.event_processor_class(self._config)
+            self._event_processor.start()
+
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
             return
-
-        if self._config.send_events:
-            self._event_consumer = self._config.event_consumer_class(self._queue, self._config)
-            self._event_consumer.start()
 
         if self._config.use_ldd:
             log.info("Started LaunchDarkly Client in LDD mode")
@@ -75,6 +77,7 @@ class LDClient(object):
             self._update_processor = self._config.update_processor_class(
                 self._config, self._feature_requester, self._store, update_processor_ready)
         else:
+            raise "*** NOT HERE ***"
             if self._config.stream:
                 self._update_processor = StreamingUpdateProcessor(
                     self._config, self._feature_requester, self._store, update_processor_ready)
@@ -102,19 +105,14 @@ class LDClient(object):
         log.info("Closing LaunchDarkly client..")
         if self.is_offline():
             return
-        if self._event_consumer and self._event_consumer.is_alive():
-            self._event_consumer.stop()
+        if self._event_processor and self._event_processor.is_alive():
+            self._event_processor.stop()
         if self._update_processor and self._update_processor.is_alive():
             self._update_processor.stop()
 
     def _send_event(self, event):
-        if self._config.offline or not self._config.send_events:
-            return
         event['creationDate'] = int(time.time() * 1000)
-        if self._queue.full():
-            log.warning("Event queue is full-- dropped an event")
-        else:
-            self._queue.put(event)
+        self._event_processor.send_event(event)
 
     def track(self, event_name, user, data=None):
         self._sanitize_user(user)
@@ -135,9 +133,9 @@ class LDClient(object):
         return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
     def flush(self):
-        if self._config.offline or not self._config.send_events:
+        if self._config.offline:
             return
-        return self._event_consumer.flush()
+        return self._event_processor.flush()
 
     def toggle(self, key, user, default):
         log.warn("Deprecated method: toggle() called. Use variation() instead.")

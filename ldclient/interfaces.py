@@ -113,16 +113,22 @@ class UpdateProcessor(BackgroundOperation):
         """
 
 
-class EventConsumer(BackgroundOperation):
+class EventProcessor(BackgroundOperation):
     """
-    Consumes events from the client and sends them to LaunchDarkly
+    Buffers analytics events and sends them to LaunchDarkly
     """
     __metaclass__ = ABCMeta
 
     @abstractmethod
+    def send_event(self, event):
+        """
+        Processes an event to be sent at some point.
+        """
+
+    @abstractmethod
     def flush(self):
         """
-        Flushes any outstanding events immediately.
+        Sends any outstanding events immediately.
         """
 
 
