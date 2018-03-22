@@ -54,8 +54,8 @@ def test_summarize_event_sets_start_and_end_dates():
 	es.summarize_event(event3)
 	data = es.output(es.snapshot())
 
-	assert data['start_date'] == 1000
-	assert data['end_date'] == 2000
+	assert data['startDate'] == 1000
+	assert data['endDate'] == 2000
 
 def test_summarize_event_increments_counters():
 	es = EventSummarizer(Config())
@@ -78,8 +78,8 @@ def test_summarize_event_increments_counters():
 
 	data['features']['flag1']['counters'].sort(key = lambda c: c['value'])
 	expected = {
-		'start_date': 1000,
-		'end_date': 1000,
+		'startDate': 1000,
+		'endDate': 1000,
 		'features': {
 			'flag1': {
 				'default': 'default1',

@@ -80,7 +80,7 @@ class EventSummarizer(object):
                 counter['version'] = version
             flag_data['counters'].append(counter)
         return {
-            'start_date': snapshot_data['start_date'],
-            'end_date': snapshot_data['end_date'],
+            'startDate': snapshot_data['start_date'],
+            'endDate': snapshot_data['end_date'],
             'features': flags_out
         }

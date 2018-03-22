@@ -3,7 +3,6 @@ from __future__ import division, with_statement, absolute_import
 import hashlib
 import hmac
 import threading
-import time
 
 import requests
 from builtins import object
@@ -110,7 +109,6 @@ class LDClient(object):
             self._update_processor.stop()
 
     def _send_event(self, event):
-        event['creationDate'] = int(time.time() * 1000)
         self._event_processor.send_event(event)
 
     def track(self, event_name, user, data=None):
