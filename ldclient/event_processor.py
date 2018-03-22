@@ -67,7 +67,7 @@ class DefaultEventProcessor(Thread, EventProcessor):
             try:
                 self._process_next()
             except Exception:
-                log.error('Unhandled exception in event consumer', exc_info=True)
+                log.error('Unhandled exception in event processor', exc_info=True)
 
     def stop(self):
         self.flush()
@@ -205,11 +205,11 @@ class DefaultEventProcessor(Thread, EventProcessor):
                     self.do_send(output_events, False)
             else:
                 log.warning(
-                    'Unhandled exception in event consumer. Analytics events were not processed.',
+                    'Unhandled exception in event processor. Analytics events were not processed.',
                     exc_info=True)
         except:
             log.warning(
-                'Unhandled exception in event consumer. Analytics events were not processed.',
+                'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
 
     def _make_output_event(self, e):
