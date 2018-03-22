@@ -61,7 +61,7 @@ class DefaultEventProcessor(Thread, EventProcessor):
         self._set_users_flush_timer()
 
     def run(self):
-        log.info("Starting event consumer")
+        log.info("Starting event processor")
         self._running = True
         while self._running:
             try:
