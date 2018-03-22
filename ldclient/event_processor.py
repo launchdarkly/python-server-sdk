@@ -66,12 +66,10 @@ class DefaultEventProcessor(Thread, EventProcessor):
         while self._running:
             try:
                 self._process_next()
-                log.error("*** processed ***")
             except Exception:
                 log.error('Unhandled exception in event consumer', exc_info=True)
 
     def stop(self):
-        log.error("*** GOT STOP ***")
         self.flush()
         self._session.close()
         self._running = False
