@@ -13,8 +13,8 @@ class Config(object):
                  events_uri='https://events.launchdarkly.com',
                  connect_timeout=10,
                  read_timeout=15,
-                 events_upload_max_batch_size=100,
                  events_max_pending=10000,
+                 flush_interval=5,
                  stream_uri='https://stream.launchdarkly.com',
                  stream=True,
                  verify_ssl=True,
@@ -46,6 +46,8 @@ class Config(object):
         :param int events_max_pending: The capacity of the events buffer. The client buffers up to this many
           events in memory before flushing. If the capacity is exceeded before the buffer is flushed, events
           will be discarded.
+        : param float flush_interval: The number of seconds in between flushes of the events buffer. Decreasing
+          the flush interval means that the event buffer is less likely to reach capacity.
         :param string stream_uri: The URL for the LaunchDarkly streaming events server. Most users should
           use the default value.
         :param bool stream: Whether or not the streaming API should be used to receive flag updates. By
@@ -100,8 +102,8 @@ class Config(object):
         self.__feature_requester_class = feature_requester_class
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
-        self.__events_upload_max_batch_size = events_upload_max_batch_size
         self.__events_max_pending = events_max_pending
+        self.__flush_interval = flush_interval
         self.__verify_ssl = verify_ssl
         self.__defaults = defaults
         if offline is True:
@@ -124,8 +126,8 @@ class Config(object):
                       events_uri=self.__events_uri,
                       connect_timeout=self.__connect_timeout,
                       read_timeout=self.__read_timeout,
-                      events_upload_max_batch_size=self.__events_upload_max_batch_size,
                       events_max_pending=self.__events_max_pending,
+                      flush_interval=self.__flush_interval,
                       stream_uri=self.__stream_uri,
                       stream=self.__stream,
                       verify_ssl=self.__verify_ssl,
@@ -216,12 +218,12 @@ class Config(object):
         return self.__send_events
 
     @property
-    def events_upload_max_batch_size(self):
-        return self.__events_upload_max_batch_size
-
-    @property
     def events_max_pending(self):
         return self.__events_max_pending
+
+    @property
+    def flush_interval(self):
+        return self.__flush_interval
 
     @property
     def verify_ssl(self):

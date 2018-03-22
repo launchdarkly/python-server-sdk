@@ -92,7 +92,7 @@ class DefaultEventProcessor(Thread, EventProcessor):
         return int(time.time() * 1000)
 
     def _set_flush_timer(self):
-        self._flush_timer = Timer(5, self._flush_async)
+        self._flush_timer = Timer(self._config.flush_interval, self._flush_async)
         self._flush_timer.start()
 
     def _set_users_flush_timer(self):
