@@ -21,6 +21,7 @@ import six
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
+from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import _headers
 from ldclient.util import log
 
@@ -57,8 +58,10 @@ class DefaultEventProcessor(Thread, EventProcessor):
         self._summarizer = EventSummarizer(config)
         self._last_known_past_time = 0
         self._running = True
-        self._set_flush_timer()
-        self._set_users_flush_timer()
+        self._flush_timer = RepeatingTimer(self._config.flush_interval, self._flush_async)
+        self._flush_timer.start()
+        self._users_flush_timer = RepeatingTimer(self._config.user_keys_flush_interval, self._flush_users)
+        self._users_flush_timer.start()
 
     def run(self):
         log.info("Starting event processor")
@@ -73,8 +76,8 @@ class DefaultEventProcessor(Thread, EventProcessor):
         self.flush()
         self._session.close()
         self._running = False
-        self._flush_timer.cancel()
-        self._users_flush_timer.cancel()
+        self._flush_timer.stop()
+        self._users_flush_timer.stop()
         # Post a non-message so we won't keep blocking on the queue
         self._queue.put(('stop', None))
 
@@ -91,21 +94,11 @@ class DefaultEventProcessor(Thread, EventProcessor):
     def _now(self):
         return int(time.time() * 1000)
 
-    def _set_flush_timer(self):
-        self._flush_timer = Timer(self._config.flush_interval, self._flush_async)
-        self._flush_timer.start()
-
-    def _set_users_flush_timer(self):
-        self._users_flush_timer = Timer(self._config.user_keys_flush_interval, self._flush_users)
-        self._users_flush_timer.start()
-
     def _flush_async(self):
         self._queue.put(('flush', None))
-        self._set_flush_timer()
 
     def _flush_users(self):
         self._queue.put(('flush_users', None))
-        self._set_users_flush_timer()
 
     def _process_next(self):
         item = self._queue.get(block=True)
