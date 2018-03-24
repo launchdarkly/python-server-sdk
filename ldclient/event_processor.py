@@ -27,7 +27,7 @@ from ldclient.util import _headers
 from ldclient.util import log
 
 
-class NullEventProcessor(Thread, EventProcessor):
+class NullEventProcessor(EventProcessor):
     def __init(self, config):
         pass
 
@@ -50,24 +50,35 @@ class NullEventProcessor(Thread, EventProcessor):
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
-class DefaultEventProcessor(Thread, EventProcessor):
-    def __init__(self, config, session=None):
-        Thread.__init__(self)
-        self._session = requests.Session() if session is None else session
-        self.daemon = True
+class EventConsumer(object):
+    def __init__(self, queue, config, session):
+        self._queue = queue
         self._config = config
-        self._queue = queue.Queue(config.events_max_pending)
+        self._session = requests.Session() if session is None else session
+        self._main_thread = Thread(target=self._run_main_loop)
+        self._main_thread.daemon = True
+        self._running = False
         self._events = []
         self._user_filter = UserFilter(config)
         self._summarizer = EventSummarizer(config)
         self._last_known_past_time = 0
-        self._running = True
-        self._flush_timer = RepeatingTimer(self._config.flush_interval, self._flush_async)
-        self._flush_timer.start()
-        self._users_flush_timer = RepeatingTimer(self._config.user_keys_flush_interval, self._flush_users)
-        self._users_flush_timer.start()
 
-    def run(self):
+    def start(self):
+        self._main_thread.start()
+
+    def stop(self):
+        self._session.close()
+        self._running = False
+        # Post a non-message so we won't keep blocking on the queue
+        self._queue.put(EventProcessorMessage('stop', None))
+
+    def is_alive(self):
+        return self._main_thread.is_alive()
+
+    def now(self):
+        return int(time.time() * 1000)
+
+    def _run_main_loop(self):
         log.info("Starting event processor")
         self._running = True
         while self._running:
@@ -75,34 +86,6 @@ class DefaultEventProcessor(Thread, EventProcessor):
                 self._process_next()
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
-
-    def stop(self):
-        self.flush()
-        self._session.close()
-        self._running = False
-        self._flush_timer.stop()
-        self._users_flush_timer.stop()
-        # Post a non-message so we won't keep blocking on the queue
-        self._queue.put(EventProcessorMessage('stop', None))
-
-    def send_event(self, event):
-        event['creationDate'] = self._now()
-        self._queue.put(EventProcessorMessage('event', event))
-
-    def flush(self):
-        # Put a flush message on the queue and wait until it's been processed.
-        reply = Event()
-        self._queue.put(EventProcessorMessage('flush', reply))
-        reply.wait()
-
-    def _now(self):
-        return int(time.time() * 1000)
-
-    def _flush_async(self):
-        self._queue.put(EventProcessorMessage('flush', None))
-
-    def _flush_users(self):
-        self._queue.put(EventProcessorMessage('flush_users', None))
 
     def _process_next(self):
         message = self._queue.get(block=True)
@@ -143,7 +126,7 @@ class DefaultEventProcessor(Thread, EventProcessor):
             debug_until = event.get('debugEventsUntilDate')
             if debug_until is not None:
                 last_past = self._last_known_past_time
-                if debug_until > last_past and debug_until > self._now():
+                if debug_until > last_past and debug_until > self.now():
                     return True
             return False
         else:
@@ -246,3 +229,41 @@ class DefaultEventProcessor(Thread, EventProcessor):
             return out
         else:
             return e
+
+
+class DefaultEventProcessor(EventProcessor):
+    def __init__(self, config, session=None):
+        self._queue = queue.Queue(config.events_max_pending)
+        self._consumer = EventConsumer(self._queue, config, session)
+        self._flush_timer = RepeatingTimer(config.flush_interval, self._flush_async)
+        self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
+
+    def start(self):
+        self._consumer.start()
+        self._flush_timer.start()
+        self._users_flush_timer.start()
+
+    def stop(self):
+        self._flush_timer.stop()
+        self._users_flush_timer.stop()
+        self.flush()
+        self._consumer.stop()
+
+    def is_alive(self):
+        return self._consumer.is_alive()
+
+    def send_event(self, event):
+        event['creationDate'] = self._consumer.now()
+        self._queue.put(EventProcessorMessage('event', event))
+
+    def flush(self):
+        # Put a flush message on the queue and wait until it's been processed.
+        reply = Event()
+        self._queue.put(EventProcessorMessage('flush', reply))
+        reply.wait()
+
+    def _flush_async(self):
+        self._queue.put(EventProcessorMessage('flush', None))
+
+    def _flush_users(self):
+        self._queue.put(EventProcessorMessage('flush_users', None))
