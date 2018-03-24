@@ -3,6 +3,7 @@ from threading import Event, Thread
 class RepeatingTimer(Thread):
     def __init__(self, interval, callable):
         Thread.__init__(self)
+        self.daemon = True
         self._interval = interval
         self._action = callable
         self._stop = Event()
