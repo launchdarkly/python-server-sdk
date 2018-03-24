@@ -52,10 +52,10 @@ def test_summarize_event_sets_start_and_end_dates():
 	es.summarize_event(event1)
 	es.summarize_event(event2)
 	es.summarize_event(event3)
-	data = es.output(es.snapshot())
+	data = es.snapshot()
 
-	assert data['startDate'] == 1000
-	assert data['endDate'] == 2000
+	assert data.start_date == 1000
+	assert data.end_date == 2000
 
 def test_summarize_event_increments_counters():
 	es = EventSummarizer(Config())
@@ -74,32 +74,12 @@ def test_summarize_event_increments_counters():
 	es.summarize_event(event3)
 	es.summarize_event(event4)
 	es.summarize_event(event5)
-	data = es.output(es.snapshot())
+	data = es.snapshot()
 
-	data['features']['flag1']['counters'].sort(key = lambda c: c['value'])
 	expected = {
-		'startDate': 1000,
-		'endDate': 1000,
-		'features': {
-			'flag1': {
-				'default': 'default1',
-				'counters': [
-					{ 'version': 11, 'value': 'value1', 'count': 2 },
-					{ 'version': 11, 'value': 'value2', 'count': 1 }
-				]
-			},
-			'flag2': {
-				'default': 'default2',
-				'counters': [
-					{ 'version': 22, 'value': 'value99', 'count': 1 }
-				]
-			},
-			'badkey': {
-				'default': 'default3',
-				'counters': [
-					{ 'unknown': True, 'value': 'default3', 'count': 1}
-				]
-			}
-		}
+		('flag1', 1, 11): { 'count': 2, 'value': 'value1', 'default': 'default1' },
+		('flag1', 2, 11): { 'count': 1, 'value': 'value2', 'default': 'default1' },
+		('flag2', 1, 22): { 'count': 1, 'value': 'value99', 'default': 'default2' },
+		('badkey', None, None): { 'count': 1, 'value': 'default3', 'default': 'default3' }
 	}
-	assert data == expected
+	assert data.counters == expected

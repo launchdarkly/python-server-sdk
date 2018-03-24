@@ -1,4 +1,9 @@
+from collections import namedtuple
 import pylru
+
+
+EventSummary = namedtuple('EventSummary', ['start_date', 'end_date', 'counters'])
+
 
 class EventSummarizer(object):
     def __init__(self, config):
@@ -48,39 +53,8 @@ class EventSummarizer(object):
     Return a snapshot of the current summarized event data, and reset this state.
     """
     def snapshot(self):
-        ret = {
-            'start_date': self.start_date,
-            'end_date': self.end_date,
-            'counters': self.counters
-        }
+        ret = EventSummary(start_date = self.start_date, end_date = self.end_date, counters = self.counters)
         self.start_date = 0
         self.end_date = 0
         self.counters = dict()
         return ret
-
-    """
-    Transform the summary data into the format used for event sending.
-    """
-    def output(self, snapshot_data):
-        counters = snapshot_data['counters']
-        flags_out = dict()
-        for ckey, cval in counters.items():
-            flag_key, variation, version = ckey
-            flag_data = flags_out.get(flag_key)
-            if flag_data is None:
-                flag_data = { 'default': cval['default'], 'counters': [] }
-                flags_out[flag_key] = flag_data
-            counter = {
-                'count': cval['count'],
-                'value': cval['value']
-            }
-            if version is None:
-                counter['unknown'] = True
-            else:
-                counter['version'] = version
-            flag_data['counters'].append(counter)
-        return {
-            'startDate': snapshot_data['start_date'],
-            'endDate': snapshot_data['end_date'],
-            'features': flags_out
-        }

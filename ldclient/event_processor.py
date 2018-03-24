@@ -55,6 +55,9 @@ class EventOutputTransformer(object):
         self._config = config
         self._user_filter = UserFilter(config)
 
+    """
+    Transform an event into the format used for the event payload.
+    """
     def make_output_event(self, e):
         kind = e['kind']
         if kind == 'feature':
@@ -92,6 +95,93 @@ class EventOutputTransformer(object):
             return out
         else:
             return e
+
+    """
+    Transform summarizer data into the format used for the event payload.
+    """
+    def make_summary_event(self, summary):
+        flags_out = dict()
+        for ckey, cval in summary.counters.items():
+            flag_key, variation, version = ckey
+            flag_data = flags_out.get(flag_key)
+            if flag_data is None:
+                flag_data = { 'default': cval['default'], 'counters': [] }
+                flags_out[flag_key] = flag_data
+            counter = {
+                'count': cval['count'],
+                'value': cval['value']
+            }
+            if version is None:
+                counter['unknown'] = True
+            else:
+                counter['version'] = version
+            flag_data['counters'].append(counter)
+        return {
+            'kind': 'summary',
+            'startDate': summary.start_date,
+            'endDate': summary.end_date,
+            'features': flags_out
+        }
+
+
+class EventPayloadSendTask(object):
+    def __init__(self, session, config, events, summary, response_listener, reply_event):
+        self._session = session
+        self._config = config
+        self._events = events
+        self._summary = summary
+        self._response_listener = response_listener
+        self._reply_event = reply_event
+    
+    def start(self):
+        if len(self._events) > 0 or len(self._summary.counters) > 0:
+            Thread(target = self._run).start()
+        else:
+            self._completed()
+
+    def _completed(self):
+        if self._reply_event is not None:
+            self._reply_event.set()
+
+    def _run(self):
+        transformer = EventOutputTransformer(self._config)
+        output_events = [ transformer.make_output_event(e) for e in self._events ]
+        if len(self._summary.counters) > 0:
+            output_events.append(transformer.make_summary_event(self._summary))
+        try:
+            self._do_send(output_events, True)
+        finally:
+            self._completed()
+
+    def _do_send(self, output_events, should_retry):
+        # noinspection PyBroadException
+        try:
+            json_body = jsonpickle.encode(output_events, unpicklable=False)
+            log.debug('Sending events payload: ' + json_body)
+            hdrs = _headers(self._config.sdk_key)
+            uri = self._config.events_uri
+            r = self._session.post(uri,
+                                   headers=hdrs,
+                                   timeout=(self._config.connect_timeout, self._config.read_timeout),
+                                   data=json_body)
+            if self._response_listener is not None:
+                self._response_listener(r)
+            r.raise_for_status()
+        except ProtocolError as e:
+            if e.args is not None and len(e.args) > 1 and e.args[1] is not None:
+                inner = e.args[1]
+                if inner.errno is not None and inner.errno == errno.ECONNRESET and should_retry:
+                    log.warning(
+                        'ProtocolError exception caught while sending events. Retrying.')
+                    self.do_send(output_events, False)
+            else:
+                log.warning(
+                    'Unhandled exception in event processor. Analytics events were not processed.',
+                    exc_info=True)
+        except:
+            log.warning(
+                'Unhandled exception in event processor. Analytics events were not processed.',
+                exc_info=True)
 
 
 class EventConsumer(object):
@@ -180,61 +270,19 @@ class EventConsumer(object):
         events = self._events
         self._events = []
         snapshot = self._summarizer.snapshot()
-        if len(events) > 0 or len(snapshot['counters']) > 0:
-            flusher = Thread(target = self._flush_task, args=(events, snapshot, reply))
-            flusher.start()
-        else:
-            if reply is not None:
-                reply.set()
+        task = EventPayloadSendTask(self._session, self._config, events, snapshot, self._handle_response, reply)
+        task.start()
 
-    def _flush_task(self, events, snapshot, reply):
-        output_events = [ self._output_transformer.make_output_event(e) for e in events ]
-        if len(snapshot['counters']) > 0:
-            summary = self._summarizer.output(snapshot)
-            summary['kind'] = 'summary'
-            output_events.append(summary)
-        try:
-            self._do_send(output_events, True)
-        finally:
-            if reply is not None:
-                reply.set()
-
-    def _do_send(self, output_events, should_retry):
-        # noinspection PyBroadException
-        try:
-            json_body = jsonpickle.encode(output_events, unpicklable=False)
-            log.debug('Sending events payload: ' + json_body)
-            hdrs = _headers(self._config.sdk_key)
-            uri = self._config.events_uri
-            r = self._session.post(uri,
-                                   headers=hdrs,
-                                   timeout=(self._config.connect_timeout, self._config.read_timeout),
-                                   data=json_body)
-            server_date_str = r.headers.get('Date')
-            if server_date_str is not None:
-                server_date = parsedate(server_date_str)
-                if server_date is not None:
-                    self._last_known_past_time = server_date
-            if r.status_code == 401:
-                log.error('Received 401 error, no further events will be posted since SDK key is invalid')
-                self.stop()
-                return
-            r.raise_for_status()
-        except ProtocolError as e:
-            if e.args is not None and len(e.args) > 1 and e.args[1] is not None:
-                inner = e.args[1]
-                if inner.errno is not None and inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning(
-                        'ProtocolError exception caught while sending events. Retrying.')
-                    self.do_send(output_events, False)
-            else:
-                log.warning(
-                    'Unhandled exception in event processor. Analytics events were not processed.',
-                    exc_info=True)
-        except:
-            log.warning(
-                'Unhandled exception in event processor. Analytics events were not processed.',
-                exc_info=True)
+    def _handle_response(self, r):
+        server_date_str = r.headers.get('Date')
+        if server_date_str is not None:
+            server_date = parsedate(server_date_str)
+            if server_date is not None:
+                self._last_known_past_time = server_date
+        if r.status_code == 401:
+            log.error('Received 401 error, no further events will be posted since SDK key is invalid')
+            self.stop()
+            return
 
 
 class DefaultEventProcessor(EventProcessor):
