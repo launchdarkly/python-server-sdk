@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 
+from collections import namedtuple
 from email.utils import parsedate
 import errno
 import jsonpickle
-from threading import Event, Thread, Timer
+from threading import Event, Thread
 import time
 
 # noinspection PyBroadException
@@ -46,6 +47,9 @@ class NullEventProcessor(Thread, EventProcessor):
         pass
 
 
+EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
+
+
 class DefaultEventProcessor(Thread, EventProcessor):
     def __init__(self, config, session=None):
         Thread.__init__(self)
@@ -79,34 +83,34 @@ class DefaultEventProcessor(Thread, EventProcessor):
         self._flush_timer.stop()
         self._users_flush_timer.stop()
         # Post a non-message so we won't keep blocking on the queue
-        self._queue.put(('stop', None))
+        self._queue.put(EventProcessorMessage('stop', None))
 
     def send_event(self, event):
         event['creationDate'] = self._now()
-        self._queue.put(('event', event))
+        self._queue.put(EventProcessorMessage('event', event))
 
     def flush(self):
         # Put a flush message on the queue and wait until it's been processed.
         reply = Event()
-        self._queue.put(('flush', reply))
+        self._queue.put(EventProcessorMessage('flush', reply))
         reply.wait()
 
     def _now(self):
         return int(time.time() * 1000)
 
     def _flush_async(self):
-        self._queue.put(('flush', None))
+        self._queue.put(EventProcessorMessage('flush', None))
 
     def _flush_users(self):
-        self._queue.put(('flush_users', None))
+        self._queue.put(EventProcessorMessage('flush_users', None))
 
     def _process_next(self):
-        item = self._queue.get(block=True)
-        if item[0] == 'event':
-            self._process_event(item[1])
-        elif item[0] == 'flush':
-            self._dispatch_flush(item[1])
-        elif item[0] == 'flush_users':
+        message = self._queue.get(block=True)
+        if message.type == 'event':
+            self._process_event(message.param)
+        elif message.type == 'flush':
+            self._dispatch_flush(message.param)
+        elif message.type == 'flush_users':
             self._summarizer.reset_users()
 
     def _process_event(self, event):
