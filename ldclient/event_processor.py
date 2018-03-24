@@ -50,6 +50,50 @@ class NullEventProcessor(EventProcessor):
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
+class EventOutputTransformer(object):
+    def __init__(self, config):
+        self._config = config
+        self._user_filter = UserFilter(config)
+
+    def make_output_event(self, e):
+        kind = e['kind']
+        if kind == 'feature':
+            is_debug = (not e['trackEvents']) and (e.get('debugEventsUntilDate') is not None)
+            out = {
+                'kind': 'debug' if is_debug else 'feature',
+                'creationDate': e['creationDate'],
+                'key': e['key'],
+                'version': e.get('version'),
+                'value': e.get('value'),
+                'default': e.get('default'),
+                'prereqOf': e.get('prereqOf')
+            }
+            if self._config.inline_users_in_events:
+                out['user'] = self._user_filter.filter_user_props(e['user'])
+            else:
+                out['userKey'] = e['user'].get('key')
+            return out
+        elif kind == 'identify':
+            return {
+                'kind': 'identify',
+                'creationDate': e['creationDate'],
+                'user': self._user_filter.filter_user_props(e['user'])
+            }
+        elif kind == 'custom':
+            out = {
+                'kind': 'custom',
+                'key': e['key'],
+                'data': e.get('data')
+            }
+            if self._config.inline_users_in_events:
+                out['user'] = self._user_filter.filter_user_props(e['user'])
+            else:
+                out['userKey'] = e['user'].get('key')
+            return out
+        else:
+            return e
+
+
 class EventConsumer(object):
     def __init__(self, queue, config, session):
         self._queue = queue
@@ -59,8 +103,8 @@ class EventConsumer(object):
         self._main_thread.daemon = True
         self._running = False
         self._events = []
-        self._user_filter = UserFilter(config)
         self._summarizer = EventSummarizer(config)
+        self._output_transformer = EventOutputTransformer(config)
         self._last_known_past_time = 0
 
     def start(self):
@@ -144,7 +188,7 @@ class EventConsumer(object):
                 reply.set()
 
     def _flush_task(self, events, snapshot, reply):
-        output_events = [ self._make_output_event(e) for e in events ]
+        output_events = [ self._output_transformer.make_output_event(e) for e in events ]
         if len(snapshot['counters']) > 0:
             summary = self._summarizer.output(snapshot)
             summary['kind'] = 'summary'
@@ -191,44 +235,6 @@ class EventConsumer(object):
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
-
-    def _make_output_event(self, e):
-        kind = e['kind']
-        if kind == 'feature':
-            is_debug = (not e['trackEvents']) and (e.get('debugEventsUntilDate') is not None)
-            out = {
-                'kind': 'debug' if is_debug else 'feature',
-                'creationDate': e['creationDate'],
-                'key': e['key'],
-                'version': e.get('version'),
-                'value': e.get('value'),
-                'default': e.get('default'),
-                'prereqOf': e.get('prereqOf')
-            }
-            if self._config.inline_users_in_events:
-                out['user'] = self._user_filter.filter_user_props(e['user'])
-            else:
-                out['userKey'] = e['user'].get('key')
-            return out
-        elif kind == 'identify':
-            return {
-                'kind': 'identify',
-                'creationDate': e['creationDate'],
-                'user': self._user_filter.filter_user_props(e['user'])
-            }
-        elif kind == 'custom':
-            out = {
-                'kind': 'custom',
-                'key': e['key'],
-                'data': e.get('data')
-            }
-            if self._config.inline_users_in_events:
-                out['user'] = self._user_filter.filter_user_props(e['user'])
-            else:
-                out['userKey'] = e['user'].get('key')
-            return out
-        else:
-            return e
 
 
 class DefaultEventProcessor(EventProcessor):
