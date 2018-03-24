@@ -85,6 +85,7 @@ class EventOutputTransformer(object):
         elif kind == 'custom':
             out = {
                 'kind': 'custom',
+                'creationDate': e['creationDate'],
                 'key': e['key'],
                 'data': e.get('data')
             }

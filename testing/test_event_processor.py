@@ -357,6 +357,7 @@ def check_feature_event(data, source, debug, inline_user):
 
 def check_custom_event(data, source, inline_user):
     assert data['kind'] == 'custom'
+    assert data['creationDate'] == source['creationDate']
     assert data['key'] == source['key']
     assert data['data'] == source['data']
     if inline_user is None:
