@@ -93,6 +93,12 @@ class EventOutputTransformer(object):
             else:
                 out['userKey'] = e['user'].get('key')
             return out
+        elif kind == 'index':
+            return {
+                'kind': 'index',
+                'creationDate': e['creationDate'],
+                'user': self._user_filter.filter_user_props(e['user'])
+            }
         else:
             return e
 

@@ -120,7 +120,22 @@ def test_individual_feature_event_is_queued_with_index_event():
 
     output = flush_and_get_events()
     assert len(output) == 3
-    check_index_event(output[0], e)
+    check_index_event(output[0], e, user)
+    check_feature_event(output[1], e, False, None)
+    check_summary_event(output[2])
+
+def test_user_is_filtered_in_index_event():
+    setup_processor(Config(all_attributes_private = True))
+
+    e = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+    }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 3
+    check_index_event(output[0], e, filtered_user)
     check_feature_event(output[1], e, False, None)
     check_summary_event(output[2])
 
@@ -165,7 +180,7 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
 
     output = flush_and_get_events()
     assert len(output) == 3
-    check_index_event(output[0], e)
+    check_index_event(output[0], e, user)
     check_feature_event(output[1], e, True, None)
     check_summary_event(output[2])
 
@@ -193,7 +208,7 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
     # Should get a summary event only, not a full feature event
     output = flush_and_get_events()
     assert len(output) == 2
-    check_index_event(output[0], e)
+    check_index_event(output[0], e, user)
     check_summary_event(output[1])
 
 def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_client_time():
@@ -220,7 +235,7 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
     # Should get a summary event only, not a full feature event
     output = flush_and_get_events()
     assert len(output) == 2
-    check_index_event(output[0], e)
+    check_index_event(output[0], e, user)
     check_summary_event(output[1])
 
 def test_two_feature_events_for_same_user_generate_only_one_index_event():
@@ -239,7 +254,7 @@ def test_two_feature_events_for_same_user_generate_only_one_index_event():
 
     output = flush_and_get_events()
     assert len(output) == 2
-    check_index_event(output[0], e1)
+    check_index_event(output[0], e1, user)
     check_summary_event(output[1])
 
 def test_nontracked_events_are_summarized():
@@ -258,7 +273,7 @@ def test_nontracked_events_are_summarized():
 
     output = flush_and_get_events()
     assert len(output) == 2
-    check_index_event(output[0], e1)
+    check_index_event(output[0], e1, user)
     se = output[1]
     assert se['kind'] == 'summary'
     assert se['startDate'] == e1['creationDate']
@@ -282,7 +297,7 @@ def test_custom_event_is_queued_with_user():
 
     output = flush_and_get_events()
     assert len(output) == 2
-    check_index_event(output[0], e)
+    check_index_event(output[0], e, user)
     check_custom_event(output[1], e, None)
 
 def test_custom_event_can_contain_inline_user():
@@ -323,10 +338,10 @@ def flush_and_get_events():
     ep.flush()
     return json.loads(mock_session.request_data)
 
-def check_index_event(data, source):
+def check_index_event(data, source, user):
     assert data['kind'] == 'index'
     assert data['creationDate'] == source['creationDate']
-    assert data['user'] == source['user']
+    assert data['user'] == user
 
 def check_feature_event(data, source, debug, inline_user):
     assert data['kind'] == ('debug' if debug else 'feature')
