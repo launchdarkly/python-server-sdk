@@ -149,7 +149,11 @@ class EventPayloadSendTask(object):
             output_events = [ transformer.make_output_event(e) for e in self._events ]
             if len(self._summary.counters) > 0:
                 output_events.append(transformer.make_summary_event(self._summary))
-                self._do_send(output_events, True)
+            self._do_send(output_events, True)
+        except:
+            log.warning(
+                'Unhandled exception in event processor. Analytics events were not processed.',
+                exc_info=True)
         finally:
             if self._reply_event is not None:
                 self._reply_event.set()

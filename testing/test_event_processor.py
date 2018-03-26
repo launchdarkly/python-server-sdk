@@ -7,6 +7,7 @@ import time
 from ldclient.config import Config
 from ldclient.event_processor import DefaultEventProcessor
 
+from ldclient.util import log
 
 default_config = Config()
 user = {
@@ -336,7 +337,7 @@ def test_sdk_key_is_sent():
 
 def flush_and_get_events():
     ep.flush()
-    return json.loads(mock_session.request_data)
+    return None if mock_session.request_data is None else json.loads(mock_session.request_data)
 
 def check_index_event(data, source, user):
     assert data['kind'] == 'index'
