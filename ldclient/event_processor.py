@@ -141,24 +141,18 @@ class EventPayloadSendTask(object):
         self._reply_event = reply_event
     
     def start(self):
-        if len(self._events) > 0 or len(self._summary.counters) > 0:
-            Thread(target = self._run).start()
-        else:
-            self._completed()
-
-    def _completed(self):
-        if self._reply_event is not None:
-            self._reply_event.set()
+        Thread(target = self._run).start()
 
     def _run(self):
-        transformer = EventOutputTransformer(self._config)
-        output_events = [ transformer.make_output_event(e) for e in self._events ]
-        if len(self._summary.counters) > 0:
-            output_events.append(transformer.make_summary_event(self._summary))
         try:
-            self._do_send(output_events, True)
+            transformer = EventOutputTransformer(self._config)
+            output_events = [ transformer.make_output_event(e) for e in self._events ]
+            if len(self._summary.counters) > 0:
+                output_events.append(transformer.make_summary_event(self._summary))
+                self._do_send(output_events, True)
         finally:
-            self._completed()
+            if self._reply_event is not None:
+                self._reply_event.set()
 
     def _do_send(self, output_events, should_retry):
         # noinspection PyBroadException
@@ -277,8 +271,12 @@ class EventConsumer(object):
         events = self._events
         self._events = []
         snapshot = self._summarizer.snapshot()
-        task = EventPayloadSendTask(self._session, self._config, events, snapshot, self._handle_response, reply)
-        task.start()
+        if len(events) > 0 or len(snapshot.counters) > 0:
+            task = EventPayloadSendTask(self._session, self._config, events, snapshot, self._handle_response, reply)
+            task.start()
+        else:
+            if reply is not None:
+                reply.set()
 
     def _handle_response(self, r):
         server_date_str = r.headers.get('Date')
