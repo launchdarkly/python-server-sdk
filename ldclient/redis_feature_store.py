@@ -137,6 +137,9 @@ class RedisFeatureStore(FeatureStore):
             old = self._get_even_if_deleted(kind, key, check_cache=False)
             self._before_update_transaction(base_key, key)
             if old and old['version'] >= item['version']:
+                log.debug('RedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
+                    'delete' if item.get('deleted') else 'update',
+                    key, old['version'], item['version'], kind.namespace)
                 pipeline.unwatch()
                 break
             else:
