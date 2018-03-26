@@ -131,15 +131,14 @@ class RedisFeatureStore(FeatureStore):
         key = item['key']
         item_json = json.dumps(item)
 
-        try_again = True
-        while try_again:
-            try_again = False
+        while True:
             pipeline = r.pipeline()
             pipeline.watch(base_key)
             old = self._get_even_if_deleted(kind, key, check_cache=False)
             self._before_update_transaction(base_key, key)
             if old and old['version'] >= item['version']:
                 pipeline.unwatch()
+                break
             else:
                 pipeline.multi()
                 pipeline.hset(base_key, key, item_json)
@@ -147,10 +146,11 @@ class RedisFeatureStore(FeatureStore):
                     pipeline.execute()
                     # Unlike Redis implementations for other platforms, in redis-py a failed WATCH
                     # produces an exception rather than a null result from execute().
-                    self._cache[self._cache_key(kind, key)] = item
                 except redis.exceptions.WatchError:
                     log.debug("RedisFeatureStore: concurrent modification detected, retrying")
-                    try_again = True
+                    continue
+            self._cache[self._cache_key(kind, key)] = item
+            break
 
     def _before_update_transaction(self, base_key, key):
         # exposed for testing
