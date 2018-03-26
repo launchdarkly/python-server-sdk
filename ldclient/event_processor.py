@@ -197,6 +197,7 @@ class EventConsumer(object):
         self._main_thread = Thread(target=self._run_main_loop)
         self._main_thread.daemon = True
         self._running = False
+        self._disabled = False
         self._events = []
         self._summarizer = EventSummarizer(config)
         self._output_transformer = EventOutputTransformer(config)
@@ -206,13 +207,13 @@ class EventConsumer(object):
         self._main_thread.start()
 
     def stop(self):
-        self._session.close()
-        self._running = False
-        # Post a non-message so we won't keep blocking on the queue
-        self._queue.put(EventProcessorMessage('stop', None))
+        if self._running:
+            self._running = False
+            # Post a non-message so we won't keep blocking on the queue
+            self._queue.put(EventProcessorMessage('stop', None))
 
     def is_alive(self):
-        return self._main_thread.is_alive()
+        return self._running
 
     def now(self):
         return int(time.time() * 1000)
@@ -225,6 +226,7 @@ class EventConsumer(object):
                 self._process_next()
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
+        self._session.close()
 
     def _process_next(self):
         message = self._queue.get(block=True)
@@ -236,6 +238,9 @@ class EventConsumer(object):
             self._summarizer.reset_users()
 
     def _process_event(self, event):
+        if self._disabled:
+            return
+
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event for that user.
         user = event.get('user')
@@ -272,6 +277,11 @@ class EventConsumer(object):
             return True
 
     def _dispatch_flush(self, reply):
+        if self._disabled:
+            if reply is not None:
+                reply.set()
+            return
+
         events = self._events
         self._events = []
         snapshot = self._summarizer.snapshot()
@@ -290,7 +300,7 @@ class EventConsumer(object):
                 self._last_known_past_time = server_date
         if r.status_code == 401:
             log.error('Received 401 error, no further events will be posted since SDK key is invalid')
-            self.stop()
+            self._disabled = true
             return
 
 
