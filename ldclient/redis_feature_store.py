@@ -141,9 +141,9 @@ class RedisFeatureStore(FeatureStore):
             if old and old['version'] >= item['version']:
                 pipeline.unwatch()
             else:
+                pipeline.multi()
+                pipeline.hset(base_key, key, item_json)
                 try:
-                    pipeline.multi()
-                    pipeline.hset(base_key, key, item_json)
                     pipeline.execute()
                     # Unlike Redis implementations for other platforms, in redis-py a failed WATCH
                     # produces an exception rather than a null result from execute().
