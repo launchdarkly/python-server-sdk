@@ -20,6 +20,7 @@ from requests.packages.urllib3.exceptions import ProtocolError
 import six
 
 from ldclient.event_summarizer import EventSummarizer
+from ldclient.user_deduplicator import UserDeduplicator
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
@@ -199,7 +200,8 @@ class EventConsumer(object):
         self._running = False
         self._disabled = False
         self._events = []
-        self._summarizer = EventSummarizer(config)
+        self._summarizer = EventSummarizer()
+        self._user_deduplicator = UserDeduplicator(config)
         self._output_transformer = EventOutputTransformer(config)
         self._last_known_past_time = 0
 
@@ -235,7 +237,7 @@ class EventConsumer(object):
         elif message.type == 'flush':
             self._dispatch_flush(message.param)
         elif message.type == 'flush_users':
-            self._summarizer.reset_users()
+            self._user_deduplicator.reset_users()
 
     def _process_event(self, event):
         if self._disabled:
@@ -244,7 +246,7 @@ class EventConsumer(object):
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event for that user.
         user = event.get('user')
-        if not self._config.inline_users_in_events and user and not self._summarizer.notice_user(user):
+        if not self._config.inline_users_in_events and user and not self._user_deduplicator.notice_user(user):
             if event['kind'] != 'identify':
                 ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
                 self._store_event(ie)
