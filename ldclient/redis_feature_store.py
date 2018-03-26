@@ -79,7 +79,7 @@ class RedisFeatureStore(FeatureStore):
         return callback(results)
 
     def get(self, kind, key, callback=lambda x: x):
-        item = self._get_even_if_deleted(kind, key, True)
+        item = self._get_even_if_deleted(kind, key, check_cache=True)
         if item is not None and item.get('deleted', False) is True:
             log.debug("RedisFeatureStore: get returned deleted item %s in '%s'. Returning None.", key, kind.namespace)
             return callback(None)
@@ -136,7 +136,7 @@ class RedisFeatureStore(FeatureStore):
             try_again = False
             pipeline = r.pipeline()
             pipeline.watch(base_key)
-            old = self._get_even_if_deleted(kind, key, False)
+            old = self._get_even_if_deleted(kind, key, check_cache=False)
             self._before_update_transaction(base_key, key)
             if old and old['version'] >= item['version']:
                 pipeline.unwatch()
