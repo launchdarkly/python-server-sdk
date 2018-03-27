@@ -79,19 +79,20 @@ class RedisFeatureStore(FeatureStore):
         return callback(results)
 
     def get(self, kind, key, callback=lambda x: x):
-        item = self._get_even_if_deleted(kind, key)
+        item = self._get_even_if_deleted(kind, key, check_cache=True)
         if item is not None and item.get('deleted', False) is True:
             log.debug("RedisFeatureStore: get returned deleted item %s in '%s'. Returning None.", key, kind.namespace)
             return callback(None)
         return callback(item)
 
-    def _get_even_if_deleted(self, kind, key):
+    def _get_even_if_deleted(self, kind, key, check_cache = True):
         cacheKey = self._cache_key(kind, key)
-        item = self._cache.get(cacheKey)
-        if item is not None:
-            # reset ttl
-            self._cache[cacheKey] = item
-            return item
+        if check_cache:
+            item = self._cache.get(cacheKey)
+            if item is not None:
+                # reset ttl
+                self._cache[cacheKey] = item
+                return item
 
         try:
             r = redis.Redis(connection_pool=self._pool)
@@ -110,17 +111,11 @@ class RedisFeatureStore(FeatureStore):
         return item
 
     def delete(self, kind, key, version):
-        r = redis.Redis(connection_pool=self._pool)
-        baseKey = self._items_key(kind)
-        r.watch(baseKey)
-        item_json = r.hget(baseKey, key)
-        item = None if item_json is None else json.loads(item_json.decode('utf-8'))
-        if item is None or item['version'] < version:
-            deletedItem = { "deleted": True, "version": version }
-            item_json = json.dumps(deletedItem)
-            r.hset(baseKey, key, item_json)
-            self._cache[self._cache_key(kind, key)] = deletedItem
-        r.unwatch()
+        deleted_item = { "key": key, "version": version, "deleted": True }
+        self._update_with_versioning(kind, deleted_item)
+
+    def upsert(self, kind, item):
+        self._update_with_versioning(kind, item)
 
     @property
     def initialized(self):
@@ -130,18 +125,36 @@ class RedisFeatureStore(FeatureStore):
         r = redis.Redis(connection_pool=self._pool)
         return r.exists(self._items_key(FEATURES))
 
-    def upsert(self, kind, item):
+    def _update_with_versioning(self, kind, item):
         r = redis.Redis(connection_pool=self._pool)
-        baseKey = self._items_key(kind)
+        base_key = self._items_key(kind)
         key = item['key']
-        r.watch(baseKey)
-        old = self._get_even_if_deleted(kind, key)
-        if old:
-            if old['version'] >= item['version']:
-                r.unwatch()
-                return
-
         item_json = json.dumps(item)
-        r.hset(baseKey, key, item_json)
-        self._cache[self._cache_key(kind, key)] = item
-        r.unwatch()
+
+        while True:
+            pipeline = r.pipeline()
+            pipeline.watch(base_key)
+            old = self._get_even_if_deleted(kind, key, check_cache=False)
+            self._before_update_transaction(base_key, key)
+            if old and old['version'] >= item['version']:
+                log.debug('RedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
+                    'delete' if item.get('deleted') else 'update',
+                    key, old['version'], item['version'], kind.namespace)
+                pipeline.unwatch()
+                break
+            else:
+                pipeline.multi()
+                pipeline.hset(base_key, key, item_json)
+                try:
+                    pipeline.execute()
+                    # Unlike Redis implementations for other platforms, in redis-py a failed WATCH
+                    # produces an exception rather than a null result from execute().
+                except redis.exceptions.WatchError:
+                    log.debug("RedisFeatureStore: concurrent modification detected, retrying")
+                    continue
+            self._cache[self._cache_key(kind, key)] = item
+            break
+
+    def _before_update_transaction(self, base_key, key):
+        # exposed for testing
+        pass
