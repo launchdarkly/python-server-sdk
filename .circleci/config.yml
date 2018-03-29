@@ -4,8 +4,6 @@ workflows:
   test:
     jobs:
       - test-2.7
-      - test-3.1
-      - test-3.2
       - test-3.3
       - test-3.4
       - test-3.5
@@ -24,16 +22,6 @@ jobs:
     <<: *test-template
     docker:
       - image: circleci/python:2.7-jessie
-      - image: redis
-  test-3.1:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.1-jessie
-      - image: redis
-  test-3.2:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.2-jessie
       - image: redis
   test-3.3:
     <<: *test-template
