@@ -62,7 +62,6 @@ class RedisFeatureStore(FeatureStore):
         r = redis.Redis(connection_pool=self._pool)
         try:
             all_items = r.hgetall(self._items_key(kind))
-            print("*** all_items:", all_items)
         except BaseException as e:
             log.error("RedisFeatureStore: Could not retrieve '%s' from Redis with error: %s. Returning None.",
                 kind.namespace, e.message)
