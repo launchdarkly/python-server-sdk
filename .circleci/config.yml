@@ -16,7 +16,13 @@ test-template: &test-template
     - run: sudo pip install -r test-requirements.txt
     - run: sudo python setup.py install
     - run: pip freeze
-    - run: pytest -s testing
+    - run: mkdir test-reports
+    - run: pytest -s testing --junitxml=test-reports/junit.xml
+    - store_test_results:
+        path: test-reports
+    - store_artifacts:
+        path: test-reports
+
 jobs:
   test-2.7:
     <<: *test-template
