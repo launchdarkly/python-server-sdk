@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [5.0.2] - 2018-03-27
+### Fixed
+- In the Redis feature store, fixed a synchronization problem that could cause a feature flag update to be missed if several of them happened in rapid succession.
+
+
 ## [5.0.1] - 2018-02-22
 ### Added
 - Support for a new LaunchDarkly feature: reusable user segments.

@@ -137,7 +137,7 @@ def _bucket_user(user, key, salt, bucket_by):
 def _bucketable_string_value(u_value):
     if isinstance(u_value, six.string_types):
         return u_value
-    if isinstance(u_value, (int, long)):
+    if isinstance(u_value, six.integer_types):
         return str(u_value)
     return None
 
