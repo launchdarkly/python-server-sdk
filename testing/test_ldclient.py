@@ -1,7 +1,7 @@
 from builtins import object
 from ldclient.client import LDClient, Config
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.interfaces import FeatureRequester, FeatureStore
+from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor
 import pytest
 from testing.sync_util import wait_until
 
@@ -9,6 +9,20 @@ try:
     import queue
 except:
     import Queue as queue
+
+
+class MockUpdateProcessor(UpdateProcessor):
+    def __init__(self, config, requestor, store, ready):
+        ready.set()
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def is_alive(self):
+        return True
 
 
 class MockFeatureStore(FeatureStore):
@@ -54,13 +68,14 @@ class MockFeatureStore(FeatureStore):
             return None
 
 
-client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore()))
+client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                  update_processor_class=MockUpdateProcessor))
 offline_client = LDClient(config=
                           Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
                                  offline=True))
 no_send_events_client = LDClient(config=
                                  Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
-                                 send_events=False))
+                                 send_events=False, update_processor_class=MockUpdateProcessor))
 
 user = {
     u'key': u'xyz',
@@ -224,6 +239,7 @@ def test_defaults_and_online():
                                        defaults={"foo": expected},
                                        event_consumer_class=MockConsumer,
                                        feature_requester_class=MockFeatureRequester,
+                                       update_processor_class=MockUpdateProcessor,
                                        feature_store=InMemoryFeatureStore()))
     actual = my_client.variation('foo', user, default="originalDefault")
     assert actual == expected
@@ -234,6 +250,7 @@ def test_defaults_and_online_no_default():
     client = LDClient(config=Config(base_uri="http://localhost:3000",
                                     defaults={"foo": "bar"},
                                     event_consumer_class=MockConsumer,
+                                    update_processor_class=MockUpdateProcessor,
                                     feature_requester_class=MockFeatureRequester))
     assert "jim" == client.variation('baz', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
@@ -251,6 +268,7 @@ def test_exception_in_retrieval():
                                     defaults={"foo": "bar"},
                                     feature_store=InMemoryFeatureStore(),
                                     feature_requester_class=ExceptionFeatureRequester,
+                                    update_processor_class=MockUpdateProcessor,
                                     event_consumer_class=MockConsumer))
     assert "bar" == client.variation('foo', user, default="jim")
     assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
