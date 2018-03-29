@@ -14,9 +14,9 @@ workflows:
 test-template: &test-template
   steps:
     - checkout
-    - run: pip install --upgrade pip setuptools
-    - run: pip install -r test-requirements.txt
-    - run: python setup.py install
+    - run: sudo pip install --upgrade pip setuptools
+    - run: sudo pip install -r test-requirements.txt
+    - run: sudo python setup.py install
     - run: pip freeze
     - run: pytest -s testing
 jobs:
@@ -53,8 +53,8 @@ jobs:
       - image: circleci/python:2.7-jessie
     steps:
       - checkout
-      - run: pip install --upgrade pip setuptools
-      - run: pip install -r test-requirements.txt
-      - run: python setup.py install
+      - run: sudo pip install --upgrade pip setuptools
+      - run: sudo pip install -r test-requirements.txt
+      - run: sudo python setup.py install
       - run: pytest --cov=ldclient testing
       - run: sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'
