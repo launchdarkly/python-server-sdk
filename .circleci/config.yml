@@ -1,0 +1,60 @@
+version: 2
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test-2.7
+      - test-3.1
+      - test-3.2
+      - test-3.3
+      - test-3.4
+      - test-3.5
+      - test-3.6
+      - coverage
+test-template: &test-template
+  steps:
+    - checkout
+    - run: pip install --upgrade pip setuptools
+    - run: pip install -r test-requirements.txt
+    - run: python setup.py install
+    - run: pip freeze
+    - run: pytest -s testing
+jobs:
+  test-2.7:
+    <<: *test-template
+    docker:
+      - image: circleci/python:2.7-jessie
+  test-3.1:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.1-jessie
+  test-3.2:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.2-jessie
+  test-3.3:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.3-jessie
+  test-3.4:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.4-jessie
+  test-3.5:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.5-jessie
+  test-3.6:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.6-jessie
+  coverage:
+    docker:
+      - image: circleci/python:2.7-jessie
+    steps:
+      - checkout
+      - run: pip install --upgrade pip setuptools
+      - run: pip install -r test-requirements.txt
+      - run: python setup.py install
+      - run: pytest --cov=ldclient testing
+      - run: sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'
