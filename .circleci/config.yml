@@ -11,14 +11,17 @@ workflows:
 test-template: &test-template
   steps:
     - checkout
-    - run: sudo pip install --upgrade pip setuptools
-    - run: sudo pip install -r test-requirements.txt
-    - run: sudo python setup.py install
-    - run: pip freeze
-    - run: mkdir test-reports
+    - run:
+        name: install test-requirements
+        command: |
+          sudo pip install --upgrade pip setuptools;
+          sudo pip install -r test-requirements.txt;
+          sudo python setup.py install;
+          pip freeze
     - run:
         name: run tests
         command: |
+          mkdir test-reports;
           if [[ $CIRCLE_JOB == test-2.7 ]]; then
             pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing;
             sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"';
