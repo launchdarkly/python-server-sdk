@@ -12,7 +12,7 @@ test-template: &test-template
   steps:
     - checkout
     - run:
-        name: install test-requirements
+        name: install requirements
         command: |
           sudo pip install --upgrade pip setuptools;
           sudo pip install -r test-requirements.txt;
