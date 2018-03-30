@@ -73,6 +73,7 @@ class RedisFeatureStore(FeatureStore):
 
         results = {}
         for key, item_json in all_items.items():
+            key = key.decode('utf-8')  # necessary in Python 3
             item = json.loads(item_json.decode('utf-8'))
             if item.get('deleted', False) is False:
                 results[key] = item

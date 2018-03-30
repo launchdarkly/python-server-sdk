@@ -1,0 +1,61 @@
+version: 2
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test-2.7
+      - test-3.3
+      - test-3.4
+      - test-3.5
+      - test-3.6
+test-template: &test-template
+  steps:
+    - checkout
+    - run:
+        name: install requirements
+        command: |
+          sudo pip install --upgrade pip setuptools;
+          sudo pip install -r test-requirements.txt;
+          sudo python setup.py install;
+          pip freeze
+    - run:
+        name: run tests
+        command: |
+          mkdir test-reports;
+          if [[ $CIRCLE_JOB == test-2.7 ]]; then
+            pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing;
+            sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"';
+          else
+            pytest -s --junitxml=test-reports/junit.xml testing;
+          fi
+    - store_test_results:
+        path: test-reports
+    - store_artifacts:
+        path: test-reports
+
+jobs:
+  test-2.7:
+    <<: *test-template
+    docker:
+      - image: circleci/python:2.7-jessie
+      - image: redis
+  test-3.3:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.3-jessie
+      - image: redis
+  test-3.4:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.4-jessie
+      - image: redis
+  test-3.5:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.5-jessie
+      - image: redis
+  test-3.6:
+    <<: *test-template
+    docker:
+      - image: circleci/python:3.6-jessie
+      - image: redis
