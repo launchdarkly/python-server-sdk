@@ -354,11 +354,11 @@ class EventDispatcher(object):
 class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, session=None):
         self._queue = queue.Queue(config.events_max_pending)
-        self._dispatcher = EventDispatcher(self._queue, config, session)
         self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
+        EventDispatcher(self._queue, config, session)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)
