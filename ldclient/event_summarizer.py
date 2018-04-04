@@ -29,11 +29,12 @@ class EventSummarizer(object):
                 self.end_date = date
 
     """
-    Return a snapshot of the current summarized event data, and reset this state.
+    Return the current summarized event data.
     """
     def snapshot(self):
-        ret = EventSummary(start_date = self.start_date, end_date = self.end_date, counters = self.counters)
+        return EventSummary(start_date = self.start_date, end_date = self.end_date, counters = self.counters)
+
+    def clear(self):
         self.start_date = 0
         self.end_date = 0
         self.counters = dict()
-        return ret

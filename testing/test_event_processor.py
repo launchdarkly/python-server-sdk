@@ -361,7 +361,10 @@ def test_no_more_payloads_are_sent_after_401_error():
 def flush_and_get_events():
     ep.flush()
     ep._wait_until_inactive()
-    return None if mock_session.request_data is None else json.loads(mock_session.request_data)
+    if mock_session.request_data is None:
+        raise AssertionError('Expected to get an HTTP request but did not get one')
+    else:
+        return json.loads(mock_session.request_data)
 
 def check_index_event(data, source, user):
     assert data['kind'] == 'index'

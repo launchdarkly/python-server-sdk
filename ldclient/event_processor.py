@@ -4,6 +4,7 @@ from collections import namedtuple
 from email.utils import parsedate
 import errno
 import jsonpickle
+import pylru
 from threading import Event, Lock, Thread
 import time
 
@@ -20,13 +21,14 @@ from requests.packages.urllib3.exceptions import ProtocolError
 import six
 
 from ldclient.event_summarizer import EventSummarizer
-from ldclient.user_deduplicator import UserDeduplicator
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import _headers
 from ldclient.util import log
 
+
+__MAX_FLUSH_THREADS__ = 5
 
 class NullEventProcessor(EventProcessor):
     def __init(self, config):
@@ -53,12 +55,15 @@ EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 class EventOutputFormatter(object):
     def __init__(self, config):
-        self._config = config
+        self._inline_users = config.inline_users_in_events
         self._user_filter = UserFilter(config)
 
-    """
-    Transform an event into the format used for the event payload.
-    """
+    def make_output_events(self, events, summary):
+        events_out = [ self.make_output_event(e) for e in events ]
+        if len(summary.counters) > 0:
+            events_out.append(self.make_summary_event(summary))
+        return events_out
+    
     def make_output_event(self, e):
         kind = e['kind']
         if kind == 'feature':
@@ -72,7 +77,7 @@ class EventOutputFormatter(object):
                 'default': e.get('default'),
                 'prereqOf': e.get('prereqOf')
             }
-            if self._config.inline_users_in_events:
+            if self._inline_users:
                 out['user'] = self._user_filter.filter_user_props(e['user'])
             else:
                 out['userKey'] = e['user'].get('key')
@@ -90,7 +95,7 @@ class EventOutputFormatter(object):
                 'key': e['key'],
                 'data': e.get('data')
             }
-            if self._config.inline_users_in_events:
+            if self._inline_users:
                 out['user'] = self._user_filter.filter_user_props(e['user'])
             else:
                 out['userKey'] = e['user'].get('key')
@@ -133,23 +138,18 @@ class EventOutputFormatter(object):
 
 
 class EventPayloadSendTask(object):
-    def __init__(self, session, config, events, summary, response_fn, completion_fn):
+    def __init__(self, session, config, formatter, payload, response_fn, completion_fn):
         self._session = session
         self._config = config
-        self._events = events
-        self._summary = summary
+        self._formatter = formatter
+        self._payload = payload
         self._response_fn = response_fn
         self._completion_fn = completion_fn
-    
-    def start(self):
         Thread(target = self._run).start()
 
     def _run(self):
         try:
-            formatter = EventOutputFormatter(self._config)
-            output_events = [ formatter.make_output_event(e) for e in self._events ]
-            if len(self._summary.counters) > 0:
-                output_events.append(formatter.make_summary_event(self._summary))
+            output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
             resp = self._do_send(output_events, True)
             if resp is not None:
                 self._response_fn(resp)
@@ -190,15 +190,44 @@ class EventPayloadSendTask(object):
                 exc_info=True)
 
 
+FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
+
+
+class EventBuffer(object):
+    def __init__(self, capacity):
+        self._capacity = capacity
+        self._events = []
+        self._summarizer = EventSummarizer()
+        self._exceeded_capacity = False
+    
+    def add_event(self, event):
+        if len(self._events) >= self._capacity:
+            if not self._exceeded_capacity:
+                log.warning("Event queue is full-- dropped an event")
+                self._exceeded_capacity = True
+        else:
+            self._events.append(event)
+            self._exceeded_capacity = False
+    
+    def add_to_summary(self, event):
+        self._summarizer.summarize_event(event)
+    
+    def get_payload(self):
+        return FlushPayload(self._events, self._summarizer.snapshot())
+    
+    def clear(self):
+        self._events = []
+        self._summarizer.clear()
+
+
 class EventDispatcher(object):
     def __init__(self, queue, config, session):
         self._queue = queue
         self._config = config
         self._session = requests.Session() if session is None else session
         self._disabled = False
-        self._events = []
-        self._summarizer = EventSummarizer()
-        self._user_deduplicator = UserDeduplicator(config)
+        self._buffer = EventBuffer(config.events_max_pending)
+        self._user_keys = pylru.lrucache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
 
@@ -220,7 +249,7 @@ class EventDispatcher(object):
                 elif message.type == 'flush':
                     self._trigger_flush()
                 elif message.type == 'flush_users':
-                    self._user_deduplicator.reset_users()
+                    self._user_keys.clear()
                 elif message.type == 'test_sync':
                     self._wait_until_inactive()
                     message.param.set()
@@ -239,24 +268,29 @@ class EventDispatcher(object):
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event for that user.
         user = event.get('user')
-        if not self._config.inline_users_in_events and user and not self._user_deduplicator.notice_user(user):
+        if not self._config.inline_users_in_events and user and not self.notice_user(user):
             if event['kind'] != 'identify':
                 ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
-                self._store_event(ie)
+                self._buffer.add_event(ie)
 
         # Always record the event in the summarizer.
-        self._summarizer.summarize_event(event)
+        self._buffer.add_to_summary(event)
 
         if self._should_track_full_event(event):
             # Queue the event as-is; we'll transform it into an output event when we're flushing
             # (to avoid doing that work on our main thread).
-            self._store_event(event)
+            self._buffer.add_event(event)
 
-    def _store_event(self, event):
-        if len(self._events) >= self._config.events_max_pending:
-            log.warning("Event queue is full-- dropped an event")
-        else:
-            self._events.append(event)
+    # Add to the set of users we've noticed, and return true if the user was already known to us.
+    def notice_user(self, user):
+        if user is None or 'key' not in user:
+            return False
+        key = user['key']
+        if key in self._user_keys:
+            self._user_keys[key]  # refresh cache item
+            return True
+        self._user_keys[key] = True
+        return False
 
     def _should_track_full_event(self, event):
         if event['kind'] == 'feature':
@@ -275,16 +309,18 @@ class EventDispatcher(object):
     def _trigger_flush(self):
         if self._disabled:
             return
-        events = self._events
-        self._events = []
-        snapshot = self._summarizer.snapshot()
-        if len(events) > 0 or len(snapshot.counters) > 0:
+        payload = self._buffer.get_payload()
+        if len(payload.events) > 0 or len(payload.summary.counters) > 0:
             with self._active_flush_workers_lock:
-                # TODO: if we're at the limit, don't start a task and don't clear the state
+                if self._active_flush_workers_count >= __MAX_FLUSH_THREADS__:
+                    # We're already at our limit of concurrent flushes; don't start a new task and
+                    # do leave the events in the buffer
+                    return
                 self._active_flush_workers_count = self._active_flush_workers_count + 1
-            task = EventPayloadSendTask(self._session, self._config, events, snapshot,
+            # Hand off the events to a new flush task and clear them from our buffer.
+            self._buffer.clear()
+            EventPayloadSendTask(self._session, self._config, self._formatter, payload,
                 self._handle_response, self._release_flush_worker)
-            task.start()
 
     def _handle_response(self, r):
         server_date_str = r.headers.get('Date')
