@@ -145,7 +145,9 @@ class EventPayloadSendTask(object):
         self._payload = payload
         self._response_fn = response_fn
         self._completion_fn = completion_fn
-        Thread(target = self._run).start()
+        thread = Thread(target = self._run)
+        thread.daemon = True
+        thread.start()
 
     def _run(self):
         try:
