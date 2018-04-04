@@ -43,6 +43,7 @@ class MockSession(object):
     def __init__(self):
         self._request_data = None
         self._request_headers = None
+        self._response_status = 200
         self._server_time = None
 
     def post(self, uri, headers, timeout, data):
@@ -51,7 +52,7 @@ class MockSession(object):
         resp_hdr = CaseInsensitiveDict()
         if self._server_time is not None:
             resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
-        return MockResponse(200, resp_hdr)
+        return MockResponse(self._response_status, resp_hdr)
 
     def close(self):
         pass
@@ -64,8 +65,15 @@ class MockSession(object):
     def request_headers(self):
         return self._request_headers
 
+    def set_response_status(self, status):
+        self._response_status = status
+    
     def set_server_time(self, timestamp):
         self._server_time = timestamp
+
+    def clear(self):
+        self._request_headers = None
+        self._request_data = None
 
 
 def setup_function():
@@ -333,6 +341,18 @@ def test_sdk_key_is_sent():
     ep.flush()
 
     assert mock_session.request_headers.get('Authorization') is 'SDK_KEY'
+
+def test_no_more_payloads_are_sent_after_401_error():
+    setup_processor(Config(sdk_key = 'SDK_KEY'))
+
+    mock_session.set_response_status(401)
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    mock_session.clear()
+
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    assert mock_session.request_data is None
 
 
 def flush_and_get_events():

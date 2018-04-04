@@ -51,7 +51,7 @@ class NullEventProcessor(EventProcessor):
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
-class EventOutputTransformer(object):
+class EventOutputFormatter(object):
     def __init__(self, config):
         self._config = config
         self._user_filter = UserFilter(config)
@@ -146,10 +146,10 @@ class EventPayloadSendTask(object):
 
     def _run(self):
         try:
-            transformer = EventOutputTransformer(self._config)
-            output_events = [ transformer.make_output_event(e) for e in self._events ]
+            formatter = EventOutputFormatter(self._config)
+            output_events = [ formatter.make_output_event(e) for e in self._events ]
             if len(self._summary.counters) > 0:
-                output_events.append(transformer.make_summary_event(self._summary))
+                output_events.append(formatter.make_summary_event(self._summary))
             self._do_send(output_events, True)
         except:
             log.warning(
@@ -179,7 +179,7 @@ class EventPayloadSendTask(object):
                 if inner.errno is not None and inner.errno == errno.ECONNRESET and should_retry:
                     log.warning(
                         'ProtocolError exception caught while sending events. Retrying.')
-                    self.do_send(output_events, False)
+                    self._do_send(output_events, False)
             else:
                 log.warning(
                     'Unhandled exception in event processor. Analytics events were not processed.',
@@ -190,7 +190,7 @@ class EventPayloadSendTask(object):
                 exc_info=True)
 
 
-class EventConsumer(object):
+class EventDispatcher(object):
     def __init__(self, queue, config, session):
         self._queue = queue
         self._config = config
@@ -202,7 +202,7 @@ class EventConsumer(object):
         self._events = []
         self._summarizer = EventSummarizer()
         self._user_deduplicator = UserDeduplicator(config)
-        self._output_transformer = EventOutputTransformer(config)
+        self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
 
     def start(self):
@@ -302,19 +302,19 @@ class EventConsumer(object):
                 self._last_known_past_time = server_date
         if r.status_code == 401:
             log.error('Received 401 error, no further events will be posted since SDK key is invalid')
-            self._disabled = true
+            self._disabled = True
             return
 
 
 class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, session=None):
         self._queue = queue.Queue(config.events_max_pending)
-        self._consumer = EventConsumer(self._queue, config, session)
+        self._dispatcher = EventDispatcher(self._queue, config, session)
         self._flush_timer = RepeatingTimer(config.flush_interval, self._flush_async)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
 
     def start(self):
-        self._consumer.start()
+        self._dispatcher.start()
         self._flush_timer.start()
         self._users_flush_timer.start()
 
@@ -322,13 +322,13 @@ class DefaultEventProcessor(EventProcessor):
         self._flush_timer.stop()
         self._users_flush_timer.stop()
         self.flush()
-        self._consumer.stop()
+        self._dispatcher.stop()
 
     def is_alive(self):
-        return self._consumer.is_alive()
+        return self._dispatcher.is_alive()
 
     def send_event(self, event):
-        event['creationDate'] = self._consumer.now()
+        event['creationDate'] = self._dispatcher.now()
         self._queue.put(EventProcessorMessage('event', event))
 
     def flush(self):
