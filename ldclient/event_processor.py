@@ -4,7 +4,7 @@ from collections import namedtuple
 from email.utils import parsedate
 import errno
 import jsonpickle
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 import time
 
 # noinspection PyBroadException
@@ -133,13 +133,13 @@ class EventOutputFormatter(object):
 
 
 class EventPayloadSendTask(object):
-    def __init__(self, session, config, events, summary, response_listener, reply_event):
+    def __init__(self, session, config, events, summary, response_fn, completion_fn):
         self._session = session
         self._config = config
         self._events = events
         self._summary = summary
-        self._response_listener = response_listener
-        self._reply_event = reply_event
+        self._response_fn = response_fn
+        self._completion_fn = completion_fn
     
     def start(self):
         Thread(target = self._run).start()
@@ -150,14 +150,15 @@ class EventPayloadSendTask(object):
             output_events = [ formatter.make_output_event(e) for e in self._events ]
             if len(self._summary.counters) > 0:
                 output_events.append(formatter.make_summary_event(self._summary))
-            self._do_send(output_events, True)
+            resp = self._do_send(output_events, True)
+            if resp is not None:
+                self._response_fn(resp)
         except:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
         finally:
-            if self._reply_event is not None:
-                self._reply_event.set()
+            self._completion_fn()
 
     def _do_send(self, output_events, should_retry):
         # noinspection PyBroadException
@@ -170,9 +171,8 @@ class EventPayloadSendTask(object):
                                    headers=hdrs,
                                    timeout=(self._config.connect_timeout, self._config.read_timeout),
                                    data=json_body)
-            if self._response_listener is not None:
-                self._response_listener(r)
             r.raise_for_status()
+            return r
         except ProtocolError as e:
             if e.args is not None and len(e.args) > 1 and e.args[1] is not None:
                 inner = e.args[1]
@@ -195,9 +195,6 @@ class EventDispatcher(object):
         self._queue = queue
         self._config = config
         self._session = requests.Session() if session is None else session
-        self._main_thread = Thread(target=self._run_main_loop)
-        self._main_thread.daemon = True
-        self._running = False
         self._disabled = False
         self._events = []
         self._summarizer = EventSummarizer()
@@ -205,40 +202,36 @@ class EventDispatcher(object):
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
 
-    def start(self):
+        self._active_flush_workers_lock = Lock()
+        self._active_flush_workers_count = 0
+        self._active_flush_workers_event = Event()
+
+        self._main_thread = Thread(target=self._run_main_loop)
+        self._main_thread.daemon = True
         self._main_thread.start()
-
-    def stop(self):
-        if self._running:
-            self._running = False
-            # Post a non-message so we won't keep blocking on the queue
-            self._queue.put(EventProcessorMessage('stop', None))
-
-    def is_alive(self):
-        return self._running
-
-    def now(self):
-        return int(time.time() * 1000)
 
     def _run_main_loop(self):
         log.info("Starting event processor")
-        self._running = True
-        while self._running:
+        while True:
             try:
-                self._process_next()
+                message = self._queue.get(block=True)
+                if message.type == 'event':
+                    self._process_event(message.param)
+                elif message.type == 'flush':
+                    self._trigger_flush()
+                elif message.type == 'flush_users':
+                    self._user_deduplicator.reset_users()
+                elif message.type == 'test_sync':
+                    self._wait_until_inactive()
+                    message.param.set()
+                elif message.type == 'stop':
+                    self._do_shutdown()
+                    message.param.set()
+                    return
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
         self._session.close()
-
-    def _process_next(self):
-        message = self._queue.get(block=True)
-        if message.type == 'event':
-            self._process_event(message.param)
-        elif message.type == 'flush':
-            self._dispatch_flush(message.param)
-        elif message.type == 'flush_users':
-            self._user_deduplicator.reset_users()
-
+    
     def _process_event(self, event):
         if self._disabled:
             return
@@ -272,27 +265,26 @@ class EventDispatcher(object):
             debug_until = event.get('debugEventsUntilDate')
             if debug_until is not None:
                 last_past = self._last_known_past_time
-                if debug_until > last_past and debug_until > self.now():
+                now = int(time.time() * 1000)
+                if debug_until > last_past and debug_until > now:
                     return True
             return False
         else:
             return True
 
-    def _dispatch_flush(self, reply):
+    def _trigger_flush(self):
         if self._disabled:
-            if reply is not None:
-                reply.set()
             return
-
         events = self._events
         self._events = []
         snapshot = self._summarizer.snapshot()
         if len(events) > 0 or len(snapshot.counters) > 0:
-            task = EventPayloadSendTask(self._session, self._config, events, snapshot, self._handle_response, reply)
+            with self._active_flush_workers_lock:
+                # TODO: if we're at the limit, don't start a task and don't clear the state
+                self._active_flush_workers_count = self._active_flush_workers_count + 1
+            task = EventPayloadSendTask(self._session, self._config, events, snapshot,
+                self._handle_response, self._release_flush_worker)
             task.start()
-        else:
-            if reply is not None:
-                reply.set()
 
     def _handle_response(self, r):
         server_date_str = r.headers.get('Date')
@@ -305,40 +297,54 @@ class EventDispatcher(object):
             self._disabled = True
             return
 
+    def _release_flush_worker(self):
+        with self._active_flush_workers_lock:
+            self._active_flush_workers_count = self._active_flush_workers_count - 1
+            self._active_flush_workers_event.clear()
+            self._active_flush_workers_event.set()
+    
+    def _wait_until_inactive(self):
+        while True:
+            with self._active_flush_workers_lock:
+                if self._active_flush_workers_count == 0:
+                    return
+            self._active_flush_workers_event.wait()
+
+    def _do_shutdown(self):
+        self._wait_until_inactive()
+        self._session.close()
+
 
 class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, session=None):
         self._queue = queue.Queue(config.events_max_pending)
         self._dispatcher = EventDispatcher(self._queue, config, session)
-        self._flush_timer = RepeatingTimer(config.flush_interval, self._flush_async)
+        self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
-
-    def start(self):
-        self._dispatcher.start()
         self._flush_timer.start()
         self._users_flush_timer.start()
+
+    def send_event(self, event):
+        event['creationDate'] = int(time.time() * 1000)
+        self._queue.put(EventProcessorMessage('event', event))
+
+    def flush(self):
+        self._queue.put(EventProcessorMessage('flush', None))
 
     def stop(self):
         self._flush_timer.stop()
         self._users_flush_timer.stop()
         self.flush()
-        self._dispatcher.stop()
-
-    def is_alive(self):
-        return self._dispatcher.is_alive()
-
-    def send_event(self, event):
-        event['creationDate'] = self._dispatcher.now()
-        self._queue.put(EventProcessorMessage('event', event))
-
-    def flush(self):
-        # Put a flush message on the queue and wait until it's been processed.
-        reply = Event()
-        self._queue.put(EventProcessorMessage('flush', reply))
-        reply.wait()
-
-    def _flush_async(self):
-        self._queue.put(EventProcessorMessage('flush', None))
+        self._post_message_and_wait('stop')
 
     def _flush_users(self):
         self._queue.put(EventProcessorMessage('flush_users', None))
+
+    # Used only in tests
+    def _wait_until_inactive(self):
+        self._post_message_and_wait('test_sync')
+
+    def _post_message_and_wait(self, type):
+        reply = Event()
+        self._queue.put(EventProcessorMessage(type, reply))
+        reply.wait()

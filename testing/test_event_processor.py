@@ -87,7 +87,6 @@ def teardown_function():
 def setup_processor(config):
     global ep
     ep = DefaultEventProcessor(config, mock_session)
-    ep.start()
 
 
 def test_identify_event_is_queued():
@@ -332,6 +331,7 @@ def test_user_is_filtered_in_custom_event():
 def test_nothing_is_sent_if_there_are_no_events():
     setup_processor(Config())
     ep.flush()
+    ep._wait_until_inactive()
     assert mock_session.request_data is None
 
 def test_sdk_key_is_sent():
@@ -339,6 +339,7 @@ def test_sdk_key_is_sent():
 
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
+    ep._wait_until_inactive()
 
     assert mock_session.request_headers.get('Authorization') is 'SDK_KEY'
 
@@ -348,15 +349,18 @@ def test_no_more_payloads_are_sent_after_401_error():
     mock_session.set_response_status(401)
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
+    ep._wait_until_inactive()
     mock_session.clear()
 
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
+    ep._wait_until_inactive()
     assert mock_session.request_data is None
 
 
 def flush_and_get_events():
     ep.flush()
+    ep._wait_until_inactive()
     return None if mock_session.request_data is None else json.loads(mock_session.request_data)
 
 def check_index_event(data, source, user):

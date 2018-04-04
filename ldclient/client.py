@@ -53,7 +53,6 @@ class LDClient(object):
             self._event_processor = NullEventProcessor()
         else:
             self._event_processor = self._config.event_processor_class(self._config)
-            self._event_processor.start()
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
@@ -103,7 +102,7 @@ class LDClient(object):
         log.info("Closing LaunchDarkly client..")
         if self.is_offline():
             return
-        if self._event_processor and self._event_processor.is_alive():
+        if self._event_processor:
             self._event_processor.stop()
         if self._update_processor and self._update_processor.is_alive():
             self._update_processor.stop()
