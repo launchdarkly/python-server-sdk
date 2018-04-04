@@ -62,7 +62,7 @@ class FixedThreadPool(object):
                 return
             try:
                 item()
-            except:
+            except Exception:
                 log.warning('Unhandled exception in worker thread', exc_info=True)
             with self._lock:
                 self._busy_count = self._busy_count - 1

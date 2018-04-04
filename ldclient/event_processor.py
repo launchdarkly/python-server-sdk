@@ -152,7 +152,7 @@ class EventPayloadSendTask(object):
             resp = self._do_send(output_events, True)
             if resp is not None:
                 self._response_fn(resp)
-        except:
+        except Exception:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
@@ -181,7 +181,7 @@ class EventPayloadSendTask(object):
                 log.warning(
                     'Unhandled exception in event processor. Analytics events were not processed.',
                     exc_info=True)
-        except:
+        except Exception:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
