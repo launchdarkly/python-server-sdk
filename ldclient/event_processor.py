@@ -365,4 +365,6 @@ class DefaultEventProcessor(EventProcessor):
     def _post_message_and_wait(self, type):
         reply = Event()
         self._queue.put(EventProcessorMessage(type, reply))
+        print "*** waiting"
         reply.wait()
+        print "*** waited"
