@@ -350,6 +350,7 @@ class DefaultEventProcessor(EventProcessor):
         self._queue.put(EventProcessorMessage('flush', None))
 
     def stop(self):
+        print("*** stopping: %d" % id(self))
         self._flush_timer.stop()
         self._users_flush_timer.stop()
         self.flush()
@@ -365,6 +366,6 @@ class DefaultEventProcessor(EventProcessor):
     def _post_message_and_wait(self, type):
         reply = Event()
         self._queue.put(EventProcessorMessage(type, reply))
-        print "*** waiting"
+        print("*** waiting: %d" % id(self))
         reply.wait()
-        print "*** waited"
+        print("*** waited: %d" % id(self))
