@@ -222,6 +222,7 @@ class EventDispatcher(object):
         self._queue = queue
         self._config = config
         self._session = requests.Session() if session is None else session
+        self._close_session = (session is None)  # so we know whether to close it later
         self._disabled = False
         self._buffer = EventBuffer(config.events_max_pending)
         self._user_keys = pylru.lrucache(config.user_keys_capacity)
@@ -330,7 +331,8 @@ class EventDispatcher(object):
     def _do_shutdown(self):
         self._flush_workers.stop()
         self._flush_workers.wait()
-        self._session.close()
+        if self._close_session:
+            self._session.close()
 
 
 class DefaultEventProcessor(EventProcessor):
