@@ -327,7 +327,7 @@ class EventDispatcher(object):
         if server_date_str is not None:
             server_date = parsedate(server_date_str)
             if server_date is not None:
-                self._last_known_past_time = server_date
+                self._last_known_past_time = int(time.mktime(server_date) * 1000)
         if r.status_code == 401:
             log.error('Received 401 error, no further events will be posted since SDK key is invalid')
             self._disabled = True
