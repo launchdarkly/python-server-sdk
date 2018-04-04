@@ -21,6 +21,7 @@ from requests.packages.urllib3.exceptions import ProtocolError
 import six
 
 from ldclient.event_summarizer import EventSummarizer
+from ldclient.fixed_thread_pool import FixedThreadPool
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
@@ -31,7 +32,7 @@ from ldclient.util import log
 __MAX_FLUSH_THREADS__ = 5
 
 class NullEventProcessor(EventProcessor):
-    def __init(self, config):
+    def __init__(self):
         pass
 
     def start(self):
@@ -138,18 +139,14 @@ class EventOutputFormatter(object):
 
 
 class EventPayloadSendTask(object):
-    def __init__(self, session, config, formatter, payload, response_fn, completion_fn):
+    def __init__(self, session, config, formatter, payload, response_fn):
         self._session = session
         self._config = config
         self._formatter = formatter
         self._payload = payload
         self._response_fn = response_fn
-        self._completion_fn = completion_fn
-        thread = Thread(target = self._run)
-        thread.daemon = True
-        thread.start()
 
-    def _run(self):
+    def run(self):
         try:
             output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
             resp = self._do_send(output_events, True)
@@ -159,8 +156,6 @@ class EventPayloadSendTask(object):
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
-        finally:
-            self._completion_fn()
 
     def _do_send(self, output_events, should_retry):
         # noinspection PyBroadException
@@ -233,9 +228,7 @@ class EventDispatcher(object):
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
 
-        self._active_flush_workers_lock = Lock()
-        self._active_flush_workers_count = 0
-        self._active_flush_workers_event = Event()
+        self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
 
         self._main_thread = Thread(target=self._run_main_loop)
         self._main_thread.daemon = True
@@ -253,7 +246,7 @@ class EventDispatcher(object):
                 elif message.type == 'flush_users':
                     self._user_keys.clear()
                 elif message.type == 'test_sync':
-                    self._wait_until_inactive()
+                    self._flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
                     self._do_shutdown()
@@ -313,43 +306,30 @@ class EventDispatcher(object):
             return
         payload = self._buffer.get_payload()
         if len(payload.events) > 0 or len(payload.summary.counters) > 0:
-            with self._active_flush_workers_lock:
-                if self._active_flush_workers_count >= __MAX_FLUSH_THREADS__:
-                    # We're already at our limit of concurrent flushes; don't start a new task and
-                    # do leave the events in the buffer
-                    return
-                self._active_flush_workers_count = self._active_flush_workers_count + 1
-            # Hand off the events to a new flush task and clear them from our buffer.
-            self._buffer.clear()
-            EventPayloadSendTask(self._session, self._config, self._formatter, payload,
-                self._handle_response, self._release_flush_worker)
+            task = EventPayloadSendTask(self._session, self._config, self._formatter, payload,
+                self._handle_response)
+            if self._flush_workers.execute(task.run):
+                # The events have been handed off to a flush worker; clear them from our buffer.
+                self._buffer.clear()
+            else:
+                # We're already at our limit of concurrent flushes; leave the events in the buffer.
+                pass
 
     def _handle_response(self, r):
         server_date_str = r.headers.get('Date')
         if server_date_str is not None:
             server_date = parsedate(server_date_str)
             if server_date is not None:
-                self._last_known_past_time = int(time.mktime(server_date) * 1000)
+                timestamp = int(time.mktime(server_date) * 1000)
+                self._last_known_past_time = timestamp
         if r.status_code == 401:
             log.error('Received 401 error, no further events will be posted since SDK key is invalid')
             self._disabled = True
             return
 
-    def _release_flush_worker(self):
-        with self._active_flush_workers_lock:
-            self._active_flush_workers_count = self._active_flush_workers_count - 1
-            self._active_flush_workers_event.clear()
-            self._active_flush_workers_event.set()
-    
-    def _wait_until_inactive(self):
-        while True:
-            with self._active_flush_workers_lock:
-                if self._active_flush_workers_count == 0:
-                    return
-            self._active_flush_workers_event.wait()
-
     def _do_shutdown(self):
-        self._wait_until_inactive()
+        self._flush_workers.stop()
+        self._flush_workers.wait()
         self._session.close()
 
 
