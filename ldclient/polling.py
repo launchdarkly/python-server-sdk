@@ -34,7 +34,7 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                         log.error('Received 401 error, no further polling requests will be made since SDK key is invalid')
                         self.stop()
                     break
-                except:
+                except Exception:
                     log.exception(
                         'Error: Exception encountered when updating flags.')
 
