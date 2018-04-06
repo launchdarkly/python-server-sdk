@@ -23,11 +23,7 @@ https://github.com/mailgun/expiringdict/commit/62c50ce7083a1557a1140dae19145f3a0
 import time
 from threading import RLock
 
-try:
-    from collections import OrderedDict
-except ImportError:
-    # Python < 2.7
-    from ordereddict import OrderedDict
+from collections import OrderedDict
 
 
 class ExpiringDict(OrderedDict):

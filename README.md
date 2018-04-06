@@ -38,12 +38,9 @@ Your first feature flag
         else:
             # the code to run if the feature is off
 
-Python 2.6
+Supported Python versions
 ----------
-Python 2.6 requires an extra dependency. Here's how to set it up:
-
-1. Use the `python2.6` extra  in your requirements.txt:
-    `ldclient-py[python2.6]`
+The SDK is tested with the most recent patch releases of Python 2.7, 3.3, 3.4, 3.5, and 3.6. Python 2.6 is no longer supported.
 
 Learn more
 -----------
