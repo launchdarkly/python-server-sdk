@@ -175,6 +175,20 @@ def test_user_is_filtered_in_feature_event():
     check_feature_event(output[0], e, False, filtered_user)
     check_summary_event(output[1])
 
+def test_index_event_is_still_generated_if_inline_users_is_true_but_feature_event_is_not_tracked():
+    setup_processor(Config(inline_users_in_events = True))
+
+    e = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': False
+    }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 2
+    check_index_event(output[0], e, user)
+    check_summary_event(output[1])
+
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     setup_processor(Config())
 
@@ -189,8 +203,26 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     output = flush_and_get_events()
     assert len(output) == 3
     check_index_event(output[0], e, user)
-    check_feature_event(output[1], e, True, None)
+    check_feature_event(output[1], e, True, user)
     check_summary_event(output[2])
+
+def test_event_can_be_both_tracked_and_debugged():
+    setup_processor(Config())
+
+    future_time = now() + 100000
+    e = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+        'variation': 1, 'value': 'value', 'default': 'default',
+        'trackEvents': True, 'debugEventsUntilDate': future_time
+    }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 4
+    check_index_event(output[0], e, user)
+    check_feature_event(output[1], e, False, None)
+    check_feature_event(output[2], e, True, user)
+    check_summary_event(output[3])
 
 def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_server_time():
     setup_processor(Config())
