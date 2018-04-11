@@ -266,28 +266,31 @@ class EventDispatcher(object):
 
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
-        will_add_full_event = False
-        debug_event = None
+        add_full_event = False
+        add_debug_event = False
+        add_index_event = False
         if event['kind'] == "feature":
-            will_add_full_event = event['trackEvents']
-            if self._should_debug_event(event):
-                debug_event = event.copy()
-                debug_event['debug'] = True
+            add_full_event = event['trackEvents']
+            add_debug_event = self._should_debug_event(event)
         else:
-            will_add_full_event = True
+            add_full_event = True
 
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event for that user.
-        if not (will_add_full_event and self._config.inline_users_in_events):
+        if not (add_full_event and self._config.inline_users_in_events):
             user = event.get('user')
             if user and not self.notice_user(user):
                 if event['kind'] != 'identify':
-                    ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
-                    self._buffer.add_event(ie)
+                    add_index_event = True
 
-        if will_add_full_event:
+        if add_index_event:
+            ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
+            self._buffer.add_event(ie)
+        if add_full_event:
             self._buffer.add_event(event)
-        if debug_event is not None:
+        if add_debug_event:
+            debug_event = event.copy()
+            debug_event['debug'] = True
             self._buffer.add_event(debug_event)
 
     # Add to the set of users we've noticed, and return true if the user was already known to us.
