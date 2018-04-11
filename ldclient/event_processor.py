@@ -68,7 +68,7 @@ class EventOutputFormatter(object):
     def make_output_event(self, e):
         kind = e['kind']
         if kind == 'feature':
-            is_debug = (not e['trackEvents']) and (e.get('debugEventsUntilDate') is not None)
+            is_debug = e.get('debug')
             out = {
                 'kind': 'debug' if is_debug else 'feature',
                 'creationDate': e['creationDate'],
@@ -78,7 +78,7 @@ class EventOutputFormatter(object):
                 'default': e.get('default'),
                 'prereqOf': e.get('prereqOf')
             }
-            if self._inline_users:
+            if self._inline_users or is_debug:
                 out['user'] = self._user_filter.filter_user_props(e['user'])
             else:
                 out['userKey'] = e['user'].get('key')
@@ -261,21 +261,37 @@ class EventDispatcher(object):
         if self._disabled:
             return
 
-        # For each user we haven't seen before, we add an index event - unless this is already
-        # an identify event for that user.
-        user = event.get('user')
-        if not self._config.inline_users_in_events and user and not self.notice_user(user):
-            if event['kind'] != 'identify':
-                ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
-                self._buffer.add_event(ie)
-
         # Always record the event in the summarizer.
         self._buffer.add_to_summary(event)
 
-        if self._should_track_full_event(event):
-            # Queue the event as-is; we'll transform it into an output event when we're flushing
-            # (to avoid doing that work on our main thread).
+        # Decide whether to add the event to the payload. Feature events may be added twice, once for
+        # the event (if tracked) and once for debugging.
+        add_full_event = False
+        add_debug_event = False
+        add_index_event = False
+        if event['kind'] == "feature":
+            add_full_event = event['trackEvents']
+            add_debug_event = self._should_debug_event(event)
+        else:
+            add_full_event = True
+
+        # For each user we haven't seen before, we add an index event - unless this is already
+        # an identify event for that user.
+        if not (add_full_event and self._config.inline_users_in_events):
+            user = event.get('user')
+            if user and not self.notice_user(user):
+                if event['kind'] != 'identify':
+                    add_index_event = True
+
+        if add_index_event:
+            ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
+            self._buffer.add_event(ie)
+        if add_full_event:
             self._buffer.add_event(event)
+        if add_debug_event:
+            debug_event = event.copy()
+            debug_event['debug'] = True
+            self._buffer.add_event(debug_event)
 
     # Add to the set of users we've noticed, and return true if the user was already known to us.
     def notice_user(self, user):
@@ -288,19 +304,14 @@ class EventDispatcher(object):
         self._user_keys[key] = True
         return False
 
-    def _should_track_full_event(self, event):
-        if event['kind'] == 'feature':
-            if event.get('trackEvents'):
+    def _should_debug_event(self, event):
+        debug_until = event.get('debugEventsUntilDate')
+        if debug_until is not None:
+            last_past = self._last_known_past_time
+            now = int(time.time() * 1000)
+            if debug_until > last_past and debug_until > now:
                 return True
-            debug_until = event.get('debugEventsUntilDate')
-            if debug_until is not None:
-                last_past = self._last_known_past_time
-                now = int(time.time() * 1000)
-                if debug_until > last_past and debug_until > now:
-                    return True
-            return False
-        else:
-            return True
+        return False
 
     def _trigger_flush(self):
         if self._disabled:
