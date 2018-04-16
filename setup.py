@@ -6,22 +6,27 @@ except ImportError:
 import sys
 import uuid
 
-from pip.req import parse_requirements
+
+def parse_requirements(filename):
+    """ load requirements from a pip requirements file """
+    lineiter = (line.strip() for line in open(filename))
+    return [line for line in lineiter if line and not line.startswith("#")]
+
 
 ldclient_version='5.0.3'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
-install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
-python26_reqs = parse_requirements('python2.6-requirements.txt', session=uuid.uuid1())
-test_reqs = parse_requirements('test-requirements.txt', session=uuid.uuid1())
-redis_reqs = parse_requirements('redis-requirements.txt', session=uuid.uuid1())
+install_reqs = parse_requirements('requirements.txt')
+python26_reqs = parse_requirements('python2.6-requirements.txt')
+test_reqs = parse_requirements('test-requirements.txt')
+redis_reqs = parse_requirements('redis-requirements.txt')
 
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
-reqs = [str(ir.req) for ir in install_reqs]
-python26reqs = [str(ir.req) for ir in python26_reqs]
-testreqs = [str(ir.req) for ir in test_reqs]
-redisreqs = [str(ir.req) for ir in redis_reqs]
+reqs = [ir for ir in install_reqs]
+python26reqs = [ir for ir in python26_reqs]
+testreqs = [ir for ir in test_reqs]
+redisreqs = [ir for ir in redis_reqs]
 
 
 class PyTest(Command):
