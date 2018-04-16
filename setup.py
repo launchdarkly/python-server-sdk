@@ -6,7 +6,10 @@ except ImportError:
 import sys
 import uuid
 
-from pip.req import parse_requirements
+try:
+    from pip._internal.req import parse_requirements
+except ImportError:
+    from pip.req import parse_requirements
 
 ldclient_version='5.0.3'
 
