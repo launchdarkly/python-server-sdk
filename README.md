@@ -2,7 +2,6 @@ LaunchDarkly SDK for Python
 ===========================
 
 [![Circle CI](https://img.shields.io/circleci/project/launchdarkly/python-client.png)](https://circleci.com/gh/launchdarkly/python-client)
-[![Code Climate](https://codeclimate.com/github/launchdarkly/python-client/badges/gpa.svg)](https://codeclimate.com/github/launchdarkly/python-client)
 
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Flaunchdarkly%2Fpython-client.svg?type=shield)](https://app.fossa.io/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Flaunchdarkly%2Fpython-client?ref=badge_shield)
 
