@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [5.0.4] - 2018-04-16
+## Fixed
+- It was not possible to install the SDK with `pip` 10.0.0. This should work now (thanks, [@theholy7](https://github.com/launchdarkly/python-client/pull/82)!) with the latest `pip` as well as previous versions.
+
+
 ## [5.0.3] - 2018-04-10
 ### Fixed
 - Fixed a bug that, in Python 3.x, caused an error when using an integer user attribute to compute a rollout.
