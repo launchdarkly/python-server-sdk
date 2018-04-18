@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [5.0.4] - 2018-04-16
+## Fixed
+- It was not possible to install the SDK with `pip` 10.0.0. This should work now (thanks, [@theholy7](https://github.com/launchdarkly/python-client/pull/82)!) with the latest `pip` as well as previous versions.
+
+
+## [5.0.3] - 2018-04-10
+### Fixed
+- Fixed a bug that, in Python 3.x, caused an error when using an integer user attribute to compute a rollout.
+- Fixed a bug that, in Python 3.x, made the `all_flags` method return a dictionary with byte-string keys instead of string keys when using the Redis feature store.
+
+
 ## [5.0.2] - 2018-03-27
 ### Fixed
 - In the Redis feature store, fixed a synchronization problem that could cause a feature flag update to be missed if several of them happened in rapid succession.
