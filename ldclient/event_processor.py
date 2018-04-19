@@ -163,6 +163,7 @@ class EventPayloadSendTask(object):
             json_body = jsonpickle.encode(output_events, unpicklable=False)
             log.debug('Sending events payload: ' + json_body)
             hdrs = _headers(self._config.sdk_key)
+            hdrs['X-LaunchDarkly-Event-Schema'] = '2'
             uri = self._config.events_uri
             r = self._session.post(uri,
                                    headers=hdrs,
