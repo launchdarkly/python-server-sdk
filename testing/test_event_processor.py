@@ -100,6 +100,7 @@ def test_identify_event_is_queued():
     assert output == [{
         'kind': 'identify',
         'creationDate': e['creationDate'],
+        'key': user['key'],
         'user': user
     }]
 
@@ -114,6 +115,7 @@ def test_user_is_filtered_in_identify_event():
     assert output == [{
         'kind': 'identify',
         'creationDate': e['creationDate'],
+        'key': user['key'],
         'user': filtered_user
     }]
 

@@ -87,6 +87,7 @@ class EventOutputFormatter(object):
             return {
                 'kind': 'identify',
                 'creationDate': e['creationDate'],
+                'key': e['user'].get('key'),
                 'user': self._user_filter.filter_user_props(e['user'])
             }
         elif kind == 'custom':
