@@ -1,3 +1,4 @@
+from collections import namedtuple
 import hashlib
 import logging
 
@@ -15,16 +16,19 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
+EvalResult = namedtuple('EvalResult', ['variation', 'value', 'events'])
+
+
 def evaluate(flag, user, store):
     prereq_events = []
     if flag.get('on', False):
         variation, value, prereq_events = _evaluate(flag, user, store)
         if value is not None:
-            return variation, value, prereq_events
+            return EvalResult(variation = variation, value = value, events = prereq_events)
 
     off_var = flag.get('offVariation')
     off_value = None if off_var is None else _get_variation(flag, off_var)
-    return off_var, off_value, prereq_events
+    return EvalResult(variation = off_var, value = off_value, events = prereq_events)
 
 
 def _evaluate(flag, user, store, prereq_events=None):

@@ -48,30 +48,9 @@ class MockUpdateProcessor(UpdateProcessor):
     def is_alive(self):
         return True
 
+    def initialized(self):
+        return True
 
-feature = {
-    u'key': u'feature.key',
-    u'salt': u'abc',
-    u'on': True,
-    u'variations': [
-        {
-            u'value': True,
-            u'weight': 100,
-            u'targets': []
-        },
-        {
-            u'value': False,
-            u'weight': 0,
-            u'targets': []
-        }
-    ]
-}
-feature_store = InMemoryFeatureStore()
-feature_store.init({
-    FEATURES: {
-        'feature.key': feature
-    }
-})
 
 client = LDClient(config=Config(base_uri="http://localhost:3000",
                                 event_processor_class = MockEventProcessor, update_processor_class = MockUpdateProcessor))
@@ -216,6 +195,55 @@ def test_exception_in_retrieval():
 
 def test_no_defaults():
     assert "bar" == offline_client.variation('foo', user, default="bar")
+
+
+def test_event_for_existing_feature():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        }
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = LDClient(config=Config(sdk_key = 'SDK_KEY',
+                                    base_uri="http://localhost:3000",
+                                    event_processor_class=MockEventProcessor,
+                                    update_processor_class=MockUpdateProcessor,
+                                    feature_store=store))
+    assert 'b' == client.variation('feature.key', user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == user and
+        e['value'] == 'b' and
+        e['variation'] == 1 and
+        e['default'] == 'c')
+
+
+def test_all_flags():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        }
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = LDClient(config=Config(sdk_key = 'SDK_KEY',
+                                    base_uri="http://localhost:3000",
+                                    event_processor_class=MockEventProcessor,
+                                    update_processor_class=MockUpdateProcessor,
+                                    feature_store=store))
+    result = client.all_flags(user)
+    assert (len(result) == 1 and
+        result.get('feature.key') == 'b')
 
 
 def test_secure_mode_hash():

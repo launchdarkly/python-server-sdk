@@ -186,14 +186,13 @@ class LDClient(object):
         return evaluate(flag, user, self._store)
 
     def _evaluate_and_send_events(self, flag, user, default):
-        variation, value, events = evaluate(flag, user, self._store)
-        for event in events or []:
+        result = evaluate(flag, user, self._store)
+        for event in result.events or []:
             self._send_event(event)
 
-        if value is None:
-            value = default
+        value = default if result.value is None else result.value
         self._send_event({'kind': 'feature', 'key': flag.get('key'),
-                          'user': user, 'variation': variation, 'value': value,
+                          'user': user, 'variation': result.variation, 'value': value,
                           'default': default, 'version': flag.get('version'),
                           'trackEvents': flag.get('trackEvents'),
                           'debugEventsUntilDate': flag.get('debugEventsUntilDate')})
@@ -225,7 +224,7 @@ class LDClient(object):
         return self._store.all(FEATURES, cb)
 
     def _evaluate_multi(self, user, flags):
-        return dict([(k, self._evaluate(v, user)[0]) for k, v in flags.items() or {}])
+        return dict([(k, self._evaluate(v, user).value) for k, v in flags.items() or {}])
 
     def secure_mode_hash(self, user):
         if user.get('key') is None or self._config.sdk_key is None:
