@@ -88,6 +88,14 @@ def setup_function(function):
     }
 
 
+def make_client(store):
+    return LDClient(config=Config(sdk_key = 'SDK_KEY',
+                                  base_uri="http://localhost:3000",
+                                  event_processor_class=MockEventProcessor,
+                                  update_processor_class=MockUpdateProcessor,
+                                  feature_store=store))
+
+
 def get_first_event(c):
     return c._event_processor._events.pop(0)
 
@@ -174,25 +182,6 @@ def test_defaults_and_online_no_default():
     assert e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user
 
 
-def test_exception_in_retrieval():
-    class ExceptionFeatureRequester(FeatureRequester):
-        def __init__(self, *_):
-            pass
-
-        def get_all(self):
-            raise Exception("blah")
-
-    client = LDClient(config=Config(base_uri="http://localhost:3000",
-                                    defaults={"foo": "bar"},
-                                    feature_store=InMemoryFeatureStore(),
-                                    feature_requester_class=ExceptionFeatureRequester,
-                                    event_processor_class=MockEventProcessor,
-                                    update_processor_class=MockUpdateProcessor))
-    assert "bar" == client.variation('foo', user, default="jim")
-    e = get_first_event(client)
-    assert e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user
-
-
 def test_no_defaults():
     assert "bar" == offline_client.variation('foo', user, default="bar")
 
@@ -205,15 +194,12 @@ def test_event_for_existing_feature():
         u'variations': ['a', 'b'],
         u'fallthrough': {
             u'variation': 1
-        }
+        },
+        u'trackEvents': True
     }
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
-    client = LDClient(config=Config(sdk_key = 'SDK_KEY',
-                                    base_uri="http://localhost:3000",
-                                    event_processor_class=MockEventProcessor,
-                                    update_processor_class=MockUpdateProcessor,
-                                    feature_store=store))
+    client = make_client(store)
     assert 'b' == client.variation('feature.key', user, default='c')
     e = get_first_event(client)
     assert (e['kind'] == 'feature' and
@@ -221,7 +207,73 @@ def test_event_for_existing_feature():
         e['user'] == user and
         e['value'] == 'b' and
         e['variation'] == 1 and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
+
+
+def test_event_for_unknown_feature():
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {}})
+    client = make_client(store)
+    assert 'c' == client.variation('feature.key', user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == user and
+        e['value'] == 'c' and
+        e['variation'] == None and
         e['default'] == 'c')
+
+
+def test_event_for_existing_feature_with_no_user():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        },
+        u'trackEvents': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'c' == client.variation('feature.key', None, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == None and
+        e['value'] == 'c' and
+        e['variation'] == None and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
+
+
+def test_event_for_existing_feature_with_no_user_key():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        },
+        u'trackEvents': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    bad_user = { u'name': u'Bob' }
+    assert 'c' == client.variation('feature.key', bad_user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == bad_user and
+        e['value'] == 'c' and
+        e['variation'] == None and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
 
 
 def test_all_flags():
