@@ -139,7 +139,8 @@ class LDClient(object):
 
     def variation(self, key, user, default):
         default = self._config.get_default(key, default)
-        self._sanitize_user(user)
+        if user is not None:
+            self._sanitize_user(user)
 
         if self._config.offline:
             return default
@@ -158,12 +159,7 @@ class LDClient(object):
                 send_event(default)
                 return default
 
-        if user is None or user.get('key') is None:
-            log.warn("Missing user or user key when evaluating Feature Flag key: " + key + ". Returning default.")
-            send_event(default)
-            return default
-
-        if user.get('key', "") == "":
+        if user is not None and user.get('key', "") == "":
             log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
         def cb(flag):
@@ -177,6 +173,7 @@ class LDClient(object):
 
             except Exception as e:
                 log.error("Exception caught in variation: " + e.message + " for flag key: " + key + " and user: " + str(user))
+                send_event(default)
 
             return default
 
@@ -186,13 +183,19 @@ class LDClient(object):
         return evaluate(flag, user, self._store)
 
     def _evaluate_and_send_events(self, flag, user, default):
-        result = evaluate(flag, user, self._store)
-        for event in result.events or []:
-            self._send_event(event)
-
-        value = default if result.value is None else result.value
+        if user is None or user.get('key') is None:
+            log.warn("Missing user or user key when evaluating Feature Flag key: " + flag.get('key') + ". Returning default.")
+            value = default
+            variation = None
+        else:
+            result = evaluate(flag, user, self._store)
+            for event in result.events or []:
+                self._send_event(event)
+            value = default if result.value is None else result.value
+            variation = result.variation
+        
         self._send_event({'kind': 'feature', 'key': flag.get('key'),
-                          'user': user, 'variation': result.variation, 'value': value,
+                          'user': user, 'variation': variation, 'value': value,
                           'default': default, 'version': flag.get('version'),
                           'trackEvents': flag.get('trackEvents'),
                           'debugEventsUntilDate': flag.get('debugEventsUntilDate')})
