@@ -30,6 +30,7 @@ from ldclient.util import log
 
 
 __MAX_FLUSH_THREADS__ = 5
+__CURRENT_EVENT_SCHEMA__ = 3
 
 class NullEventProcessor(EventProcessor):
     def __init__(self):
@@ -74,6 +75,7 @@ class EventOutputFormatter(object):
                 'creationDate': e['creationDate'],
                 'key': e['key'],
                 'version': e.get('version'),
+                'variation': e.get('variation'),
                 'value': e.get('value'),
                 'default': e.get('default'),
                 'prereqOf': e.get('prereqOf')
@@ -126,6 +128,8 @@ class EventOutputFormatter(object):
                 'count': cval['count'],
                 'value': cval['value']
             }
+            if variation is not None:
+                counter['variation'] = variation
             if version is None:
                 counter['unknown'] = True
             else:
@@ -164,7 +168,7 @@ class EventPayloadSendTask(object):
             json_body = jsonpickle.encode(output_events, unpicklable=False)
             log.debug('Sending events payload: ' + json_body)
             hdrs = _headers(self._config.sdk_key)
-            hdrs['X-LaunchDarkly-Event-Schema'] = '2'
+            hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
             uri = self._config.events_uri
             r = self._session.post(uri,
                                    headers=hdrs,
