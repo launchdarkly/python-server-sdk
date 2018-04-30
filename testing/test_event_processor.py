@@ -323,11 +323,11 @@ def test_nontracked_events_are_summarized():
     assert se['features'] == {
         'flagkey1': {
             'default': 'default1',
-            'counters': [ { 'version': 11, 'value': 'value1', 'count': 1 } ]
+            'counters': [ { 'version': 11, 'variation': 1, 'value': 'value1', 'count': 1 } ]
         },
         'flagkey2': {
             'default': 'default2',
-            'counters': [ { 'version': 22, 'value': 'value2', 'count': 1 } ]
+            'counters': [ { 'version': 22, 'variation': 2, 'value': 'value2', 'count': 1 } ]
         }
     }
 
@@ -410,6 +410,7 @@ def check_feature_event(data, source, debug, inline_user):
     assert data['creationDate'] == source['creationDate']
     assert data['key'] == source['key']
     assert data.get('version') == source.get('version')
+    assert data.get('variation') == source.get('variation')
     assert data.get('value') == source.get('value')
     assert data.get('default') == source.get('default')
     if inline_user is None:
