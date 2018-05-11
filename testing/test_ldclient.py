@@ -1,7 +1,9 @@
 from builtins import object
 from ldclient.client import LDClient, Config
+from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor
+from ldclient.versioned_data_kind import FEATURES
 import pytest
 from testing.sync_util import wait_until
 
@@ -11,8 +13,30 @@ except:
     import Queue as queue
 
 
+class MockEventProcessor(object):
+    def __init__(self, *_):
+        self._running = False
+        self._events = []
+        mock_event_processor = self
+
+    def stop(self):
+        self._running = False
+
+    def start(self):
+        self._running = True
+
+    def is_alive(self):
+        return self._running
+
+    def send_event(self, event):
+        self._events.append(event)
+
+    def flush(self):
+        pass
+
+
 class MockUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, requestor, store, ready):
+    def __init__(self, config, store, ready):
         ready.set()
 
     def start(self):
@@ -24,58 +48,18 @@ class MockUpdateProcessor(UpdateProcessor):
     def is_alive(self):
         return True
 
-
-class MockFeatureStore(FeatureStore):
-    def delete(self, key, version):
-        pass
-
-    @property
     def initialized(self):
-        pass
-
-    def init(self, features):
-        pass
-
-    def all(self):
-        pass
-
-    def upsert(self, key, feature):
-        pass
-
-    def __init__(self, *_):
-        pass
-
-    def get(self, key):
-        if key == "feature.key":
-            return {
-                u'key': u'feature.key',
-                u'salt': u'abc',
-                u'on': True,
-                u'variations': [
-                    {
-                        u'value': True,
-                        u'weight': 100,
-                        u'targets': []
-                    },
-                    {
-                        u'value': False,
-                        u'weight': 0,
-                        u'targets': []
-                    }
-                ]
-            }
-        else:
-            return None
+        return True
 
 
-client = LDClient(config=Config(base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
-                  update_processor_class=MockUpdateProcessor))
+client = LDClient(config=Config(base_uri="http://localhost:3000",
+                                event_processor_class = MockEventProcessor, update_processor_class = MockUpdateProcessor))
 offline_client = LDClient(config=
-                          Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
+                          Config(sdk_key="secret", base_uri="http://localhost:3000",
                                  offline=True))
 no_send_events_client = LDClient(config=
-                                 Config(sdk_key="secret", base_uri="http://localhost:3000", feature_store=MockFeatureStore(),
-                                 send_events=False, update_processor_class=MockUpdateProcessor))
+                                 Config(sdk_key="secret", base_uri="http://localhost:3000",
+                                 update_processor_class = MockUpdateProcessor, send_events=False))
 
 user = {
     u'key': u'xyz',
@@ -94,39 +78,6 @@ sanitized_numeric_key_user = {
 }
 
 
-class MockConsumer(object):
-    def __init__(self, *_):
-        self._running = False
-
-    def stop(self):
-        self._running = False
-
-    def start(self):
-        self._running = True
-
-    def is_alive(self):
-        return self._running
-
-    def flush(self):
-        pass
-
-
-class MockFeatureRequester(FeatureRequester):
-    def __init__(self, *_):
-        pass
-
-    def get_all(self):
-        pass
-
-
-def mock_consumer():
-    return MockConsumer()
-
-
-def noop_consumer():
-    return
-
-
 def setup_function(function):
     global numeric_key_user
     numeric_key_user = {
@@ -135,19 +86,32 @@ def setup_function(function):
             u'bizzle': u'def'
         }
     }
-    client._queue = queue.Queue(10)
-    client._event_consumer = mock_consumer()
 
 
-def wait_for_event(c, cb):
-    e = c._queue.get(False)
-    return cb(e)
+def make_client(store):
+    return LDClient(config=Config(sdk_key = 'SDK_KEY',
+                                  base_uri="http://localhost:3000",
+                                  event_processor_class=MockEventProcessor,
+                                  update_processor_class=MockUpdateProcessor,
+                                  feature_store=store))
+
+
+def get_first_event(c):
+    return c._event_processor._events.pop(0)
 
 
 def test_ctor_both_sdk_keys_set():
     with pytest.raises(Exception):
         config = Config(sdk_key="sdk key a", offline=True)
         LDClient(sdk_key="sdk key b", config=config)
+
+
+def test_client_has_null_event_processor_if_offline():
+    assert isinstance(offline_client._event_processor, NullEventProcessor)
+
+
+def test_client_has_null_event_processor_if_send_events_off():
+    assert isinstance(no_send_events_client._event_processor, NullEventProcessor)
 
 
 def test_toggle_offline():
@@ -159,140 +123,181 @@ def test_sanitize_user():
     assert numeric_key_user == sanitized_numeric_key_user
 
 
-def test_toggle_event_offline():
-    offline_client.variation('feature.key', user, default=None)
-    assert offline_client._queue.empty()
-
-
-def test_toggle_event_with_send_events_off():
-    no_send_events_client.variation('feature.key', user, default=None)
-    assert no_send_events_client._queue.empty()
-
-
 def test_identify():
     client.identify(user)
 
-    def expected_event(e):
-        return e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
-
-    assert expected_event(client._queue.get(False))
+    e = get_first_event(client)
+    assert e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
 
 
 def test_identify_numeric_key_user():
     client.identify(numeric_key_user)
 
-    def expected_event(e):
-        return e['kind'] == 'identify' and e['key'] == '33' and e['user'] == sanitized_numeric_key_user
-
-    assert expected_event(client._queue.get(False))
-
-
-def test_identify_offline():
-    offline_client.identify(numeric_key_user)
-    assert offline_client._queue.empty()
-
-
-def test_identify_with_send_events_off():
-    no_send_events_client.identify(numeric_key_user)
-    assert no_send_events_client._queue.empty()
+    e = get_first_event(client)
+    assert e['kind'] == 'identify' and e['key'] == '33' and e['user'] == sanitized_numeric_key_user
 
 
 def test_track():
     client.track('my_event', user, 42)
 
-    def expected_event(e):
-        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
-
-    assert expected_event(client._queue.get(False))
+    e = get_first_event(client)
+    assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
 
 
 def test_track_numeric_key_user():
     client.track('my_event', numeric_key_user, 42)
 
-    def expected_event(e):
-        return e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user \
-               and e['data'] == 42
-
-    assert expected_event(client._queue.get(False))
-
-
-def test_track_offline():
-    offline_client.track('my_event', user, 42)
-    assert offline_client._queue.empty()
-
-
-def test_track_with_send_events_off():
-    no_send_events_client.track('my_event', user, 42)
-    assert no_send_events_client._queue.empty()
+    e = get_first_event(client)
+    assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user \
+       and e['data'] == 42
 
 
 def test_defaults():
-    client = LDClient(config=Config(base_uri="http://localhost:3000",
-                                    defaults={"foo": "bar"},
-                                    offline=True))
-    assert "bar" == client.variation('foo', user, default=None)
+    my_client = LDClient(config=Config(base_uri="http://localhost:3000",
+                                       defaults={"foo": "bar"},
+                                       offline=True))
+    assert "bar" == my_client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
     my_client = LDClient(config=Config(base_uri="http://localhost:3000",
                                        defaults={"foo": expected},
-                                       event_consumer_class=MockConsumer,
-                                       feature_requester_class=MockFeatureRequester,
+                                       event_processor_class=MockEventProcessor,
                                        update_processor_class=MockUpdateProcessor,
                                        feature_store=InMemoryFeatureStore()))
     actual = my_client.variation('foo', user, default="originalDefault")
     assert actual == expected
-    assert wait_for_event(my_client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
+    e = get_first_event(my_client)
+    assert e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user
 
 
 def test_defaults_and_online_no_default():
-    client = LDClient(config=Config(base_uri="http://localhost:3000",
-                                    defaults={"foo": "bar"},
-                                    event_consumer_class=MockConsumer,
-                                    update_processor_class=MockUpdateProcessor,
-                                    feature_requester_class=MockFeatureRequester))
-    assert "jim" == client.variation('baz', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user)
-
-
-def test_exception_in_retrieval():
-    class ExceptionFeatureRequester(FeatureRequester):
-        def __init__(self, *_):
-            pass
-
-        def get_all(self):
-            raise Exception("blah")
-
-    client = LDClient(config=Config(base_uri="http://localhost:3000",
-                                    defaults={"foo": "bar"},
-                                    feature_store=InMemoryFeatureStore(),
-                                    feature_requester_class=ExceptionFeatureRequester,
-                                    update_processor_class=MockUpdateProcessor,
-                                    event_consumer_class=MockConsumer))
-    assert "bar" == client.variation('foo', user, default="jim")
-    assert wait_for_event(client, lambda e: e['kind'] == 'feature' and e['key'] == u'foo' and e['user'] == user)
+    my_client = LDClient(config=Config(base_uri="http://localhost:3000",
+                                       defaults={"foo": "bar"},
+                                       event_processor_class=MockEventProcessor,
+                                       update_processor_class=MockUpdateProcessor))
+    assert "jim" == my_client.variation('baz', user, default="jim")
+    e = get_first_event(my_client)
+    assert e['kind'] == 'feature' and e['key'] == u'baz' and e['user'] == user
 
 
 def test_no_defaults():
     assert "bar" == offline_client.variation('foo', user, default="bar")
 
 
+def test_event_for_existing_feature():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        },
+        u'trackEvents': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'b' == client.variation('feature.key', user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == user and
+        e['value'] == 'b' and
+        e['variation'] == 1 and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
+
+
+def test_event_for_unknown_feature():
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {}})
+    client = make_client(store)
+    assert 'c' == client.variation('feature.key', user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == user and
+        e['value'] == 'c' and
+        e['variation'] == None and
+        e['default'] == 'c')
+
+
+def test_event_for_existing_feature_with_no_user():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        },
+        u'trackEvents': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'c' == client.variation('feature.key', None, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == None and
+        e['value'] == 'c' and
+        e['variation'] == None and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
+
+
+def test_event_for_existing_feature_with_no_user_key():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        },
+        u'trackEvents': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    bad_user = { u'name': u'Bob' }
+    assert 'c' == client.variation('feature.key', bad_user, default='c')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == bad_user and
+        e['value'] == 'c' and
+        e['variation'] == None and
+        e['default'] == 'c' and
+        e['trackEvents'] == True)
+
+
+def test_all_flags():
+    feature = {
+        u'key': u'feature.key',
+        u'salt': u'abc',
+        u'on': True,
+        u'variations': ['a', 'b'],
+        u'fallthrough': {
+            u'variation': 1
+        }
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = LDClient(config=Config(sdk_key = 'SDK_KEY',
+                                    base_uri="http://localhost:3000",
+                                    event_processor_class=MockEventProcessor,
+                                    update_processor_class=MockUpdateProcessor,
+                                    feature_store=store))
+    result = client.all_flags(user)
+    assert (len(result) == 1 and
+        result.get('feature.key') == 'b')
+
+
 def test_secure_mode_hash():
     user = {'key': 'Message'}
     assert offline_client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
-
-
-def drain(queue):
-    while not queue.empty():
-        queue.get()
-        queue.task_done()
-    return
-
-
-def test_flush_empties_queue():
-    client.track('my_event', user, 42)
-    client.track('my_event', user, 33)
-    drain(client._queue)
-    client.flush()
-    assert client._queue.empty()

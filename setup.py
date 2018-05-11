@@ -17,14 +17,12 @@ ldclient_version='5.0.4'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt')
-python26_reqs = parse_requirements('python2.6-requirements.txt')
 test_reqs = parse_requirements('test-requirements.txt')
 redis_reqs = parse_requirements('redis-requirements.txt')
 
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 reqs = [ir for ir in install_reqs]
-python26reqs = [ir for ir in python26_reqs]
 testreqs = [ir for ir in test_reqs]
 redisreqs = [ir for ir in redis_reqs]
 
@@ -59,17 +57,17 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries',
     ],
     extras_require={
-        "redis": redisreqs,
-        "python2.6": python26reqs
+        "redis": redisreqs
     },
     tests_require=testreqs,
     cmdclass={'test': PyTest},

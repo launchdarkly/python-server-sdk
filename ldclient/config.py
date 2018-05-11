@@ -1,4 +1,4 @@
-from ldclient.event_consumer import EventConsumerImpl
+from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
 
@@ -13,8 +13,8 @@ class Config(object):
                  events_uri='https://events.launchdarkly.com',
                  connect_timeout=10,
                  read_timeout=15,
-                 events_upload_max_batch_size=100,
                  events_max_pending=10000,
+                 flush_interval=5,
                  stream_uri='https://stream.launchdarkly.com',
                  stream=True,
                  verify_ssl=True,
@@ -26,10 +26,13 @@ class Config(object):
                  use_ldd=False,
                  feature_store=InMemoryFeatureStore(),
                  feature_requester_class=None,
-                 event_consumer_class=None,
+                 event_processor_class=None,
                  private_attribute_names=(),
                  all_attributes_private=False,
-                 offline=False):
+                 offline=False,
+                 user_keys_capacity=1000,
+                 user_keys_flush_interval=300,
+                 inline_users_in_events=False):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -43,6 +46,8 @@ class Config(object):
         :param int events_max_pending: The capacity of the events buffer. The client buffers up to this many
           events in memory before flushing. If the capacity is exceeded before the buffer is flushed, events
           will be discarded.
+        : param float flush_interval: The number of seconds in between flushes of the events buffer. Decreasing
+          the flush interval means that the event buffer is less likely to reach capacity.
         :param string stream_uri: The URL for the LaunchDarkly streaming events server. Most users should
           use the default value.
         :param bool stream: Whether or not the streaming API should be used to receive flag updates. By
@@ -66,10 +71,17 @@ class Config(object):
           private, not just the attributes specified in `private_attribute_names`.
         :param feature_store: A FeatureStore implementation
         :type feature_store: FeatureStore
+        :param int user_keys_capacity: The number of user keys that the event processor can remember at any
+          one time, so that duplicate user details will not be sent in analytics events.
+        :param float user_keys_flush_interval: The interval in seconds at which the event processor will
+          reset its set of known user keys.
+        :param bool inline_users_in_events: Whether to include full user details in every analytics event.
+          By default, events will only include the user key, except for one "index" event that provides the
+          full details for the user.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
-        :param event_consumer_class: A factory for an EventConsumer implementation taking the event queue, sdk key, and config
-        :type event_consumer_class: (queue.Queue, str, Config) -> EventConsumer
+        :param event_processor_class: A factory for an EventProcessor implementation taking the config
+        :type event_processor_class: (Config) -> EventProcessor
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
         """
@@ -86,12 +98,12 @@ class Config(object):
         self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.__event_consumer_class = EventConsumerImpl if not event_consumer_class else event_consumer_class
+        self.__event_processor_class = DefaultEventProcessor if not event_processor_class else event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
-        self.__events_upload_max_batch_size = events_upload_max_batch_size
         self.__events_max_pending = events_max_pending
+        self.__flush_interval = flush_interval
         self.__verify_ssl = verify_ssl
         self.__defaults = defaults
         if offline is True:
@@ -100,6 +112,9 @@ class Config(object):
         self.__private_attribute_names = private_attribute_names
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
+        self.__user_keys_capacity = user_keys_capacity
+        self.__user_keys_flush_interval = user_keys_flush_interval
+        self.__inline_users_in_events = inline_users_in_events
 
     @classmethod
     def default(cls):
@@ -111,8 +126,8 @@ class Config(object):
                       events_uri=self.__events_uri,
                       connect_timeout=self.__connect_timeout,
                       read_timeout=self.__read_timeout,
-                      events_upload_max_batch_size=self.__events_upload_max_batch_size,
                       events_max_pending=self.__events_max_pending,
+                      flush_interval=self.__flush_interval,
                       stream_uri=self.__stream_uri,
                       stream=self.__stream,
                       verify_ssl=self.__verify_ssl,
@@ -123,10 +138,13 @@ class Config(object):
                       use_ldd=self.__use_ldd,
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
-                      event_consumer_class=self.__event_consumer_class,
+                      event_processor_class=self.__event_processor_class,
                       private_attribute_names=self.__private_attribute_names,
                       all_attributes_private=self.__all_attributes_private,
-                      offline=self.__offline)
+                      offline=self.__offline,
+                      user_keys_capacity=self.__user_keys_capacity,
+                      user_keys_flush_interval=self.__user_keys_flush_interval,
+                      inline_users_in_events=self.__inline_users_in_events)
 
     def get_default(self, key, default):
         return default if key not in self.__defaults else self.__defaults[key]
@@ -176,8 +194,8 @@ class Config(object):
         return self.__feature_store
 
     @property
-    def event_consumer_class(self):
-        return self.__event_consumer_class
+    def event_processor_class(self):
+        return self.__event_processor_class
 
     @property
     def feature_requester_class(self):
@@ -200,12 +218,12 @@ class Config(object):
         return self.__send_events
 
     @property
-    def events_upload_max_batch_size(self):
-        return self.__events_upload_max_batch_size
-
-    @property
     def events_max_pending(self):
         return self.__events_max_pending
+
+    @property
+    def flush_interval(self):
+        return self.__flush_interval
 
     @property
     def verify_ssl(self):
@@ -222,6 +240,18 @@ class Config(object):
     @property
     def offline(self):
         return self.__offline
+
+    @property
+    def user_keys_capacity(self):
+        return self.__user_keys_capacity
+
+    @property
+    def user_keys_flush_interval(self):
+        return self.__user_keys_flush_interval
+
+    @property
+    def inline_users_in_events(self):
+        return self.__inline_users_in_events
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key is '':
