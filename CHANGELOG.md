@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.0.0] - 2018-05-10
+
+### Changed:
+- To reduce the network bandwidth used for analytics events, feature request events are now sent as counters rather than individual events, and user details are now sent only at intervals rather than in each event. These behaviors can be modified through the LaunchDarkly UI and with the new configuration option `inline_users_in_events`. For more details, see [Analytics Data Stream Reference](https://docs.launchdarkly.com/v2.0/docs/analytics-data-stream-reference).
+- The analytics event processor now flushes events at a configurable interval defaulting to 5 seconds, like the other SDKs (previously it flushed if no events had been posted for 5 seconds, or if events exceeded a configurable number). This interval is set by the new `Config` property `flush_interval`.
+
+### Removed:
+- Python 2.6 is no longer supported.
+- Removed the `Config` property `events_upload_max_batch_size`, which is no longer relevant in the new event flushing logic (see above).
+
+
 ## [5.0.4] - 2018-04-16
 ## Fixed
 - It was not possible to install the SDK with `pip` 10.0.0. This should work now (thanks, [@theholy7](https://github.com/launchdarkly/python-client/pull/82)!) with the latest `pip` as well as previous versions.
