@@ -18,7 +18,7 @@ class EventSummarizer(object):
             counter_key = (event['key'], event['variation'], event['version'])
             counter_val = self.counters.get(counter_key)
             if counter_val is None:
-                counter_val = { 'count': 1, 'value': event['value'], 'default': event['default'] }
+                counter_val = { 'count': 1, 'value': event['value'], 'default': event.get('default') }
                 self.counters[counter_key] = counter_val
             else:
                 counter_val['count'] = counter_val['count'] + 1
