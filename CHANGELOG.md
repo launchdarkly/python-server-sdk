@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.0.1] - 2018-05-25
+
+### Fixed:
+- Fixed a bug that caused an error message to be logged (`KeyError: 'default'`) when evaluating a prerequisite flag (and that also prevented an analytics event from being sent for that flag).
+- When running in uWSGI, the client will no longer log an error message if the `enableThreads` option is absent, as long as the `threads` option has been set to a number greater than 1. ([#84](https://github.com/launchdarkly/python-client/issues/84))
+
 ## [6.0.0] - 2018-05-10
 
 ### Changed:
