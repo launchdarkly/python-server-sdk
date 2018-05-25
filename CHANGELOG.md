@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.0.1] - 2018-05-25
+
+_This release was broken and has been removed._
+
 ## [6.0.0] - 2018-05-10
 
 ### Changed:
