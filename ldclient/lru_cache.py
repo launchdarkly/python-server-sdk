@@ -22,6 +22,6 @@ class SimpleLRUCache(object):
         if found:
             self.cache.pop(key)
         if len(self.cache) >= self.capacity:
-            x = self.cache.popitem(last=False)
+            self.cache.popitem(last=False)
         self.cache[key] = value
         return found
