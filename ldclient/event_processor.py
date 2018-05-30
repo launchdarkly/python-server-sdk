@@ -4,7 +4,6 @@ from collections import namedtuple
 from email.utils import parsedate
 import errno
 import jsonpickle
-import pylru
 from threading import Event, Lock, Thread
 import time
 
@@ -22,6 +21,7 @@ import six
 
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.fixed_thread_pool import FixedThreadPool
+from ldclient.lru_cache import SimpleLRUCache
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
@@ -231,7 +231,7 @@ class EventDispatcher(object):
         self._close_session = (session is None)  # so we know whether to close it later
         self._disabled = False
         self._buffer = EventBuffer(config.events_max_pending)
-        self._user_keys = pylru.lrucache(config.user_keys_capacity)
+        self._user_keys = SimpleLRUCache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
 
@@ -304,11 +304,7 @@ class EventDispatcher(object):
         if user is None or 'key' not in user:
             return False
         key = user['key']
-        if key in self._user_keys:
-            self._user_keys[key]  # refresh cache item
-            return True
-        self._user_keys[key] = True
-        return False
+        return self._user_keys.put(key, True)
 
     def _should_debug_event(self, event):
         debug_until = event.get('debugEventsUntilDate')
