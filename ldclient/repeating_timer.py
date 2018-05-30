@@ -6,11 +6,11 @@ class RepeatingTimer(Thread):
         self.daemon = True
         self._interval = interval
         self._action = callable
-        self._stop = Event()
+        self._stopper = Event()
 
     def run(self):
-        while not self._stop.wait(self._interval):
+        while not self._stopper.wait(self._interval):
             self._action()
 
     def stop(self):
-        self._stop.set()
+        self._stopper.set()
