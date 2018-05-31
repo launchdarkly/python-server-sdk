@@ -2,6 +2,16 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.0.3] - 2018-05-30
+
+### Removed:
+- Removed a dependency on the `pylru` package, because it uses a GPL license.
+
+### Fixed:
+- Fixed a bug that, in Python 3.x, could cause a timer thread to keep running after the client has been shut down. This bug also caused the message "TypeError: Event object is not callable" to be logged.
+- Fixed the `Config` initializer to create a new instance of `InMemoryFeatureStore` if you omit the `feature_store` argument. Previously, all `Config` instances that were created with default parameters would share the same feature store instance.
+- Clarified HTTP proxy setup instructions in the readme.
+
 ## [6.0.2] - 2018-05-25
 
 ### Fixed:
