@@ -24,7 +24,7 @@ class Config(object):
                  update_processor_class=None,
                  poll_interval=30,
                  use_ldd=False,
-                 feature_store=InMemoryFeatureStore(),
+                 feature_store=None,
                  feature_requester_class=None,
                  event_processor_class=None,
                  private_attribute_names=(),

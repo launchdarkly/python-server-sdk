@@ -26,6 +26,38 @@ Quick setup
         ldclient.set_sdk_key("your sdk key")
         client = ldclient.get()
 
+
+HTTPS proxy
+------------
+Python's standard HTTP library provides built-in support for the use of a HTTPS proxy. If the HTTPS_PROXY environment variable is present then the SDK will proxy all network requests through the URL provided.
+
+How to set the HTTPS_PROXY environment variable on Mac/Linux systems:
+```
+export HTTPS_PROXY=https://web-proxy.domain.com:8080
+```
+
+
+How to set the HTTPS_PROXY environment variable on Windows systems:
+```
+set HTTPS_PROXY=https://web-proxy.domain.com:8080
+```
+
+Or it can be set from within python:
+```
+os.environ["https_proxy"] = "https://web-proxy.domain.com:8080"
+```
+
+
+If your proxy requires authentication then you can prefix the URN with your login information:
+```
+export HTTPS_PROXY=http://user:pass@web-proxy.domain.com:8080
+```
+or
+```
+set HTTPS_PROXY=http://user:pass@web-proxy.domain.com:8080
+```
+
+
 Your first feature flag
 -----------------------
 
