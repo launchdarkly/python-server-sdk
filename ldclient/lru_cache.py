@@ -49,3 +49,5 @@ class SimpleLRUCache(object):
         self.cache[key] = value
         return found
 
+    def clear(self):
+        self.cache.clear()
