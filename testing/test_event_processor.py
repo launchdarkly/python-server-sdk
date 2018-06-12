@@ -1,7 +1,6 @@
 from email.utils import formatdate
 import json
 import pytest
-from requests.structures import CaseInsensitiveDict
 import time
 
 from ldclient.config import Config
@@ -33,7 +32,7 @@ class MockResponse(object):
         return self._status
 
     def getheader(self, name):
-        return self._headers.get(name)
+        return self._headers.get(name.lower())
 
 
 class MockHttp(object):
@@ -46,9 +45,9 @@ class MockHttp(object):
     def request(self, method, uri, headers, timeout, body, retries):
         self._request_headers = headers
         self._request_data = body
-        resp_hdr = CaseInsensitiveDict()
+        resp_hdr = dict()
         if self._server_time is not None:
-            resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
+            resp_hdr['date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
         return MockResponse(self._response_status, resp_hdr)
 
     def clear(self):

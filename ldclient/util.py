@@ -76,3 +76,8 @@ class UnsuccessfulResponseException(Exception):
     @property
     def status(self):
         return self._status
+
+
+def throw_if_unsuccessful_response(resp):
+    if resp.status >= 400:
+        raise UnsuccessfulResponseException(resp.status)

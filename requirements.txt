@@ -1,6 +1,5 @@
 backoff>=1.4.3
 CacheControl>=0.12.3
-requests>=2.17.3
 future>=0.16.0
 six>=1.10.0
 pyRFC3339>=1.0

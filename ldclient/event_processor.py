@@ -25,6 +25,7 @@ from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
 from ldclient.util import log
+from ldclient.util import throw_if_unsuccessful_response
 
 
 __MAX_FLUSH_THREADS__ = 5
@@ -168,12 +169,11 @@ class EventPayloadSendTask(object):
             uri = self._config.events_uri
             r = self._http.request('POST', uri,
                                    headers=hdrs,
-                                   timeout=self._config.connect_timeout,
+                                   timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                    body=json_body,
                                    retries=1)
             self._response_fn(r)
-            if r.status >= 400:
-                raise UnsuccessfulResponseException(r.status)
+            throw_if_unsuccessful_response(r)
             return r
         except Exception as e:
             log.warning(

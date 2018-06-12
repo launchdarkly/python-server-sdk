@@ -6,7 +6,9 @@ import warnings
 
 import six
 
-import requests
+import urllib3
+
+from ldclient.util import throw_if_unsuccessful_response
 
 # Inspired by: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
 
@@ -16,7 +18,7 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient(object):
-    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000, session=None, **kwargs):
+    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000, http=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
@@ -24,10 +26,10 @@ class SSEClient(object):
         self._read_timeout = read_timeout
         self._chunk_size = chunk_size
 
-        # Optional support for passing in a requests.Session()
-        self.session = session
+        # Optional support for passing in an HTTP client
+        self.http = http or urllib3.PoolManager(num_pools=1)
 
-        # Any extra kwargs will be fed into the requests.get call later.
+        # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs
 
         # The SSE spec requires making requests with Cache-Control: nocache
@@ -48,21 +50,21 @@ class SSEClient(object):
             self.requests_kwargs['headers']['Last-Event-ID'] = self.last_id
 
         # Use session if set.  Otherwise fall back to requests module.
-        requester = self.session or requests
-        self.resp = requester.get(
+        self.resp = self.http.request(
+            'GET',
             self.url,
-            stream=True,
-            timeout=(self._connect_timeout, self._read_timeout),
+            timeout=urllib3.Timeout(connect=self._connect_timeout, read=self._read_timeout),
+        preload_content=False,
             **self.requests_kwargs)
 
         # Raw readlines doesn't work because we may be missing newline characters until the next chunk
         # For some reason, we also need to specify a chunk size because stream=True doesn't seem to guarantee
         # that we get the newlines in a timeline manner
-        self.resp_file = self.resp.iter_content(chunk_size=self._chunk_size, decode_unicode=True)
+        self.resp_file = self.resp.stream(amt=self._chunk_size)
 
         # TODO: Ensure we're handling redirects.  Might also stick the 'origin'
         # attribute on Events like the Javascript spec requires.
-        self.resp.raise_for_status()
+        throw_if_unsuccessful_response(self.resp)
 
     def _event_complete(self):
         return re.search(end_of_field, self.buf[len(self.buf)-self._chunk_size-10:]) is not None  # Just search the last chunk plus a bit
@@ -77,8 +79,8 @@ class SSEClient(object):
                 # There are some bad cases where we don't always get a line: https://github.com/requests/requests/pull/2431
                 if not nextline:
                     raise EOFError()
-                self.buf += nextline
-            except (StopIteration, requests.RequestException, EOFError) as e:
+                self.buf += nextline.decode("utf-8")
+            except (StopIteration, EOFError) as e:
                 time.sleep(self.retry / 1000.0)
                 self._connect()
 

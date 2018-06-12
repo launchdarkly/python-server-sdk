@@ -5,12 +5,11 @@ import json
 from threading import Thread
 
 import backoff
-from requests import HTTPError
 import time
 
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
-from ldclient.util import _stream_headers, log
+from ldclient.util import _stream_headers, log, UnsuccessfulResponseException
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
@@ -49,9 +48,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     if message_ok is True and self._ready.is_set() is False:
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
-            except HTTPError as e:
-                log.error("Received unexpected status code %d for stream connection" % e.response.status_code)
-                if e.response.status_code == 401:
+            except UnsuccessfulResponseException as e:
+                log.error("Received unexpected status code %d for stream connection" % e.status)
+                if e.status == 401:
                     log.error("Received 401 error, no further streaming connection will be made since SDK key is invalid")
                     self.stop()
                     break
@@ -66,14 +65,13 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         return backoff.expo(max_value=30)
 
     def should_not_retry(e):
-        return isinstance(e, HTTPError) and (e.response.status_code == 401)
+        return isinstance(e, UnsuccessfulResponseException) and (e.response.status_code == 401)
 
     @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter,
                           giveup=should_not_retry)
     def _connect(self):
         return SSEClient(
             self._uri,
-            verify=self._config.verify_ssl,
             headers=_stream_headers(self._config.sdk_key),
             connect_timeout=self._config.connect_timeout,
             read_timeout=stream_read_timeout)

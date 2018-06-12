@@ -2,7 +2,8 @@ from threading import Thread
 
 from ldclient.interfaces import UpdateProcessor
 from ldclient.util import log
-from requests import HTTPError
+from ldclient.util import UnsuccessfulResponseException
+
 import time
 
 
@@ -28,9 +29,9 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                     if not self._ready.is_set() is True and self._store.initialized is True:
                         log.info("PollingUpdateProcessor initialized ok")
                         self._ready.set()
-                except HTTPError as e:
-                    log.error('Received unexpected status code %d from polling request' % e.response.status_code)
-                    if e.response.status_code == 401:
+                except UnsuccessfulResponseException as e:
+                    log.error('Received unexpected status code %d from polling request' % e.status)
+                    if e.status == 401:
                         log.error('Received 401 error, no further polling requests will be made since SDK key is invalid')
                         self.stop()
                     break
