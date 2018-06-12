@@ -66,3 +66,13 @@ class Event(object):
 
     def __str__(self, *args, **kwargs):
         return self.data
+
+
+class UnsuccessfulResponseException(Exception):
+    def __init__(self, status):
+        super(UnsuccessfulResponseException, self).__init__("HTTP error %d" % status)
+        self._status = status
+
+    @property
+    def status(self):
+        return self._status

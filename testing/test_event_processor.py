@@ -20,7 +20,7 @@ filtered_user = {
 }
 
 ep = None
-mock_session = None
+mock_http = None
 
 
 class MockResponse(object):
@@ -29,32 +29,29 @@ class MockResponse(object):
         self._headers = headers
 
     @property
-    def status_code(self):
+    def status(self):
         return self._status
 
-    @property
-    def headers(self):
-        return self._headers
+    def getheader(self, name):
+        return self._headers.get(name)
 
-    def raise_for_status(self):
-        pass
 
-class MockSession(object):
+class MockHttp(object):
     def __init__(self):
         self._request_data = None
         self._request_headers = None
         self._response_status = 200
         self._server_time = None
 
-    def post(self, uri, headers, timeout, data):
+    def request(self, method, uri, headers, timeout, body, retries):
         self._request_headers = headers
-        self._request_data = data
+        self._request_data = body
         resp_hdr = CaseInsensitiveDict()
         if self._server_time is not None:
             resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
         return MockResponse(self._response_status, resp_hdr)
 
-    def close(self):
+    def clear(self):
         pass
 
     @property
@@ -71,14 +68,14 @@ class MockSession(object):
     def set_server_time(self, timestamp):
         self._server_time = timestamp
 
-    def clear(self):
+    def reset(self):
         self._request_headers = None
         self._request_data = None
 
 
 def setup_function():
-    global mock_session
-    mock_session = MockSession()
+    global mock_http
+    mock_http = MockHttp()
 
 def teardown_function():
     if ep is not None:
@@ -86,7 +83,7 @@ def teardown_function():
 
 def setup_processor(config):
     global ep
-    ep = DefaultEventProcessor(config, mock_session)
+    ep = DefaultEventProcessor(config, mock_http)
 
 
 def test_identify_event_is_queued():
@@ -233,7 +230,7 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
     server_time = now() - 20000
 
     # Send and flush an event we don't care about, just to set the last server time
-    mock_session.set_server_time(server_time)
+    mock_http.set_server_time(server_time)
     ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
     flush_and_get_events()
 
@@ -260,7 +257,7 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
     server_time = now() + 20000
 
     # Send and flush an event we don't care about, just to set the last server time
-    mock_session.set_server_time(server_time)
+    mock_http.set_server_time(server_time)
     ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
     flush_and_get_events()
 
@@ -366,7 +363,7 @@ def test_nothing_is_sent_if_there_are_no_events():
     setup_processor(Config())
     ep.flush()
     ep._wait_until_inactive()
-    assert mock_session.request_data is None
+    assert mock_http.request_data is None
 
 def test_sdk_key_is_sent():
     setup_processor(Config(sdk_key = 'SDK_KEY'))
@@ -375,30 +372,30 @@ def test_sdk_key_is_sent():
     ep.flush()
     ep._wait_until_inactive()
 
-    assert mock_session.request_headers.get('Authorization') is 'SDK_KEY'
+    assert mock_http.request_headers.get('Authorization') is 'SDK_KEY'
 
 def test_no_more_payloads_are_sent_after_401_error():
     setup_processor(Config(sdk_key = 'SDK_KEY'))
 
-    mock_session.set_response_status(401)
+    mock_http.set_response_status(401)
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
     ep._wait_until_inactive()
-    mock_session.clear()
+    mock_http.reset()
 
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
     ep._wait_until_inactive()
-    assert mock_session.request_data is None
+    assert mock_http.request_data is None
 
 
 def flush_and_get_events():
     ep.flush()
     ep._wait_until_inactive()
-    if mock_session.request_data is None:
+    if mock_http.request_data is None:
         raise AssertionError('Expected to get an HTTP request but did not get one')
     else:
-        return json.loads(mock_session.request_data)
+        return json.loads(mock_http.request_data)
 
 def check_index_event(data, source, user):
     assert data['kind'] == 'index'
