@@ -188,6 +188,44 @@ def test_index_event_is_still_generated_if_inline_users_is_true_but_feature_even
     check_index_event(output[0], e, user)
     check_summary_event(output[1])
 
+def test_two_events_for_same_user_only_produce_one_index_event():
+    setup_processor(Config(user_keys_flush_interval = 300))
+
+    e0 = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+    }
+    e1 = e0.copy();
+    ep.send_event(e0)
+    ep.send_event(e1)
+
+    output = flush_and_get_events()
+    assert len(output) == 4
+    check_index_event(output[0], e0, user)
+    check_feature_event(output[1], e0, False, None)
+    check_feature_event(output[2], e1, False, None)
+    check_summary_event(output[3])
+
+def test_new_index_event_is_added_if_user_cache_has_been_cleared():
+    setup_processor(Config(user_keys_flush_interval = 0.1))
+
+    e0 = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+    }
+    e1 = e0.copy();
+    ep.send_event(e0);
+    time.sleep(0.2)
+    ep.send_event(e1)
+
+    output = flush_and_get_events()
+    assert len(output) == 5
+    check_index_event(output[0], e0, user)
+    check_feature_event(output[1], e0, False, None)
+    check_index_event(output[2], e1, user)
+    check_feature_event(output[3], e1, False, None)
+    check_summary_event(output[4])
+
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     setup_processor(Config())
 
