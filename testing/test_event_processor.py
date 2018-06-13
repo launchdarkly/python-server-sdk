@@ -1,13 +1,12 @@
-from email.utils import formatdate
 import json
 import pytest
-from requests.structures import CaseInsensitiveDict
 import time
 
 from ldclient.config import Config
 from ldclient.event_processor import DefaultEventProcessor
-
 from ldclient.util import log
+from testing.stub_util import MockResponse, MockSession
+
 
 default_config = Config()
 user = {
@@ -21,59 +20,6 @@ filtered_user = {
 
 ep = None
 mock_session = None
-
-
-class MockResponse(object):
-    def __init__(self, status, headers):
-        self._status = status
-        self._headers = headers
-
-    @property
-    def status_code(self):
-        return self._status
-
-    @property
-    def headers(self):
-        return self._headers
-
-    def raise_for_status(self):
-        pass
-
-class MockSession(object):
-    def __init__(self):
-        self._request_data = None
-        self._request_headers = None
-        self._response_status = 200
-        self._server_time = None
-
-    def post(self, uri, headers, timeout, data):
-        self._request_headers = headers
-        self._request_data = data
-        resp_hdr = CaseInsensitiveDict()
-        if self._server_time is not None:
-            resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
-        return MockResponse(self._response_status, resp_hdr)
-
-    def close(self):
-        pass
-
-    @property
-    def request_data(self):
-        return self._request_data
-
-    @property
-    def request_headers(self):
-        return self._request_headers
-
-    def set_response_status(self, status):
-        self._response_status = status
-    
-    def set_server_time(self, timestamp):
-        self._server_time = timestamp
-
-    def clear(self):
-        self._request_headers = None
-        self._request_data = None
 
 
 def setup_function():
