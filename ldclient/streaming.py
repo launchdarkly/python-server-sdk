@@ -53,6 +53,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 log.error("Received unexpected status code %d for stream connection" % e.response.status_code)
                 if e.response.status_code == 401:
                     log.error("Received 401 error, no further streaming connection will be made since SDK key is invalid")
+                    self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
                     self.stop()
                     break
                 else:
