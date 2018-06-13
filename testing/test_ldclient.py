@@ -5,51 +5,13 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor
 from ldclient.versioned_data_kind import FEATURES
 import pytest
+from testing.stub_util import MockEventProcessor, MockUpdateProcessor
 from testing.sync_util import wait_until
 
 try:
     import queue
 except:
     import Queue as queue
-
-
-class MockEventProcessor(object):
-    def __init__(self, *_):
-        self._running = False
-        self._events = []
-        mock_event_processor = self
-
-    def stop(self):
-        self._running = False
-
-    def start(self):
-        self._running = True
-
-    def is_alive(self):
-        return self._running
-
-    def send_event(self, event):
-        self._events.append(event)
-
-    def flush(self):
-        pass
-
-
-class MockUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, store, ready):
-        ready.set()
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def is_alive(self):
-        return True
-
-    def initialized(self):
-        return True
 
 
 client = LDClient(config=Config(base_uri="http://localhost:3000",

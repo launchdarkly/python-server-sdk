@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.0.4] - 2018-06-12
+
+### Fixed:
+- Fixed a bug introduced in v6.0.3 that caused the user cache for analytics events to never be cleared, also causing an `AttributeError` to appear in the log.
+
 ## [6.0.3] - 2018-05-30
 
 ### Removed:
