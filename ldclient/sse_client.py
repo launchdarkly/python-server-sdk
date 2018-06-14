@@ -56,7 +56,8 @@ class SSEClient(object):
             'GET',
             self.url,
             timeout=urllib3.Timeout(connect=self._connect_timeout, read=self._read_timeout),
-        preload_content=False,
+            preload_content=False,
+            retries=0, # caller is responsible for implementing appropriate retry semantics, e.g. backoff
             **self.requests_kwargs)
 
         # Raw readlines doesn't work because we may be missing newline characters until the next chunk
