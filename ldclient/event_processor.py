@@ -24,6 +24,7 @@ from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
+from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import throw_if_unsuccessful_response
 
@@ -214,7 +215,7 @@ class EventDispatcher(object):
     def __init__(self, queue, config, http_client):
         self._queue = queue
         self._config = config
-        self._http = urllib3.PoolManager(num_pools=1) if http_client is None else http_client
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl) if http_client is None else http_client
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._buffer = EventBuffer(config.events_max_pending)

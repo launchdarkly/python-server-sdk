@@ -1,7 +1,9 @@
 from __future__ import division, with_statement, absolute_import
 
+import certifi
 import logging
 import sys
+import urllib3
 
 from ldclient.version import VERSION
 
@@ -76,6 +78,16 @@ class UnsuccessfulResponseException(Exception):
     @property
     def status(self):
         return self._status
+
+
+def create_http_pool_manager(num_pools=1, verify_ssl=False):
+    if not verify_ssl:
+        return urllib3.PoolManager(num_pools=num_pools)
+    return urllib3.PoolManager(
+        num_pools=num_pools,
+        cert_reqs='CERT_REQUIRED',
+        ca_certs=certifi.where()
+        )
 
 
 def throw_if_unsuccessful_response(resp):

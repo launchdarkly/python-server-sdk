@@ -8,6 +8,7 @@ import six
 
 import urllib3
 
+from ldclient.util import create_http_pool_manager
 from ldclient.util import throw_if_unsuccessful_response
 
 # Inspired by: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
@@ -18,7 +19,8 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient(object):
-    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000, http=None, **kwargs):
+    def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000,
+                 verify_ssl=False, http=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
@@ -27,7 +29,7 @@ class SSEClient(object):
         self._chunk_size = chunk_size
 
         # Optional support for passing in an HTTP client
-        self.http = http or urllib3.PoolManager(num_pools=1)
+        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl)
 
         # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs

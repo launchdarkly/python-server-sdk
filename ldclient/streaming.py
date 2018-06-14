@@ -75,7 +75,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             self._uri,
             headers=_stream_headers(self._config.sdk_key),
             connect_timeout=self._config.connect_timeout,
-            read_timeout=stream_read_timeout)
+            read_timeout=stream_read_timeout,
+            verify_ssl=self._config.verify_ssl)
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")

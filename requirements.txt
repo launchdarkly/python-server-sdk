@@ -1,5 +1,6 @@
 backoff>=1.4.3
 CacheControl>=0.12.3
+certifi>=2018.4.16
 future>=0.16.0
 six>=1.10.0
 pyRFC3339>=1.0

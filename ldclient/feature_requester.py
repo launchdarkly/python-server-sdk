@@ -7,6 +7,7 @@ import urllib3
 from ldclient.interfaces import FeatureRequester
 from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
+from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import throw_if_unsuccessful_response
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
@@ -21,7 +22,7 @@ CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 class FeatureRequesterImpl(FeatureRequester):
     def __init__(self, config):
         self._cache = dict()
-        self._http = urllib3.PoolManager(num_pools=1)
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl)
         self._config = config
 
     def get_all_data(self):
