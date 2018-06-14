@@ -57,9 +57,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     break
                 else:
                     log.warning("Restarting stream connection after one second.")
-            except Exception:
-                log.warning("Caught exception. Restarting stream connection after one second.",
-                            exc_info=True)
+            except Exception as e:
+                log.warning("Caught exception. Restarting stream connection after one second. %s" % e)
+                # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
             time.sleep(1)
 
     def _backoff_expo():
