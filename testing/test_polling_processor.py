@@ -80,7 +80,6 @@ def test_http_500_error_does_not_cause_immediate_failure():
 
 def verify_unrecoverable_http_error(status):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    start_time = time.time()
     setup_processor(config)
     finished = ready.wait(5.0)
     assert finished
@@ -88,7 +87,6 @@ def verify_unrecoverable_http_error(status):
 
 def verify_recoverable_http_error(status):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    start_time = time.time()
     setup_processor(config)
     finished = ready.wait(0.2)
     assert not finished
