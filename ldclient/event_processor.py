@@ -26,7 +26,7 @@ from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
-from ldclient.util import throw_if_unsuccessful_response
+from ldclient.util import http_error_message, is_http_error_recoverable, throw_if_unsuccessful_response
 
 
 __MAX_FLUSH_THREADS__ = 5
@@ -174,7 +174,6 @@ class EventPayloadSendTask(object):
                                    body=json_body,
                                    retries=1)
             self._response_fn(r)
-            throw_if_unsuccessful_response(r)
             return r
         except Exception as e:
             log.warning(
@@ -323,10 +322,11 @@ class EventDispatcher(object):
             if server_date is not None:
                 timestamp = int(time.mktime(server_date) * 1000)
                 self._last_known_past_time = timestamp
-        if r.status == 401:
-            log.error('Received 401 error, no further events will be posted since SDK key is invalid')
-            self._disabled = True
-            return
+        if r.status > 299:
+            log.error(http_error_message(r.status, "event delivery", "some events were dropped"))
+            if not is_http_error_recoverable(r.status):
+                self._disabled = True
+                return
 
     def _do_shutdown(self):
         self._flush_workers.stop()

@@ -93,3 +93,18 @@ def create_http_pool_manager(num_pools=1, verify_ssl=False):
 def throw_if_unsuccessful_response(resp):
     if resp.status >= 400:
         raise UnsuccessfulResponseException(resp.status)
+
+
+def is_http_error_recoverable(status):
+    if status >= 400 and status < 500:
+        return (status == 408) or (status == 429)  # request timeout / too many requests - all other 4xx are unrecoverable
+    return True  # all other errors are recoverable
+
+
+def http_error_message(status, context, retryable_message = "will retry"):
+    return "Received HTTP error %d%s for %s - %s" % (
+        status,
+        " (invalid SDK key)" if (status == 401 or status == 403) else "",
+        context,
+        retryable_message if is_http_error_recoverable(status) else "giving up permanently"
+        )
