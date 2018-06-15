@@ -362,9 +362,24 @@ def test_sdk_key_is_sent():
     assert mock_http.request_headers.get('Authorization') is 'SDK_KEY'
 
 def test_no_more_payloads_are_sent_after_401_error():
+    verify_unrecoverable_http_error(401)
+
+def test_no_more_payloads_are_sent_after_403_error():
+    verify_unrecoverable_http_error(403)
+
+def test_will_still_send_after_408_error():
+    verify_recoverable_http_error(408)
+
+def test_will_still_send_after_429_error():
+    verify_recoverable_http_error(429)
+
+def test_will_still_send_after_500_error():
+    verify_recoverable_http_error(500)
+
+def verify_unrecoverable_http_error(status):
     setup_processor(Config(sdk_key = 'SDK_KEY'))
 
-    mock_http.set_response_status(401)
+    mock_http.set_response_status(status)
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
     ep._wait_until_inactive()
@@ -375,6 +390,19 @@ def test_no_more_payloads_are_sent_after_401_error():
     ep._wait_until_inactive()
     assert mock_http.request_data is None
 
+def verify_recoverable_http_error(status):
+    setup_processor(Config(sdk_key = 'SDK_KEY'))
+
+    mock_http.set_response_status(status)
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    ep._wait_until_inactive()
+    mock_http.reset()
+
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    ep._wait_until_inactive()
+    assert mock_http.request_data is not None
 
 def flush_and_get_events():
     ep.flush()
