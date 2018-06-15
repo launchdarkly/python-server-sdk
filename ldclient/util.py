@@ -97,7 +97,7 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     if status >= 400 and status < 500:
-        return (status == 408) or (status == 429)  # request timeout / too many requests - all other 4xx are unrecoverable
+        return (status == 400) or (status == 408) or (status == 429)  # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
 
 
