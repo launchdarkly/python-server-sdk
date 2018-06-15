@@ -5,7 +5,9 @@ from email.utils import parsedate
 import errno
 import jsonpickle
 from threading import Event, Lock, Thread
+import six
 import time
+import urllib3
 
 # noinspection PyBroadException
 try:
@@ -14,19 +16,17 @@ except:
     # noinspection PyUnresolvedReferences,PyPep8Naming
     import Queue as queue
 
-import requests
-from requests.packages.urllib3.exceptions import ProtocolError
-
-import six
-
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.fixed_thread_pool import FixedThreadPool
 from ldclient.lru_cache import SimpleLRUCache
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
+from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
+from ldclient.util import create_http_pool_manager
 from ldclient.util import log
+from ldclient.util import throw_if_unsuccessful_response
 
 
 __MAX_FLUSH_THREADS__ = 5
@@ -144,8 +144,8 @@ class EventOutputFormatter(object):
 
 
 class EventPayloadSendTask(object):
-    def __init__(self, session, config, formatter, payload, response_fn):
-        self._session = session
+    def __init__(self, http, config, formatter, payload, response_fn):
+        self._http = http
         self._config = config
         self._formatter = formatter
         self._payload = payload
@@ -154,15 +154,13 @@ class EventPayloadSendTask(object):
     def run(self):
         try:
             output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
-            resp = self._do_send(output_events, True)
-            if resp is not None:
-                self._response_fn(resp)
+            resp = self._do_send(output_events)
         except Exception:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
 
-    def _do_send(self, output_events, should_retry):
+    def _do_send(self, output_events):
         # noinspection PyBroadException
         try:
             json_body = jsonpickle.encode(output_events, unpicklable=False)
@@ -170,27 +168,17 @@ class EventPayloadSendTask(object):
             hdrs = _headers(self._config.sdk_key)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
             uri = self._config.events_uri
-            r = self._session.post(uri,
+            r = self._http.request('POST', uri,
                                    headers=hdrs,
-                                   timeout=(self._config.connect_timeout, self._config.read_timeout),
-                                   data=json_body)
-            r.raise_for_status()
+                                   timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
+                                   body=json_body,
+                                   retries=1)
+            self._response_fn(r)
+            throw_if_unsuccessful_response(r)
             return r
-        except ProtocolError as e:
-            if e.args is not None and len(e.args) > 1 and e.args[1] is not None:
-                inner = e.args[1]
-                if inner.errno is not None and inner.errno == errno.ECONNRESET and should_retry:
-                    log.warning(
-                        'ProtocolError exception caught while sending events. Retrying.')
-                    self._do_send(output_events, False)
-            else:
-                log.warning(
-                    'Unhandled exception in event processor. Analytics events were not processed.',
-                    exc_info=True)
-        except Exception:
+        except Exception as e:
             log.warning(
-                'Unhandled exception in event processor. Analytics events were not processed.',
-                exc_info=True)
+                'Unhandled exception in event processor. Analytics events were not processed. [%s]', e)
 
 
 FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
@@ -224,11 +212,11 @@ class EventBuffer(object):
 
 
 class EventDispatcher(object):
-    def __init__(self, queue, config, session):
+    def __init__(self, queue, config, http_client):
         self._queue = queue
         self._config = config
-        self._session = requests.Session() if session is None else session
-        self._close_session = (session is None)  # so we know whether to close it later
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl) if http_client is None else http_client
+        self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._buffer = EventBuffer(config.events_max_pending)
         self._user_keys = SimpleLRUCache(config.user_keys_capacity)
@@ -261,7 +249,6 @@ class EventDispatcher(object):
                     return
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
-        self._session.close()
     
     def _process_event(self, event):
         if self._disabled:
@@ -320,7 +307,7 @@ class EventDispatcher(object):
             return
         payload = self._buffer.get_payload()
         if len(payload.events) > 0 or len(payload.summary.counters) > 0:
-            task = EventPayloadSendTask(self._session, self._config, self._formatter, payload,
+            task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
                 self._handle_response)
             if self._flush_workers.execute(task.run):
                 # The events have been handed off to a flush worker; clear them from our buffer.
@@ -330,13 +317,13 @@ class EventDispatcher(object):
                 pass
 
     def _handle_response(self, r):
-        server_date_str = r.headers.get('Date')
+        server_date_str = r.getheader('Date')
         if server_date_str is not None:
             server_date = parsedate(server_date_str)
             if server_date is not None:
                 timestamp = int(time.mktime(server_date) * 1000)
                 self._last_known_past_time = timestamp
-        if r.status_code == 401:
+        if r.status == 401:
             log.error('Received 401 error, no further events will be posted since SDK key is invalid')
             self._disabled = True
             return
@@ -344,12 +331,12 @@ class EventDispatcher(object):
     def _do_shutdown(self):
         self._flush_workers.stop()
         self._flush_workers.wait()
-        if self._close_session:
-            self._session.close()
+        if self._close_http:
+            self._http.clear()
 
 
 class DefaultEventProcessor(EventProcessor):
-    def __init__(self, config, session=None):
+    def __init__(self, config, http=None):
         self._queue = queue.Queue(config.events_max_pending)
         self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
@@ -357,7 +344,7 @@ class DefaultEventProcessor(EventProcessor):
         self._users_flush_timer.start()
         self._close_lock = Lock()
         self._closed = False
-        EventDispatcher(self._queue, config, session)
+        EventDispatcher(self._queue, config, http)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)

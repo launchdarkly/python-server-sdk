@@ -1,5 +1,4 @@
 import pytest
-from requests import HTTPError
 import threading
 import time
 
@@ -7,6 +6,7 @@ from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureRequester
 from ldclient.polling import PollingUpdateProcessor
+from ldclient.util import UnsuccessfulResponseException
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from testing.stub_util import MockFeatureRequester, MockResponse
 
@@ -64,7 +64,7 @@ def test_general_connection_error_does_not_cause_immediate_failure():
     assert not pp.initialized()
 
 def test_http_401_error_causes_immediate_failure():
-    mock_requester.exception = HTTPError(response=MockResponse(401, {}))
+    mock_requester.exception = UnsuccessfulResponseException(401)
     start_time = time.time()
     setup_processor(config)
     ready.wait(5.0)

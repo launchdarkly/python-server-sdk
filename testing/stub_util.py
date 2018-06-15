@@ -44,32 +44,28 @@ class MockResponse(object):
         self._headers = headers
 
     @property
-    def status_code(self):
+    def status(self):
         return self._status
 
-    @property
-    def headers(self):
-        return self._headers
+    def getheader(self, name):
+        return self._headers.get(name.lower())
 
-    def raise_for_status(self):
-        pass
-
-class MockSession(object):
+class MockHttp(object):
     def __init__(self):
         self._request_data = None
         self._request_headers = None
         self._response_status = 200
         self._server_time = None
 
-    def post(self, uri, headers, timeout, data):
+    def request(self, method, uri, headers, timeout, body, retries):
         self._request_headers = headers
-        self._request_data = data
-        resp_hdr = CaseInsensitiveDict()
+        self._request_data = body
+        resp_hdr = dict()
         if self._server_time is not None:
-            resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
+            resp_hdr['date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
         return MockResponse(self._response_status, resp_hdr)
 
-    def close(self):
+    def clear(self):
         pass
 
     @property
@@ -86,7 +82,7 @@ class MockSession(object):
     def set_server_time(self, timestamp):
         self._server_time = timestamp
 
-    def clear(self):
+    def reset(self):
         self._request_headers = None
         self._request_data = None
 
