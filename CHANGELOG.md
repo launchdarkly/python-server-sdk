@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.1.0] - 2018-06-18
+
+### Changed:
+- The client now uses `urllib3` for HTTP requests, rather than the `requests` package. This change was made because `requests` has a dependency on an LGPL-licensed package, and some of our customers cannot use LGPL code. The networking behavior of the client should be unchanged.
+- The client now treats most HTTP 4xx errors as unrecoverable: that is, after receiving such an error, it will not make any more HTTP requests for the lifetime of the client instance, in effect taking the client offline. This is because such errors indicate either a configuration problem (invalid SDK key) or a bug in the client, which will not resolve without a restart or an upgrade. This does not apply if the error is 400, 408, 429, or any 5xx error.
+- During initialization, if the client receives any of the unrecoverable errors described above, `ldclient.get()` will return immediately; previously it would continue waiting until a timeout. The `is_initialized()` method will return false in this case.
+
 ## [6.0.4] - 2018-06-12
 
 ### Fixed:
