@@ -1,7 +1,9 @@
 from __future__ import division, with_statement, absolute_import
 
+import certifi
 import logging
 import sys
+import urllib3
 
 from ldclient.version import VERSION
 
@@ -66,3 +68,43 @@ class Event(object):
 
     def __str__(self, *args, **kwargs):
         return self.data
+
+
+class UnsuccessfulResponseException(Exception):
+    def __init__(self, status):
+        super(UnsuccessfulResponseException, self).__init__("HTTP error %d" % status)
+        self._status = status
+
+    @property
+    def status(self):
+        return self._status
+
+
+def create_http_pool_manager(num_pools=1, verify_ssl=False):
+    if not verify_ssl:
+        return urllib3.PoolManager(num_pools=num_pools)
+    return urllib3.PoolManager(
+        num_pools=num_pools,
+        cert_reqs='CERT_REQUIRED',
+        ca_certs=certifi.where()
+        )
+
+
+def throw_if_unsuccessful_response(resp):
+    if resp.status >= 400:
+        raise UnsuccessfulResponseException(resp.status)
+
+
+def is_http_error_recoverable(status):
+    if status >= 400 and status < 500:
+        return (status == 400) or (status == 408) or (status == 429)  # all other 4xx besides these are unrecoverable
+    return True  # all other errors are recoverable
+
+
+def http_error_message(status, context, retryable_message = "will retry"):
+    return "Received HTTP error %d%s for %s - %s" % (
+        status,
+        " (invalid SDK key)" if (status == 401 or status == 403) else "",
+        context,
+        retryable_message if is_http_error_recoverable(status) else "giving up permanently"
+        )

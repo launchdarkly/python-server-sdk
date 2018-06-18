@@ -2,7 +2,8 @@ from threading import Thread
 
 from ldclient.interfaces import UpdateProcessor
 from ldclient.util import log
-from requests import HTTPError
+from ldclient.util import UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
+
 import time
 
 
@@ -28,15 +29,15 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                     if not self._ready.is_set() is True and self._store.initialized is True:
                         log.info("PollingUpdateProcessor initialized ok")
                         self._ready.set()
-                except HTTPError as e:
-                    log.error('Received unexpected status code %d from polling request' % e.response.status_code)
-                    if e.response.status_code == 401:
-                        log.error('Received 401 error, no further polling requests will be made since SDK key is invalid')
+                except UnsuccessfulResponseException as e:
+                    log.error(http_error_message(e.status, "polling request"))
+                    if not is_http_error_recoverable(e.status):
+                        self._ready.set() # if client is initializing, make it stop waiting; has no effect if already inited
                         self.stop()
                     break
-                except Exception:
+                except Exception as e:
                     log.exception(
-                        'Error: Exception encountered when updating flags.')
+                        'Error: Exception encountered when updating flags. %s' % e)
 
                 elapsed = time.time() - start_time
                 if elapsed < self._config.poll_interval:

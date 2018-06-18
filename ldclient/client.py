@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import threading
 
-import requests
 from builtins import object
 
 from ldclient.config import Config as Config
@@ -42,7 +41,6 @@ class LDClient(object):
             self._config = config or Config.default()
         self._config._validate()
 
-        self._session = CacheControl(requests.Session())
         self._event_processor = None
         self._lock = Lock()
 

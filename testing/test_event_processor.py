@@ -1,13 +1,12 @@
-from email.utils import formatdate
 import json
 import pytest
-from requests.structures import CaseInsensitiveDict
 import time
 
 from ldclient.config import Config
 from ldclient.event_processor import DefaultEventProcessor
-
 from ldclient.util import log
+from testing.stub_util import MockResponse, MockHttp
+
 
 default_config = Config()
 user = {
@@ -20,65 +19,12 @@ filtered_user = {
 }
 
 ep = None
-mock_session = None
-
-
-class MockResponse(object):
-    def __init__(self, status, headers):
-        self._status = status
-        self._headers = headers
-
-    @property
-    def status_code(self):
-        return self._status
-
-    @property
-    def headers(self):
-        return self._headers
-
-    def raise_for_status(self):
-        pass
-
-class MockSession(object):
-    def __init__(self):
-        self._request_data = None
-        self._request_headers = None
-        self._response_status = 200
-        self._server_time = None
-
-    def post(self, uri, headers, timeout, data):
-        self._request_headers = headers
-        self._request_data = data
-        resp_hdr = CaseInsensitiveDict()
-        if self._server_time is not None:
-            resp_hdr['Date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
-        return MockResponse(self._response_status, resp_hdr)
-
-    def close(self):
-        pass
-
-    @property
-    def request_data(self):
-        return self._request_data
-
-    @property
-    def request_headers(self):
-        return self._request_headers
-
-    def set_response_status(self, status):
-        self._response_status = status
-    
-    def set_server_time(self, timestamp):
-        self._server_time = timestamp
-
-    def clear(self):
-        self._request_headers = None
-        self._request_data = None
+mock_http = None
 
 
 def setup_function():
-    global mock_session
-    mock_session = MockSession()
+    global mock_http
+    mock_http = MockHttp()
 
 def teardown_function():
     if ep is not None:
@@ -86,7 +32,7 @@ def teardown_function():
 
 def setup_processor(config):
     global ep
-    ep = DefaultEventProcessor(config, mock_session)
+    ep = DefaultEventProcessor(config, mock_http)
 
 
 def test_identify_event_is_queued():
@@ -271,7 +217,7 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
     server_time = now() - 20000
 
     # Send and flush an event we don't care about, just to set the last server time
-    mock_session.set_server_time(server_time)
+    mock_http.set_server_time(server_time)
     ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
     flush_and_get_events()
 
@@ -298,7 +244,7 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
     server_time = now() + 20000
 
     # Send and flush an event we don't care about, just to set the last server time
-    mock_session.set_server_time(server_time)
+    mock_http.set_server_time(server_time)
     ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
     flush_and_get_events()
 
@@ -404,7 +350,7 @@ def test_nothing_is_sent_if_there_are_no_events():
     setup_processor(Config())
     ep.flush()
     ep._wait_until_inactive()
-    assert mock_session.request_data is None
+    assert mock_http.request_data is None
 
 def test_sdk_key_is_sent():
     setup_processor(Config(sdk_key = 'SDK_KEY'))
@@ -413,30 +359,58 @@ def test_sdk_key_is_sent():
     ep.flush()
     ep._wait_until_inactive()
 
-    assert mock_session.request_headers.get('Authorization') is 'SDK_KEY'
+    assert mock_http.request_headers.get('Authorization') is 'SDK_KEY'
 
 def test_no_more_payloads_are_sent_after_401_error():
+    verify_unrecoverable_http_error(401)
+
+def test_no_more_payloads_are_sent_after_403_error():
+    verify_unrecoverable_http_error(403)
+
+def test_will_still_send_after_408_error():
+    verify_recoverable_http_error(408)
+
+def test_will_still_send_after_429_error():
+    verify_recoverable_http_error(429)
+
+def test_will_still_send_after_500_error():
+    verify_recoverable_http_error(500)
+
+def verify_unrecoverable_http_error(status):
     setup_processor(Config(sdk_key = 'SDK_KEY'))
 
-    mock_session.set_response_status(401)
+    mock_http.set_response_status(status)
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
     ep._wait_until_inactive()
-    mock_session.clear()
+    mock_http.reset()
 
     ep.send_event({ 'kind': 'identify', 'user': user })
     ep.flush()
     ep._wait_until_inactive()
-    assert mock_session.request_data is None
+    assert mock_http.request_data is None
 
+def verify_recoverable_http_error(status):
+    setup_processor(Config(sdk_key = 'SDK_KEY'))
+
+    mock_http.set_response_status(status)
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    ep._wait_until_inactive()
+    mock_http.reset()
+
+    ep.send_event({ 'kind': 'identify', 'user': user })
+    ep.flush()
+    ep._wait_until_inactive()
+    assert mock_http.request_data is not None
 
 def flush_and_get_events():
     ep.flush()
     ep._wait_until_inactive()
-    if mock_session.request_data is None:
+    if mock_http.request_data is None:
         raise AssertionError('Expected to get an HTTP request but did not get one')
     else:
-        return json.loads(mock_session.request_data)
+        return json.loads(mock_http.request_data)
 
 def check_index_event(data, source, user):
     assert data['kind'] == 'index'
