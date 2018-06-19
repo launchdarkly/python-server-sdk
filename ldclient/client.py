@@ -22,7 +22,6 @@ except:
     # noinspection PyUnresolvedReferences,PyPep8Naming
     import Queue as queue  # Python 3
 
-from cachecontrol import CacheControl
 from threading import Lock
 
 
