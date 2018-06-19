@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.1.1] - 2018-06-19
+
+### Fixed:
+- Removed an unused dependency on the `CacheControl` package.
+
 ## [6.1.0] - 2018-06-18
 
 ### Changed:
