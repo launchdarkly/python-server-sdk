@@ -63,5 +63,5 @@ jobs:
   test-3.7:
     <<: *test-template
     docker:
-      - image: circleci/python:3.7-rc-stretch
+      - image: circleci/python:3.7-stretch
       - image: redis
