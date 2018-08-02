@@ -5,6 +5,7 @@ import json
 from threading import Thread
 
 import backoff
+import logging
 import time
 
 from ldclient.interfaces import UpdateProcessor
@@ -31,6 +32,13 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._store = store
         self._running = False
         self._ready = ready
+
+        # We need to suppress the default logging behavior of the backoff package, because
+        # it logs messages at ERROR level with variable content (the delay time) which will
+        # prevent monitors from coalescing multiple messages. The backoff package attempts
+        # to suppress its own output by default by giving the logger a NullHandler, but it
+        # will still propagate up to the root logger unless we do this:
+        logging.getLogger('backoff').propagate = False
 
     # Retry/backoff logic:
     # Upon any error establishing the stream connection we retry with backoff + jitter.
@@ -65,8 +73,12 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def should_not_retry(e):
         return isinstance(e, UnsuccessfulResponseException) and (not is_http_error_recoverable(e.status))
 
+    def log_backoff_message(props):
+        log.error("Streaming connection failed, will attempt to restart")
+        log.info("Will reconnect after delay of %fs", props['wait'])
+
     @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter,
-                          giveup=should_not_retry)
+                          on_backoff=log_backoff_message, giveup=should_not_retry)
     def _connect(self):
         return SSEClient(
             self._uri,
