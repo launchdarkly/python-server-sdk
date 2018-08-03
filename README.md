@@ -10,6 +10,11 @@ LaunchDarkly SDK for Python
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/launchdarkly.svg?style=social&label=Follow&maxAge=2592000)](https://twitter.com/intent/follow?screen_name=launchdarkly)
 
+Supported Python versions
+-------------------------
+
+This version of the LaunchDarkly SDK is compatible with Python 2.7, and Python 3.3 through 3.7.
+
 Quick setup
 -----------
 
