@@ -238,28 +238,6 @@ def test_event_for_existing_feature_with_no_user_key():
         e['trackEvents'] == True)
 
 
-def test_all_flags():
-    feature = {
-        u'key': u'feature.key',
-        u'salt': u'abc',
-        u'on': True,
-        u'variations': ['a', 'b'],
-        u'fallthrough': {
-            u'variation': 1
-        }
-    }
-    store = InMemoryFeatureStore()
-    store.init({FEATURES: {'feature.key': feature}})
-    client = LDClient(config=Config(sdk_key = 'SDK_KEY',
-                                    base_uri="http://localhost:3000",
-                                    event_processor_class=MockEventProcessor,
-                                    update_processor_class=MockUpdateProcessor,
-                                    feature_store=store))
-    result = client.all_flags(user)
-    assert (len(result) == 1 and
-        result.get('feature.key') == 'b')
-
-
 def test_secure_mode_hash():
     user = {'key': 'Message'}
     assert offline_client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
