@@ -38,14 +38,27 @@ class FeatureFlagsState(object):
     def to_values_map(self):
         """Returns a dictionary of flag keys to flag values. If the flag would have evaluated to the
         default value, its value will be None.
+
+        Do not use this method if you are passing data to the front end to "bootstrap" the JavaScript client.
+        Instead, use to_json_dict.
         """
         return self.__flag_values
-    
-    def to_json_string(self):
-        """Returns a JSON string representation of the entire state map, in the format used by the
-        LaunchDarkly JavaScript SDK. Use this method if you are passing data to the front end that
-        will be used to "bootstrap" the JavaScript client.
+
+    def to_json_dict(self):
+        """Returns a dictionary suitable for passing as JSON, in the format used by the LaunchDarkly
+        JavaScript SDK. Use this method if you are passing data to the front end in order to
+        "bootstrap" the JavaScript client.
         """
         ret = self.__flag_values.copy()
         ret['$flagsState'] = self.__flag_metadata
-        return json.dumps(ret)
+        return ret
+    
+    def to_json_string(self):
+        """Same as to_json_dict, but serializes the JSON structure into a string.
+        """
+        return json.dumps(self.to_json_dict())
+
+    def __getstate__(self):
+        """Equivalent to to_json_dict() - used if you are serializing the object with jsonpickle.
+        """
+        return self.to_json_dict()

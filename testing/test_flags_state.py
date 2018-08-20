@@ -20,14 +20,14 @@ def test_can_convert_to_values_map():
     state.add_flag(flag2, 'value2', 1)
     assert state.to_values_map() == { 'key1': 'value1', 'key2': 'value2' }
 
-def test_can_convert_to_json_string():
+def test_can_convert_to_json_dict():
     state = FeatureFlagsState(True)
     flag1 = { 'key': 'key1', 'version': 100, 'offVariation': 0, 'variations': [ 'value1' ], 'trackEvents': False }
     flag2 = { 'key': 'key2', 'version': 200, 'offVariation': 1, 'variations': [ 'x', 'value2' ], 'trackEvents': True, 'debugEventsUntilDate': 1000 }
     state.add_flag(flag1, 'value1', 0)
     state.add_flag(flag2, 'value2', 1)
 
-    result = json.loads(state.to_json_string())
+    result = state.to_json_dict()
     assert result == {
         'key1': 'value1',
         'key2': 'value2',
@@ -45,3 +45,14 @@ def test_can_convert_to_json_string():
             }
         }
     }
+
+def test_can_convert_to_json_string():
+    state = FeatureFlagsState(True)
+    flag1 = { 'key': 'key1', 'version': 100, 'offVariation': 0, 'variations': [ 'value1' ], 'trackEvents': False }
+    flag2 = { 'key': 'key2', 'version': 200, 'offVariation': 1, 'variations': [ 'x', 'value2' ], 'trackEvents': True, 'debugEventsUntilDate': 1000 }
+    state.add_flag(flag1, 'value1', 0)
+    state.add_flag(flag2, 'value2', 1)
+
+    obj = state.to_json_dict()
+    str = state.to_json_string()
+    assert json.loads(str) == obj

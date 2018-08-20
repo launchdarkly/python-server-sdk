@@ -59,7 +59,7 @@ def test_all_flags_state_returns_state():
     client = make_client(store)
     state = client.all_flags_state(user)
     assert state.valid == True
-    result = json.loads(state.to_json_string())
+    result = state.to_json_dict()
     assert result == {
         'key1': 'value1',
         'key2': 'value2',
