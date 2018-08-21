@@ -215,12 +215,15 @@ class LDClient(object):
             return None
         return state.to_values_map()
     
-    def all_flags_state(self, user):
+    def all_flags_state(self, user, **kwargs):
         """Returns an object that encapsulates the state of all feature flags for a given user,
         including the flag values and also metadata that can be used on the front end. This method
         does not send analytics events back to LaunchDarkly.
 
         :param user: the end user requesting the feature flags
+        :param kwargs: optional parameters affecting how the state is computed: set
+          `client_side_only=True` to limit it to only flags that are marked for use with the
+          client-side SDK (by default, all flags are included)
         :return a FeatureFlagsState object (will never be None; its 'valid' property will be False
         if the client is offline, has not been initialized, or the user is None or has no key)
         """
@@ -240,6 +243,7 @@ class LDClient(object):
             return FeatureFlagsState(False)
         
         state = FeatureFlagsState(True)
+        client_only = kwargs.get('client_side_only', False)
         try:
             flags_map = self._store.all(FEATURES, lambda x: x)
         except Exception as e:
@@ -247,6 +251,8 @@ class LDClient(object):
             return FeatureFlagsState(False)
         
         for key, flag in flags_map.items():
+            if client_only and not flag.get('clientSide', False):
+                continue
             try:
                 result = self._evaluate(flag, user)
                 state.add_flag(flag, result.value, result.variation)

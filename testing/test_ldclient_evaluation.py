@@ -79,6 +79,45 @@ def test_all_flags_state_returns_state():
         '$valid': True
     }
 
+def test_all_flags_state_can_be_filtered_for_client_side_flags():
+    flag1 = {
+        'key': 'server-side-1',
+        'on': False,
+        'offVariation': 0,
+        'variations': [ 'a' ],
+        'clientSide': False
+    }
+    flag2 = {
+        'key': 'server-side-2',
+        'on': False,
+        'offVariation': 0,
+        'variations': [ 'b' ],
+        'clientSide': False
+    }
+    flag3 = {
+        'key': 'client-side-1',
+        'on': False,
+        'offVariation': 0,
+        'variations': [ 'value1' ],
+        'clientSide': True
+    }
+    flag4 = {
+        'key': 'client-side-2',
+        'on': False,
+        'offVariation': 0,
+        'variations': [ 'value2' ],
+        'clientSide': True
+    }
+
+    store = InMemoryFeatureStore()
+    store.init({ FEATURES: { flag1['key']: flag1, flag2['key']: flag2, flag3['key']: flag3, flag4['key']: flag4 } })
+    client = make_client(store)
+
+    state = client.all_flags_state(user, client_side_only=True)
+    assert state.valid == True
+    values = state.to_values_map()
+    assert values == { 'client-side-1': 'value1', 'client-side-2': 'value2' }
+
 def test_all_flags_state_returns_empty_state_if_user_is_none():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
