@@ -75,7 +75,8 @@ def test_all_flags_state_returns_state():
                 'trackEvents': True,
                 'debugEventsUntilDate': 1000
             }
-        }
+        },
+        '$valid': True
     }
 
 def test_all_flags_state_returns_empty_state_if_user_is_none():
