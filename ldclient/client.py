@@ -10,6 +10,7 @@ from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.flag import evaluate
+from ldclient.flags_state import FeatureFlagsState
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -199,33 +200,62 @@ class LDClient(object):
         return value
 
     def all_flags(self, user):
-        if self._config.offline:
-            log.warn("all_flags() called, but client is in offline mode. Returning None")
+        """Returns all feature flag values for the given user.
+        
+        This method is deprecated - please use all_flags_state instead. Current versions of the
+        client-side SDK (2.0.0 and later) will not generate analytics events correctly if you pass
+        the result of all_flags.
+
+        :param user: the end user requesting the feature flags
+        :return a dictionary of feature flag keys to values; returns None if the client is offline,
+        has not been initialized, or the user is None or has no key
+        """
+        state = self.all_flags_state(user)
+        if not state.valid:
             return None
+        return state.to_values_map()
+    
+    def all_flags_state(self, user):
+        """Returns an object that encapsulates the state of all feature flags for a given user,
+        including the flag values and also metadata that can be used on the front end. This method
+        does not send analytics events back to LaunchDarkly.
+
+        :param user: the end user requesting the feature flags
+        :return a FeatureFlagsState object (will never be None; its 'valid' property will be False
+        if the client is offline, has not been initialized, or the user is None or has no key)
+        """
+        if self._config.offline:
+            log.warn("all_flags_state() called, but client is in offline mode. Returning empty state")
+            return FeatureFlagsState(False)
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warn("all_flags() called before client has finished initializing! Using last known values from feature store")
+                log.warn("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
-                log.warn("all_flags() called before client has finished initializing! Feature store unavailable - returning None")
-                return None
+                log.warn("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                return FeatureFlagsState(False)
 
         if user is None or user.get('key') is None:
-            log.warn("User or user key is None when calling all_flags(). Returning None.")
-            return None
-
-        def cb(all_flags):
+            log.warn("User or user key is None when calling all_flags_state(). Returning empty state.")
+            return FeatureFlagsState(False)
+        
+        state = FeatureFlagsState(True)
+        try:
+            flags_map = self._store.all(FEATURES, lambda x: x)
+        except Exception as e:
+            log.error("Unable to read flags for all_flag_state: %s" % e)
+            return FeatureFlagsState(False)
+        
+        for key, flag in flags_map.items():
             try:
-                return self._evaluate_multi(user, all_flags)
+                result = self._evaluate(flag, user)
+                state.add_flag(flag, result.value, result.variation)
             except Exception as e:
-                log.error("Exception caught in all_flags: " + e.message + " for user: " + str(user))
-            return {}
-
-        return self._store.all(FEATURES, cb)
-
-    def _evaluate_multi(self, user, flags):
-        return dict([(k, self._evaluate(v, user).value) for k, v in flags.items() or {}])
-
+                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
+                state.add_flag(flag, None, None)
+        
+        return state
+    
     def secure_mode_hash(self, user):
         if user.get('key') is None or self._config.sdk_key is None:
             return ""
