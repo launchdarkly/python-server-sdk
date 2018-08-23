@@ -12,13 +12,15 @@ class FeatureFlagsState(object):
         self.__flag_metadata = {}
         self.__valid = valid
 
-    def add_flag(self, flag, value, variation):
+    def add_flag(self, flag, value, variation, reason):
         """Used internally to build the state map."""
         key = flag['key']
         self.__flag_values[key] = value
         meta = { 'version': flag.get('version'), 'trackEvents': flag.get('trackEvents') }
         if variation is not None:
             meta['variation'] = variation
+        if reason is not None:
+            meta['reason'] = reason
         if flag.get('debugEventsUntilDate') is not None:
             meta['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
         self.__flag_metadata[key] = meta
@@ -36,6 +38,15 @@ class FeatureFlagsState(object):
         :return: the flag's value; None if the flag returned the default value, or if there was no such flag
         """
         return self.__flag_values.get(key)
+    
+    def get_flag_reason(self, key):
+        """Returns the evaluation reason for an individual feature flag at the time the state was recorded.
+        :param string key: the feature flag key
+        :return: a dictionary describing the reason; None if reasons were not recorded, or if there was no
+          such flag
+        """
+        meta = self.__flag_metadata.get(key)
+        return None if meta is None else meta.get('reason')
     
     def to_values_map(self):
         """Returns a dictionary of flag keys to flag values. If the flag would have evaluated to the

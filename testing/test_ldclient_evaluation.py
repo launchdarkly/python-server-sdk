@@ -2,8 +2,10 @@ import pytest
 import json
 from ldclient.client import LDClient, Config
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.flag import EvaluationDetail
 from ldclient.versioned_data_kind import FEATURES
 from testing.stub_util import MockEventProcessor, MockUpdateProcessor
+from testing.test_ldclient import make_off_flag_with_value
 
 
 user = { 'key': 'userkey' }
@@ -31,6 +33,62 @@ def make_client(store):
                                   event_processor_class=MockEventProcessor,
                                   update_processor_class=MockUpdateProcessor,
                                   feature_store=store))
+
+def test_variation_for_existing_feature():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'value' == client.variation('feature.key', user, default='default')
+
+def test_variation_for_unknown_feature():
+    store = InMemoryFeatureStore()
+    client = make_client(store)
+    assert 'default' == client.variation('feature.key', user, default='default')
+
+def test_variation_when_user_is_none():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'default' == client.variation('feature.key', None, default='default')
+
+def test_variation_when_user_has_no_key():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'default' == client.variation('feature.key', { }, default='default')
+
+def test_variation_detail_for_existing_feature():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    expected = EvaluationDetail('value', 0, {'kind': 'OFF'})
+    assert expected == client.variation_detail('feature.key', user, default='default')
+
+def test_variation_detail_for_unknown_feature():
+    store = InMemoryFeatureStore()
+    client = make_client(store)
+    expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'FLAG_NOT_FOUND'})
+    assert expected == client.variation_detail('feature.key', user, default='default')
+
+def test_variation_detail_when_user_is_none():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
+    assert expected == client.variation_detail('feature.key', None, default='default')
+
+def test_variation_when_user_has_no_key():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
+    assert expected == client.variation_detail('feature.key', { }, default='default')
 
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()
@@ -74,6 +132,34 @@ def test_all_flags_state_returns_state():
                 'version': 200,
                 'trackEvents': True,
                 'debugEventsUntilDate': 1000
+            }
+        },
+        '$valid': True
+    }
+
+def test_all_flags_state_returns_state_with_reasons():
+    store = InMemoryFeatureStore()
+    store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
+    client = make_client(store)
+    state = client.all_flags_state(user, with_reasons=True)
+    assert state.valid == True
+    result = state.to_json_dict()
+    assert result == {
+        'key1': 'value1',
+        'key2': 'value2',
+        '$flagsState': {
+            'key1': {
+                'variation': 0,
+                'version': 100,
+                'trackEvents': False,
+                'reason': {'kind': 'OFF'}
+            },
+            'key2': {
+                'variation': 1,
+                'version': 200,
+                'trackEvents': True,
+                'debugEventsUntilDate': 1000,
+                'reason': {'kind': 'OFF'}
             }
         },
         '$valid': True
