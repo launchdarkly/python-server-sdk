@@ -278,7 +278,7 @@ class LDClient(object):
 
         :param dict user: the end user requesting the feature flags
         :return: a dictionary of feature flag keys to values; returns None if the client is offline,
-        has not been initialized, or the user is None or has no key
+          has not been initialized, or the user is None or has no key
         :rtype: dict
         """
         state = self.all_flags_state(user)
