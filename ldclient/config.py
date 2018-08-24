@@ -46,7 +46,7 @@ class Config(object):
         :param int events_max_pending: The capacity of the events buffer. The client buffers up to this many
           events in memory before flushing. If the capacity is exceeded before the buffer is flushed, events
           will be discarded.
-        : param float flush_interval: The number of seconds in between flushes of the events buffer. Decreasing
+        :param float flush_interval: The number of seconds in between flushes of the events buffer. Decreasing
           the flush interval means that the event buffer is less likely to reach capacity.
         :param string stream_uri: The URL for the LaunchDarkly streaming events server. Most users should
           use the default value.
