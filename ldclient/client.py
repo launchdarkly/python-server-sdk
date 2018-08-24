@@ -274,7 +274,7 @@ class LDClient(object):
           `client_side_only=True` to limit it to only flags that are marked for use with the
           client-side SDK (by default, all flags are included)
         :return: a FeatureFlagsState object (will never be None; its 'valid' property will be False
-        if the client is offline, has not been initialized, or the user is None or has no key)
+          if the client is offline, has not been initialized, or the user is None or has no key)
         :rtype: FeatureFlagsState
         """
         if self._config.offline:
