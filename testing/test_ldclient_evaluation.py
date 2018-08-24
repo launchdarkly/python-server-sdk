@@ -60,6 +60,17 @@ def test_variation_when_user_has_no_key():
     client = make_client(store)
     assert 'default' == client.variation('feature.key', { }, default='default')
 
+def test_variation_for_flag_that_evaluates_to_none():
+    empty_flag = {
+        'key': 'feature.key',
+        'on': False,
+        'offVariation': None
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': empty_flag}})
+    client = make_client(store)
+    assert 'default' == client.variation('feature.key', user, default='default')
+
 def test_variation_detail_for_existing_feature():
     feature = make_off_flag_with_value('feature.key', 'value')
     store = InMemoryFeatureStore()
@@ -89,6 +100,20 @@ def test_variation_when_user_has_no_key():
     client = make_client(store)
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
     assert expected == client.variation_detail('feature.key', { }, default='default')
+
+def test_variation_detail_for_flag_that_evaluates_to_none():
+    empty_flag = {
+        'key': 'feature.key',
+        'on': False,
+        'offVariation': None
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': empty_flag}})
+    client = make_client(store)
+    expected = EvaluationDetail('default', None, {'kind': 'OFF'})
+    actual = client.variation_detail('feature.key', user, default='default')
+    assert expected == actual
+    assert actual.is_default_value() == True
 
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()

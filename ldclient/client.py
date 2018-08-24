@@ -220,9 +220,11 @@ class LDClient(object):
                 result = evaluate(flag, user, self._store, include_reasons_in_events)
                 for event in result.events or []:
                     self._send_event(event)
-                value = default if result.detail.variation_index is None else result.detail.value
-                send_event(value, result.detail.variation_index, flag, result.detail.reason)
-                return EvaluationDetail(value, result.detail.variation_index, result.detail.reason)
+                detail = result.detail
+                if detail.is_default_value():
+                    detail = EvaluationDetail(default, None, detail.reason)
+                send_event(detail.value, detail.variation_index, flag, detail.reason)
+                return detail
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, e))
                 log.debug(traceback.format_exc())

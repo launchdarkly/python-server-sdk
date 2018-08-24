@@ -64,6 +64,12 @@ class EvaluationDetail(object):
         """
         return self.__reason
     
+    def is_default_value(self):
+        """Returns True if the flag evaluated to the default value rather than one of its
+        variations.
+        """
+        return self.__variation_index is None
+    
     def __eq__(self, other):
         return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
 
