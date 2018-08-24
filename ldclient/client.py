@@ -184,9 +184,6 @@ class LDClient(object):
           available from LaunchDarkly
         :return: one of the flag's variation values, or the default value
         """
-        return self._evaluate_internal(key, user, default).value
-    
-    def _evaluate_internal(self, key, user, default):
         default = self._config.get_default(key, default)
         if user is not None:
             self._sanitize_user(user)
