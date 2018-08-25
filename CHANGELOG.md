@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.3.0] - 2018-08-27
+### Added:
+- The new `LDClient` method `all_flags_state()` should be used instead of `all_flags()` if you are passing flag data to the front end for use with the JavaScript SDK. It preserves some flag metadata that the front end requires in order to send analytics events correctly. Versions 2.5.0 and above of the JavaScript SDK are able to use this metadata, but the output of `all_flags_state()` will still work with older versions.
+- The `all_flags_state()` method also allows you to select only client-side-enabled flags to pass to the front end, by using the option `client_side_only=True`.
+
+### Deprecated:
+- `LDClient.all_flags()`
+
 ## [6.2.0] - 2018-08-03
 ### Changed:
 - In streaming mode, each connection failure or unsuccessful reconnection attempt logs a message at `ERROR` level. Previously, this message included the amount of time before the next retry; since that interval is different for each attempt, that meant the `ERROR`-level messages were all unique, which could cause problems for monitors. This has been changed so the `ERROR`-level message is always the same, and is followed by an `INFO`-level message about the time delay. (Note that in order to suppress the default message, the LaunchDarkly client modifies the logger used by the `backoff` package; if you are using `backoff` for some other purpose and _do_ want to see the default message, set `logging.getLogger('backoff').propagate` to `True`.) ([#88](https://github.com/launchdarkly/python-client/issues/88))
