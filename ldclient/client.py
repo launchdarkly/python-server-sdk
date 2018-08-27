@@ -10,6 +10,7 @@ from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.flag import evaluate
+from ldclient.flags_state import FeatureFlagsState
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -27,6 +28,16 @@ from threading import Lock
 
 class LDClient(object):
     def __init__(self, sdk_key=None, config=None, start_wait=5):
+        """Constructs a new LDClient instance.
+
+        Rather than calling this constructor directly, you can call the `ldclient.set_sdk_key`,
+        `ldclient.set_config`, and `ldclient.get` functions to configure and use a singleton
+        client instance.
+
+        :param string sdk_key: the SDK key for your LaunchDarkly environment
+        :param Config config: optional custom configuration
+        :param float start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
+        """
         check_uwsgi()
 
         if config is not None and config.sdk_key is not None and sdk_key is not None:
@@ -93,9 +104,17 @@ class LDClient(object):
                      "Feature Flags may not yet be available.")
 
     def get_sdk_key(self):
+        """Returns the configured SDK key.
+
+        :rtype: string
+        """
         return self._config.sdk_key
 
     def close(self):
+        """Releases all threads and network connections used by the LaunchDarkly client.
+        
+        Do not attempt to use the client after calling this method.
+        """
         log.info("Closing LaunchDarkly client..")
         if self.is_offline():
             return
@@ -108,33 +127,63 @@ class LDClient(object):
         self._event_processor.send_event(event)
 
     def track(self, event_name, user, data=None):
+        """Tracks that a user performed an event.
+
+        :param string event_name: The name of the event.
+        :param dict user: The attributes of the user.
+        :param data: Optional additional data associated with the event.
+        """
         self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling track().")
         self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
+        """Registers the user.
+
+        :param dict user: attributes of the user to register
+        """
         self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling identify().")
         self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
 
     def is_offline(self):
+        """Returns true if the client is in offline mode.
+
+        :rtype: bool
+        """
         return self._config.offline
 
     def is_initialized(self):
+        """Returns true if the client has successfully connected to LaunchDarkly.
+
+        :rype: bool
+        """
         return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
     def flush(self):
+        """Flushes all pending events.
+        """
         if self._config.offline:
             return
         return self._event_processor.flush()
 
     def toggle(self, key, user, default):
+        """Deprecated synonym for `variation`.
+        """
         log.warn("Deprecated method: toggle() called. Use variation() instead.")
         return self.variation(key, user, default)
 
     def variation(self, key, user, default):
+        """Determines the variation of a feature flag for a user.
+
+        :param string key: the unique key for the feature flag
+        :param dict user: a dictionary containing parameters for the end user requesting the flag
+        :param object default: the default value of the flag, to be used if the value is not
+          available from LaunchDarkly
+        :return: one of the flag's variation values, or the default value
+        """
         default = self._config.get_default(key, default)
         if user is not None:
             self._sanitize_user(user)
@@ -199,34 +248,79 @@ class LDClient(object):
         return value
 
     def all_flags(self, user):
-        if self._config.offline:
-            log.warn("all_flags() called, but client is in offline mode. Returning None")
+        """Returns all feature flag values for the given user.
+        
+        This method is deprecated - please use `all_flags_state` instead. Current versions of the
+        client-side SDK will not generate analytics events correctly if you pass the result of `all_flags`.
+
+        :param dict user: the end user requesting the feature flags
+        :return: a dictionary of feature flag keys to values; returns None if the client is offline,
+          has not been initialized, or the user is None or has no key
+        :rtype: dict
+        """
+        state = self.all_flags_state(user)
+        if not state.valid:
             return None
+        return state.to_values_map()
+    
+    def all_flags_state(self, user, **kwargs):
+        """Returns an object that encapsulates the state of all feature flags for a given user,
+        including the flag values and also metadata that can be used on the front end. 
+        
+        This method does not send analytics events back to LaunchDarkly.
+
+        :param dict user: the end user requesting the feature flags
+        :param kwargs: optional parameters affecting how the state is computed: set
+          `client_side_only=True` to limit it to only flags that are marked for use with the
+          client-side SDK (by default, all flags are included)
+        :return: a FeatureFlagsState object (will never be None; its 'valid' property will be False
+          if the client is offline, has not been initialized, or the user is None or has no key)
+        :rtype: FeatureFlagsState
+        """
+        if self._config.offline:
+            log.warn("all_flags_state() called, but client is in offline mode. Returning empty state")
+            return FeatureFlagsState(False)
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warn("all_flags() called before client has finished initializing! Using last known values from feature store")
+                log.warn("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
-                log.warn("all_flags() called before client has finished initializing! Feature store unavailable - returning None")
-                return None
+                log.warn("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                return FeatureFlagsState(False)
 
         if user is None or user.get('key') is None:
-            log.warn("User or user key is None when calling all_flags(). Returning None.")
-            return None
-
-        def cb(all_flags):
+            log.warn("User or user key is None when calling all_flags_state(). Returning empty state.")
+            return FeatureFlagsState(False)
+        
+        state = FeatureFlagsState(True)
+        client_only = kwargs.get('client_side_only', False)
+        try:
+            flags_map = self._store.all(FEATURES, lambda x: x)
+        except Exception as e:
+            log.error("Unable to read flags for all_flag_state: %s" % e)
+            return FeatureFlagsState(False)
+        
+        for key, flag in flags_map.items():
+            if client_only and not flag.get('clientSide', False):
+                continue
             try:
-                return self._evaluate_multi(user, all_flags)
+                result = self._evaluate(flag, user)
+                state.add_flag(flag, result.value, result.variation)
             except Exception as e:
-                log.error("Exception caught in all_flags: " + e.message + " for user: " + str(user))
-            return {}
-
-        return self._store.all(FEATURES, cb)
-
-    def _evaluate_multi(self, user, flags):
-        return dict([(k, self._evaluate(v, user).value) for k, v in flags.items() or {}])
-
+                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
+                state.add_flag(flag, None, None)
+        
+        return state
+    
     def secure_mode_hash(self, user):
+        """Generates a hash value for a user.
+
+        For more info: <a href="https://github.com/launchdarkly/js-client#secure-mode">https://github.com/launchdarkly/js-client#secure-mode</a>
+        
+        :param dict user: the attributes of the user
+        :return: a hash string that can be passed to the front end
+        :rtype: string
+        """
         if user.get('key') is None or self._config.sdk_key is None:
             return ""
         return hmac.new(self._config.sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
