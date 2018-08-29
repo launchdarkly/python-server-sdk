@@ -74,6 +74,34 @@ def test_flag_returns_off_variation_if_prerequisite_not_found():
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'badfeature'})
     assert evaluate(flag, user, empty_store) == EvalResult(detail, [])
 
+def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
+    store = InMemoryFeatureStore()
+    flag = {
+        'key': 'feature0',
+        'on': True,
+        'prerequisites': [{'key': 'feature1', 'variation': 1}],
+        'fallthrough': { 'variation': 0 },
+        'offVariation': 1,
+        'variations': ['a', 'b', 'c'],
+        'version': 1
+    }
+    flag1 = {
+        'key': 'feature1',
+        'off': False,
+        'offVariation': 1,
+        # note that even though it returns the desired variation, it is still off and therefore not a match
+        'fallthrough': { 'variation': 0 },
+        'variations': ['d', 'e'],
+        'version': 2,
+        'trackEvents': False
+    }
+    store.upsert(FEATURES, flag1)
+    user = { 'key': 'x' }
+    detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
+    events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e',
+        'version': 2, 'user': user, 'prereqOf': 'feature0', 'trackEvents': False, 'debugEventsUntilDate': None, 'reason': None}]
+    assert evaluate(flag, user, store) == EvalResult(detail, events_should_be)
+
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     store = InMemoryFeatureStore()
     flag = {

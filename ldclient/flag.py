@@ -91,14 +91,14 @@ def error_reason(error_kind):
 
 
 def evaluate(flag, user, store, include_reasons_in_events = False):
-    if flag.get('on', False):
-        prereq_events = []
-        detail = _evaluate(flag, user, store, prereq_events, include_reasons_in_events)
-        return EvalResult(detail = detail, events = prereq_events)
-    return EvalResult(detail = _get_off_value(flag, {'kind': 'OFF'}), events = [])
-
+    prereq_events = []
+    detail = _evaluate(flag, user, store, prereq_events, include_reasons_in_events)
+    return EvalResult(detail = detail, events = prereq_events)
 
 def _evaluate(flag, user, store, prereq_events, include_reasons_in_events):
+    if not flag.get('on', False):
+        return _get_off_value(flag, {'kind': 'OFF'})
+    
     prereq_failure_reason = _check_prerequisites(flag, user, store, prereq_events, include_reasons_in_events)
     if prereq_failure_reason is not None:
         return _get_off_value(flag, prereq_failure_reason)
@@ -128,25 +128,19 @@ def _check_prerequisites(flag, user, store, events, include_reasons_in_events):
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
-            break
-        if prereq_flag.get('on', False) is True:
-            prereq_res = _evaluate(prereq_flag, user, store, events, include_reasons_in_events)
-            if prereq_res.variation_index != prereq.get('variation'):
-                failed_prereq = prereq
         else:
-            failed_prereq = prereq
-
-        event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
-                 'variation': prereq_res.variation_index if prereq_res else None,
-                 'value': prereq_res.value if prereq_res else None,
-                 'version': prereq_flag.get('version'), 'prereqOf': flag.get('key'),
-                 'trackEvents': prereq_flag.get('trackEvents'),
-                 'debugEventsUntilDate': prereq_flag.get('debugEventsUntilDate'),
-                 'reason': prereq_res.reason if prereq_res and include_reasons_in_events else None}
-        events.append(event)
-
-    if failed_prereq:
-        return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.get('key')}
+            prereq_res = _evaluate(prereq_flag, user, store, events, include_reasons_in_events)
+            if (not prereq_flag.get('on', False)) or prereq_res.variation_index != prereq.get('variation'):
+                failed_prereq = prereq
+            event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
+                    'variation': prereq_res.variation_index, 'value': prereq_res.value,
+                    'version': prereq_flag.get('version'), 'prereqOf': flag.get('key'),
+                    'trackEvents': prereq_flag.get('trackEvents'),
+                    'debugEventsUntilDate': prereq_flag.get('debugEventsUntilDate'),
+                    'reason': prereq_res.reason if prereq_res and include_reasons_in_events else None}
+            events.append(event)
+        if failed_prereq:
+            return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.get('key')}
     return None
 
 
