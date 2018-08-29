@@ -130,6 +130,8 @@ def _check_prerequisites(flag, user, store, events, include_reasons_in_events):
             failed_prereq = prereq
         else:
             prereq_res = _evaluate(prereq_flag, user, store, events, include_reasons_in_events)
+            # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
+            # off variation was. But we still need to evaluate it in order to generate an event.
             if (not prereq_flag.get('on', False)) or prereq_res.variation_index != prereq.get('variation'):
                 failed_prereq = prereq
             event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
