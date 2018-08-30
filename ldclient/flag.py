@@ -16,81 +16,155 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
-EvalResult = namedtuple('EvalResult', ['variation', 'value', 'events'])
+class EvaluationDetail(object):
+    """
+    The return type of LDClient.variation_detail, combining the result of a flag evaluation
+    with information about how it was calculated.
+    """
+    def __init__(self, value, variation_index, reason):
+        self.__value = value
+        self.__variation_index = variation_index
+        self.__reason = reason
+    
+    @property
+    def value(self):
+        """The result of the flag evaluation. This will be either one of the flag's
+        variations or the default value that was passed to the variation() method.
+        """
+        return self.__value
+    
+    @property
+    def variation_index(self):
+        """The index of the returned value within the flag's list of variations, e.g.
+        0 for the first variation - or None if the default value was returned.
+        """
+        return self.__variation_index
+    
+    @property
+    def reason(self):
+        """A dictionary describing the main factor that influenced the flag evaluation value.
+        It contains the following properties:
+
+        'kind': The general category of reason, as follows: 'OFF' - the flag was off;
+        'FALLTHROUGH' - the flag was on but the user did not match any targets or rules;
+        'TARGET_MATCH' - the user was specifically targeted for this flag; 'RULE_MATCH' -
+        the user matched one of the flag's rules; 'PREREQUISITE_FAILED' - the flag was
+        considered off because it had at least one prerequisite flag that did not return
+        the desired variation; 'ERROR' - the flag could not be evaluated due to an
+        unexpected error.
+
+        'ruleIndex', 'ruleId': The positional index and unique identifier of the matched
+        rule, if the kind was 'RULE_MATCH'
+
+        'prerequisiteKey': The flag key of the prerequisite that failed, if the kind was
+        'PREREQUISITE_FAILED'
+
+        'errorKind': further describes the nature of the error if the kind was 'ERROR',
+        e.g. 'FLAG_NOT_FOUND'
+        """
+        return self.__reason
+    
+    def is_default_value(self):
+        """Returns True if the flag evaluated to the default value rather than one of its
+        variations.
+        """
+        return self.__variation_index is None
+    
+    def __eq__(self, other):
+        return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def __str__(self):
+        return "(value=%s, variation_index=%s, reason=%s)" % (self.value, self.variation_index, self.reason)
+
+    def __repr__(self):
+        return self.__str__()
 
 
-def evaluate(flag, user, store):
+EvalResult = namedtuple('EvalResult', ['detail', 'events'])
+
+
+def error_reason(error_kind):
+    return {'kind': 'ERROR', 'errorKind': error_kind}
+
+
+def evaluate(flag, user, store, include_reasons_in_events = False):
     prereq_events = []
-    if flag.get('on', False):
-        variation, value, prereq_events = _evaluate(flag, user, store)
-        if value is not None:
-            return EvalResult(variation = variation, value = value, events = prereq_events)
+    detail = _evaluate(flag, user, store, prereq_events, include_reasons_in_events)
+    return EvalResult(detail = detail, events = prereq_events)
 
-    off_var = flag.get('offVariation')
-    off_value = None if off_var is None else _get_variation(flag, off_var)
-    return EvalResult(variation = off_var, value = off_value, events = prereq_events)
+def _evaluate(flag, user, store, prereq_events, include_reasons_in_events):
+    if not flag.get('on', False):
+        return _get_off_value(flag, {'kind': 'OFF'})
+    
+    prereq_failure_reason = _check_prerequisites(flag, user, store, prereq_events, include_reasons_in_events)
+    if prereq_failure_reason is not None:
+        return _get_off_value(flag, prereq_failure_reason)
+
+    # Check to see if any user targets match:
+    for target in flag.get('targets') or []:
+        for value in target.get('values') or []:
+            if value == user['key']:
+                return _get_variation(flag, target.get('variation'), {'kind': 'TARGET_MATCH'})
+
+    # Now walk through the rules to see if any match
+    for index, rule in enumerate(flag.get('rules') or []):
+        if _rule_matches_user(rule, user, store):
+            return _get_value_for_variation_or_rollout(flag, rule, user,
+                {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.get('id')})
+
+    # Walk through fallthrough and see if it matches
+    if flag.get('fallthrough') is not None:
+        return _get_value_for_variation_or_rollout(flag, flag['fallthrough'], user, {'kind': 'FALLTHROUGH'})
 
 
-def _evaluate(flag, user, store, prereq_events=None):
-    events = prereq_events or []
+def _check_prerequisites(flag, user, store, events, include_reasons_in_events):
     failed_prereq = None
-    prereq_var = None
-    prereq_value = None
+    prereq_res = None
     for prereq in flag.get('prerequisites') or []:
         prereq_flag = store.get(FEATURES, prereq.get('key'), lambda x: x)
         if prereq_flag is None:
             log.warn("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
-            break
-        if prereq_flag.get('on', False) is True:
-            prereq_var, prereq_value, events = _evaluate(prereq_flag, user, store, events)
-            if prereq_var is None or not prereq_var == prereq.get('variation'):
-                failed_prereq = prereq
         else:
-            failed_prereq = prereq
-
-        event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user, 'variation': prereq_var,
-                 'value': prereq_value, 'version': prereq_flag.get('version'), 'prereqOf': flag.get('key'),
-                 'trackEvents': prereq_flag.get('trackEvents'),
-                 'debugEventsUntilDate': prereq_flag.get('debugEventsUntilDate')}
-        events.append(event)
-
-    if failed_prereq is not None:
-        return None, None, events
-
-    index = _evaluate_index(flag, user, store)
-    return index, _get_variation(flag, index), events
-
-
-def _evaluate_index(feature, user, store):
-    # Check to see if any user targets match:
-    for target in feature.get('targets') or []:
-        for value in target.get('values') or []:
-            if value == user['key']:
-                return target.get('variation')
-
-    # Now walk through the rules to see if any match
-    for rule in feature.get('rules') or []:
-        if _rule_matches_user(rule, user, store):
-            return _variation_index_for_user(feature, rule, user)
-
-    # Walk through fallthrough and see if it matches
-    if feature.get('fallthrough') is not None:
-        return _variation_index_for_user(feature, feature['fallthrough'], user)
-
+            prereq_res = _evaluate(prereq_flag, user, store, events, include_reasons_in_events)
+            # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
+            # off variation was. But we still need to evaluate it in order to generate an event.
+            if (not prereq_flag.get('on', False)) or prereq_res.variation_index != prereq.get('variation'):
+                failed_prereq = prereq
+            event = {'kind': 'feature', 'key': prereq.get('key'), 'user': user,
+                    'variation': prereq_res.variation_index, 'value': prereq_res.value,
+                    'version': prereq_flag.get('version'), 'prereqOf': flag.get('key'),
+                    'trackEvents': prereq_flag.get('trackEvents'),
+                    'debugEventsUntilDate': prereq_flag.get('debugEventsUntilDate'),
+                    'reason': prereq_res.reason if prereq_res and include_reasons_in_events else None}
+            events.append(event)
+        if failed_prereq:
+            return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.get('key')}
     return None
 
 
-def _get_variation(feature, index):
-    if index is not None and index < len(feature['variations']):
-        return feature['variations'][index]
-    return None
+def _get_variation(flag, variation, reason):
+    vars = flag.get('variations') or []
+    if variation < 0 or variation >= len(vars):
+        return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
+    return EvaluationDetail(vars[variation], variation, reason)
 
 
-def _get_off_variation(feature):
-    if feature.get('offVariation') is not None:
-        return _get_variation(feature, feature.get('offVariation'))
-    return None
+def _get_off_value(flag, reason):
+    off_var = flag.get('offVariation')
+    if off_var is None:
+        return EvaluationDetail(None, None, reason)
+    return _get_variation(flag, off_var, reason)
+
+
+def _get_value_for_variation_or_rollout(flag, vr, user, reason):
+    index = _variation_index_for_user(flag, vr, user)
+    if index is None:
+        return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
+    return _get_variation(flag, index, reason)
 
 
 def _get_user_attribute(user, attr):

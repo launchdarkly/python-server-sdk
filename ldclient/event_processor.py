@@ -84,6 +84,8 @@ class EventOutputFormatter(object):
                 out['user'] = self._user_filter.filter_user_props(e['user'])
             else:
                 out['userKey'] = e['user'].get('key')
+            if e.get('reason'):
+                out['reason'] = e.get('reason')
             return out
         elif kind == 'identify':
             return {
