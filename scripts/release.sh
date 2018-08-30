@@ -21,6 +21,11 @@ SETUP_PY_TEMP=./setup.py.tmp
 sed "s/ldclient_version=.*/ldclient_version='${VERSION}'/g" setup.py > ${SETUP_PY_TEMP}
 mv ${SETUP_PY_TEMP} setup.py
 
-python setup.py sdist upload
+# Prepare distribution
+python setup.py sdist
+
+# Upload with Twine
+pip install twine
+twine upload dist/*
 
 echo "Done with python-client release"
