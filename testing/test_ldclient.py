@@ -58,6 +58,17 @@ def make_client(store):
                                   feature_store=store))
 
 
+def make_off_flag_with_value(key, value):
+    return {
+        u'key': key,
+        u'version': 100,
+        u'salt': u'',
+        u'on': False,
+        u'variations': [value],
+        u'offVariation': 0
+    }
+
+
 def get_first_event(c):
     return c._event_processor._events.pop(0)
 
@@ -149,93 +160,100 @@ def test_no_defaults():
 
 
 def test_event_for_existing_feature():
-    feature = {
-        u'key': u'feature.key',
-        u'salt': u'abc',
-        u'on': True,
-        u'variations': ['a', 'b'],
-        u'fallthrough': {
-            u'variation': 1
-        },
-        u'trackEvents': True
-    }
+    feature = make_off_flag_with_value('feature.key', 'value')
+    feature['trackEvents'] = True
+    feature['debugEventsUntilDate'] = 1000
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
-    assert 'b' == client.variation('feature.key', user, default='c')
+    assert 'value' == client.variation('feature.key', user, default='default')
     e = get_first_event(client)
     assert (e['kind'] == 'feature' and
         e['key'] == 'feature.key' and
         e['user'] == user and
-        e['value'] == 'b' and
-        e['variation'] == 1 and
-        e['default'] == 'c' and
-        e['trackEvents'] == True)
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e.get('reason') is None and
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e['debugEventsUntilDate'] == 1000)
+
+
+def test_event_for_existing_feature_with_reason():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    feature['trackEvents'] = True
+    feature['debugEventsUntilDate'] = 1000
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    client = make_client(store)
+    assert 'value' == client.variation_detail('feature.key', user, default='default').value
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == 'feature.key' and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e['reason'] == {'kind': 'OFF'} and
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e['debugEventsUntilDate'] == 1000)
 
 
 def test_event_for_unknown_feature():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {}})
     client = make_client(store)
-    assert 'c' == client.variation('feature.key', user, default='c')
+    assert 'default' == client.variation('feature.key', user, default='default')
     e = get_first_event(client)
     assert (e['kind'] == 'feature' and
         e['key'] == 'feature.key' and
         e['user'] == user and
-        e['value'] == 'c' and
+        e['value'] == 'default' and
         e['variation'] == None and
-        e['default'] == 'c')
+        e['default'] == 'default')
 
 
 def test_event_for_existing_feature_with_no_user():
-    feature = {
-        u'key': u'feature.key',
-        u'salt': u'abc',
-        u'on': True,
-        u'variations': ['a', 'b'],
-        u'fallthrough': {
-            u'variation': 1
-        },
-        u'trackEvents': True
-    }
+    feature = make_off_flag_with_value('feature.key', 'value')
+    feature['trackEvents'] = True
+    feature['debugEventsUntilDate'] = 1000
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
-    assert 'c' == client.variation('feature.key', None, default='c')
+    assert 'default' == client.variation('feature.key', None, default='default')
     e = get_first_event(client)
     assert (e['kind'] == 'feature' and
         e['key'] == 'feature.key' and
         e['user'] == None and
-        e['value'] == 'c' and
+        e['version'] == feature['version'] and
+        e['value'] == 'default' and
         e['variation'] == None and
-        e['default'] == 'c' and
-        e['trackEvents'] == True)
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e['debugEventsUntilDate'] == 1000)
 
 
 def test_event_for_existing_feature_with_no_user_key():
-    feature = {
-        u'key': u'feature.key',
-        u'salt': u'abc',
-        u'on': True,
-        u'variations': ['a', 'b'],
-        u'fallthrough': {
-            u'variation': 1
-        },
-        u'trackEvents': True
-    }
+    feature = make_off_flag_with_value('feature.key', 'value')
+    feature['trackEvents'] = True
+    feature['debugEventsUntilDate'] = 1000
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
     bad_user = { u'name': u'Bob' }
-    assert 'c' == client.variation('feature.key', bad_user, default='c')
+    assert 'default' == client.variation('feature.key', bad_user, default='default')
     e = get_first_event(client)
     assert (e['kind'] == 'feature' and
         e['key'] == 'feature.key' and
         e['user'] == bad_user and
-        e['value'] == 'c' and
+        e['version'] == feature['version'] and
+        e['value'] == 'default' and
         e['variation'] == None and
-        e['default'] == 'c' and
-        e['trackEvents'] == True)
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e['debugEventsUntilDate'] == 1000)
 
 
 def test_secure_mode_hash():

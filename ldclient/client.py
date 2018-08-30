@@ -3,13 +3,14 @@ from __future__ import division, with_statement, absolute_import
 import hashlib
 import hmac
 import threading
+import traceback
 
 from builtins import object
 
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
-from ldclient.flag import evaluate
+from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
@@ -184,17 +185,50 @@ class LDClient(object):
           available from LaunchDarkly
         :return: one of the flag's variation values, or the default value
         """
+        return self._evaluate_internal(key, user, default, False).value
+    
+    def variation_detail(self, key, user, default):
+        """Determines the variation of a feature flag for a user, like `variation`, but also
+        provides additional information about how this value was calculated.
+        
+        The return value is an EvaluationDetail object, which has three properties:
+
+        `value`: the value that was calculated for this user (same as the return value
+        of `variation`)
+        
+        `variation_index`: the positional index of this value in the flag, e.g. 0 for the
+        first variation - or `None` if the default value was returned
+        
+        `reason`: a hash describing the main reason why this value was selected.
+        
+        The `reason` will also be included in analytics events, if you are capturing
+        detailed event data for this flag.
+        
+        :param string key: the unique key for the feature flag
+        :param dict user: a dictionary containing parameters for the end user requesting the flag
+        :param object default: the default value of the flag, to be used if the value is not
+          available from LaunchDarkly
+        :return: an EvaluationDetail object describing the result
+        :rtype: EvaluationDetail
+        """
+        return self._evaluate_internal(key, user, default, True)
+    
+    def _evaluate_internal(self, key, user, default, include_reasons_in_events):
         default = self._config.get_default(key, default)
+
+        if self._config.offline:
+            return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
+        
         if user is not None:
             self._sanitize_user(user)
 
-        if self._config.offline:
-            return default
-
-        def send_event(value, version=None):
-            self._send_event({'kind': 'feature', 'key': key, 'user': user, 'variation': None,
-                              'value': value, 'default': default, 'version': version,
-                              'trackEvents': False, 'debugEventsUntilDate': None})
+        def send_event(value, variation=None, flag=None, reason=None):
+            self._send_event({'kind': 'feature', 'key': key, 'user': user,
+                              'value': value, 'variation': variation, 'default': default,
+                              'version': flag.get('version') if flag else None,
+                              'trackEvents': flag.get('trackEvents') if flag else None,
+                              'debugEventsUntilDate': flag.get('debugEventsUntilDate') if flag else None,
+                              'reason': reason if include_reasons_in_events else None})
 
         if not self.is_initialized():
             if self._store.initialized:
@@ -202,51 +236,40 @@ class LDClient(object):
             else:
                 log.warn("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
                          + str(default) + " for feature key: " + key)
-                send_event(default)
-                return default
-
+                reason = error_reason('CLIENT_NOT_READY')
+                send_event(default, None, None, reason)
+                return EvaluationDetail(default, None, reason)
+        
         if user is not None and user.get('key', "") == "":
             log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
-        def cb(flag):
-            try:
-                if not flag:
-                    log.info("Feature Flag key: " + key + " not found in Feature Store. Returning default.")
-                    send_event(default)
-                    return default
-
-                return self._evaluate_and_send_events(flag, user, default)
-
-            except Exception as e:
-                log.error("Exception caught in variation: " + e.message + " for flag key: " + key + " and user: " + str(user))
-                send_event(default)
-
-            return default
-
-        return self._store.get(FEATURES, key, cb)
-
-    def _evaluate(self, flag, user):
-        return evaluate(flag, user, self._store)
-
-    def _evaluate_and_send_events(self, flag, user, default):
-        if user is None or user.get('key') is None:
-            log.warn("Missing user or user key when evaluating Feature Flag key: " + flag.get('key') + ". Returning default.")
-            value = default
-            variation = None
+        flag = self._store.get(FEATURES, key, lambda x: x)
+        if not flag:
+            reason = error_reason('FLAG_NOT_FOUND')
+            send_event(default, None, None, reason)
+            return EvaluationDetail(default, None, reason)
         else:
-            result = evaluate(flag, user, self._store)
-            for event in result.events or []:
-                self._send_event(event)
-            value = default if result.value is None else result.value
-            variation = result.variation
-        
-        self._send_event({'kind': 'feature', 'key': flag.get('key'),
-                          'user': user, 'variation': variation, 'value': value,
-                          'default': default, 'version': flag.get('version'),
-                          'trackEvents': flag.get('trackEvents'),
-                          'debugEventsUntilDate': flag.get('debugEventsUntilDate')})
-        return value
+            if user is None or user.get('key') is None:
+                reason = error_reason('USER_NOT_SPECIFIED')
+                send_event(default, None, flag, reason)
+                return EvaluationDetail(default, None, reason)
 
+            try:
+                result = evaluate(flag, user, self._store, include_reasons_in_events)
+                for event in result.events or []:
+                    self._send_event(event)
+                detail = result.detail
+                if detail.is_default_value():
+                    detail = EvaluationDetail(default, None, detail.reason)
+                send_event(detail.value, detail.variation_index, flag, detail.reason)
+                return detail
+            except Exception as e:
+                log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, e))
+                log.debug(traceback.format_exc())
+                reason = error_reason('EXCEPTION')
+                send_event(default, None, flag, reason)
+                return EvaluationDetail(default, None, reason)
+    
     def all_flags(self, user):
         """Returns all feature flag values for the given user.
         
@@ -272,7 +295,8 @@ class LDClient(object):
         :param dict user: the end user requesting the feature flags
         :param kwargs: optional parameters affecting how the state is computed: set
           `client_side_only=True` to limit it to only flags that are marked for use with the
-          client-side SDK (by default, all flags are included)
+          client-side SDK (by default, all flags are included); set `with_reasons=True` to
+          include evaluation reasons in the state (see `variation_detail`)
         :return: a FeatureFlagsState object (will never be None; its 'valid' property will be False
           if the client is offline, has not been initialized, or the user is None or has no key)
         :rtype: FeatureFlagsState
@@ -294,6 +318,7 @@ class LDClient(object):
         
         state = FeatureFlagsState(True)
         client_only = kwargs.get('client_side_only', False)
+        with_reasons = kwargs.get('with_reasons', False)
         try:
             flags_map = self._store.all(FEATURES, lambda x: x)
         except Exception as e:
@@ -304,11 +329,14 @@ class LDClient(object):
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                result = self._evaluate(flag, user)
-                state.add_flag(flag, result.value, result.variation)
+                detail = evaluate(flag, user, self._store, False).detail
+                state.add_flag(flag, detail.value, detail.variation_index,
+                    detail.reason if with_reasons else None)
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
-                state.add_flag(flag, None, None)
+                log.debug(traceback.format_exc())
+                reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+                state.add_flag(flag, None, None, reason if with_reasons else None)
         
         return state
     
