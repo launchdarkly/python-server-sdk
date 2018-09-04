@@ -8,6 +8,14 @@ from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 
+def get_log_lines(caplog):
+    loglines = caplog.records
+    if callable(loglines):
+        # records() is a function in older versions of the caplog plugin
+        loglines = loglines()
+    return loglines
+
+
 class TestFeatureStore:
     redis_host = 'localhost'
     redis_port = 6379
@@ -163,16 +171,24 @@ class TestRedisFeatureStoreExtraTests:
         result = store.get(FEATURES, 'flagkey', lambda x: x)
         assert result['version'] == 5
 
-    def test_exception_is_handled(self, caplog):
+    def test_exception_is_handled_in_get(self, caplog):
         # This just verifies the fix for a bug that caused an error during exception handling in Python 3
         store = RedisFeatureStore(url='redis://bad')
         feature = store.get(FEATURES, 'flagkey')
         assert feature is None
-        loglines = caplog.records
-        if callable(loglines):
-            # records() is a function in older versions of the caplog plugin
-            loglines = loglines()
+        loglines = get_log_lines(caplog)
         assert len(loglines) == 2
         message = loglines[1].message
         assert message.startswith("RedisFeatureStore: Could not retrieve key flagkey from 'features' with error:")
+        assert "connecting to bad:6379" in message
+
+    def test_exception_is_handled_in_all(self, caplog):
+        # This just verifies the fix for a bug that caused an error during exception handling in Python 3
+        store = RedisFeatureStore(url='redis://bad')
+        all = store.all(FEATURES, lambda x: x)
+        assert all is None
+        loglines = get_log_lines(caplog)
+        assert len(loglines) == 2
+        message = loglines[1].message
+        assert message.startswith("RedisFeatureStore: Could not retrieve 'features' from Redis")
         assert "connecting to bad:6379" in message
