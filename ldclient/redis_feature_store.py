@@ -64,7 +64,7 @@ class RedisFeatureStore(FeatureStore):
             all_items = r.hgetall(self._items_key(kind))
         except BaseException as e:
             log.error("RedisFeatureStore: Could not retrieve '%s' from Redis with error: %s. Returning None.",
-                kind.namespace, e.message)
+                kind.namespace, e)
             return callback(None)
 
         if all_items is None or all_items is "":
@@ -100,7 +100,7 @@ class RedisFeatureStore(FeatureStore):
             item_json = r.hget(self._items_key(kind), key)
         except BaseException as e:
             log.error("RedisFeatureStore: Could not retrieve key %s from '%s' with error: %s",
-                key, kind.namespace, e.message)
+                key, kind.namespace, e)
             return None
 
         if item_json is None or item_json is "":
