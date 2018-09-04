@@ -162,3 +162,11 @@ class TestRedisFeatureStoreExtraTests:
         store.upsert(FEATURES, feature)
         result = store.get(FEATURES, 'flagkey', lambda x: x)
         assert result['version'] == 5
+
+    def test_exception_is_handled(self, caplog):
+        # This just verifies the fix for a bug that caused an error during exception handling in Python 3
+        store = RedisFeatureStore(url='redis://bad')
+        feature = store.get(FEATURES, 'key')
+        assert feature is None
+        assert len(caplog.records) == 2
+        assert caplog.records[1].message.startswith("RedisFeatureStore: Could not retrieve key key from 'features' with error: Error 8 connecting to bad:6379")
