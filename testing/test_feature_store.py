@@ -168,7 +168,11 @@ class TestRedisFeatureStoreExtraTests:
         store = RedisFeatureStore(url='redis://bad')
         feature = store.get(FEATURES, 'flagkey')
         assert feature is None
-        assert len(caplog.records) == 2
-        message = caplog.records[1].message
+        loglines = caplog.records
+        if callable(loglines):
+            # records() is a function in older versions of the caplog plugin
+            loglines = loglines()
+        assert len(loglines) == 2
+        message = loglines[1].message
         assert message.startswith("RedisFeatureStore: Could not retrieve key flagkey from 'features' with error:")
         assert "connecting to bad:6379" in message
