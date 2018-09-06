@@ -26,6 +26,6 @@ python setup.py sdist
 
 # Upload with Twine
 pip install twine
-twine upload dist/*
+python -m twine upload dist/*
 
 echo "Done with python-client release"
