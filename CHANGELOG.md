@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.4.1] - 2018-09-06
+### Fixed:
+- In Python 3, if the Redis feature store encountered a Redis exception, it would crash on trying to log the `message` property of the exception, which does not exist in Python 3. This has been fixed. (Thanks, [mattbriancon](https://github.com/launchdarkly/python-client/pull/96)!)
+
 ## [6.4.0] - 2018-08-29
 ### Added:
 - The new `LDClient` method `variation_detail` allows you to evaluate a feature flag (using the same parameters as you would for `variation`) and receive more information about how the value was calculated. This information is returned in an `EvaluationDetail` object, which contains both the result value and a "reason" object which will tell you, for instance, if the user was individually targeted for the flag or was matched by one of the flag's rules, or if the flag returned the default value due to an error.
