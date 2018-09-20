@@ -8,18 +8,18 @@ import time
 
 
 class PollingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, config, requester, store, ready):
+    def __init__(self, config, requester, store, ready, override_poll_interval = None):
         Thread.__init__(self)
         self.daemon = True
-        self._config = config
         self._requester = requester
         self._store = store
         self._running = False
         self._ready = ready
+        self._interval = config.poll_interval if override_poll_interval is None else override_poll_interval
 
     def run(self):
         if not self._running:
-            log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
+            log.info("Starting PollingUpdateProcessor with request interval: " + str(self._interval))
             self._running = True
             while self._running:
                 start_time = time.time()
@@ -34,14 +34,13 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                     if not is_http_error_recoverable(e.status):
                         self._ready.set() # if client is initializing, make it stop waiting; has no effect if already inited
                         self.stop()
-                    break
                 except Exception as e:
                     log.exception(
                         'Error: Exception encountered when updating flags. %s' % e)
 
                 elapsed = time.time() - start_time
-                if elapsed < self._config.poll_interval:
-                    time.sleep(self._config.poll_interval - elapsed)
+                if elapsed < self._interval:
+                    time.sleep(self._interval - elapsed)
 
     def initialized(self):
         return self._running and self._ready.is_set() is True and self._store.initialized is True
