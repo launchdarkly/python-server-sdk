@@ -29,8 +29,10 @@ class MockFeatureRequester(FeatureRequester):
     def __init__(self):
         self.all_data = {}
         self.exception = None
+        self.request_count = 0
 
     def get_all_data(self):
+        self.request_count += 1
         if self.exception is not None:
             raise self.exception
         return self.all_data
