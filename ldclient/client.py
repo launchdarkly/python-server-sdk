@@ -321,6 +321,8 @@ class LDClient(object):
         with_reasons = kwargs.get('with_reasons', False)
         try:
             flags_map = self._store.all(FEATURES, lambda x: x)
+            if flags_map is None:
+                raise ValueError("feature store error")
         except Exception as e:
             log.error("Unable to read flags for all_flag_state: %s" % e)
             return FeatureFlagsState(False)
