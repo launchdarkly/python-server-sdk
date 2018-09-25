@@ -1,6 +1,7 @@
 import pytest
 import threading
 import time
+import mock
 
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
@@ -10,7 +11,6 @@ from ldclient.util import UnsuccessfulResponseException
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from testing.stub_util import MockFeatureRequester, MockResponse
 
-config = Config()
 pp = None
 mock_requester = None
 store = None
@@ -47,21 +47,23 @@ def test_successful_request_puts_feature_data_in_store():
             "segkey": segment
         }
     }
-    setup_processor(config)
+    setup_processor(Config())
     ready.wait()
     assert store.get(FEATURES, "flagkey", lambda x: x) == flag
     assert store.get(SEGMENTS, "segkey", lambda x: x) == segment
     assert store.initialized
     assert pp.initialized()
 
-def test_general_connection_error_does_not_cause_immediate_failure():
+# Note that we have to mock Config.poll_interval because Config won't let you set a value less than 30 seconds
+
+@mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
+def test_general_connection_error_does_not_cause_immediate_failure(ignore_mock):
     mock_requester.exception = Exception("bad")
     start_time = time.time()
-    setup_processor(config)
+    setup_processor(Config())
     ready.wait(0.3)
-    elapsed_time = time.time() - start_time
-    assert elapsed_time >= 0.2
     assert not pp.initialized()
+    assert mock_requester.request_count >= 2
 
 def test_http_401_error_causes_immediate_failure():
     verify_unrecoverable_http_error(401)
@@ -78,16 +80,23 @@ def test_http_429_error_does_not_cause_immediate_failure():
 def test_http_500_error_does_not_cause_immediate_failure():
     verify_recoverable_http_error(500)
 
-def verify_unrecoverable_http_error(status):
+def test_http_503_error_does_not_cause_immediate_failure():
+    verify_recoverable_http_error(503)
+
+@mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
+def verify_unrecoverable_http_error(status, ignore_mock):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    setup_processor(config)
-    finished = ready.wait(5.0)
+    setup_processor(Config())
+    finished = ready.wait(0.5)
     assert finished
     assert not pp.initialized()
+    assert mock_requester.request_count == 1
 
-def verify_recoverable_http_error(status):
+@mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
+def verify_recoverable_http_error(status, ignore_mock):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    setup_processor(config)
-    finished = ready.wait(0.2)
+    setup_processor(Config())
+    finished = ready.wait(0.5)
     assert not finished
     assert not pp.initialized()
+    assert mock_requester.request_count >= 2

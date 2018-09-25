@@ -34,7 +34,6 @@ class PollingUpdateProcessor(Thread, UpdateProcessor):
                     if not is_http_error_recoverable(e.status):
                         self._ready.set() # if client is initializing, make it stop waiting; has no effect if already inited
                         self.stop()
-                    break
                 except Exception as e:
                     log.exception(
                         'Error: Exception encountered when updating flags. %s' % e)
