@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.4.2] - 2018-09-21
+### Fixed:
+- In polling mode, if the client received an HTTP error from LaunchDarkly, it stopped polling. This has been fixed so it only stops polling if the error is 401 (indicating an invalid SDK key).
+- When using a Redis feature store, if the `hgetall` method returned an invalid result, `all_flags` and `all_flags_state` would throw an exception. Instead, `all_flags` will now return an empty dict, and `all_flags_state` will return a state object with no flags and `valid==False`. (Thanks, [thieman](https://github.com/launchdarkly/python-client/pull/99)!)
+
 ## [6.4.1] - 2018-09-06
 ### Fixed:
 - In Python 3, if the Redis feature store encountered a Redis exception, it would crash on trying to log the `message` property of the exception, which does not exist in Python 3. This has been fixed. (Thanks, [mattbriancon](https://github.com/launchdarkly/python-client/pull/96)!)
