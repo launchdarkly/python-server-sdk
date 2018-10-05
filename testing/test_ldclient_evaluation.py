@@ -149,8 +149,7 @@ def test_all_flags_state_returns_state():
         '$flagsState': {
             'key1': {
                 'variation': 0,
-                'version': 100,
-                'trackEvents': False
+                'version': 100
             },
             'key2': {
                 'variation': 1,
@@ -176,7 +175,6 @@ def test_all_flags_state_returns_state_with_reasons():
             'key1': {
                 'variation': 0,
                 'version': 100,
-                'trackEvents': False,
                 'reason': {'kind': 'OFF'}
             },
             'key2': {
@@ -228,6 +226,61 @@ def test_all_flags_state_can_be_filtered_for_client_side_flags():
     assert state.valid == True
     values = state.to_values_map()
     assert values == { 'client-side-1': 'value1', 'client-side-2': 'value2' }
+
+def test_all_flags_state_can_omit_details_for_untracked_flags():
+    flag1 = {
+        'key': 'key1',
+        'version': 100,
+        'on': False,
+        'offVariation': 0,
+        'variations': [ 'value1' ],
+        'trackEvents': False
+    }
+    flag2 = {
+        'key': 'key2',
+        'version': 200,
+        'on': False,
+        'offVariation': 1,
+        'variations': [ 'x', 'value2' ],
+        'trackEvents': True
+    }
+    flag3 = {
+        'key': 'key3',
+        'version': 300,
+        'on': False,
+        'offVariation': 1,
+        'variations': [ 'x', 'value3' ],
+        'debugEventsUntilDate': 1000
+    }
+    store = InMemoryFeatureStore()
+    store.init({ FEATURES: { 'key1': flag1, 'key2': flag2, 'key3': flag3 } })
+    client = make_client(store)
+    state = client.all_flags_state(user, with_reasons=True, details_only_for_tracked_flags=True)
+    assert state.valid == True
+    result = state.to_json_dict()
+    assert result == {
+        'key1': 'value1',
+        'key2': 'value2',
+        'key3': 'value3',
+        '$flagsState': {
+            'key1': {
+                'variation': 0
+            },
+            'key2': {
+                'variation': 1,
+                'version': 200,
+                'trackEvents': True,
+                'reason': {'kind': 'OFF'}
+            },
+            'key3': {
+                'variation': 1,
+                'version': 300,
+                'debugEventsUntilDate': 1000,
+                'reason': {'kind': 'OFF'}
+            }
+        },
+        '$valid': True
+    }
 
 def test_all_flags_state_returns_empty_state_if_user_is_none():
     store = InMemoryFeatureStore()
