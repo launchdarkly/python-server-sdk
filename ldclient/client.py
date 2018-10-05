@@ -296,7 +296,10 @@ class LDClient(object):
         :param kwargs: optional parameters affecting how the state is computed: set
           `client_side_only=True` to limit it to only flags that are marked for use with the
           client-side SDK (by default, all flags are included); set `with_reasons=True` to
-          include evaluation reasons in the state (see `variation_detail`)
+          include evaluation reasons in the state (see `variation_detail`); set
+          `details_only_for_tracked_flags=True` to omit any metadata that is normally only
+          used for event generation, such as flag versions and evaluation reasons, unless
+          the flag has event tracking or debugging turned on
         :return: a FeatureFlagsState object (will never be None; its 'valid' property will be False
           if the client is offline, has not been initialized, or the user is None or has no key)
         :rtype: FeatureFlagsState
@@ -319,6 +322,7 @@ class LDClient(object):
         state = FeatureFlagsState(True)
         client_only = kwargs.get('client_side_only', False)
         with_reasons = kwargs.get('with_reasons', False)
+        details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
             flags_map = self._store.all(FEATURES, lambda x: x)
             if flags_map is None:
@@ -333,12 +337,12 @@ class LDClient(object):
             try:
                 detail = evaluate(flag, user, self._store, False).detail
                 state.add_flag(flag, detail.value, detail.variation_index,
-                    detail.reason if with_reasons else None)
+                    detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
-                state.add_flag(flag, None, None, reason if with_reasons else None)
+                state.add_flag(flag, None, None, reason if with_reasons else None, details_only_if_tracked)
         
         return state
     
