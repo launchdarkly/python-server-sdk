@@ -1,4 +1,5 @@
 import json
+import time
 
 class FeatureFlagsState(object):
     """
@@ -17,7 +18,12 @@ class FeatureFlagsState(object):
         key = flag['key']
         self.__flag_values[key] = value
         meta = {}
-        if (not details_only_if_tracked) or flag.get('trackEvents') or flag.get('debugEventsUntilDate'):
+        with_details = (not details_only_if_tracked) or flag.get('trackEvents')
+        if not with_details:
+            if flag.get('debugEventsUntilDate'):
+                now = int(time.time() * 1000)
+                with_details = (flag.get('debugEventsUntilDate') > now)
+        if with_details:
             meta['version'] = flag.get('version')
             if reason is not None:
                 meta['reason'] = reason
