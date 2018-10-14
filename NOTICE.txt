@@ -1,2 +1,0 @@
-This product includes software (ExpiringDict) developed by
-Mailgun (https://github.com/mailgun/expiringdict).
