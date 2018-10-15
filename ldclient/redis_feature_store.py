@@ -1,10 +1,10 @@
 import json
 from pprint import pprint
 
+from expiringdict import ExpiringDict
 import redis
 
 from ldclient import log
-from ldclient.expiringdict import ExpiringDict
 from ldclient.interfaces import FeatureStore
 from ldclient.memoized_value import MemoizedValue
 from ldclient.versioned_data_kind import FEATURES
