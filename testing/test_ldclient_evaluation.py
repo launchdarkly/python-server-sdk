@@ -1,5 +1,6 @@
 import pytest
 import json
+import time
 from ldclient.client import LDClient, Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.flag import EvaluationDetail
@@ -228,6 +229,7 @@ def test_all_flags_state_can_be_filtered_for_client_side_flags():
     assert values == { 'client-side-1': 'value1', 'client-side-2': 'value2' }
 
 def test_all_flags_state_can_omit_details_for_untracked_flags():
+    future_time = (time.time() * 1000) + 100000
     flag1 = {
         'key': 'key1',
         'version': 100,
@@ -250,7 +252,7 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         'on': False,
         'offVariation': 1,
         'variations': [ 'x', 'value3' ],
-        'debugEventsUntilDate': 1000
+        'debugEventsUntilDate': future_time
     }
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2, 'key3': flag3 } })
@@ -275,7 +277,7 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
             'key3': {
                 'variation': 1,
                 'version': 300,
-                'debugEventsUntilDate': 1000,
+                'debugEventsUntilDate': future_time,
                 'reason': {'kind': 'OFF'}
             }
         },
