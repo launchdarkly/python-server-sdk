@@ -1,4 +1,5 @@
 import json
+import time
 
 class FeatureFlagsState(object):
     """
@@ -12,15 +13,24 @@ class FeatureFlagsState(object):
         self.__flag_metadata = {}
         self.__valid = valid
 
-    def add_flag(self, flag, value, variation, reason):
+    def add_flag(self, flag, value, variation, reason, details_only_if_tracked):
         """Used internally to build the state map."""
         key = flag['key']
         self.__flag_values[key] = value
-        meta = { 'version': flag.get('version'), 'trackEvents': flag.get('trackEvents') }
+        meta = {}
+        with_details = (not details_only_if_tracked) or flag.get('trackEvents')
+        if not with_details:
+            if flag.get('debugEventsUntilDate'):
+                now = int(time.time() * 1000)
+                with_details = (flag.get('debugEventsUntilDate') > now)
+        if with_details:
+            meta['version'] = flag.get('version')
+            if reason is not None:
+                meta['reason'] = reason
         if variation is not None:
             meta['variation'] = variation
-        if reason is not None:
-            meta['reason'] = reason
+        if flag.get('trackEvents'):
+            meta['trackEvents'] = True
         if flag.get('debugEventsUntilDate') is not None:
             meta['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
         self.__flag_metadata[key] = meta
