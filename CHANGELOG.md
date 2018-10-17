@@ -2,6 +2,16 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.5.0] - 2018-10-17
+### Added:
+- The `all_flags_state` method now accepts a new option, `details_only_for_tracked_flags`, which reduces the size of the JSON representation of the flag state by omitting some metadata. Specifically, it omits any data that is normally used for generating detailed evaluation events if a flag does not have event tracking or debugging turned on.
+
+### Changed:
+- The SDK previously contained a copy of code from the `expiringdict` package. This has been changed to use the current version of that package from PyPi.
+
+### Fixed:
+- JSON data from `all_flags_state` is now slightly smaller even if you do not use the new option described above, because it omits the flag property for event tracking unless that property is true.
+
 ## [6.4.2] - 2018-09-21
 ### Fixed:
 - In polling mode, if the client received an HTTP error from LaunchDarkly, it stopped polling. This has been fixed so it only stops polling if the error is 401 (indicating an invalid SDK key).
