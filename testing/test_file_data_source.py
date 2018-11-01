@@ -1,6 +1,7 @@
 import json
 import os
 import pytest
+import six
 import tempfile
 import threading
 import time
@@ -93,7 +94,7 @@ def teardown_function():
 
 def make_temp_file(content):
     f, path = tempfile.mkstemp()
-    os.write(f, content)
+    os.write(f, six.b(content))
     os.close(f)
     return path
 
