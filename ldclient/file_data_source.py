@@ -42,7 +42,6 @@ class FileDataSource(UpdateProcessor):
 
     def _load_all(self):
         all_data = { FEATURES: {}, SEGMENTS: {} }
-        print "Loading: %s" % self._paths
         for path in self._paths:
             try:
                 self._load_file(path, all_data)
