@@ -49,7 +49,6 @@ class FileDataSource(UpdateProcessor):
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
                 return
-        print "Initing: %s" % all_data
         self._store.init(all_data)
         self._inited = True
     
@@ -68,11 +67,9 @@ class FileDataSource(UpdateProcessor):
     def _parse_content(self, content):
         if have_yaml:
             if content.strip().startswith("{"):
-                print("json: %s" % content)
                 return json.loads(content)
             else:
                 return yaml.load(content)
-        print("json: %s" % content)
         return json.loads(content)
     
     def _add_item(self, all_data, kind, item):
