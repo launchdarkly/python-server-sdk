@@ -194,8 +194,14 @@ def do_auto_update_test(options):
         assert len(store.all(SEGMENTS, lambda x: x)) == 0
         time.sleep(0.5)
         replace_file(path, segment_only_json)
-        time.sleep(0.5)
-        assert len(store.all(SEGMENTS, lambda x: x)) == 1
+        print("*** modified file %s" % path)
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            time.sleep(0.1)
+            if len(store.all(SEGMENTS, lambda x: x)) == 1:
+                return
+            print("*** checked")
+        assert False, "Flags were not reloaded after 10 seconds"
     finally:
         os.remove(path)
 
