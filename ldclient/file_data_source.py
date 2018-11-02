@@ -239,6 +239,7 @@ class FileDataSource(UpdateProcessor):
             self._observer.start()
 
         def stop(self):
+            print("*** stopping observer")
             self._observer.stop()
             self._observer.join()
 
@@ -253,6 +254,7 @@ class FileDataSource(UpdateProcessor):
             self._timer.start()
         
         def stop(self):
+            print("*** stopping polling")
             self._timer.stop()
         
         def _poll(self):

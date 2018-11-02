@@ -199,16 +199,19 @@ def do_auto_update_test(options):
         while time.time() < deadline:
             time.sleep(0.1)
             if len(store.all(SEGMENTS, lambda x: x)) == 1:
+                print("*** success on %s" % path)
                 return
-            print("*** checked")
+            print("*** checked %s" % path)
         assert False, "Flags were not reloaded after 10 seconds"
     finally:
         os.remove(path)
 
 def test_reloads_modified_file_if_auto_update_is_on():
+    print("*** with watchdog")
     do_auto_update_test({ 'auto_update': True })
 
 def test_reloads_modified_file_in_polling_mode():
+    print("*** with polling")
     do_auto_update_test({ 'auto_update': True, 'force_polling': True, 'poll_interval': 0.1 })
 
 def test_evaluates_full_flag_with_client_as_expected():
