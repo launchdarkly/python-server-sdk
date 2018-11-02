@@ -218,10 +218,12 @@ class FileDataSource(UpdateProcessor):
     # if available for the current platform.
     class WatchdogAutoUpdater(object):
         def __init__(self, resolved_paths, reloader):
+            print("*** all paths: %s" % resolved_paths)
             watched_files = set(resolved_paths)
 
             class LDWatchdogHandler(watchdog.events.FileSystemEventHandler):
                 def on_any_event(self, event):
+                    print("*** got event: %s" % event.src_path)
                     if event.src_path in watched_files:
                         reloader()
             
@@ -232,6 +234,7 @@ class FileDataSource(UpdateProcessor):
             self._observer = watchdog.observers.Observer()
             handler = LDWatchdogHandler()
             for path in dir_paths:
+                print("*** watching: %s" % path)
                 self._observer.schedule(handler, path)
             self._observer.start()
 
