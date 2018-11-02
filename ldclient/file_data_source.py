@@ -133,6 +133,7 @@ class FileDataSource(UpdateProcessor):
         if isinstance(self._paths, six.string_types):
             self._paths = [ self._paths ]
         self._auto_update = options.get('auto_update', False)
+        self._auto_updater = None
         self._poll_interval = options.get('poll_interval', 1)
         self._force_polling = options.get('force_polling', False)  # used only in tests
         
@@ -141,8 +142,6 @@ class FileDataSource(UpdateProcessor):
 
         if self._auto_update:
             self._auto_updater = self._start_auto_updater()
-        else:
-            self._auto_updater = None
         
         # We will signal readiness immediately regardless of whether the file load succeeded or failed -
         # the difference can be detected by checking initialized()
