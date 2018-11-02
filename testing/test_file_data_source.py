@@ -78,19 +78,19 @@ segment_only_json = '''
   }
 '''
 
-fds = None
+data_source = None
 store = None
 ready = None
 
 
 def setup_function():
-    global fds, store, ready
+    global data_source, store, ready
     store = InMemoryFeatureStore()
     ready = threading.Event()
 
 def teardown_function():
-    if fds is not None:
-        fds.stop()
+    if data_source is not None:
+        data_source.stop()
 
 def make_temp_file(content):
     f, path = tempfile.mkstemp()
@@ -105,9 +105,9 @@ def replace_file(path, content):
 def test_does_not_load_data_prior_to_start():
     path = make_temp_file('{"flagValues":{"key":"value"}}')
     try:
-        fds = FileDataSource.factory(paths = path)(Config(), store, ready)
+        data_source = FileDataSource.factory(paths = path)(Config(), store, ready)
         assert ready.is_set() is False
-        assert fds.initialized() is False
+        assert data_source.initialized() is False
         assert store.initialized is False
     finally:
         os.remove(path)
@@ -115,8 +115,8 @@ def test_does_not_load_data_prior_to_start():
 def test_loads_flags_on_start_from_json():
     path = make_temp_file(all_properties_json)
     try:
-        fds = FileDataSource.factory(paths = path)(Config(), store, ready)
-        fds.start()
+        data_source = FileDataSource.factory(paths = path)(Config(), store, ready)
+        data_source.start()
         assert store.initialized is True
         assert sorted(list(store.all(FEATURES, lambda x: x).keys())) == all_flag_keys
     finally:
@@ -125,8 +125,8 @@ def test_loads_flags_on_start_from_json():
 def test_loads_flags_on_start_from_yaml():
     path = make_temp_file(all_properties_yaml)
     try:
-        fds = FileDataSource.factory(paths = path)(Config(), store, ready)
-        fds.start()
+        data_source = FileDataSource.factory(paths = path)(Config(), store, ready)
+        data_source.start()
         assert store.initialized is True
         assert sorted(list(store.all(FEATURES, lambda x: x).keys())) == all_flag_keys
     finally:
@@ -135,26 +135,26 @@ def test_loads_flags_on_start_from_yaml():
 def test_sets_ready_event_and_initialized_on_successful_load():
     path = make_temp_file(all_properties_json)
     try:
-        fds = FileDataSource.factory(paths = path)(Config(), store, ready)
-        fds.start()
-        assert fds.initialized() is True
+        data_source = FileDataSource.factory(paths = path)(Config(), store, ready)
+        data_source.start()
+        assert data_source.initialized() is True
         assert ready.is_set() is True
     finally:
         os.remove(path)
 
 def test_sets_ready_event_and_does_not_set_initialized_on_unsuccessful_load():
     bad_file_path = 'no-such-file'
-    fds = FileDataSource.factory(paths = bad_file_path)(Config(), store, ready)
-    fds.start()
-    assert fds.initialized() is False
+    data_source = FileDataSource.factory(paths = bad_file_path)(Config(), store, ready)
+    data_source.start()
+    assert data_source.initialized() is False
     assert ready.is_set() is True
 
 def test_can_load_multiple_files():
     path1 = make_temp_file(flag_only_json)
     path2 = make_temp_file(segment_only_json)
     try:
-        fds = FileDataSource.factory(paths = [ path1, path2 ])(Config(), store, ready)
-        fds.start()
+        data_source = FileDataSource.factory(paths = [ path1, path2 ])(Config(), store, ready)
+        data_source.start()
         assert len(store.all(FEATURES, lambda x: x)) == 1
         assert len(store.all(SEGMENTS, lambda x: x)) == 1
     finally:
@@ -165,8 +165,8 @@ def test_does_not_allow_duplicate_keys():
     path1 = make_temp_file(flag_only_json)
     path2 = make_temp_file(flag_only_json)
     try:
-        fds = FileDataSource.factory(paths = [ path1, path2 ])(Config(), store, ready)
-        fds.start()
+        data_source = FileDataSource.factory(paths = [ path1, path2 ])(Config(), store, ready)
+        data_source.start()
         assert len(store.all(FEATURES, lambda x: x)) == 0
     finally:
         os.remove(path1)
@@ -175,8 +175,8 @@ def test_does_not_allow_duplicate_keys():
 def test_does_not_reload_modified_file_if_auto_update_is_off():
     path = make_temp_file(flag_only_json)
     try:
-        fds = FileDataSource.factory(paths = path)(Config(), store, ready)
-        fds.start()
+        data_source = FileDataSource.factory(paths = path)(Config(), store, ready)
+        data_source.start()
         assert len(store.all(SEGMENTS, lambda x: x)) == 0
         time.sleep(0.5)
         replace_file(path, segment_only_json)
@@ -185,22 +185,46 @@ def test_does_not_reload_modified_file_if_auto_update_is_off():
     finally:
         os.remove(path)
 
+def do_auto_update_test(options):
+    path = make_temp_file(flag_only_json)
+    options['paths'] = path
+    try:
+        data_source = FileDataSource.factory(**options)(Config(), store, ready)
+        data_source.start()
+        assert len(store.all(SEGMENTS, lambda x: x)) == 0
+        time.sleep(0.5)
+        replace_file(path, segment_only_json)
+        time.sleep(0.5)
+        assert len(store.all(SEGMENTS, lambda x: x)) == 1
+    finally:
+        os.remove(path)
+
+def test_reloads_modified_file_if_auto_update_is_on():
+    do_auto_update_test({ 'auto_update': True })
+
+def test_reloads_modified_file_in_polling_mode():
+    do_auto_update_test({ 'auto_update': True, 'force_polling': True, 'poll_interval': 0.1 })
+
 def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
-        fds = FileDataSource.factory(paths = path)
-        client = LDClient(config=Config(update_processor_class = fds, send_events = False))
+        data_source = FileDataSource.factory(paths = path)
+        client = LDClient(config=Config(update_processor_class = data_source, send_events = False))
         value = client.variation('flag1', { 'key': 'user' }, '')
         assert value == 'on'
     finally:
         os.remove(path)
+        if client is not None:
+            client.close()
 
 def test_evaluates_simplified_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
-        fds = FileDataSource.factory(paths = path)
-        client = LDClient(config=Config(update_processor_class = fds, send_events = False))
+        data_source = FileDataSource.factory(paths = path)
+        client = LDClient(config=Config(update_processor_class = data_source, send_events = False))
         value = client.variation('flag2', { 'key': 'user' }, '')
         assert value == 'value2'
     finally:
         os.remove(path)
+        if client is not None:
+            client.close()
