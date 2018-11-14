@@ -37,7 +37,7 @@ class FileDataSource(UpdateProcessor):
         to `factory`, set `paths` to the file path(s) of your data file(s):
         ::
 
-            factory = FileDataSource.factory(paths: [ myFilePath ])
+            factory = FileDataSource.factory(paths = [ myFilePath ])
             config = Config(update_processor_class = factory)
 
         This will cause the client not to connect to LaunchDarkly to get feature flags. The
