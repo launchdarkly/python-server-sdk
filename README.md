@@ -78,6 +78,10 @@ Supported Python versions
 ----------
 The SDK is tested with the most recent patch releases of Python 2.7, 3.3, 3.4, 3.5, and 3.6. Python 2.6 is no longer supported.
 
+Using flag data from a file
+---------------------------
+For testing purposes, the SDK can be made to read feature flag state from a file or files instead of connecting to LaunchDarkly. See [`file_data_source.py`](https://github.com/launchdarkly/python-client/blob/master/ldclient/file_data_source.py) for more details.
+
 Learn more
 -----------
 
