@@ -1,5 +1,4 @@
 import json
-from mock import patch
 import pytest
 import redis
 
@@ -133,8 +132,7 @@ class TestFeatureStore:
 
 
 class TestRedisFeatureStoreExtraTests:
-    @patch.object(RedisFeatureStore, '_before_update_transaction')
-    def test_upsert_race_condition_against_external_client_with_higher_version(self, mock_method):
+    def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         store = RedisFeatureStore()
         store.init({ FEATURES: {} })
@@ -144,7 +142,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        mock_method.side_effect = hook
+        store.core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 1 }
 
@@ -152,8 +150,7 @@ class TestRedisFeatureStoreExtraTests:
         result = store.get(FEATURES, 'flagkey', lambda x: x)
         assert result['version'] == 2
 
-    @patch.object(RedisFeatureStore, '_before_update_transaction')
-    def test_upsert_race_condition_against_external_client_with_lower_version(self, mock_method):
+    def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         store = RedisFeatureStore()
         store.init({ FEATURES: {} })
@@ -163,7 +160,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        mock_method.side_effect = hook
+        store.core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 5 }
 
@@ -186,7 +183,7 @@ class TestRedisFeatureStoreExtraTests:
         # This just verifies the fix for a bug that caused an error during exception handling in Python 3
         store = RedisFeatureStore(url='redis://bad')
         all = store.all(FEATURES, lambda x: x)
-        assert all is None
+        assert all == {}
         loglines = get_log_lines(caplog)
         assert len(loglines) == 2
         message = loglines[1].message
