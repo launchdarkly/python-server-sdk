@@ -1,9 +1,12 @@
+import boto3
 import json
 import pytest
 import redis
+import time
 
+from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
 from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
-from ldclient.integrations import Redis
+from ldclient.integrations import DynamoDB, Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
@@ -16,38 +19,124 @@ def get_log_lines(caplog):
     return loglines
 
 
-class TestFeatureStore:
+class InMemoryTester(object):
+    def init_store(self):
+        return InMemoryFeatureStore()
+
+
+class RedisTester(object):
     redis_host = 'localhost'
     redis_port = 6379
 
-    def clear_redis_data(self):
+    def __init__(self, cache_config):
+        self._cache_config = cache_config
+    
+    def init_store(self):
+        self._clear_data()
+        return Redis.new_feature_store(caching=self._cache_config)
+
+    def _clear_data(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.delete("launchdarkly:features")
 
-    def in_memory(self):
-        return InMemoryFeatureStore()
 
-    def redis_with_local_cache(self):
-        self.clear_redis_data()
-        return Redis.new_feature_store()
+class RedisWithDeprecatedConstructorTester(RedisTester):
+    def init_store(self):
+        self._clear_data()
+        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0))
 
-    def redis_no_local_cache(self):
-        self.clear_redis_data()
-        return Redis.new_feature_store(caching=CacheConfig.disabled())
 
-    def deprecated_redis_with_local_cache(self):
-        self.clear_redis_data()
-        return RedisFeatureStore()
+class DynamoDBTester(object):
+    table_name = 'LD_DYNAMODB_TEST_TABLE'
+    table_created = False
+    options = { 'endpoint_url': 'http://localhost:8000', 'region_name': 'us-east-1' }
 
-    def deprecated_redis_no_local_cache(self):
-        self.clear_redis_data()
-        return RedisFeatureStore(expiration=0)
+    def __init__(self, cache_config):
+        self._cache_config = cache_config
+    
+    def init_store(self):
+        self._create_table()
+        self._clear_data()
+        return DynamoDB.new_feature_store(self.table_name, dynamodb_opts=self.options)
 
-    params = [in_memory, redis_with_local_cache, redis_no_local_cache]
+    def _create_table(self):
+        if self.table_created:
+            return
+        client = boto3.client('dynamodb', **self.options)
+        try:
+            client.describe_table(TableName=self.table_name)
+            self.table_created = True
+            return
+        except client.exceptions.ResourceNotFoundException:
+            pass
+        req = {
+            'TableName': self.table_name,
+            'KeySchema': [
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                    'KeyType': 'HASH',
+                },
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
+                    'KeyType': 'RANGE'
+                }
+            ],
+            'AttributeDefinitions': [
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
+                    'AttributeType': 'S'
+                }
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 1,
+                'WriteCapacityUnits': 1
+            }
+        }
+        client.create_table(**req)
+        while True:
+            try:
+                client.describe_table(TableName=self.table_name)
+                self.table_created = True
+                return
+            except client.exceptions.ResourceNotFoundException:
+                time.sleep(0.5)
+        
+    def _clear_data(self):
+        client = boto3.client('dynamodb', **self.options)
+        delete_requests = []
+        req = {
+            'TableName': self.table_name,
+            'ConsistentRead': True,
+            'ProjectionExpression': '#namespace, #key',
+            'ExpressionAttributeNames': {
+                '#namespace': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                '#key': _DynamoDBFeatureStoreCore.SORT_KEY
+            }
+        }
+        for resp in client.get_paginator('scan').paginate(**req):
+            for item in resp['Items']:
+                delete_requests.append({ 'DeleteRequest': { 'Key': item } })
+        _DynamoDBHelpers.batch_write_requests(client, self.table_name, delete_requests)        
+
+
+class TestFeatureStore:
+    params = [
+        InMemoryTester(),
+        RedisTester(CacheConfig.default()),
+        RedisTester(CacheConfig.disabled()),
+        RedisWithDeprecatedConstructorTester(CacheConfig.default()),
+        RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
+        DynamoDBTester(CacheConfig.default()),
+        DynamoDBTester(CacheConfig.disabled())
+    ]
 
     @pytest.fixture(params=params)
     def store(self, request):
-        return request.param(self)
+        return request.param.init_store()
 
     @staticmethod
     def make_feature(key, ver):
@@ -79,6 +168,9 @@ class TestFeatureStore:
         })
         return store
 
+    def test_not_initialized_before_init(self, store):
+        assert store.initialized is False
+    
     def test_initialized(self, store):
         store = self.base_initialized_store(store)
         assert store.initialized is True
