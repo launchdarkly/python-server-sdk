@@ -11,9 +11,9 @@ class Redis(object):
     DEFAULT_MAX_CONNECTIONS = 16
     
     @staticmethod
-    def new_feature_store(url=Redis.DEFAULT_URL,
-                          prefix=Redis.DEFAULT_PREFIX,
-                          max_connections=Redis.DEFAULT_MAX_CONNECTIONS,
+    def new_feature_store(url='redis://localhost:6379/0',
+                          prefix='launchdarkly',
+                          max_connections=16,
                           caching=CacheConfig.default()):
         """Creates a Redis-backed implementation of `:class:ldclient.feature_store.FeatureStore`.
 

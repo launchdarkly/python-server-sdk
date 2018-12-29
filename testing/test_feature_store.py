@@ -2,7 +2,8 @@ import json
 import pytest
 import redis
 
-from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
+from ldclient.integrations import Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
@@ -19,17 +20,27 @@ class TestFeatureStore:
     redis_host = 'localhost'
     redis_port = 6379
 
+    def clear_redis_data(self):
+        r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
+        r.delete("launchdarkly:features")
+
     def in_memory(self):
         return InMemoryFeatureStore()
 
     def redis_with_local_cache(self):
-        r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
-        r.delete("launchdarkly:features")
-        return RedisFeatureStore()
+        self.clear_redis_data()
+        return Redis.new_feature_store()
 
     def redis_no_local_cache(self):
-        r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
-        r.delete("launchdarkly:features")
+        self.clear_redis_data()
+        return Redis.new_feature_store(caching=CacheConfig.disabled())
+
+    def deprecated_redis_with_local_cache(self):
+        self.clear_redis_data()
+        return RedisFeatureStore()
+
+    def deprecated_redis_no_local_cache(self):
+        self.clear_redis_data()
         return RedisFeatureStore(expiration=0)
 
     params = [in_memory, redis_with_local_cache, redis_no_local_cache]
