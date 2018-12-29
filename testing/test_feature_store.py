@@ -49,7 +49,12 @@ class RedisWithDeprecatedConstructorTester(RedisTester):
 class DynamoDBTester(object):
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
-    options = { 'endpoint_url': 'http://localhost:8000', 'region_name': 'us-east-1' }
+    options = {
+        'aws_access_key_id': 'key', # not used by local DynamoDB, but still required
+        'aws_secret_access_key': 'secret',
+        'endpoint_url': 'http://localhost:8000',
+        'region_name': 'us-east-1'
+    }
 
     def __init__(self, cache_config):
         self._cache_config = cache_config
