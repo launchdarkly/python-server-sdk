@@ -243,7 +243,14 @@ class LDClient(object):
         if user is not None and user.get('key', "") == "":
             log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
-        flag = self._store.get(FEATURES, key, lambda x: x)
+        try:
+            flag = self._store.get(FEATURES, key, lambda x: x)
+        except Exception as e:
+            log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
+            log.debug(traceback.format_exc())
+            reason = error_reason('EXCEPTION')
+            send_event(default, None, None, reason)
+            return EvaluationDetail(default, None, reason)
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
             send_event(default, None, None, reason)
@@ -264,7 +271,7 @@ class LDClient(object):
                 send_event(detail.value, detail.variation_index, flag, detail.reason)
                 return detail
             except Exception as e:
-                log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, e))
+                log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
                 send_event(default, None, flag, reason)
@@ -328,7 +335,7 @@ class LDClient(object):
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
-            log.error("Unable to read flags for all_flag_state: %s" % e)
+            log.error("Unable to read flags for all_flag_state: %s" % repr(e))
             return FeatureFlagsState(False)
         
         for key, flag in flags_map.items():
@@ -339,7 +346,7 @@ class LDClient(object):
                 state.add_flag(flag, detail.value, detail.variation_index,
                     detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
-                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
+                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 state.add_flag(flag, None, None, reason if with_reasons else None, details_only_if_tracked)
