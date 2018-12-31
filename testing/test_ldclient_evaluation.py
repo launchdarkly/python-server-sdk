@@ -36,6 +36,15 @@ class ErroringFeatureStore(FeatureStore):
     def all(self, kind, callback=lambda x: x):
         raise NotImplementedError()
     
+    def upsert(self, kind, item):
+        pass
+    
+    def delete(self, key, version):
+        pass
+    
+    def init(self, data):
+        pass
+    
     @property
     def initialized(self):
         return True
@@ -47,12 +56,12 @@ def make_client(store):
                                   update_processor_class=MockUpdateProcessor,
                                   feature_store=store))
 
-def get_log_lines(caplog):
+def get_log_lines(caplog, level):
     loglines = caplog.records
     if callable(loglines):
         # records() is a function in older versions of the caplog plugin
         loglines = loglines()
-    return loglines
+    return [line.message for line in loglines if line.levelname == level]
 
 
 def test_variation_for_existing_feature():
@@ -140,20 +149,18 @@ def test_variation_when_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     assert client.variation('feature.key', { "key": "user" }, default='default') == 'default'
-    loglines = get_log_lines(caplog)
-    assert len(loglines) == 1
-    assert loglines[0].message == 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()'
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
 
 def test_variation_detail_when_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
-    actual = client.variation_detail('feature.key', { }, default='default')
+    actual = client.variation_detail('feature.key', { "key": "user" }, default='default')
     assert expected == actual
     assert actual.is_default_value() == True
-    loglines = get_log_lines(caplog)
-    assert len(loglines) == 1
-    assert loglines[0].message == 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()'
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
 
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()
@@ -180,9 +187,8 @@ def test_all_flags_returns_none_if_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     assert client.all_flags({ "key": "user" }) is None
-    loglines = get_log_lines(caplog)
-    assert len(loglines) == 1
-    assert loglines[0].message == 'Unable to read flags for all_flag_state: NotImplementedError()'
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]
 
 def test_all_flags_state_returns_state():
     store = InMemoryFeatureStore()
@@ -350,6 +356,5 @@ def test_all_flags_returns_empty_state_if_feature_store_throws_error(caplog):
     client = make_client(store)
     state = client.all_flags_state({ "key": "user" })
     assert state.valid == False
-    loglines = get_log_lines(caplog)
-    assert len(loglines) == 1
-    assert loglines[0].message == 'Unable to read flags for all_flag_state: NotImplementedError()'
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]
