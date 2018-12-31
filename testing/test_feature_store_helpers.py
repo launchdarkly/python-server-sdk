@@ -16,20 +16,25 @@ class MockCore:
         self.data = {}
         self.inited = False
         self.inited_query_count = 0
+        self.error = None
     
     def init_internal(self, all_data):
+        self._maybe_throw()
         self.data = {}
         for kind, items in all_data.items():
             self.data[kind] = items.copy()
     
     def get_internal(self, kind, key):
+        self._maybe_throw()
         items = self.data.get(kind)
         return None if items is None else items.get(key)
     
     def get_all_internal(self, kind):
+        self._maybe_throw()
         return self.data.get(kind)
     
     def upsert_internal(self, kind, item):
+        self._maybe_throw()
         key = item.get('key')
         items = self.data.get(kind)
         if items is None:
@@ -42,9 +47,14 @@ class MockCore:
         return old_item
     
     def initialized_internal(self):
+        self._maybe_throw()
         self.inited_query_count = self.inited_query_count + 1
         return self.inited
-    
+
+    def _maybe_throw(self):
+        if self.error is not None:
+            raise self.error
+        
     def force_set(self, kind, item):
         items = self.data.get(kind)
         if items is None:
@@ -56,6 +66,9 @@ class MockCore:
         items = self.data.get(kind)
         if items is not None:
             items.pop(key, None)
+
+class CustomError(Exception):
+    pass
 
 class TestCachingStoreWrapper:
     @pytest.mark.parametrize("cached", [False, True])
@@ -120,6 +133,14 @@ class TestCachingStoreWrapper:
         assert wrapper.get(THINGS, item1["key"]) == item1
     
     @pytest.mark.parametrize("cached", [False, True])
+    def test_get_can_throw_exception(self, cached):
+        core = MockCore()
+        wrapper = make_wrapper(core, cached)
+        core.error = CustomError()
+        with pytest.raises(CustomError, message="expected exception"):
+            wrapper.get(THINGS, "key", lambda x: x)
+
+    @pytest.mark.parametrize("cached", [False, True])
     def test_get_all(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
@@ -128,13 +149,13 @@ class TestCachingStoreWrapper:
 
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
-        assert wrapper.all(THINGS, lambda x: x) == { item1["key"]: item1, item2["key"]: item2 }
+        assert wrapper.all(THINGS) == { item1["key"]: item1, item2["key"]: item2 }
 
         core.force_remove(THINGS, item2["key"])
         if cached:
-            assert wrapper.all(THINGS, lambda x: x) == { item1["key"]: item1, item2["key"]: item2 }
+            assert wrapper.all(THINGS) == { item1["key"]: item1, item2["key"]: item2 }
         else:
-            assert wrapper.all(THINGS, lambda x: x) == { item1["key"]: item1 }
+            assert wrapper.all(THINGS) == { item1["key"]: item1 }
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_removes_deleted_items(self, cached):
@@ -145,14 +166,14 @@ class TestCachingStoreWrapper:
 
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
-        assert wrapper.all(THINGS, lambda x: x) == { item1["key"]: item1 }
+        assert wrapper.all(THINGS) == { item1["key"]: item1 }
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_changes_None_to_empty_dict(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
 
-        assert wrapper.all(WRONG_THINGS, lambda x:x) == {}
+        assert wrapper.all(WRONG_THINGS) == {}
     
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_iwith_lambda(self, cached):
@@ -176,7 +197,15 @@ class TestCachingStoreWrapper:
 
         wrapper.init({ THINGS: both })
         core.force_remove(THINGS, item1["key"])
-        assert wrapper.all(THINGS, lambda x: x) == both
+        assert wrapper.all(THINGS) == both
+
+    @pytest.mark.parametrize("cached", [False, True])
+    def test_get_all_can_throw_exception(self, cached):
+        core = MockCore()
+        wrapper = make_wrapper(core, cached)
+        core.error = CustomError()
+        with pytest.raises(CustomError, message="expected exception"):
+            wrapper.all(THINGS)
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_upsert_successful(self, cached):
@@ -222,6 +251,14 @@ class TestCachingStoreWrapper:
         assert wrapper.get(THINGS, key) == itemv2
     
     @pytest.mark.parametrize("cached", [False, True])
+    def test_upsert_can_throw_exception(self, cached):
+        core = MockCore()
+        wrapper = make_wrapper(core, cached)
+        core.error = CustomError()
+        with pytest.raises(CustomError, message="expected exception"):
+            wrapper.upsert(THINGS, { "key": "x", "version": 1 })
+
+    @pytest.mark.parametrize("cached", [False, True])
     def test_delete(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
@@ -238,6 +275,14 @@ class TestCachingStoreWrapper:
 
         core.force_set(THINGS, itemv3)  # make a change that bypasses the cache
         assert wrapper.get(THINGS, key) == (None if cached else itemv3)
+
+    @pytest.mark.parametrize("cached", [False, True])
+    def test_delete_can_throw_exception(self, cached):
+        core = MockCore()
+        wrapper = make_wrapper(core, cached)
+        core.error = CustomError()
+        with pytest.raises(CustomError, message="expected exception"):
+            wrapper.delete(THINGS, "x", 1)
 
     def test_uncached_initialized_queries_state_only_until_inited(self):
         core = MockCore()

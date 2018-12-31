@@ -4,6 +4,7 @@ import time
 from ldclient.client import LDClient, Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.flag import EvaluationDetail
+from ldclient.interfaces import FeatureStore
 from ldclient.versioned_data_kind import FEATURES
 from testing.stub_util import MockEventProcessor, MockUpdateProcessor
 from testing.test_ldclient import make_off_flag_with_value
@@ -28,12 +29,40 @@ flag2 = {
     'debugEventsUntilDate': 1000
 }
 
+class ErroringFeatureStore(FeatureStore):
+    def get(self, kind, key, callback=lambda x: x):
+        raise NotImplementedError()
+    
+    def all(self, kind, callback=lambda x: x):
+        raise NotImplementedError()
+    
+    def upsert(self, kind, item):
+        pass
+    
+    def delete(self, key, version):
+        pass
+    
+    def init(self, data):
+        pass
+    
+    @property
+    def initialized(self):
+        return True
+
 def make_client(store):
     return LDClient(config=Config(sdk_key='SDK_KEY',
                                   base_uri='http://test',
                                   event_processor_class=MockEventProcessor,
                                   update_processor_class=MockUpdateProcessor,
                                   feature_store=store))
+
+def get_log_lines(caplog, level):
+    loglines = caplog.records
+    if callable(loglines):
+        # records() is a function in older versions of the caplog plugin
+        loglines = loglines()
+    return [line.message for line in loglines if line.levelname == level]
+
 
 def test_variation_for_existing_feature():
     feature = make_off_flag_with_value('feature.key', 'value')
@@ -116,6 +145,23 @@ def test_variation_detail_for_flag_that_evaluates_to_none():
     assert expected == actual
     assert actual.is_default_value() == True
 
+def test_variation_when_feature_store_throws_error(caplog):
+    store = ErroringFeatureStore()
+    client = make_client(store)
+    assert client.variation('feature.key', { "key": "user" }, default='default') == 'default'
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
+
+def test_variation_detail_when_feature_store_throws_error(caplog):
+    store = ErroringFeatureStore()
+    client = make_client(store)
+    expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
+    actual = client.variation_detail('feature.key', { "key": "user" }, default='default')
+    assert expected == actual
+    assert actual.is_default_value() == True
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
+
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
@@ -136,6 +182,13 @@ def test_all_flags_returns_none_if_user_has_no_key():
     client = make_client(store)
     result = client.all_flags({ })
     assert result is None
+
+def test_all_flags_returns_none_if_feature_store_throws_error(caplog):
+    store = ErroringFeatureStore()
+    client = make_client(store)
+    assert client.all_flags({ "key": "user" }) is None
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]
 
 def test_all_flags_state_returns_state():
     store = InMemoryFeatureStore()
@@ -297,3 +350,11 @@ def test_all_flags_state_returns_empty_state_if_user_has_no_key():
     client = make_client(store)
     state = client.all_flags_state({ })
     assert state.valid == False
+
+def test_all_flags_returns_empty_state_if_feature_store_throws_error(caplog):
+    store = ErroringFeatureStore()
+    client = make_client(store)
+    state = client.all_flags_state({ "key": "user" })
+    assert state.valid == False
+    errlog = get_log_lines(caplog, 'ERROR')
+    assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]

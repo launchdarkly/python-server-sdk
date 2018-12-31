@@ -187,5 +187,5 @@ class _DynamoDBHelpers(object):
     @staticmethod
     def batch_write_requests(client, table_name, requests):
         batch_size = 25
-        for batch in (requests[i:i+batch_size] for i in xrange(0, len(requests), batch_size)):
+        for batch in (requests[i:i+batch_size] for i in range(0, len(requests), batch_size)):
             client.batch_write_item(RequestItems={ table_name: batch })

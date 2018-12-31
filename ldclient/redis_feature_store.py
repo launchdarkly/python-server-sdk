@@ -84,16 +84,10 @@ class _RedisFeatureStoreCore(FeatureStoreCore):
 
     def get_all_internal(self, kind):
         r = redis.Redis(connection_pool=self._pool)
-        try:
-            all_items = r.hgetall(self._items_key(kind))
-        except BaseException as e:
-            log.error("RedisFeatureStore: Could not retrieve '%s' from Redis with error: %s. Returning None.",
-                kind.namespace, e)
-            return None
+        all_items = r.hgetall(self._items_key(kind))
 
         if all_items is None or all_items is "":
-            log.warn("RedisFeatureStore: call to get all '%s' returned no results. Returning None.", kind.namespace)
-            return None
+            all_items = {}
 
         results = {}
         for key, item_json in all_items.items():
@@ -102,13 +96,8 @@ class _RedisFeatureStoreCore(FeatureStoreCore):
         return results
 
     def get_internal(self, kind, key):
-        try:
-            r = redis.Redis(connection_pool=self._pool)
-            item_json = r.hget(self._items_key(kind), key)
-        except BaseException as e:
-            log.error("RedisFeatureStore: Could not retrieve key %s from '%s' with error: %s",
-                key, kind.namespace, e)
-            return None
+        r = redis.Redis(connection_pool=self._pool)
+        item_json = r.hget(self._items_key(kind), key)
 
         if item_json is None or item_json is "":
             log.debug("RedisFeatureStore: key %s not found in '%s'. Returning None.", key, kind.namespace)

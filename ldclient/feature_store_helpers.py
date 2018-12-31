@@ -42,7 +42,7 @@ class CachingStoreWrapper(FeatureStore):
             self._cache[cache_key] = [item]
         return callback(self._item_if_not_deleted(item))
 
-    def all(self, kind, callback):
+    def all(self, kind, callback=lambda x: x):
         if self._cache is not None:
             cache_key = self._all_cache_key(kind)
             cached_items = self._cache.get(cache_key)
@@ -68,11 +68,11 @@ class CachingStoreWrapper(FeatureStore):
         if self._inited:
             return True
         if self._cache is None:
-            result = self._core.initialized_internal()
+            result = bool(self._core.initialized_internal())
         else:
             result = self._cache.get(CachingStoreWrapper.__INITED_CACHE_KEY__)
             if result is None:
-                result = self._core.initialized_internal()
+                result = bool(self._core.initialized_internal())
                 self._cache[CachingStoreWrapper.__INITED_CACHE_KEY__] = result
         if result:
             self._inited = True

@@ -19,7 +19,7 @@ class FeatureStore(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, kind, key, callback):
+    def get(self, kind, key, callback=lambda x: x):
         """
         Retrieves the object to which the specified key is mapped, or None if the key is not found
         or the associated object has a "deleted" property of True. The retrieved object, if any (a
@@ -35,7 +35,7 @@ class FeatureStore(object):
         """
 
     @abstractmethod
-    def all(self, kind, callback):
+    def all(self, kind, callback=lambda x: x):
         """
         Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
         to objects can be transformed by the specified callback.
