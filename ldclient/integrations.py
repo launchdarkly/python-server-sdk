@@ -18,7 +18,7 @@ class DynamoDB(object):
         :param string table_name: The name of an existing DynamoDB table
         :param string prefix: An optional namespace prefix to be prepended to all Redis keys
         :param dict dynamodb_opts: Optional parameters for configuring the DynamoDB client, as defined in
-          the boto3 API
+          the boto3 API; see https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client
         :param CacheConfig caching: Specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to `CacheConfig.default()`
         """
