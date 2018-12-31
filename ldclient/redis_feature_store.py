@@ -14,6 +14,11 @@ from ldclient.interfaces import FeatureStore, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
 
 
+# Note that this class is now just a facade around CachingStoreWrapper, which is in turn delegating
+# to _RedisFeatureStoreCore where the actual database logic is. This class was retained for historical
+# reasons, to support existing code that calls the RedisFeatureStore constructor. In the future, we
+# will migrate away from exposing these concrete classes and use only the factory methods.
+
 class RedisFeatureStore(FeatureStore):
     """A Redis-backed implementation of :class:`ldclient.feature_store.FeatureStore`.
 
