@@ -2,10 +2,10 @@ from builtins import object
 from ldclient.client import LDClient, Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor
+from ldclient.interfaces import UpdateProcessor
 from ldclient.versioned_data_kind import FEATURES
 import pytest
-from testing.stub_util import MockEventProcessor, MockUpdateProcessor
+from testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
 from testing.sync_util import wait_until
 
 try:
@@ -259,3 +259,34 @@ def test_event_for_existing_feature_with_no_user_key():
 def test_secure_mode_hash():
     user = {'key': 'Message'}
     assert offline_client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
+
+
+dependency_ordering_test_data = {
+    FEATURES: {
+
+    },
+    SEGMENTS: {
+
+    }
+}
+
+class DependencyOrderingDataUpdateProcessor(UpdateProcessor):
+    def __init__(self, config, store, ready):
+        store.init(dependency_ordering_test_data)
+        ready.set()
+
+    def start(self):
+        pass
+
+    def initialized(self):
+        return True
+
+
+def test_store_data_set_ordering():
+    store = CapturingFeatureStore()
+    config = Config(sdk_key = 'SDK_KEY', send_events=False, feature_store=store,
+                    update_processor_class=DependencyOrderingDataUpdateProcessor)
+    client = LDClient(config=config)
+
+    data = store.received_data
+    
