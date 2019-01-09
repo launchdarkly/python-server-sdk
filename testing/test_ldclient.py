@@ -3,7 +3,7 @@ from ldclient.client import LDClient, Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import UpdateProcessor
-from ldclient.versioned_data_kind import FEATURES
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 import pytest
 from testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
 from testing.sync_util import wait_until
@@ -263,10 +263,15 @@ def test_secure_mode_hash():
 
 dependency_ordering_test_data = {
     FEATURES: {
-
+        "a": { "key": "a", "prerequisites": [ { "key": "b" }, { "key": "c" } ] },
+        "b": { "key": "b", "prerequisites": [ { "key": "c" }, { "key": "e" } ] },
+        "c": { "key": "c" },
+        "d": { "key": "d" },
+        "e": { "key": "e" },
+        "f": { "key": "f" }
     },
     SEGMENTS: {
-
+        "o": { "key": "o" }
     }
 }
 
@@ -286,7 +291,24 @@ def test_store_data_set_ordering():
     store = CapturingFeatureStore()
     config = Config(sdk_key = 'SDK_KEY', send_events=False, feature_store=store,
                     update_processor_class=DependencyOrderingDataUpdateProcessor)
-    client = LDClient(config=config)
+    LDClient(config=config)
 
     data = store.received_data
-    
+    assert data is not None
+    assert len(data) == 2
+
+    assert data.keys()[0] == SEGMENTS
+    assert len(data.values()[0]) == len(dependency_ordering_test_data[SEGMENTS])
+
+    assert data.keys()[1] == FEATURES
+    flags_map = data.values()[1]
+    flags_list = flags_map.values()
+    assert len(flags_list) == len(dependency_ordering_test_data[FEATURES])
+    for item_index, item in enumerate(flags_list):
+        for prereq in item.get("prerequisites", []):
+            prereq_item = flags_map[prereq["key"]]
+            prereq_index = flags_list.index(prereq_item)
+            if prereq_index > item_index:
+                all_keys = (f["key"] for f in flags_list)
+                raise Exception("%s depends on %s, but %s was listed first; keys in order are [%s]" %
+                    (item["key"], prereq["key"], item["key"], ", ".join(all_keys)))

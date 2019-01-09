@@ -10,6 +10,7 @@ from builtins import object
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
+from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
 from ldclient.interfaces import FeatureStore
@@ -37,20 +38,20 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def __init__(self, store):
         self.store = store
     
+    def init(self, all_data):
+        return self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data))
+
     def get(self, kind, key, callback):
-        return self.store.get(self, kind, key, callback)
+        return self.store.get(kind, key, callback)
 
     def all(self, kind, callback):
-        return self.store.all(self, kind, callback)
-
-    def init(self, all_data):
-        return self.store.init(self, all_data)
+        return self.store.all(kind, callback)
 
     def delete(self, kind, key, version):
-        return self.store.delete(self, kind, key, version)
+        return self.store.delete(kind, key, version)
 
     def upsert(self, kind, item):
-        return self.store.upsert(self, kind, item)
+        return self.store.upsert(kind, item)
 
     @property
     def initialized(self):

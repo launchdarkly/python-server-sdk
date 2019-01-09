@@ -2,6 +2,7 @@ from collections import OrderedDict, defaultdict
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
+from six import iteritems
 
 
 class CacheConfig:
@@ -143,7 +144,9 @@ class _FeatureStoreDataSetSorter:
         outer_hash = OrderedDict()
         kinds = list(all_data.keys())
         def priority_order(kind):
-            return kind.get('priority', len(kind['namespace']))  # use arbitrary order if there's no priority
+            if hasattr(kind, 'priority'):
+                return kind.priority
+            return len(kind.namespace)  # use arbitrary order if there's no priority
         kinds.sort(key=priority_order)
         for kind in kinds:
             items = all_data[kind]
@@ -161,7 +164,7 @@ class _FeatureStoreDataSetSorter:
         items_out = OrderedDict()
         while len(remaining_items) > 0:
             # pick a random item that hasn't been updated yet
-            for key, item in remaining_items:
+            for key, item in iteritems(remaining_items):
                 _FeatureStoreDataSetSorter._add_with_dependencies_first(item, dependency_fn, remaining_items, items_out)
                 break
         return items_out
