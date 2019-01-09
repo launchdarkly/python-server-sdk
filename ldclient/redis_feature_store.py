@@ -1,6 +1,11 @@
 import json
 
-import redis
+have_redis = False
+try:
+    import redis
+    have_redis = True
+except ImportError:
+    pass
 
 from ldclient import log
 from ldclient.feature_store import CacheConfig
@@ -26,7 +31,8 @@ class RedisFeatureStore(FeatureStore):
                  max_connections=16,
                  expiration=15,
                  capacity=1000):
-
+        if not have_redis:
+            raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self.core = _RedisFeatureStoreCore(url, prefix, max_connections)  # exposed for testing
         self._wrapper = CachingStoreWrapper(self.core, CacheConfig(expiration=expiration, capacity=capacity))
 
@@ -52,6 +58,7 @@ class RedisFeatureStore(FeatureStore):
 
 class _RedisFeatureStoreCore(FeatureStoreCore):
     def __init__(self, url, prefix, max_connections):
+        
         self._prefix = prefix
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
         self.test_update_hook = None  # exposed for testing
