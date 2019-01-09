@@ -1,43 +1,139 @@
+import boto3
 import json
-from mock import patch
 import pytest
 import redis
+import time
 
-from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
+from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
+from ldclient.integrations import DynamoDB, Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 
-def get_log_lines(caplog):
-    loglines = caplog.records
-    if callable(loglines):
-        # records() is a function in older versions of the caplog plugin
-        loglines = loglines()
-    return loglines
+class InMemoryTester(object):
+    def init_store(self):
+        return InMemoryFeatureStore()
 
 
-class TestFeatureStore:
+class RedisTester(object):
     redis_host = 'localhost'
     redis_port = 6379
 
-    def in_memory(self):
-        return InMemoryFeatureStore()
+    def __init__(self, cache_config):
+        self._cache_config = cache_config
+    
+    def init_store(self):
+        self._clear_data()
+        return Redis.new_feature_store(caching=self._cache_config)
 
-    def redis_with_local_cache(self):
+    def _clear_data(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.delete("launchdarkly:features")
-        return RedisFeatureStore()
 
-    def redis_no_local_cache(self):
-        r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
-        r.delete("launchdarkly:features")
-        return RedisFeatureStore(expiration=0)
 
-    params = [in_memory, redis_with_local_cache, redis_no_local_cache]
+class RedisWithDeprecatedConstructorTester(RedisTester):
+    def init_store(self):
+        self._clear_data()
+        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0))
+
+
+class DynamoDBTester(object):
+    table_name = 'LD_DYNAMODB_TEST_TABLE'
+    table_created = False
+    options = {
+        'aws_access_key_id': 'key', # not used by local DynamoDB, but still required
+        'aws_secret_access_key': 'secret',
+        'endpoint_url': 'http://localhost:8000',
+        'region_name': 'us-east-1'
+    }
+
+    def __init__(self, cache_config):
+        self._cache_config = cache_config
+    
+    def init_store(self):
+        self._create_table()
+        self._clear_data()
+        return DynamoDB.new_feature_store(self.table_name, dynamodb_opts=self.options)
+
+    def _create_table(self):
+        if self.table_created:
+            return
+        client = boto3.client('dynamodb', **self.options)
+        try:
+            client.describe_table(TableName=self.table_name)
+            self.table_created = True
+            return
+        except client.exceptions.ResourceNotFoundException:
+            pass
+        req = {
+            'TableName': self.table_name,
+            'KeySchema': [
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                    'KeyType': 'HASH',
+                },
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
+                    'KeyType': 'RANGE'
+                }
+            ],
+            'AttributeDefinitions': [
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
+                    'AttributeType': 'S'
+                }
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 1,
+                'WriteCapacityUnits': 1
+            }
+        }
+        client.create_table(**req)
+        while True:
+            try:
+                client.describe_table(TableName=self.table_name)
+                self.table_created = True
+                return
+            except client.exceptions.ResourceNotFoundException:
+                time.sleep(0.5)
+        
+    def _clear_data(self):
+        client = boto3.client('dynamodb', **self.options)
+        delete_requests = []
+        req = {
+            'TableName': self.table_name,
+            'ConsistentRead': True,
+            'ProjectionExpression': '#namespace, #key',
+            'ExpressionAttributeNames': {
+                '#namespace': _DynamoDBFeatureStoreCore.PARTITION_KEY,
+                '#key': _DynamoDBFeatureStoreCore.SORT_KEY
+            }
+        }
+        for resp in client.get_paginator('scan').paginate(**req):
+            for item in resp['Items']:
+                delete_requests.append({ 'DeleteRequest': { 'Key': item } })
+        _DynamoDBHelpers.batch_write_requests(client, self.table_name, delete_requests)        
+
+
+class TestFeatureStore:
+    params = [
+        InMemoryTester(),
+        RedisTester(CacheConfig.default()),
+        RedisTester(CacheConfig.disabled()),
+        RedisWithDeprecatedConstructorTester(CacheConfig.default()),
+        RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
+        DynamoDBTester(CacheConfig.default()),
+        DynamoDBTester(CacheConfig.disabled())
+    ]
 
     @pytest.fixture(params=params)
     def store(self, request):
-        return request.param(self)
+        return request.param.init_store()
 
     @staticmethod
     def make_feature(key, ver):
@@ -69,6 +165,9 @@ class TestFeatureStore:
         })
         return store
 
+    def test_not_initialized_before_init(self, store):
+        assert store.initialized is False
+    
     def test_initialized(self, store):
         store = self.base_initialized_store(store)
         assert store.initialized is True
@@ -133,8 +232,7 @@ class TestFeatureStore:
 
 
 class TestRedisFeatureStoreExtraTests:
-    @patch.object(RedisFeatureStore, '_before_update_transaction')
-    def test_upsert_race_condition_against_external_client_with_higher_version(self, mock_method):
+    def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         store = RedisFeatureStore()
         store.init({ FEATURES: {} })
@@ -144,7 +242,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        mock_method.side_effect = hook
+        store.core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 1 }
 
@@ -152,8 +250,7 @@ class TestRedisFeatureStoreExtraTests:
         result = store.get(FEATURES, 'flagkey', lambda x: x)
         assert result['version'] == 2
 
-    @patch.object(RedisFeatureStore, '_before_update_transaction')
-    def test_upsert_race_condition_against_external_client_with_lower_version(self, mock_method):
+    def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
         store = RedisFeatureStore()
         store.init({ FEATURES: {} })
@@ -163,32 +260,10 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        mock_method.side_effect = hook
+        store.core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 5 }
 
         store.upsert(FEATURES, feature)
         result = store.get(FEATURES, 'flagkey', lambda x: x)
         assert result['version'] == 5
-
-    def test_exception_is_handled_in_get(self, caplog):
-        # This just verifies the fix for a bug that caused an error during exception handling in Python 3
-        store = RedisFeatureStore(url='redis://bad')
-        feature = store.get(FEATURES, 'flagkey')
-        assert feature is None
-        loglines = get_log_lines(caplog)
-        assert len(loglines) == 2
-        message = loglines[1].message
-        assert message.startswith("RedisFeatureStore: Could not retrieve key flagkey from 'features' with error:")
-        assert "connecting to bad:6379" in message
-
-    def test_exception_is_handled_in_all(self, caplog):
-        # This just verifies the fix for a bug that caused an error during exception handling in Python 3
-        store = RedisFeatureStore(url='redis://bad')
-        all = store.all(FEATURES, lambda x: x)
-        assert all is None
-        loglines = get_log_lines(caplog)
-        assert len(loglines) == 2
-        message = loglines[1].message
-        assert message.startswith("RedisFeatureStore: Could not retrieve 'features' from Redis")
-        assert "connecting to bad:6379" in message

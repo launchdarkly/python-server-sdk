@@ -4,6 +4,53 @@ from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
 
 
+class CacheConfig:
+    """Encapsulates caching parameters for feature store implementations that support local caching.
+    """
+
+    DEFAULT_EXPIRATION = 15
+    DEFAULT_CAPACITY = 1000
+
+    def __init__(self,
+                 expiration = DEFAULT_EXPIRATION,
+                 capacity = DEFAULT_CAPACITY):
+        """Constructs an instance of CacheConfig.
+        :param float expiration: The cache TTL, in seconds. Items will be evicted from the cache after
+          this amount of time from the time when they were originally cached. If the time is less than or
+          equal to zero, caching is disabled.
+        :param int capacity: The maximum number of items that can be in the cache at a time.
+        """
+        self._expiration = expiration
+        self._capacity = capacity
+
+    @staticmethod
+    def default():
+        """Returns an instance of CacheConfig with default properties. By default, caching is enabled.
+        This is the same as calling the constructor with no parameters.
+        :rtype: CacheConfig
+        """
+        return CacheConfig()
+    
+    @staticmethod
+    def disabled():
+        """Returns an instance of CacheConfig specifying that caching should be disabled.
+        :rtype: CacheConfig
+        """
+        return CacheConfig(expiration = 0)
+    
+    @property
+    def enabled(self):
+        return self._expiration > 0
+    
+    @property
+    def expiration(self):
+        return self._expiration
+    
+    @property
+    def capacity(self):
+        return self._capacity
+
+
 class InMemoryFeatureStore(FeatureStore):
     """
     In-memory implementation of a store that holds feature flags and related data received from the streaming API.
