@@ -296,13 +296,15 @@ def test_store_data_set_ordering():
     data = store.received_data
     assert data is not None
     assert len(data) == 2
+    keys = list(data.keys())
+    values = list(data.values())
 
-    assert data.keys()[0] == SEGMENTS
-    assert len(data.values()[0]) == len(dependency_ordering_test_data[SEGMENTS])
+    assert keys[0] == SEGMENTS
+    assert len(values[0]) == len(dependency_ordering_test_data[SEGMENTS])
 
-    assert data.keys()[1] == FEATURES
-    flags_map = data.values()[1]
-    flags_list = flags_map.values()
+    assert keys[1] == FEATURES
+    flags_map = values[1]
+    flags_list = list(flags_map.values())
     assert len(flags_list) == len(dependency_ordering_test_data[FEATURES])
     for item_index, item in enumerate(flags_list):
         for prereq in item.get("prerequisites", []):
