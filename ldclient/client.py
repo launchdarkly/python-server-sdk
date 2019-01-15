@@ -10,8 +10,10 @@ from builtins import object
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
+from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
+from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -25,6 +27,35 @@ except:
     import Queue as queue  # Python 3
 
 from threading import Lock
+
+
+class _FeatureStoreClientWrapper(FeatureStore):
+    """Provides additional behavior that the client requires before or after feature store operations.
+    Currently this just means sorting the data set for init(). In the future we may also use this
+    to provide an update listener capability.
+    """
+
+    def __init__(self, store):
+        self.store = store
+    
+    def init(self, all_data):
+        return self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data))
+
+    def get(self, kind, key, callback):
+        return self.store.get(kind, key, callback)
+
+    def all(self, kind, callback):
+        return self.store.all(kind, callback)
+
+    def delete(self, kind, key, version):
+        return self.store.delete(kind, key, version)
+
+    def upsert(self, kind, item):
+        return self.store.upsert(kind, item)
+
+    @property
+    def initialized(self):
+        return self.store.initialized
 
 
 class LDClient(object):
@@ -55,7 +86,7 @@ class LDClient(object):
         self._event_processor = None
         self._lock = Lock()
 
-        self._store = self._config.feature_store
+        self._store = _FeatureStoreClientWrapper(self._config.feature_store)
         """ :type: FeatureStore """
 
         if self._config.offline or not self._config.send_events:
