@@ -1,7 +1,55 @@
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore
 from ldclient.rwlock import ReadWriteLock
+from six import iteritems
+
+
+class CacheConfig:
+    """Encapsulates caching parameters for feature store implementations that support local caching.
+    """
+
+    DEFAULT_EXPIRATION = 15
+    DEFAULT_CAPACITY = 1000
+
+    def __init__(self,
+                 expiration = DEFAULT_EXPIRATION,
+                 capacity = DEFAULT_CAPACITY):
+        """Constructs an instance of CacheConfig.
+        :param float expiration: The cache TTL, in seconds. Items will be evicted from the cache after
+          this amount of time from the time when they were originally cached. If the time is less than or
+          equal to zero, caching is disabled.
+        :param int capacity: The maximum number of items that can be in the cache at a time.
+        """
+        self._expiration = expiration
+        self._capacity = capacity
+
+    @staticmethod
+    def default():
+        """Returns an instance of CacheConfig with default properties. By default, caching is enabled.
+        This is the same as calling the constructor with no parameters.
+        :rtype: CacheConfig
+        """
+        return CacheConfig()
+    
+    @staticmethod
+    def disabled():
+        """Returns an instance of CacheConfig specifying that caching should be disabled.
+        :rtype: CacheConfig
+        """
+        return CacheConfig(expiration = 0)
+    
+    @property
+    def enabled(self):
+        return self._expiration > 0
+    
+    @property
+    def expiration(self):
+        return self._expiration
+    
+    @property
+    def capacity(self):
+        return self._capacity
 
 
 class InMemoryFeatureStore(FeatureStore):
@@ -79,3 +127,54 @@ class InMemoryFeatureStore(FeatureStore):
             return self._initialized
         finally:
             self._lock.runlock()
+
+
+class _FeatureStoreDataSetSorter:
+    """
+    Implements a dependency graph ordering for data to be stored in a feature store. We must use this
+    on every data set that will be passed to the feature store's init() method.
+    """
+    @staticmethod
+    def sort_all_collections(all_data):
+        """ Returns a copy of the input data that has the following guarantees: the iteration order of the outer
+        dictionary will be in ascending order by the VersionDataKind's :priority property (if any), and for each
+        data kind that has a "get_dependency_keys" function, the inner dictionary will have an iteration order
+        where B is before A if A has a dependency on B.
+        """
+        outer_hash = OrderedDict()
+        kinds = list(all_data.keys())
+        def priority_order(kind):
+            if hasattr(kind, 'priority'):
+                return kind.priority
+            return len(kind.namespace)  # use arbitrary order if there's no priority
+        kinds.sort(key=priority_order)
+        for kind in kinds:
+            items = all_data[kind]
+            outer_hash[kind] = _FeatureStoreDataSetSorter._sort_collection(kind, items)
+        return outer_hash
+    
+    @staticmethod
+    def _sort_collection(kind, input):
+        if len(input) == 0 or not hasattr(kind, 'get_dependency_keys'):
+            return input
+        dependency_fn = kind.get_dependency_keys
+        if dependency_fn is None or len(input) == 0:
+            return input
+        remaining_items = input.copy()
+        items_out = OrderedDict()
+        while len(remaining_items) > 0:
+            # pick a random item that hasn't been updated yet
+            for key, item in iteritems(remaining_items):
+                _FeatureStoreDataSetSorter._add_with_dependencies_first(item, dependency_fn, remaining_items, items_out)
+                break
+        return items_out
+    
+    @staticmethod
+    def _add_with_dependencies_first(item, dependency_fn, remaining_items, items_out):
+        key = item.get('key')
+        del remaining_items[key]  # we won't need to visit this item again
+        for dep_key in dependency_fn(item):
+            dep_item = remaining_items.get(dep_key)
+            if dep_item is not None:
+                _FeatureStoreDataSetSorter._add_with_dependencies_first(dep_item, dependency_fn, remaining_items, items_out)
+        items_out[key] = item

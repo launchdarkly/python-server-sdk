@@ -52,7 +52,6 @@ Or it can be set from within python:
 os.environ["https_proxy"] = "https://web-proxy.domain.com:8080"
 ```
 
-
 If your proxy requires authentication then you can prefix the URN with your login information:
 ```
 export HTTPS_PROXY=http://user:pass@web-proxy.domain.com:8080
@@ -75,12 +74,19 @@ Your first feature flag
             # the code to run if the feature is off
 
 Supported Python versions
-----------
+-------------------------
+
 The SDK is tested with the most recent patch releases of Python 2.7, 3.3, 3.4, 3.5, and 3.6. Python 2.6 is no longer supported.
+
+Database integrations
+---------------------
+
+Feature flag data can be kept in a persistent store using Redis or DynamoDB. These adapters are implemented in the `DynamoDB` and `Redis` classes in `ldclient.integrations`; to use them, call the `new_feature_store` method in the appropriate class, and put the returned object in the `feature_store` property of your client configuration. See [`ldclient.integrations`](https://github.com/launchdarkly/python-client-private/blob/master/ldclient/integrations.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store) for more information.
 
 Using flag data from a file
 ---------------------------
-For testing purposes, the SDK can be made to read feature flag state from a file or files instead of connecting to LaunchDarkly. See [`file_data_source.py`](https://github.com/launchdarkly/python-client/blob/master/ldclient/file_data_source.py) for more details.
+
+For testing purposes, the SDK can be made to read feature flag state from a file or files instead of connecting to LaunchDarkly. See [`file_data_source.py`](https://github.com/launchdarkly/python-client/blob/master/ldclient/file_data_source.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/reading-flags-from-a-file) for more details.
 
 Learn more
 -----------
@@ -100,7 +106,7 @@ Contributing
 See [CONTRIBUTING](CONTRIBUTING.md) for more information.
 
 About LaunchDarkly
------------
+------------------
 
 * LaunchDarkly is a continuous delivery platform that provides feature flags as a service and allows developers to iterate quickly and safely. We allow you to easily flag your features and manage them from the LaunchDarkly dashboard.  With LaunchDarkly, you can:
     * Roll out a new feature to a subset of your users (like a group of users who opt-in to a beta tester group), gathering feedback and bug reports from real-world use cases.

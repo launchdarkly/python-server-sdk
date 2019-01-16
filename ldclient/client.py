@@ -10,8 +10,10 @@ from builtins import object
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
+from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
+from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -25,6 +27,35 @@ except:
     import Queue as queue  # Python 3
 
 from threading import Lock
+
+
+class _FeatureStoreClientWrapper(FeatureStore):
+    """Provides additional behavior that the client requires before or after feature store operations.
+    Currently this just means sorting the data set for init(). In the future we may also use this
+    to provide an update listener capability.
+    """
+
+    def __init__(self, store):
+        self.store = store
+    
+    def init(self, all_data):
+        return self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data))
+
+    def get(self, kind, key, callback):
+        return self.store.get(kind, key, callback)
+
+    def all(self, kind, callback):
+        return self.store.all(kind, callback)
+
+    def delete(self, kind, key, version):
+        return self.store.delete(kind, key, version)
+
+    def upsert(self, kind, item):
+        return self.store.upsert(kind, item)
+
+    @property
+    def initialized(self):
+        return self.store.initialized
 
 
 class LDClient(object):
@@ -55,7 +86,7 @@ class LDClient(object):
         self._event_processor = None
         self._lock = Lock()
 
-        self._store = self._config.feature_store
+        self._store = _FeatureStoreClientWrapper(self._config.feature_store)
         """ :type: FeatureStore """
 
         if self._config.offline or not self._config.send_events:
@@ -243,7 +274,14 @@ class LDClient(object):
         if user is not None and user.get('key', "") == "":
             log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
-        flag = self._store.get(FEATURES, key, lambda x: x)
+        try:
+            flag = self._store.get(FEATURES, key, lambda x: x)
+        except Exception as e:
+            log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
+            log.debug(traceback.format_exc())
+            reason = error_reason('EXCEPTION')
+            send_event(default, None, None, reason)
+            return EvaluationDetail(default, None, reason)
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
             send_event(default, None, None, reason)
@@ -264,7 +302,7 @@ class LDClient(object):
                 send_event(detail.value, detail.variation_index, flag, detail.reason)
                 return detail
             except Exception as e:
-                log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, e))
+                log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
                 send_event(default, None, flag, reason)
@@ -328,7 +366,7 @@ class LDClient(object):
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
-            log.error("Unable to read flags for all_flag_state: %s" % e)
+            log.error("Unable to read flags for all_flag_state: %s" % repr(e))
             return FeatureFlagsState(False)
         
         for key, flag in flags_map.items():
@@ -339,7 +377,7 @@ class LDClient(object):
                 state.add_flag(flag, detail.value, detail.variation_index,
                     detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
-                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, e))
+                log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 state.add_flag(flag, None, None, reason if with_reasons else None, details_only_if_tracked)

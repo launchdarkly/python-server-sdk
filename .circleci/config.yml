@@ -40,28 +40,34 @@ jobs:
     docker:
       - image: circleci/python:2.7-jessie
       - image: redis
+      - image: amazon/dynamodb-local
   test-3.3:
     <<: *test-template
     docker:
       - image: circleci/python:3.3-jessie
       - image: redis
+      - image: amazon/dynamodb-local
   test-3.4:
     <<: *test-template
     docker:
       - image: circleci/python:3.4-jessie
       - image: redis
+      - image: amazon/dynamodb-local
   test-3.5:
     <<: *test-template
     docker:
       - image: circleci/python:3.5-jessie
       - image: redis
+      - image: amazon/dynamodb-local
   test-3.6:
     <<: *test-template
     docker:
       - image: circleci/python:3.6-jessie
       - image: redis
+      - image: amazon/dynamodb-local
   test-3.7:
     <<: *test-template
     docker:
       - image: circleci/python:3.7-stretch
       - image: redis
+      - image: amazon/dynamodb-local

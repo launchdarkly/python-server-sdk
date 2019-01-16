@@ -1,14 +1,13 @@
 from email.utils import formatdate
 from requests.structures import CaseInsensitiveDict
 
-from ldclient.interfaces import EventProcessor, FeatureRequester, UpdateProcessor
+from ldclient.interfaces import EventProcessor, FeatureRequester, FeatureStore, UpdateProcessor
 
 
 class MockEventProcessor(EventProcessor):
     def __init__(self, *_):
         self._running = False
         self._events = []
-        mock_event_processor = self
 
     def stop(self):
         self._running = False
@@ -103,3 +102,27 @@ class MockUpdateProcessor(UpdateProcessor):
 
     def initialized(self):
         return True
+
+class CapturingFeatureStore(FeatureStore):
+    def init(self, all_data):
+        self.data = all_data
+
+    def get(self, kind, key, callback=lambda x: x):    
+        pass
+    
+    def all(self, kind, callback=lambda x: x):
+        pass
+    
+    def delete(self, kind, key, version):
+        pass
+    
+    def upsert(self, kind, item):
+        pass
+    
+    @property
+    def initialized(self):
+        return True
+    
+    @property
+    def received_data(self):
+        return self.data

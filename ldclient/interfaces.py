@@ -3,64 +3,86 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 
 class FeatureStore(object):
     """
-    Stores and retrieves the state of feature flags and related data
+    A versioned store for feature flags and related objects received from LaunchDarkly.
+    Implementations should permit concurrent access and updates.
+
+    An "object", for `FeatureStore`, is simply a dict of arbitrary data which must have at least
+    three properties: "key" (its unique key), "version" (the version number provided by
+    LaunchDarkly), and "deleted" (True if this is a placeholder for a deleted object).
+    
+    Delete and upsert requests are versioned-- if the version number in the request is less than
+    the currently stored version of the object, the request should be ignored.
+    
+    These semantics support the primary use case for the store, which synchronizes a collection
+    of objects based on update messages that may be received out-of-order.
     """
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, kind, key, callback):
+    def get(self, kind, key, callback=lambda x: x):
         """
-        Gets a feature and calls the callback with the feature data to return the result
-        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        Retrieves the object to which the specified key is mapped, or None if the key is not found
+        or the associated object has a "deleted" property of True. The retrieved object, if any (a
+        dict) can be transformed by the specified callback.
+
+        :param kind: The kind of object to get
         :type kind: VersionedDataKind
-        :param key: The key of the object
+        :param key: The key whose associated object is to be returned
         :type key: str
-        :param callback: The function that accepts the retrieved data and returns a transformed value
-        :type callback: Function that processes the retrieved object once received.
-        :return: The result of executing callback.
+        :param callback: A function that accepts the retrieved data and returns a transformed value
+        :type callback: function
+        :return: The result of executing callback
         """
 
     @abstractmethod
-    def all(self, callback):
+    def all(self, kind, callback=lambda x: x):
         """
-        Returns all feature flags and their data
-        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
+        to objects can be transformed by the specified callback.
+
+        :param kind: The kind of objects to get
         :type kind: VersionedDataKind
-        :param callback: The function that accepts the retrieved data and returns a transformed value
-        :type callback: Function that processes the retrieved objects once received.
-        :rtype: The result of executing callback.
+        :param callback: A function that accepts the retrieved data and returns a transformed value
+        :type callback: function
+        :rtype: The result of executing callback
         """
 
     @abstractmethod
     def init(self, all_data):
         """
-        Initializes the store with a set of objects.  Meant to be called by the UpdateProcessor
+        Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
+        will be removed. Implementations can assume that this set of objects is up to date-- there is no
+        need to perform individual version comparisons between the existing objects and the supplied data.
 
-        :param all_data: The features and their data as provided by LD
+        :param all_data: All objects to be stored
         :type all_data: dict[VersionedDataKind, dict[str, dict]]
         """
 
     @abstractmethod
     def delete(self, kind, key, version):
         """
-        Marks an object as deleted
+        Deletes the object associated with the specified key, if it exists and its version is less than
+        the specified version. The object should be replaced in the data store by a
+        placeholder with the specified version and a "deleted" property of TErue.
 
-        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :param kind: The kind of object to delete
         :type kind: VersionedDataKind
-        :param key: The object key
+        :param key: The key of the object to be deleted
         :type key: str
-        :param version: The version of the object to mark as deleted
+        :param version: The version for the delete operation
         :type version: int
         """
 
     @abstractmethod
     def upsert(self, kind, item):
         """
-        Inserts an object if its version is newer or missing
+        Updates or inserts the object associated with the specified key. If an item with the same key
+        already exists, it should update it only if the new item's version property is greater than
+        the old one.
 
-        :param kind: Denotes which collection to access - one of the constants in versioned_data_kind
+        :param kind: The kind of object to update
         :type kind: VersionedDataKind
-        :param item: The object to be inserted or updated - must have key and version properties
+        :param item: The object to update or insert
         :type feature: dict
         """
 
@@ -68,6 +90,85 @@ class FeatureStore(object):
     def initialized(self):
         """
         Returns whether the store has been initialized yet or not
+
+        :rtype: bool
+        """
+
+
+class FeatureStoreCore(object):
+    """
+    `FeatureStoreCore` is an interface for a simplified subset of the functionality of :class:`FeatureStore`,
+    to be used in conjunction with :class:`feature_store_helpers.CachingStoreWrapper`. This allows developers
+    developers of custom `FeatureStore` implementations to avoid repeating logic that would
+    commonly be needed in any such implementation, such as caching. Instead, they can implement
+    only `FeatureStoreCore` and then create a `CachingStoreWrapper`.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def get_internal(self, kind, key):
+        """
+        Returns the object to which the specified key is mapped, or None if no such item exists.
+        The method should not attempt to filter out any items based on their deleted property,
+        nor to cache any items.
+
+        :param kind: The kind of object to get
+        :type kind: VersionedDataKind
+        :param key: The key of the object
+        :type key: str
+        :return: The object to which the specified key is mapped, or None
+        :rtype: dict
+        """
+
+    @abstractmethod
+    def get_all_internal(self, callback):
+        """
+        Returns a dictionary of all associated objects of a given kind. The method should not attempt
+        to filter out any items based on their deleted property, nor to cache any items.
+
+        :param kind: The kind of objects to get
+        :type kind: VersionedDataKind
+        :return: A dictionary of keys to items
+        :rtype: dict[str, dict]
+        """
+
+    @abstractmethod
+    def init_internal(self, all_data):
+        """
+        Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
+        will be removed. Implementations can assume that this set of objects is up to date-- there is no
+        need to perform individual version comparisons between the existing objects and the supplied
+        data.
+
+        :param all_data: A dictionary of data kinds to item collections
+        :type all_data: dict[VersionedDataKind, dict[str, dict]]
+        """
+
+    @abstractmethod
+    def upsert_internal(self, kind, item):
+        """
+        Updates or inserts the object associated with the specified key. If an item with the same key
+        already exists, it should update it only if the new item's version property is greater than
+        the old one. It should return the final state of the item, i.e. if the update succeeded then
+        it returns the item that was passed in, and if the update failed due to the version check
+        then it returns the item that is currently in the data store (this ensures that
+        `CachingStoreWrapper` will update the cache correctly).
+
+        :param kind: The kind of object to update
+        :type kind: VersionedDataKind
+        :param item: The object to update or insert
+        :type item: dict
+        :return: The state of the object after the update
+        :rtype: dict
+        """
+
+    @abstractmethod
+    def initialized_internal(self):
+        """
+        Returns true if this store has been initialized. In a shared data store, it should be able to
+        detect this even if initInternal was called in a different process, i.e. the test should be
+        based on looking at what is in the data store. The method does not need to worry about caching
+        this value; `CachingStoreWrapper` will only call it when necessary.
 
         :rtype: bool
         """
