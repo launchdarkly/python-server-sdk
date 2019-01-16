@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.7.0] - 2019-01-15
+### Added:
+- It is now possible to use DynamoDB as a persistent feature store, similar to the existing Redis integration. See `DynamoDB` in `ldclient.integrations`, and the reference guide to ["Using a persistent feature store"](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store).
+- The new class `CacheConfig` (in `ldclient.feature_store`) encapsulates all the parameters that control local caching in database feature stores. This takes the place of the `expiration` and `capacity` parameters that are in the deprecated `RedisFeatureStore` constructor; it can be used with DynamoDB and any other database integrations in the future, and if more caching options are added to `CacheConfig` they will be automatically supported in all of the feature stores.
+
+### Deprecated:
+- The `RedisFeatureStore` constructor in `ldclient.redis_feature_store`. The recommended way to create a Redis feature store now is to use `Redis.new_feature_store` in `ldclient.integrations`.
+
 ## [6.6.0] - 2018-11-14
 ### Added:
 - It is now possible to inject feature flags into the client from local JSON or YAML files, replacing the normal LaunchDarkly connection. This would typically be for testing purposes. See `file_data_source.py`.
