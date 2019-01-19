@@ -1,14 +1,17 @@
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import _ConsulFeatureStoreCore
-from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore
-from ldclient.redis_feature_store import _RedisFeatureStoreCore
+from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore
+from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
 
 
 class Consul(object):
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
     """
     
+    """The key prefix that is used if you do not specify one."""
+    DEFAULT_PREFIX = "launchdarkly"
+
     @staticmethod
     def new_feature_store(host=None,
                           port=None,
@@ -28,7 +31,7 @@ class Consul(object):
 
         :param string host: Hostname of the Consul server (uses "localhost" if omitted)
         :param int port: Port of the Consul server (uses 8500 if omitted)
-        :param string prefix: An optional namespace prefix to be prepended to all Consul keys
+        :param string prefix: A namespace prefix to be prepended to all Consul keys
         :param dict consul_opts: Optional parameters for configuring the Consul client, if you need
           to set any of them besides host and port, as defined in the python-consul API; see
           https://python-consul.readthedocs.io/en/latest/#consul
