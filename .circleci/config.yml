@@ -17,7 +17,7 @@ test-template: &test-template
         command: |
           sudo pip install --upgrade pip setuptools;
           sudo pip install -r test-requirements.txt;
-          if [[ "$CIRCLE_JOB != test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
+          if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
             sudo pip install -r consul-requirements.txt;
           fi;
           sudo python setup.py install;
