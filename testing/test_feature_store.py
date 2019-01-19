@@ -15,6 +15,10 @@ class InMemoryTester(object):
     def init_store(self):
         return InMemoryFeatureStore()
 
+    @property
+    def supports_prefix(self):
+        return False
+
 
 class RedisTester(object):
     redis_host = 'localhost'
@@ -23,19 +27,27 @@ class RedisTester(object):
     def __init__(self, cache_config):
         self._cache_config = cache_config
     
-    def init_store(self):
+    def init_store(self, prefix=None):
         self._clear_data()
-        return Redis.new_feature_store(caching=self._cache_config)
+        return Redis.new_feature_store(caching=self._cache_config, prefix=prefix)
+
+    @property
+    def supports_prefix(self):
+        return True
 
     def _clear_data(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
-        r.delete("launchdarkly:features")
+        r.flushdb()
 
 
 class RedisWithDeprecatedConstructorTester(RedisTester):
-    def init_store(self):
+    def init_store(self, prefix=None):
         self._clear_data()
-        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0))
+        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0), prefix=prefix)
+
+    @property
+    def supports_prefix(self):
+        return True
 
 
 class DynamoDBTester(object):
@@ -51,10 +63,14 @@ class DynamoDBTester(object):
     def __init__(self, cache_config):
         self._cache_config = cache_config
     
-    def init_store(self):
+    def init_store(self, prefix=None):
         self._create_table()
         self._clear_data()
-        return DynamoDB.new_feature_store(self.table_name, dynamodb_opts=self.options)
+        return DynamoDB.new_feature_store(self.table_name, prefix=prefix, dynamodb_opts=self.options)
+
+    @property
+    def supports_prefix(self):
+        return True
 
     def _create_table(self):
         if self.table_created:
@@ -130,6 +146,10 @@ class TestFeatureStore:
         DynamoDBTester(CacheConfig.default()),
         DynamoDBTester(CacheConfig.disabled())
     ]
+
+    @pytest.fixture(params=params)
+    def tester(self, request):
+        return request.param
 
     @pytest.fixture(params=params)
     def store(self, request):
@@ -229,6 +249,39 @@ class TestFeatureStore:
         old_ver = self.make_feature('foo', 9)
         store.upsert(FEATURES, old_ver)
         assert store.get(FEATURES, 'foo', lambda x: x) is None
+
+    def test_stores_with_different_prefixes_are_independent(self, tester):
+        # This verifies that init(), get(), all(), and upsert() are all correctly using the specified key prefix.
+        # The delete() method isn't tested separately because it's implemented as a variant of upsert().
+        if not tester.supports_prefix:
+            return
+
+        flag_a1 = { 'key': 'flagA1', 'version': 1 }
+        flag_a2 = { 'key': 'flagA2', 'version': 1 }
+        flag_b1 = { 'key': 'flagB1', 'version': 1 }
+        flag_b2 = { 'key': 'flagB2', 'version': 1 }
+        store_a = tester.init_store('a')
+        store_b = tester.init_store('b')
+
+        store_a.init({ FEATURES: { 'flagA1': flag_a1 } })
+        store_a.upsert(FEATURES, flag_a2)
+
+        store_b.init({ FEATURES: { 'flagB1': flag_b1 } })
+        store_b.upsert(FEATURES, flag_b2)
+
+        item = store_a.get(FEATURES, 'flagA1', lambda x: x)
+        assert item == flag_a1
+        item = store_a.get(FEATURES, 'flagB1', lambda x: x)
+        assert item is None
+        items = store_a.all(FEATURES, lambda x: x)
+        assert items == { 'flagA1': flag_a1, 'flagA2': flag_a2 }
+
+        item = store_b.get(FEATURES, 'flagB1', lambda x: x)
+        assert item == flag_b1
+        item = store_b.get(FEATURES, 'flagA1', lambda x: x)
+        assert item is None
+        items = store_b.all(FEATURES, lambda x: x)
+        assert items == { 'flagB1': flag_b1, 'flagB2': flag_b2 }
 
 
 class TestRedisFeatureStoreExtraTests:

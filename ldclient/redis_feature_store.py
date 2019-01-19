@@ -59,10 +59,10 @@ class RedisFeatureStore(FeatureStore):
 class _RedisFeatureStoreCore(FeatureStoreCore):
     def __init__(self, url, prefix, max_connections):
         
-        self._prefix = prefix
+        self._prefix = prefix or 'launchdarkly'
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
         self.test_update_hook = None  # exposed for testing
-        log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + prefix)
+        log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + self._prefix)
 
     def _items_key(self, kind):
         return "{0}:{1}".format(self._prefix, kind.namespace)
