@@ -251,7 +251,8 @@ class TestFeatureStore:
         assert store.get(FEATURES, 'foo', lambda x: x) is None
 
     def test_stores_with_different_prefixes_are_independent(self, tester):
-        # This verifies that init, get, and upsert are all correctly using the specified key prefix.
+        # This verifies that init(), get(), all(), and upsert() are all correctly using the specified key prefix.
+        # The delete() method isn't tested separately because it's implemented as a variant of upsert().
         if not tester.supports_prefix:
             return
 
