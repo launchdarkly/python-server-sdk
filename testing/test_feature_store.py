@@ -1,5 +1,4 @@
 import boto3
-import consul
 import json
 import pytest
 import redis
