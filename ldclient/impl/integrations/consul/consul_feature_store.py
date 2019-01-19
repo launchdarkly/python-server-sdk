@@ -75,13 +75,13 @@ class _ConsulFeatureStoreCore(FeatureStoreCore):
 
     def get_internal(self, kind, key):
         index, resp = self._client.kv.get(self._item_key(kind, key))
-        return None if resp is None else json.loads(resp['Value'])
+        return None if resp is None else json.loads(resp['Value'].decode('utf-8'))
 
     def get_all_internal(self, kind):
         items_out = {}
         index, results = self._client.kv.get(self._kind_key(kind), recurse=True)
         for result in results:
-            item = json.loads(result['Value'])
+            item = json.loads(result['Value'].decode('utf-8'))
             items_out[item['key']] = item
         return items_out
 
@@ -95,7 +95,7 @@ class _ConsulFeatureStoreCore(FeatureStoreCore):
             if old_value is None:
                 mod_index = 0
             else:
-                old_item = json.loads(old_value['Value'])
+                old_item = json.loads(old_value['Value'].decode('utf-8'))
                 # Check whether the item is stale. If so, don't do the update (and return the existing item to
                 # CachingStoreWrapper so it can be cached)
                 if old_item['version'] >= new_item['version']:
