@@ -251,17 +251,36 @@ class TestFeatureStore:
         assert store.get(FEATURES, 'foo', lambda x: x) is None
 
     def test_stores_with_different_prefixes_are_independent(self, tester):
+        # This verifies that init, get, and upsert are all correctly using the specified key prefix.
         if not tester.supports_prefix:
             return
+
+        flag_a1 = { 'key': 'flagA1', 'version': 1 }
+        flag_a2 = { 'key': 'flagA2', 'version': 1 }
+        flag_b1 = { 'key': 'flagB1', 'version': 1 }
+        flag_b2 = { 'key': 'flagB2', 'version': 1 }
         store_a = tester.init_store('a')
         store_b = tester.init_store('b')
-        flag = { 'key': 'flag', 'version': 1 }
-        store_a.init({ FEATURES: { flag['key']: flag } })
-        store_b.init({ FEATURES: { } })
-        item = store_a.get(FEATURES, flag['key'], lambda x: x)
-        assert item == flag
-        item = store_b.get(FEATURES, flag['key'], lambda x: x)
+
+        store_a.init({ FEATURES: { 'flagA1': flag_a1 } })
+        store_a.upsert(FEATURES, flag_a2)
+
+        store_b.init({ FEATURES: { 'flagB1': flag_b1 } })
+        store_b.upsert(FEATURES, flag_b2)
+
+        item = store_a.get(FEATURES, 'flagA1', lambda x: x)
+        assert item == flag_a1
+        item = store_a.get(FEATURES, 'flagB1', lambda x: x)
         assert item is None
+        items = store_a.all(FEATURES, lambda x: x)
+        assert items == { 'flagA1': flag_a1, 'flagA2': flag_a2 }
+
+        item = store_b.get(FEATURES, 'flagB1', lambda x: x)
+        assert item == flag_b1
+        item = store_b.get(FEATURES, 'flagA1', lambda x: x)
+        assert item is None
+        items = store_b.all(FEATURES, lambda x: x)
+        assert items == { 'flagB1': flag_b1, 'flagB2': flag_b2 }
 
 
 class TestRedisFeatureStoreExtraTests:
