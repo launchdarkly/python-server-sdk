@@ -1,6 +1,6 @@
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.integrations.consul.feature_store import _ConsulFeatureStoreCore
+from ldclient.impl.integrations.consul.consul_feature_store import _ConsulFeatureStoreCore
 from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore
 from ldclient.redis_feature_store import _RedisFeatureStoreCore
 
@@ -22,6 +22,9 @@ class Consul(object):
         To use this method, you must first install the `python-consul` package. Then, put the object
         returned by this method into the `feature_store` property of your client configuration
         (:class:ldclient.config.Config).
+
+        Note that `python-consul` is not available for Python 3.3 or 3.4, so this feature cannot be
+        used in those Python versions.
 
         :param string host: Hostname of the Consul server (uses "localhost" if omitted)
         :param int port: Port of the Consul server (uses 8500 if omitted)
