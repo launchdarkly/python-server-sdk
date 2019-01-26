@@ -81,7 +81,9 @@ The SDK is tested with the most recent patch releases of Python 2.7, 3.3, 3.4, 3
 Database integrations
 ---------------------
 
-Feature flag data can be kept in a persistent store using Redis or DynamoDB. These adapters are implemented in the `DynamoDB` and `Redis` classes in `ldclient.integrations`; to use them, call the `new_feature_store` method in the appropriate class, and put the returned object in the `feature_store` property of your client configuration. See [`ldclient.integrations`](https://github.com/launchdarkly/python-client-private/blob/master/ldclient/integrations.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store) for more information.
+Feature flag data can be kept in a persistent store using Consul, DynamoDB, or Redis. These adapters are implemented in the `Consul`, `DynamoDB` and `Redis` classes in `ldclient.integrations`; to use them, call the `new_feature_store` method in the appropriate class, and put the returned object in the `feature_store` property of your client configuration. See [`ldclient.integrations`](https://github.com/launchdarkly/python-client-private/blob/master/ldclient/integrations.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store) for more information.
+
+Note that Consul is not supported in Python 3.3 or 3.4.
 
 Using flag data from a file
 ---------------------------

@@ -1,7 +1,42 @@
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
+from ldclient.impl.integrations.consul.consul_feature_store import _ConsulFeatureStoreCore
 from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore
 from ldclient.redis_feature_store import _RedisFeatureStoreCore
+
+
+class Consul(object):
+    """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
+    """
+    
+    @staticmethod
+    def new_feature_store(host=None,
+                          port=None,
+                          prefix=None,
+                          consul_opts=None,
+                          caching=CacheConfig.default()):
+        """Creates a Consul-backed implementation of `:class:ldclient.feature_store.FeatureStore`.
+        For more details about how and why you can use a persistent feature store, see the
+        SDK reference guide: https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store
+
+        To use this method, you must first install the `python-consul` package. Then, put the object
+        returned by this method into the `feature_store` property of your client configuration
+        (:class:ldclient.config.Config).
+
+        Note that `python-consul` is not available for Python 3.3 or 3.4, so this feature cannot be
+        used in those Python versions.
+
+        :param string host: Hostname of the Consul server (uses "localhost" if omitted)
+        :param int port: Port of the Consul server (uses 8500 if omitted)
+        :param string prefix: An optional namespace prefix to be prepended to all Consul keys
+        :param dict consul_opts: Optional parameters for configuring the Consul client, if you need
+          to set any of them besides host and port, as defined in the python-consul API; see
+          https://python-consul.readthedocs.io/en/latest/#consul
+        :param CacheConfig caching: Specifies whether local caching should be enabled and if so,
+          sets the cache properties; defaults to `CacheConfig.default()`
+        """
+        core = _ConsulFeatureStoreCore(host, port, prefix, consul_opts)
+        return CachingStoreWrapper(core, caching)
 
 
 class DynamoDB(object):
@@ -14,6 +49,8 @@ class DynamoDB(object):
                           dynamodb_opts={},
                           caching=CacheConfig.default()):
         """Creates a DynamoDB-backed implementation of `:class:ldclient.feature_store.FeatureStore`.
+        For more details about how and why you can use a persistent feature store, see the
+        SDK reference guide: https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store
 
         To use this method, you must first install the `boto3` package containing the AWS SDK gems.
         Then, put the object returned by this method into the `feature_store` property of your
@@ -52,6 +89,8 @@ class Redis(object):
                           max_connections=16,
                           caching=CacheConfig.default()):
         """Creates a Redis-backed implementation of `:class:ldclient.feature_store.FeatureStore`.
+        For more details about how and why you can use a persistent feature store, see the
+        SDK reference guide: https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store
 
         To use this method, you must first install the `redis` package. Then, put the object
         returned by this method into the `feature_store` property of your client configuration

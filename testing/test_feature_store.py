@@ -4,9 +4,17 @@ import pytest
 import redis
 import time
 
+# Consul is only supported in some Python versions
+have_consul = False
+try:
+    import consul
+    have_consul = True
+except ImportError:
+    pass
+
 from ldclient.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
 from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
-from ldclient.integrations import DynamoDB, Redis
+from ldclient.integrations import Consul, DynamoDB, Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
@@ -50,6 +58,25 @@ class RedisWithDeprecatedConstructorTester(RedisTester):
         return True
 
 
+class ConsulTester(object):
+    def __init__(self, cache_config):
+        self._cache_config = cache_config
+
+    def init_store(self, prefix=None):
+        self._clear_data(prefix or "launchdarkly")
+        return Consul.new_feature_store(prefix=prefix, caching=self._cache_config)
+
+    @property
+    def supports_prefix(self):
+        return True
+
+    def _clear_data(self, prefix):
+        client = consul.Consul()
+        index, keys = client.kv.get(prefix + "/", recurse=True, keys=True)
+        for key in (keys or []):
+            client.kv.delete(key)
+
+
 class DynamoDBTester(object):
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
@@ -66,7 +93,8 @@ class DynamoDBTester(object):
     def init_store(self, prefix=None):
         self._create_table()
         self._clear_data()
-        return DynamoDB.new_feature_store(self.table_name, prefix=prefix, dynamodb_opts=self.options)
+        return DynamoDB.new_feature_store(self.table_name, prefix=prefix, dynamodb_opts=self.options,
+            caching=self._cache_config)
 
     @property
     def supports_prefix(self):
@@ -146,6 +174,10 @@ class TestFeatureStore:
         DynamoDBTester(CacheConfig.default()),
         DynamoDBTester(CacheConfig.disabled())
     ]
+
+    if have_consul:
+        params.append(ConsulTester(CacheConfig.default()))
+        params.append(ConsulTester(CacheConfig.disabled()))
 
     @pytest.fixture(params=params)
     def tester(self, request):
