@@ -1,4 +1,4 @@
-from __future__ import division, with_statement, absolute_import
+from __future__ import division, absolute_import
 
 import certifi
 import logging
