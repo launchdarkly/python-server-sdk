@@ -1,5 +1,3 @@
-from __future__ import division
-
 import certifi
 import logging
 import sys
