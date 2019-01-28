@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from collections import namedtuple
 from email.utils import parsedate
 import errno
