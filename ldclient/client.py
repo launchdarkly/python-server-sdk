@@ -3,8 +3,6 @@ import hmac
 import threading
 import traceback
 
-from builtins import object
-
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl

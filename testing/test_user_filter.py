@@ -1,4 +1,3 @@
-from builtins import object
 import json
 from ldclient.client import Config
 from ldclient.user_filter import UserFilter

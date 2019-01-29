@@ -1,4 +1,3 @@
-from builtins import object
 from ldclient.client import LDClient, Config
 from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
