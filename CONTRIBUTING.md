@@ -28,6 +28,6 @@ Development information (for developing this module itself)
 Developing with different Python versions
 -----------------------------------------
 
-Example for switching to python 3:
+Example for switching to Python 3:
 
 ```virtualenv -p `which python3` ~/.virtualenvs/python-client```
