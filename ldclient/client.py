@@ -1,11 +1,7 @@
-from __future__ import division, with_statement, absolute_import
-
 import hashlib
 import hmac
 import threading
 import traceback
-
-from builtins import object
 
 from ldclient.config import Config as Config
 from ldclient.event_processor import NullEventProcessor
