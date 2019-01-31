@@ -1,7 +1,4 @@
-try:
-    from setuptools import setup, Command
-except ImportError:
-    from distutils.core import setup
+from setuptools import find_packages, setup, Command
 
 import sys
 import uuid
@@ -51,7 +48,7 @@ setup(
     version=ldclient_version,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
-    packages=['ldclient'],
+    packages=find_packages(),
     url='https://github.com/launchdarkly/python-client',
     description='LaunchDarkly SDK for Python',
     long_description='LaunchDarkly SDK for Python',
