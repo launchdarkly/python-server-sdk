@@ -1,4 +1,4 @@
-from setuptools import setup, Command
+from setuptools import find_packages, setup, Command
 
 import sys
 import uuid
