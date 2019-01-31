@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.8.0] - 2019-01-31
+### Added:
+- It is now possible to use Consul as a persistent feature store, similar to the existing Redis and DynamoDB integrations. See `Consul` in `ldclient.integrations`, and the reference guide for ["Using a persistent feature store"](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store).
+
 ## [6.7.0] - 2019-01-15
 ### Added:
 - It is now possible to use DynamoDB as a persistent feature store, similar to the existing Redis integration. See `DynamoDB` in `ldclient.integrations`, and the reference guide to ["Using a persistent feature store"](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store).
