@@ -39,7 +39,7 @@ test-template: &test-template
         command: |
           if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
             sudo rm -rf dist *.egg-info;
-            ./scripts/test-packaging.sh;
+            ./test-packaging/test-packaging.sh;
           fi
     - store_test_results:
         path: test-reports
