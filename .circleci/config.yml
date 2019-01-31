@@ -15,9 +15,10 @@ test-template: &test-template
     - run:
         name: install requirements
         command: |
-          sudo pip install --upgrade pip setuptools virtualenv;
+          sudo pip install --upgrade pip virtualenv;
           virtualenv env;
           source ./env/bin/activate;
+          pip install setuptools;
           pip install -r test-requirements.txt;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
             pip install -r consul-requirements.txt;
@@ -36,12 +37,8 @@ test-template: &test-template
             pytest -s --junitxml=test-reports/junit.xml testing;
           fi
     - run:
-        name: test packaging/install  # this can't be run on 3.3 because the "wheel" package isn't available;
-                                      # that's OK because we never build our actual published package on 3.3
-        command: |
-          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
-            ./scripts/test-packaging.sh;
-          fi
+        name: test packaging/install
+        command: ./scripts/test-packaging.sh
     - store_test_results:
         path: test-reports
     - store_artifacts:
