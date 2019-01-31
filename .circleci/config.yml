@@ -36,8 +36,12 @@ test-template: &test-template
             pytest -s --junitxml=test-reports/junit.xml testing;
           fi
     - run:
-        name: test packaging/install
-        command: ./scripts/test-packaging.sh
+        name: test packaging/install  # this can't be run on 3.3 because the "wheel" package isn't available;
+                                      # that's OK because we never build our actual published package on 3.3
+        command: |
+          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
+            ./scripts/test-packaging.sh;
+          fi
     - store_test_results:
         path: test-reports
     - store_artifacts:
