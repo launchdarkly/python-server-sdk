@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.8.2] - 2019-01-31
+### Fixed:
+- Fixed a _different_ packaging error that was still present in the 6.8.1 release, which made the package installable but caused imports to fail. The 6.8.1 release has been pulled from PyPI. We apologize for these recent errors, which were not detected prior to release because our prerelease testing was using the source code directly rather than installing it with `pip`. Our CI tests have been updated and should prevent this in the future.
+
+
 ## [6.8.1] - 2019-01-31
 ### Fixed:
 - Fixed a packaging error that made the 6.8.0 release not installable. There are no other changes. The 6.8.0 release has been pulled from PyPI.
