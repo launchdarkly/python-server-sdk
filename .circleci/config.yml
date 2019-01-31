@@ -16,14 +16,11 @@ test-template: &test-template
         name: install requirements
         command: |
           sudo pip install --upgrade pip virtualenv;
-          virtualenv env;
-          source ./env/bin/activate;
-          pip install setuptools;
-          pip install -r test-requirements.txt;
+          sudo pip install -r test-requirements.txt;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
-            pip install -r consul-requirements.txt;
+            sudo pip install -r consul-requirements.txt;
           fi;
-          python setup.py install;
+          sudo python setup.py install;
           pip freeze
     - run:
         name: run tests
@@ -38,7 +35,13 @@ test-template: &test-template
           fi
     - run:
         name: test packaging/install
-        command: ./scripts/test-packaging.sh
+        # Note, virtualenv isn't supported on Python 3.3 and this test requires virtualenv. But we
+        # never build our published package on 3.3 anyway.
+        command: |
+          if [[ "$CIRCLE_JOB" == "test-3.3" ]]; then
+            sudo rm -rf dist *.egg-info;
+            ./scripts/test-packaging.sh;
+          fi
     - store_test_results:
         path: test-reports
     - store_artifacts:
