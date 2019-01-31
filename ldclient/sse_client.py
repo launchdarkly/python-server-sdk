@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import re
 import time
 import warnings
@@ -111,6 +109,10 @@ class SSEClient(object):
 
         return msg
 
+    # The following two lines make our iterator class compatible with both Python 2.x and 3.x,
+    # even though they expect different magic method names. We could accomplish the same thing
+    # by importing builtins.object and deriving from that, but this way it's easier to see
+    # what we're doing.
     if six.PY2:
         next = __next__
 

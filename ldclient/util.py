@@ -1,5 +1,3 @@
-from __future__ import division, with_statement, absolute_import
-
 import certifi
 import logging
 import sys

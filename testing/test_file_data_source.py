@@ -9,7 +9,7 @@ import time
 from ldclient.client import LDClient
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.file_data_source import FileDataSource
+from ldclient.integrations import Files
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
@@ -94,7 +94,7 @@ def teardown_function():
 
 def make_data_source(**kwargs):
     global data_source
-    data_source = FileDataSource.factory(**kwargs)(Config(), store, ready)
+    data_source = Files.new_data_source(**kwargs)(Config(), store, ready)
     return data_source
 
 def make_temp_file(content):
@@ -217,7 +217,7 @@ def test_reloads_modified_file_in_polling_mode():
 def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
-        factory = FileDataSource.factory(paths = path)
+        factory = Files.new_data_source(paths = path)
         client = LDClient(config=Config(update_processor_class = factory, send_events = False))
         value = client.variation('flag1', { 'key': 'user' }, '')
         assert value == 'on'
@@ -229,7 +229,7 @@ def test_evaluates_full_flag_with_client_as_expected():
 def test_evaluates_simplified_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
-        factory = FileDataSource.factory(paths = path)
+        factory = Files.new_data_source(paths = path)
         client = LDClient(config=Config(update_processor_class = factory, send_events = False))
         value = client.variation('flag2', { 'key': 'user' }, '')
         assert value == 'value2'
