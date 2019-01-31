@@ -15,7 +15,7 @@ test-template: &test-template
     - run:
         name: install requirements
         command: |
-          sudo pip install --upgrade pip setuptools;
+          sudo pip install --upgrade pip virtualenv;
           sudo pip install -r test-requirements.txt;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
             sudo pip install -r consul-requirements.txt;
@@ -31,6 +31,15 @@ test-template: &test-template
             sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"';
           else
             pytest -s --junitxml=test-reports/junit.xml testing;
+          fi
+    - run:
+        name: test packaging/install
+        # Note, virtualenv isn't supported on Python 3.3 and this test requires virtualenv. But we
+        # never build our published package on 3.3 anyway.
+        command: |
+          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
+            sudo rm -rf dist *.egg-info;
+            ./scripts/test-packaging.sh;
           fi
     - store_test_results:
         path: test-reports
