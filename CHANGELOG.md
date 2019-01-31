@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.8.1] - 2019-01-31
+### Fixed:
+- Fixed a packaging error that made the 6.8.0 release not installable. There are no other changes. The 6.8.0 release has been pulled from PyPI.
+
+
 ## [6.8.0] - 2019-01-31
 ### Added:
 - It is now possible to use Consul as a persistent feature store, similar to the existing Redis and DynamoDB integrations. See `Consul` in `ldclient.integrations`, and the reference guide for ["Using a persistent feature store"](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store).

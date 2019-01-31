@@ -13,7 +13,7 @@ def parse_requirements(filename):
     return [line for line in lineiter if line and not line.startswith("#")]
 
 
-ldclient_version='6.8.0'
+ldclient_version='6.8.1'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt')
