@@ -66,5 +66,4 @@ p2venv
 .idea
 *.iml
 .vagrant
-ldd/py2
-ldd/py3
+test-packaging-venv

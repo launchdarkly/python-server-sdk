@@ -15,7 +15,7 @@ test-template: &test-template
     - run:
         name: install requirements
         command: |
-          sudo pip install --upgrade pip setuptools;
+          sudo pip install --upgrade pip setuptools virtualenv;
           sudo pip install -r test-requirements.txt;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
             sudo pip install -r consul-requirements.txt;
@@ -32,6 +32,9 @@ test-template: &test-template
           else
             pytest -s --junitxml=test-reports/junit.xml testing;
           fi
+    - run:
+        name: test packaging/install
+        command: ./scripts/test-packaging.sh
     - store_test_results:
         path: test-reports
     - store_artifacts:
