@@ -19,12 +19,16 @@ ldclient_version='6.7.0'
 install_reqs = parse_requirements('requirements.txt')
 test_reqs = parse_requirements('test-requirements.txt')
 redis_reqs = parse_requirements('redis-requirements.txt')
+consul_reqs = parse_requirements('consul-requirements.txt')
+dynamodb_reqs = parse_requirements('dynamodb-requirements.txt')
 
 # reqs is a list of requirement
 # e.g. ['django==1.5.1', 'mezzanine==1.4.6']
 reqs = [ir for ir in install_reqs]
 testreqs = [ir for ir in test_reqs]
 redisreqs = [ir for ir in redis_reqs]
+consulreqs = [ir for ir in consul_reqs]
+dynamodbreqs = [ir for ir in dynamodb_reqs]
 
 
 class PyTest(Command):
@@ -63,11 +67,14 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries',
     ],
     extras_require={
-        "redis": redisreqs
+        "redis": redisreqs,
+        "consul": consulreqs,
+        "dynamodb": dynamodbreqs
     },
     tests_require=testreqs,
     cmdclass={'test': PyTest},
