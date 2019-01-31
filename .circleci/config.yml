@@ -37,7 +37,7 @@ test-template: &test-template
         # Note, virtualenv isn't supported on Python 3.3 and this test requires virtualenv. But we
         # never build our published package on 3.3 anyway.
         command: |
-          if [[ "$CIRCLE_JOB" == "test-3.3" ]]; then
+          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
             sudo rm -rf dist *.egg-info;
             ./scripts/test-packaging.sh;
           fi
