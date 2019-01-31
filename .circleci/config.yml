@@ -27,6 +27,7 @@ test-template: &test-template
     - run:
         name: run tests
         command: |
+          source ./env/bin/activate;
           mkdir test-reports;
           if [[ "$CIRCLE_JOB" == "test-2.7" ]]; then
             pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing;
