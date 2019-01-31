@@ -1,5 +1,7 @@
 include requirements.txt
 include README.txt
 include test-requirements.txt
+include consul-requirements.txt
+include dynamodb-requirements.txt
 include redis-requirements.txt
 include python2.6-requirements.txt
