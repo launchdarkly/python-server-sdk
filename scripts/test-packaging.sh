@@ -2,12 +2,13 @@
 
 set -e
 
-rm -r dist
+rm -rf dist
 python setup.py sdist
 
-VENV=`pwd`/test-packaging-venv
-rm -rf $VENV
-virtualenv $VENV
-source $VENV/bin/activate
+rm -rf test-packaging
+mkdir test-packaging
+cd test-packaging
+virtualenv env
+source env/bin/activate
 
-pip install dist/*.tar.gz
+pip install ../dist/*.tar.gz
