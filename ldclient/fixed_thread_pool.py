@@ -1,7 +1,7 @@
 """
 Internal helper class for thread management.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 from threading import Event, Lock, Thread
 

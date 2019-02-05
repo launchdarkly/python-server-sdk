@@ -1,7 +1,7 @@
 """
 Deprecated entry point for a component that has been moved.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.interfaces import UpdateProcessor

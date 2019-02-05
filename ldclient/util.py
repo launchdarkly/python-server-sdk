@@ -1,7 +1,7 @@
 """
 General internal helper functions.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 import certifi
 import logging

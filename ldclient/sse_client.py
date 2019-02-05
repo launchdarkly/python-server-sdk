@@ -3,7 +3,7 @@ Server-Sent Events implementation for streaming.
 
 Based on: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 import re
 import time

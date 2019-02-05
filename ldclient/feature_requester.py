@@ -1,7 +1,7 @@
 """
 Default implementation of feature flag polling requests.
 """
-# currently excluded from documentation
+# currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
 import json
