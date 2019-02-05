@@ -122,6 +122,7 @@ def get():
         __lock.unlock()
 
 
+# currently hidden from documentation - see api-main.rst
 class NullHandler(logging.Handler):
     """A :class:`logging.Handler` implementation that does nothing.
 

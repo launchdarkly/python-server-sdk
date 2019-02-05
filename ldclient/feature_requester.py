@@ -1,7 +1,7 @@
 """
 Default implementation of feature flag polling requests.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation
 
 from collections import namedtuple
 import json

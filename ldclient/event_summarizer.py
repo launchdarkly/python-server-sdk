@@ -1,7 +1,7 @@
 """
 Implementation details of the analytics event delivery component.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation
 
 from collections import namedtuple
 
