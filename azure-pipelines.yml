@@ -46,6 +46,9 @@ jobs:
           script: |
             python --version
             pip install -r test-requirements.txt
+            pip install -r redis-requirements.txt
+            pip install -r consul-requirements.txt
+            pip install -r dynamodb-requirements.txt
             python setup.py install
             mkdir test-reports
             pytest -s --junitxml=test-reports/junit.xml testing;
