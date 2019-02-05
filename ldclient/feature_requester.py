@@ -1,3 +1,8 @@
+"""
+Default implementation of feature flag polling requests.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 from collections import namedtuple
 import json
 import urllib3

@@ -1,3 +1,7 @@
+"""
+This submodule contains the client class that provides most of the SDK functionality.
+"""
+
 import hashlib
 import hmac
 import threading
@@ -55,6 +59,15 @@ class _FeatureStoreClientWrapper(FeatureStore):
 
 
 class LDClient(object):
+    """The LaunchDarkly SDK client object.
+
+    Applications should configure the client at startup time and continue to use it throughout the lifetime
+    of the application, rather than creating instances on the fly. The best way to do this is with the
+    singleton methods :func:`ldclient.set_sdk_key()`, :func:`ldclient.set_config()`, and :func:`ldclient.get()`.
+    However, you may also call the constructor directly if you need to maintain multiple instances.
+    
+    Client instances are thread-safe.
+    """
     def __init__(self, sdk_key=None, config=None, start_wait=5):
         """Constructs a new LDClient instance.
 
@@ -63,7 +76,7 @@ class LDClient(object):
         client instance.
 
         :param string sdk_key: the SDK key for your LaunchDarkly environment
-        :param Config config: optional custom configuration
+        :param ldclient.config.Config config: optional custom configuration
         :param float start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
         """
         check_uwsgi()
@@ -157,9 +170,9 @@ class LDClient(object):
     def track(self, event_name, user, data=None):
         """Tracks that a user performed an event.
 
-        :param string event_name: The name of the event.
-        :param dict user: The attributes of the user.
-        :param data: Optional additional data associated with the event.
+        :param string event_name: the name of the event, which may correspond to a goal in A/B tests
+        :param dict user: the attributes of the user
+        :param data: optional additional data associated with the event
         """
         self._sanitize_user(user)
         if user is None or user.get('key') is None:
@@ -168,6 +181,10 @@ class LDClient(object):
 
     def identify(self, user):
         """Registers the user.
+
+        This simply creates an analytics event that will transmit the given user properties to
+        LaunchDarkly, so that the user will be visible on your dashboard even if you have not
+        evaluated any flags for that user. It has no other effect.
 
         :param dict user: attributes of the user to register
         """
@@ -192,13 +209,20 @@ class LDClient(object):
 
     def flush(self):
         """Flushes all pending events.
+
+        Normally, batches of events are delivered in the background at intervals determined by the
+        ``flush_interval`` property of :class:`ldclient.config.Config`. Calling ``flush()``
+        schedules the next event delivery to be as soon as possible; however, the delivery still
+        happens asynchronously on a worker thread, so this method will return immediately.
         """
         if self._config.offline:
             return
         return self._event_processor.flush()
 
     def toggle(self, key, user, default):
-        """Deprecated synonym for `variation`.
+        """Deprecated synonym for :func:`variation()`.
+
+        .. deprecated:: 2.0.0
         """
         log.warn("Deprecated method: toggle() called. Use variation() instead.")
         return self.variation(key, user, default)
@@ -215,27 +239,18 @@ class LDClient(object):
         return self._evaluate_internal(key, user, default, False).value
     
     def variation_detail(self, key, user, default):
-        """Determines the variation of a feature flag for a user, like `variation`, but also
-        provides additional information about how this value was calculated.
+        """Determines the variation of a feature flag for a user, like :func:`variation()`, but also
+        provides additional information about how this value was calculated, in the form of an
+        :class:`ldclient.flag.EvaluationDetail` object.
         
-        The return value is an EvaluationDetail object, which has three properties:
-
-        `value`: the value that was calculated for this user (same as the return value
-        of `variation`)
-        
-        `variation_index`: the positional index of this value in the flag, e.g. 0 for the
-        first variation - or `None` if the default value was returned
-        
-        `reason`: a hash describing the main reason why this value was selected.
-        
-        The `reason` will also be included in analytics events, if you are capturing
-        detailed event data for this flag.
+        Calling this method also causes the "reason" data to be included in analytics events,
+        if you are capturing detailed event data for this flag.
         
         :param string key: the unique key for the feature flag
         :param dict user: a dictionary containing parameters for the end user requesting the flag
         :param object default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
-        :return: an EvaluationDetail object describing the result
+        :return: an object describing the result
         :rtype: EvaluationDetail
         """
         return self._evaluate_internal(key, user, default, True)
@@ -307,8 +322,8 @@ class LDClient(object):
     def all_flags(self, user):
         """Returns all feature flag values for the given user.
         
-        This method is deprecated - please use `all_flags_state` instead. Current versions of the
-        client-side SDK will not generate analytics events correctly if you pass the result of `all_flags`.
+        This method is deprecated - please use :func:`all_flags_state()` instead. Current versions of the
+        client-side SDK will not generate analytics events correctly if you pass the result of ``all_flags``.
 
         :param dict user: the end user requesting the feature flags
         :return: a dictionary of feature flag keys to values; returns None if the client is offline,
@@ -322,19 +337,27 @@ class LDClient(object):
     
     def all_flags_state(self, user, **kwargs):
         """Returns an object that encapsulates the state of all feature flags for a given user,
-        including the flag values and also metadata that can be used on the front end. 
+        including the flag values and also metadata that can be used on the front end. See the
+        JavaScript SDK Reference Guide on
+        `Bootstrapping <https://docs.launchdarkly.com/docs/js-sdk-reference#section-bootstrapping>`_.
         
         This method does not send analytics events back to LaunchDarkly.
 
         :param dict user: the end user requesting the feature flags
-        :param kwargs: optional parameters affecting how the state is computed: set
-          `client_side_only=True` to limit it to only flags that are marked for use with the
-          client-side SDK (by default, all flags are included); set `with_reasons=True` to
-          include evaluation reasons in the state (see `variation_detail`); set
-          `details_only_for_tracked_flags=True` to omit any metadata that is normally only
-          used for event generation, such as flag versions and evaluation reasons, unless
-          the flag has event tracking or debugging turned on
-        :return: a FeatureFlagsState object (will never be None; its 'valid' property will be False
+        :param kwargs: optional parameters affecting how the state is computed - see below
+
+        :Keyword Arguments:
+          * **client_side_only** (*boolean*) --
+            set to True to limit it to only flags that are marked for use with the client-side SDK
+            (by default, all flags are included)
+          * **with_reasons** (*boolean*) --
+            set to True to include evaluation reasons in the state (see :func:`variation_detail()`)
+          * **details_only_for_tracked_flags** (*boolean*) --
+            set to True to omit any metadata that is normally only used for event generation, such
+            as flag versions and evaluation reasons, unless the flag has event tracking or debugging
+            turned on
+
+        :return: a FeatureFlagsState object (will never be None; its ``valid`` property will be False
           if the client is offline, has not been initialized, or the user is None or has no key)
         :rtype: FeatureFlagsState
         """
@@ -381,9 +404,10 @@ class LDClient(object):
         return state
     
     def secure_mode_hash(self, user):
-        """Generates a hash value for a user.
+        """Generates a hash value for a user, for use by the JavaScript SDK.
 
-        For more info: <a href="https://github.com/launchdarkly/js-client#secure-mode">https://github.com/launchdarkly/js-client#secure-mode</a>
+        For more information, see the JavaScript SDK Reference Guide on
+        `Secure mode <https://github.com/launchdarkly/js-client#secure-mode>`_.
         
         :param dict user: the attributes of the user
         :return: a hash string that can be passed to the front end

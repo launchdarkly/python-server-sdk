@@ -1,3 +1,8 @@
+"""
+Internal helper class for locking.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 import threading
 
 

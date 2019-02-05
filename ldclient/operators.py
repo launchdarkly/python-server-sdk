@@ -1,3 +1,8 @@
+"""
+Implementation details of feature flag evaluation.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 import logging
 import re
 import semver

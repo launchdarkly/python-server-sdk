@@ -1,3 +1,8 @@
+"""
+Internal helper class for repeating tasks.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 from threading import Event, Thread
 
 class RepeatingTimer(object):

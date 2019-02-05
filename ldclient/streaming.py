@@ -1,3 +1,8 @@
+"""
+Default implementation of the streaming component.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 from collections import namedtuple
 
 import json
