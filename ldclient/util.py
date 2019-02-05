@@ -1,3 +1,8 @@
+"""
+General internal helper functions.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 import certifi
 import logging
 import sys

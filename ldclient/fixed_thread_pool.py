@@ -1,3 +1,8 @@
+"""
+Internal helper class for thread management.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 from threading import Event, Lock, Thread
 
 # noinspection PyBroadException

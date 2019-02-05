@@ -1,3 +1,9 @@
+"""
+This submodule contains the :class:`Config` class for custom configuration of the SDK client.
+
+Note that the same class can also be imported from the ``ldclient.client`` submodule.
+"""
+
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
@@ -7,6 +13,11 @@ STREAM_FLAGS_PATH = '/flags'
 
 
 class Config(object):
+    """Advanced configuration options for the SDK client.
+
+    To use these options, create an instance of ``Config`` and pass it to either :func:`ldclient.set_config()`
+    if you are using the singleton client, or the :class:`ldclient.client.LDClient` constructor otherwise.
+    """
     def __init__(self,
                  sdk_key=None,
                  base_uri='https://app.launchdarkly.com',
@@ -59,7 +70,7 @@ class Config(object):
         :param bool offline: Whether the client should be initialized in offline mode. In offline mode,
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
-        :type update_processor_class: (str, Config, FeatureStore) -> UpdateProcessor
+        :type update_processor_class: (str, ldclient.config.Config, FeatureStore) -> UpdateProcessor
         :param float poll_interval: The number of seconds between polls for flag updates if streaming is off.
         :param bool use_ldd: Whether you are using the LaunchDarkly relay proxy in daemon mode. In this
           configuration, the client will not use a streaming connection to listen for updates, but instead
@@ -79,9 +90,9 @@ class Config(object):
           By default, events will only include the user key, except for one "index" event that provides the
           full details for the user.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
-        :type feature_requester_class: (str, Config, FeatureStore) -> FeatureRequester
+        :type feature_requester_class: (str, ldclient.config.Config, FeatureStore) -> FeatureRequester
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
-        :type event_processor_class: (Config) -> EventProcessor
+        :type event_processor_class: (ldclient.config.Config) -> EventProcessor
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
         """
@@ -118,9 +129,18 @@ class Config(object):
 
     @classmethod
     def default(cls):
+        """Returns a ``Config`` instance with default values for all properties.
+
+        :rtype: ldclient.config.Config
+        """
         return cls()
 
     def copy_with_new_sdk_key(self, new_sdk_key):
+        """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
+
+        :param string new_sdk_key: the new SDK key
+        :rtype: ldclient.config.Config
+        """
         return Config(sdk_key=new_sdk_key,
                       base_uri=self.__base_uri,
                       events_uri=self.__events_uri,
@@ -147,6 +167,8 @@ class Config(object):
                       inline_users_in_events=self.__inline_users_in_events)
 
     def get_default(self, key, default):
+        """Used internally by the SDK client to get the default value for a flag.
+        """
         return default if key not in self.__defaults else self.__defaults[key]
 
     @property
@@ -159,6 +181,10 @@ class Config(object):
 
     @property
     def get_latest_flags_uri(self):
+        """Used internally, deprecated.
+
+        .. deprecated:: 5.0.0
+        """
         return self.__base_uri + GET_LATEST_FEATURES_PATH
 
     @property

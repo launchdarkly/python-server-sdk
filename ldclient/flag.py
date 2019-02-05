@@ -1,3 +1,7 @@
+"""
+This submodule contains a helper class for feature flag evaluation, as well as some implementation details.
+"""
+
 from collections import namedtuple
 import hashlib
 import logging
@@ -18,10 +22,12 @@ log = logging.getLogger(sys.modules[__name__].__name__)
 
 class EvaluationDetail(object):
     """
-    The return type of LDClient.variation_detail, combining the result of a flag evaluation
-    with information about how it was calculated.
+    The return type of :func:`ldclient.client.LDClient.variation_detail()`, combining the result of a
+    flag evaluation with information about how it was calculated.
     """
     def __init__(self, value, variation_index, reason):
+        """Constructs an instance.
+        """
         self.__value = value
         self.__variation_index = variation_index
         self.__reason = reason
@@ -29,14 +35,17 @@ class EvaluationDetail(object):
     @property
     def value(self):
         """The result of the flag evaluation. This will be either one of the flag's
-        variations or the default value that was passed to the variation() method.
+        variations or the default value that was passed to the
+        :func:`ldclient.client.LDClient.variation_detail()` method.
         """
         return self.__value
     
     @property
     def variation_index(self):
         """The index of the returned value within the flag's list of variations, e.g.
-        0 for the first variation - or None if the default value was returned.
+        0 for the first variation -- or None if the default value was returned.
+
+        :rtype: int
         """
         return self.__variation_index
     
@@ -45,28 +54,34 @@ class EvaluationDetail(object):
         """A dictionary describing the main factor that influenced the flag evaluation value.
         It contains the following properties:
 
-        'kind': The general category of reason, as follows: 'OFF' - the flag was off;
-        'FALLTHROUGH' - the flag was on but the user did not match any targets or rules;
-        'TARGET_MATCH' - the user was specifically targeted for this flag; 'RULE_MATCH' -
-        the user matched one of the flag's rules; 'PREREQUISITE_FAILED' - the flag was
-        considered off because it had at least one prerequisite flag that did not return
-        the desired variation; 'ERROR' - the flag could not be evaluated due to an
-        unexpected error.
+        * ``kind``: The general category of reason, as follows:
+        
+          * ``"OFF"``: the flag was off
+          * ``"FALLTHROUGH"`` -- the flag was on but the user did not match any targets or rules
+          * ``"TARGET_MATCH"`` -- the user was specifically targeted for this flag
+          * ``"RULE_MATCH"`` -- the user matched one of the flag's rules
+          * ``"PREREQUISITE_FAILED"`` -- the flag was considered off because it had at least one
+            prerequisite flag that did not return the desired variation
+          * ``"ERROR"`` - the flag could not be evaluated due to an unexpected error.
 
-        'ruleIndex', 'ruleId': The positional index and unique identifier of the matched
-        rule, if the kind was 'RULE_MATCH'
+        * ``ruleIndex``, ``ruleId``: The positional index and unique identifier of the matched
+          rule, if the kind was ``RULE_MATCH``
 
-        'prerequisiteKey': The flag key of the prerequisite that failed, if the kind was
-        'PREREQUISITE_FAILED'
+        * ``prerequisiteKey``: The flag key of the prerequisite that failed, if the kind was
+          ``PREREQUISITE_FAILED``
 
-        'errorKind': further describes the nature of the error if the kind was 'ERROR',
-        e.g. 'FLAG_NOT_FOUND'
+        * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
+          e.g. ``"FLAG_NOT_FOUND"``
+
+        :rtype: dict
         """
         return self.__reason
     
     def is_default_value(self):
         """Returns True if the flag evaluated to the default value rather than one of its
         variations.
+
+        :rtype: bool
         """
         return self.__variation_index is None
     

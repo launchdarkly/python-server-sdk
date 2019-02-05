@@ -1,3 +1,8 @@
+"""
+Implementation details of the analytics event delivery component.
+"""
+# currently excluded from documentation - see ldclient.rst
+
 from collections import namedtuple
 
 

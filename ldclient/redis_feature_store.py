@@ -11,10 +11,11 @@ from ldclient.interfaces import FeatureStore
 # will migrate away from exposing these concrete classes and use only the factory methods.
 
 class RedisFeatureStore(FeatureStore):
-    """A Redis-backed implementation of :class:`ldclient.feature_store.FeatureStore`.
+    """A Redis-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
 
-    This module and this implementation class are deprecated and may be changed or removed in the future.
-    Please use :func:`ldclient.integrations.Redis.new_feature_store()`.
+    .. deprecated:: 6.7.0
+      This module and this implementation class are deprecated and may be changed or removed in the future.
+      Please use :func:`ldclient.integrations.Redis.new_feature_store()`.
     """
     def __init__(self,
                  url='redis://localhost:6379/0',
