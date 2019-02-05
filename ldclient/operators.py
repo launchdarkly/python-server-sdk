@@ -1,7 +1,7 @@
 """
 Implementation details of feature flag evaluation.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 import logging
 import re

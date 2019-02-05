@@ -1,7 +1,7 @@
 """
 Implementation details of the analytics event delivery component.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
 from email.utils import parsedate

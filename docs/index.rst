@@ -3,19 +3,19 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to ldclient-py's documentation!
-=======================================
+LaunchDarkly Python SDK
+=======================
+
+This is the API reference for the `LaunchDarkly <https://launchdarkly.com/>`_ SDK for Python.
+
+The latest version of the SDK can be found on `PyPI <https://pypi.org/project/ldclient-py/>`_, and the source code is on `GitHub <https://github.com/launchdarkly/python-client>`_.
+
+For more information, see LaunchDarkly's `Quickstart <https://docs.launchdarkly.com/docs>`_ and `SDK Reference Guide <http://docs.launchdarkly.com/docs/python-sdk-reference>`_.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-.. automodule:: ldclient
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   api-main
+   api-integrations
+   api-extending

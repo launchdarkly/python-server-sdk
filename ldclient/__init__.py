@@ -122,6 +122,7 @@ def get():
         __lock.unlock()
 
 
+# currently hidden from documentation - see docs/README.md
 class NullHandler(logging.Handler):
     """A :class:`logging.Handler` implementation that does nothing.
 

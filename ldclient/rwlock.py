@@ -1,7 +1,7 @@
 """
 Internal helper class for locking.
 """
-# currently excluded from documentation - see ldclient.rst
+# currently excluded from documentation - see docs/README.md
 
 import threading
 
