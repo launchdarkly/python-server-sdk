@@ -14,7 +14,7 @@ Every public class, method, and module should have a docstring. Classes and meth
 
 "Public" here means things that we want third-party developers to use. The SDK also contains many modules and classes that are not actually private (i.e. they aren't prefixed with `_`), but are for internal use only and aren't supported for any other use (we would like to reduce the amount of these in future).
 
-To cause a class or method in an existing module to be added to the docs, all that's necessary is to give it a docstring.
+To add an undocumented class or method in an existing module to the docs, just give it a docstring.
 
 To add a new module to the docs, give it a docstring and then add a link to it in the appropriate `api-*.rst` file, in the same format as the existing links.
 
