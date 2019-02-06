@@ -63,7 +63,7 @@ class FeatureFlagsState(object):
         :param string key: the feature flag key
         :return: a dictionary describing the reason; None if reasons were not recorded, or if there was no
           such flag
-        :rtype: dict
+        :rtype: dict or None
         """
         meta = self.__flag_metadata.get(key)
         return None if meta is None else meta.get('reason')
