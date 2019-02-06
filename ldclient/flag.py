@@ -45,7 +45,7 @@ class EvaluationDetail(object):
         """The index of the returned value within the flag's list of variations, e.g.
         0 for the first variation -- or None if the default value was returned.
 
-        :rtype: int
+        :rtype: int or None
         """
         return self.__variation_index
     

@@ -166,9 +166,8 @@ class Config(object):
                       user_keys_flush_interval=self.__user_keys_flush_interval,
                       inline_users_in_events=self.__inline_users_in_events)
 
+    # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
-        """Used internally by the SDK client to get the default value for a flag.
-        """
         return default if key not in self.__defaults else self.__defaults[key]
 
     @property
@@ -179,22 +178,22 @@ class Config(object):
     def base_uri(self):
         return self.__base_uri
 
+    # for internal use only - also no longer used, will remove
     @property
     def get_latest_flags_uri(self):
-        """Used internally, deprecated.
-
-        .. deprecated:: 5.0.0
-        """
         return self.__base_uri + GET_LATEST_FEATURES_PATH
 
+    # for internal use only - should construct the URL path in the events code, not here
     @property
     def events_uri(self):
         return self.__events_uri + '/bulk'
 
+    # for internal use only
     @property
     def stream_base_uri(self):
         return self.__stream_uri
 
+    # for internal use only - should construct the URL path in the streaming code, not here
     @property
     def stream_uri(self):
         return self.__stream_uri + STREAM_FLAGS_PATH

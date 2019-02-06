@@ -32,7 +32,7 @@ def set_config(config):
     re-initialized with the new configuration (this will result in the next call to :func:`ldclient.get()`
     returning a new client instance).
 
-    :param string sdk_key: the new SDK key
+    :param ldclient.config.Config config: the client configuration
     """
     global __config
     global __client
@@ -93,7 +93,7 @@ def get():
     """Returns the shared SDK client instance, using the current global configuration.
 
     To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_sdk_key()` or
-    :func:`ldclient.set_config()` at startup time. Then `get()` will return the same shared
+    :func:`ldclient.set_config()` at startup time. Then ``get()`` will return the same shared
     :class:`ldclient.client.LDClient` instance each time. The client will be initialized if it has
     not been already.
 

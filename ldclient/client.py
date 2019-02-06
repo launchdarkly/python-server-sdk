@@ -71,10 +71,6 @@ class LDClient(object):
     def __init__(self, sdk_key=None, config=None, start_wait=5):
         """Constructs a new LDClient instance.
 
-        Rather than calling this constructor directly, you can call the `ldclient.set_sdk_key`,
-        `ldclient.set_config`, and `ldclient.get` functions to configure and use a singleton
-        client instance.
-
         :param string sdk_key: the SDK key for your LaunchDarkly environment
         :param ldclient.config.Config config: optional custom configuration
         :param float start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
@@ -203,7 +199,7 @@ class LDClient(object):
     def is_initialized(self):
         """Returns true if the client has successfully connected to LaunchDarkly.
 
-        :rype: bool
+        :rtype: bool
         """
         return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
