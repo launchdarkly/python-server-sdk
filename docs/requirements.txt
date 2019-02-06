@@ -1,4 +1,5 @@
 sphinx<2.0
+sphinx_rtd_theme
 
 backoff>=1.4.3
 certifi>=2018.4.16
