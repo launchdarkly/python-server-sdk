@@ -166,6 +166,10 @@ class LDClient(object):
     def track(self, event_name, user, data=None):
         """Tracks that a user performed an event.
 
+        LaunchDarkly automatically tracks pageviews and clicks that are specified in the Goals
+        section of the dashboard. This can be used to track custom goals or other events that do
+        not currently have goals.
+
         :param string event_name: the name of the event, which may correspond to a goal in A/B tests
         :param dict user: the attributes of the user
         :param data: optional additional data associated with the event
@@ -199,12 +203,17 @@ class LDClient(object):
     def is_initialized(self):
         """Returns true if the client has successfully connected to LaunchDarkly.
 
+        If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
+        It might still be in the process of starting up, or it might be attempting to reconnect after an
+        unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
+        and given up.
+
         :rtype: bool
         """
         return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
 
     def flush(self):
-        """Flushes all pending events.
+        """Flushes all pending analytics events.
 
         Normally, batches of events are delivered in the background at intervals determined by the
         ``flush_interval`` property of :class:`ldclient.config.Config`. Calling ``flush()``
@@ -400,7 +409,8 @@ class LDClient(object):
         return state
     
     def secure_mode_hash(self, user):
-        """Generates a hash value for a user, for use by the JavaScript SDK.
+        """Computes an HMAC signature of a user signed with the client's SDK key,
+        for use with the JavaScript SDK.
 
         For more information, see the JavaScript SDK Reference Guide on
         `Secure mode <https://github.com/launchdarkly/js-client#secure-mode>`_.

@@ -81,19 +81,21 @@ The SDK is tested with the most recent patch releases of Python 2.7, 3.3, 3.4, 3
 Database integrations
 ---------------------
 
-Feature flag data can be kept in a persistent store using Consul, DynamoDB, or Redis. These adapters are implemented in the `Consul`, `DynamoDB` and `Redis` classes in `ldclient.integrations`; to use them, call the `new_feature_store` method in the appropriate class, and put the returned object in the `feature_store` property of your client configuration. See [`ldclient.integrations`](https://github.com/launchdarkly/python-client-private/blob/master/ldclient/integrations.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store) for more information.
+Feature flag data can be kept in a persistent store using Consul, DynamoDB, or Redis. These adapters are implemented in the `Consul`, `DynamoDB` and `Redis` classes in `ldclient.integrations`; to use them, call the `new_feature_store` method in the appropriate class, and put the returned object in the `feature_store` property of your client configuration. See [`ldclient.integrations`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-integrations.html#module-ldclient.integrations) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store) for more information.
 
 Note that Consul is not supported in Python 3.3 or 3.4.
 
 Using flag data from a file
 ---------------------------
 
-For testing purposes, the SDK can be made to read feature flag state from a file or files instead of connecting to LaunchDarkly. See [`file_data_source.py`](https://github.com/launchdarkly/python-client/blob/master/ldclient/file_data_source.py) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/reading-flags-from-a-file) for more details.
+For testing purposes, the SDK can be made to read feature flag state from a file or files instead of connecting to LaunchDarkly. See [`ldclient.integrations.Files`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-integrations.html#ldclient.integrations.Files) and the [SDK reference guide](https://docs.launchdarkly.com/v2.0/docs/reading-flags-from-a-file) for more details.
 
 Learn more
------------
+----------
 
 Check out our [documentation](http://docs.launchdarkly.com) for in-depth instructions on configuring and using LaunchDarkly. You can also head straight to the [complete reference guide for this SDK](http://docs.launchdarkly.com/docs/python-sdk-reference).
+
+Generated API documentation is on [readthedocs.io](https://launchdarkly-python-sdk.readthedocs.io/en/latest/).
 
 Testing
 -------
@@ -116,16 +118,18 @@ About LaunchDarkly
     * Turn off a feature that you realize is causing performance problems in production, without needing to re-deploy, or even restart the application with a changed configuration file.
     * Grant access to certain features based on user attributes, like payment plan (eg: users on the ‘gold’ plan get access to more features than users in the ‘silver’ plan). Disable parts of your application to facilitate maintenance, without taking everything offline.
 * LaunchDarkly provides feature flag SDKs for
-    * [Java](http://docs.launchdarkly.com/docs/java-sdk-reference "Java SDK")
+    * [Java](http://docs.launchdarkly.com/docs/java-sdk-reference "LaunchDarkly Java SDK")
     * [JavaScript](http://docs.launchdarkly.com/docs/js-sdk-reference "LaunchDarkly JavaScript SDK")
     * [PHP](http://docs.launchdarkly.com/docs/php-sdk-reference "LaunchDarkly PHP SDK")
     * [Python](http://docs.launchdarkly.com/docs/python-sdk-reference "LaunchDarkly Python SDK")
     * [Go](http://docs.launchdarkly.com/docs/go-sdk-reference "LaunchDarkly Go SDK")
     * [Node.JS](http://docs.launchdarkly.com/docs/node-sdk-reference "LaunchDarkly Node SDK")
+    * [Electron](http://docs.launchdarkly.com/docs/electron-sdk-reference "LaunchDarkly Electron SDK")
     * [.NET](http://docs.launchdarkly.com/docs/dotnet-sdk-reference "LaunchDarkly .Net SDK")
     * [Ruby](http://docs.launchdarkly.com/docs/ruby-sdk-reference "LaunchDarkly Ruby SDK")
     * [iOS](http://docs.launchdarkly.com/docs/ios-sdk-reference "LaunchDarkly iOS SDK")
     * [Android](http://docs.launchdarkly.com/docs/android-sdk-reference "LaunchDarkly Android SDK")
+    * [C/C++](http://docs.launchdarkly.com/docs/c-sdk-reference "LaunchDarkly C/C++ SDK")
 * Explore LaunchDarkly
     * [launchdarkly.com](http://www.launchdarkly.com/ "LaunchDarkly Main Website") for more information
     * [docs.launchdarkly.com](http://docs.launchdarkly.com/  "LaunchDarkly Documentation") for our documentation and SDKs
