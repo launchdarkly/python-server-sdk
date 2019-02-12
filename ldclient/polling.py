@@ -1,3 +1,8 @@
+"""
+Default implementation of the polling component.
+"""
+# currently excluded from documentation - see docs/README.md
+
 from threading import Thread
 
 from ldclient.interfaces import UpdateProcessor

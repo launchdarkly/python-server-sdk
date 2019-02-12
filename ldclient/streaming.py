@@ -1,3 +1,8 @@
+"""
+Default implementation of the streaming component.
+"""
+# currently excluded from documentation - see docs/README.md
+
 from collections import namedtuple
 
 import json

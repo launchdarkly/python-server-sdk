@@ -3,6 +3,7 @@ pytest>=2.8
 redis>=2.10.5
 boto3>=1.9.71
 coverage>=4.4
+jsonpickle==0.9.3
 pytest-capturelog>=0.7
 pytest-cov>=2.4.0
 codeclimate-test-reporter>=0.2.1

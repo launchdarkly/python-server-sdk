@@ -1,7 +1,12 @@
+"""
+Implementation details of the analytics event delivery component.
+"""
+# currently excluded from documentation - see docs/README.md
+
 from collections import namedtuple
 from email.utils import parsedate
 import errno
-import jsonpickle
+import json
 from threading import Event, Lock, Thread
 import six
 import time
@@ -163,7 +168,7 @@ class EventPayloadSendTask(object):
     def _do_send(self, output_events):
         # noinspection PyBroadException
         try:
-            json_body = jsonpickle.encode(output_events, unpicklable=False)
+            json_body = json.dumps(output_events)
             log.debug('Sending events payload: ' + json_body)
             hdrs = _headers(self._config.sdk_key)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)

@@ -1,3 +1,8 @@
+"""
+Internal helper class for repeating tasks.
+"""
+# currently excluded from documentation - see docs/README.md
+
 from threading import Event, Thread
 
 class RepeatingTimer(object):

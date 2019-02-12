@@ -1,16 +1,22 @@
+"""
+This submodule contains interfaces for various components of the SDK.
+
+They may be useful in writing new implementations of these components, or for testing.
+"""
+
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 
 class FeatureStore(object):
     """
-    A versioned store for feature flags and related objects received from LaunchDarkly.
+    Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
     Implementations should permit concurrent access and updates.
 
-    An "object", for `FeatureStore`, is simply a dict of arbitrary data which must have at least
-    three properties: "key" (its unique key), "version" (the version number provided by
-    LaunchDarkly), and "deleted" (True if this is a placeholder for a deleted object).
+    An "object", for ``FeatureStore``, is simply a dict of arbitrary data which must have at least
+    three properties: ``key`` (its unique key), ``version`` (the version number provided by
+    LaunchDarkly), and ``deleted`` (True if this is a placeholder for a deleted object).
     
-    Delete and upsert requests are versioned-- if the version number in the request is less than
+    Delete and upsert requests are versioned: if the version number in the request is less than
     the currently stored version of the object, the request should be ignored.
     
     These semantics support the primary use case for the store, which synchronizes a collection
@@ -22,7 +28,7 @@ class FeatureStore(object):
     def get(self, kind, key, callback=lambda x: x):
         """
         Retrieves the object to which the specified key is mapped, or None if the key is not found
-        or the associated object has a "deleted" property of True. The retrieved object, if any (a
+        or the associated object has a ``deleted`` property of True. The retrieved object, if any (a
         dict) can be transformed by the specified callback.
 
         :param kind: The kind of object to get
@@ -97,11 +103,11 @@ class FeatureStore(object):
 
 class FeatureStoreCore(object):
     """
-    `FeatureStoreCore` is an interface for a simplified subset of the functionality of :class:`FeatureStore`,
-    to be used in conjunction with :class:`feature_store_helpers.CachingStoreWrapper`. This allows developers
-    developers of custom `FeatureStore` implementations to avoid repeating logic that would
+    Interface for a simplified subset of the functionality of :class:`FeatureStore`, to be used
+    in conjunction with :class:`ldclient.feature_store_helpers.CachingStoreWrapper`. This allows
+    developers of custom ``FeatureStore`` implementations to avoid repeating logic that would
     commonly be needed in any such implementation, such as caching. Instead, they can implement
-    only `FeatureStoreCore` and then create a `CachingStoreWrapper`.
+    only ``FeatureStoreCore`` and then create a ``CachingStoreWrapper``.
     """
     __metaclass__ = ABCMeta
 
@@ -174,10 +180,8 @@ class FeatureStoreCore(object):
         """
 
 
+# Internal use only. Common methods for components that perform a task in the background.
 class BackgroundOperation(object):
-    """
-    Performs a task in the background
-    """
 
     # noinspection PyMethodMayBeStatic
     def start(self):
@@ -203,20 +207,24 @@ class BackgroundOperation(object):
 
 class UpdateProcessor(BackgroundOperation):
     """
-    Responsible for retrieving Feature Flag updates from LaunchDarkly and saving them to the feature store
+    Interface for the component that obtains feature flag data in some way and passes it to a
+    :class:`FeatureStore`. The built-in implementations of this are the client's standard streaming
+    or polling behavior. For testing purposes, there is also :func:`ldclient.integrations.Files.new_data_source()`.
     """
     __metaclass__ = ABCMeta
 
     def initialized(self):
         """
         Returns whether the update processor has received feature flags and has initialized its feature store.
+
         :rtype: bool
         """
 
 
 class EventProcessor(object):
     """
-    Buffers analytics events and sends them to LaunchDarkly
+    Interface for the component that buffers analytics events and sends them to LaunchDarkly.
+    The default implementation can be replaced for testing purposes.
     """
     __metaclass__ = ABCMeta
 
@@ -231,7 +239,7 @@ class EventProcessor(object):
         """
         Specifies that any buffered events should be sent as soon as possible, rather than waiting
         for the next flush interval. This method is asynchronous, so events still may not be sent
-        until a later time. However, calling stop() will synchronously deliver any events that were
+        until a later time. However, calling ``stop()`` will synchronously deliver any events that were
         not yet delivered prior to shutting down.
         """
     
@@ -244,7 +252,8 @@ class EventProcessor(object):
 
 class FeatureRequester(object):
     """
-    Requests features.
+    Interface for the component that acquires feature flag data in polling mode. The default
+    implementation can be replaced for testing purposes.
     """
     __metaclass__ = ABCMeta
 
@@ -254,7 +263,7 @@ class FeatureRequester(object):
         """
         pass
 
-    def get_one(self, key):
+    def get_one(self, kind, key):
         """
         Gets one Feature flag
         :return:

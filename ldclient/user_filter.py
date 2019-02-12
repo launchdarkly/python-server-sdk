@@ -1,4 +1,8 @@
-import jsonpickle
+"""
+Internal helper class for filtering out private attributes.
+"""
+# currently excluded from documentation - see docs/README.md
+
 import six
 
 

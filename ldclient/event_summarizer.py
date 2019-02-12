@@ -1,3 +1,8 @@
+"""
+Implementation details of the analytics event delivery component.
+"""
+# currently excluded from documentation - see docs/README.md
+
 from collections import namedtuple
 
 

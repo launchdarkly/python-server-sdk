@@ -1,3 +1,8 @@
+"""
+General internal helper functions.
+"""
+# currently excluded from documentation - see docs/README.md
+
 import certifi
 import logging
 import sys

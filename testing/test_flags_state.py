@@ -58,6 +58,8 @@ def test_can_convert_to_json_string():
     str = state.to_json_string()
     assert json.loads(str) == obj
 
+# We don't actually use jsonpickle in the SDK, but FeatureFlagsState has a magic method that makes it
+# behave correctly in case the application uses jsonpickle to serialize it.
 def test_can_serialize_with_jsonpickle():
     state = FeatureFlagsState(True)
     flag1 = { 'key': 'key1', 'version': 100, 'offVariation': 0, 'variations': [ 'value1' ], 'trackEvents': False }

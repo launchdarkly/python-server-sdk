@@ -1,3 +1,7 @@
+"""
+The ldclient module contains the most common top-level entry points for the SDK.
+"""
+
 import logging
 
 from ldclient.rwlock import ReadWriteLock
@@ -20,12 +24,16 @@ __config = Config()
 __lock = ReadWriteLock()
 
 
-# 2 Use Cases:
-# 1. Initial setup: sets the config for the uninitialized client
-# 2. Allows on-the-fly changing of the config. When this function is called after the client has been initialized
-#    the client will get re-initialized with the new config. In order for this to work, the return value of
-#    ldclient.get() should never be assigned
 def set_config(config):
+    """Sets the configuration for the shared SDK client instance.
+
+    If this is called prior to :func:`ldclient.get()`, it stores the configuration that will be used when the
+    client is initialized. If it is called after the client has already been initialized, the client will be
+    re-initialized with the new configuration (this will result in the next call to :func:`ldclient.get()`
+    returning a new client instance).
+
+    :param ldclient.config.Config config: the client configuration
+    """
     global __config
     global __client
     global __lock
@@ -42,12 +50,18 @@ def set_config(config):
         __lock.unlock()
 
 
-# 2 Use Cases:
-# 1. Initial setup: sets the sdk key for the uninitialized client
-# 2. Allows on-the-fly changing of the sdk key. When this function is called after the client has been initialized
-#    the client will get re-initialized with the new sdk key. In order for this to work, the return value of
-#    ldclient.get() should never be assigned
 def set_sdk_key(sdk_key):
+    """Sets the SDK key for the shared SDK client instance.
+
+    If this is called prior to :func:`ldclient.get()`, it stores the SDK key that will be used when the client is
+    initialized. If it is called after the client has already been initialized, the client will be
+    re-initialized with the new SDK key (this will result in the next call to :func:`ldclient.get()` returning a
+    new client instance).
+
+    If you need to set any configuration options other than the SDK key, use :func:`ldclient.set_config()` instead.
+
+    :param string sdk_key: the new SDK key
+    """
     global __config
     global __client
     global __lock
@@ -76,6 +90,18 @@ def set_sdk_key(sdk_key):
 
 
 def get():
+    """Returns the shared SDK client instance, using the current global configuration.
+
+    To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_sdk_key()` or
+    :func:`ldclient.set_config()` at startup time. Then ``get()`` will return the same shared
+    :class:`ldclient.client.LDClient` instance each time. The client will be initialized if it has
+    not been already.
+
+    If you need to create multiple client instances with different configurations, instead of this
+    singleton approach you can call the :class:`ldclient.client.LDClient` constructor directly instead.
+
+    :rtype: ldclient.client.LDClient
+    """
     global __config
     global __client
     global __lock
@@ -96,8 +122,15 @@ def get():
         __lock.unlock()
 
 
-# Add a NullHandler for Python < 2.7 compatibility
+# currently hidden from documentation - see docs/README.md
 class NullHandler(logging.Handler):
+    """A :class:`logging.Handler` implementation that does nothing.
+
+    .. deprecated:: 6.0.0
+      You should not need to use this class. It was originally used in order to support Python 2.6,
+      which requires that at least one logging handler must always be configured. However, the SDK
+      no longer supports Python 2.6.
+    """
     def emit(self, record):
         pass
 

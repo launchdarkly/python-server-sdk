@@ -1,3 +1,11 @@
+"""
+This submodule contains basic classes related to the feature store.
+
+The feature store is the SDK component that holds the last known state of all feature flags, as
+received from LaunchDarkly. This submodule does not include specific integrations with external
+storage systems; those are in :class:`ldclient.integrations`.
+"""
+
 from collections import OrderedDict, defaultdict
 from ldclient.util import log
 from ldclient.interfaces import FeatureStore
@@ -16,10 +24,11 @@ class CacheConfig:
                  expiration = DEFAULT_EXPIRATION,
                  capacity = DEFAULT_CAPACITY):
         """Constructs an instance of CacheConfig.
-        :param float expiration: The cache TTL, in seconds. Items will be evicted from the cache after
+
+        :param float expiration: the cache TTL, in seconds. Items will be evicted from the cache after
           this amount of time from the time when they were originally cached. If the time is less than or
           equal to zero, caching is disabled.
-        :param int capacity: The maximum number of items that can be in the cache at a time.
+        :param int capacity: the maximum number of items that can be in the cache at a time
         """
         self._expiration = expiration
         self._capacity = capacity
@@ -28,41 +37,58 @@ class CacheConfig:
     def default():
         """Returns an instance of CacheConfig with default properties. By default, caching is enabled.
         This is the same as calling the constructor with no parameters.
-        :rtype: CacheConfig
+
+        :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig()
     
     @staticmethod
     def disabled():
         """Returns an instance of CacheConfig specifying that caching should be disabled.
-        :rtype: CacheConfig
+        
+        :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig(expiration = 0)
     
     @property
     def enabled(self):
+        """Returns True if caching is enabled in this configuration.
+
+        :rtype: bool
+        """
         return self._expiration > 0
     
     @property
     def expiration(self):
+        """Returns the configured cache TTL, in seconds.
+
+        :rtype: float
+        """
         return self._expiration
     
     @property
     def capacity(self):
+        """Returns the configured maximum number of cacheable items.
+
+        :rtype: int
+        """
         return self._capacity
 
 
 class InMemoryFeatureStore(FeatureStore):
-    """
-    In-memory implementation of a store that holds feature flags and related data received from the streaming API.
+    """The default feature store implementation, which holds all data in a thread-safe data structure in memory.
     """
 
     def __init__(self):
+        """Constructs an instance of InMemoryFeatureStore.
+        """
         self._lock = ReadWriteLock()
         self._initialized = False
         self._items = defaultdict(dict)
 
     def get(self, kind, key, callback):
+        """
+        """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -78,6 +104,8 @@ class InMemoryFeatureStore(FeatureStore):
             self._lock.runlock()
 
     def all(self, kind, callback):
+        """
+        """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -86,6 +114,8 @@ class InMemoryFeatureStore(FeatureStore):
             self._lock.runlock()
 
     def init(self, all_data):
+        """
+        """
         try:
             self._lock.rlock()
             self._items.clear()
@@ -98,6 +128,8 @@ class InMemoryFeatureStore(FeatureStore):
 
     # noinspection PyShadowingNames
     def delete(self, kind, key, version):
+        """
+        """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -109,6 +141,8 @@ class InMemoryFeatureStore(FeatureStore):
             self._lock.runlock()
 
     def upsert(self, kind, item):
+        """
+        """
         key = item['key']
         try:
             self._lock.rlock()
@@ -122,6 +156,8 @@ class InMemoryFeatureStore(FeatureStore):
 
     @property
     def initialized(self):
+        """
+        """
         try:
             self._lock.rlock()
             return self._initialized

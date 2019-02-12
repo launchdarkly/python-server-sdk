@@ -1,3 +1,10 @@
+"""
+Server-Sent Events implementation for streaming.
+
+Based on: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
+"""
+# currently excluded from documentation - see docs/README.md
+
 import re
 import time
 import warnings
@@ -8,8 +15,6 @@ import urllib3
 
 from ldclient.util import create_http_pool_manager
 from ldclient.util import throw_if_unsuccessful_response
-
-# Inspired by: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
 
 # Technically, we should support streams that mix line endings.  This regex,
 # however, assumes that a system will provide consistent line endings.

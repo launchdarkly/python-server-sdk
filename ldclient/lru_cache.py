@@ -1,13 +1,13 @@
-'''
-A dictionary-based cache that removes the oldest entries when its limit is exceeded.
-Values are only refreshed by writing, not by reading. Not thread-safe.
-'''
+"""
+Internal helper class for caching.
+"""
+# currently excluded from documentation - see docs/README.md
 
 from collections import OrderedDict
 
 
 # Backport of Python 3.2 move_to_end method which doesn't exist in 2.7
-class OrderedDictWithReordering(OrderedDict):
+class _OrderedDictWithReordering(OrderedDict):
     if not hasattr(OrderedDict, 'move_to_end'):
         # backport of Python 3.2 logic
         def move_to_end(self, key, last=True):
@@ -28,9 +28,12 @@ class OrderedDictWithReordering(OrderedDict):
 
 
 class SimpleLRUCache(object):
+    """A dictionary-based cache that removes the oldest entries when its limit is exceeded.
+    Values are only refreshed by writing, not by reading. Not thread-safe.
+    """
     def __init__(self, capacity):
         self.capacity = capacity
-        self.cache = OrderedDictWithReordering()
+        self.cache = _OrderedDictWithReordering()
 
     def get(self, key):
         return self.cache.get(key)
