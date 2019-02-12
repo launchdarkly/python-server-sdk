@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.8.3] - 2019-02-12
+
+Note that starting with this release, generated API documentation is available online at [https://launchdarkly-python-sdk.readthedocs.io](https://launchdarkly-python-sdk.readthedocs.io). This is published automatically from the documentation comments in the code.
+
+### Changed:
+- The SDK no longer uses `jsonpickle`.
+- The CI test suite for all supported Python versions, which previously only ran in Linux, has been extended to include Python 3.6 in Windows.
+
+### Fixed:
+- Corrected and expanded many documentation comments. All public API methods (not including internal implementation details) are now documented.
+
 ## [6.8.2] - 2019-01-31
 ### Fixed:
 - Fixed a _different_ packaging error that was still present in the 6.8.1 release, which made the package installable but caused imports to fail. The 6.8.1 release has been pulled from PyPI. We apologize for these recent errors, which were not detected prior to release because our prerelease testing was using the source code directly rather than installing it with `pip`. Our CI tests have been updated and should prevent this in the future.
