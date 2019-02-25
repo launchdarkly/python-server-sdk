@@ -235,6 +235,41 @@ def test_event_for_existing_feature_with_tracked_rule():
         e.get('debugEventsUntilDate') is None)
 
 
+def test_event_for_existing_feature_with_untracked_rule():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [
+            {
+                'clauses': [
+                    { 'attribute': 'key', 'op': 'in', 'values': [ user['key'] ] }
+                ],
+                'variation': 0,
+                'trackEvents': False,
+                'id': 'rule_id'
+            }
+        ],
+        'variations': [ 'value' ]
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e.get('reason') is None and
+        e['default'] == 'default' and
+        e.get('trackEvents', False) == False and
+        e.get('debugEventsUntilDate') is None)
+
+
 def test_event_for_existing_feature_with_tracked_fallthrough():
     feature = {
         'key': 'feature.key',
@@ -260,6 +295,34 @@ def test_event_for_existing_feature_with_tracked_fallthrough():
         e['reason'] == { 'kind': 'FALLTHROUGH' } and
         e['default'] == 'default' and
         e['trackEvents'] == True and
+        e.get('debugEventsUntilDate') is None)
+
+
+def test_event_for_existing_feature_with_untracked_fallthrough():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [],
+        'fallthrough': { 'variation': 0 },
+        'variations': [ 'value' ],
+        'trackEventsFallthrough': False
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e.get('reason') is None and
+        e['default'] == 'default' and
+        e.get('trackEvents', False) == False and
         e.get('debugEventsUntilDate') is None)
 
 
