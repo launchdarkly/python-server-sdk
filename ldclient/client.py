@@ -180,7 +180,7 @@ class LDClient(object):
         self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling track().")
-        self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        self._send_event(self._event_factory_default.new_custom_event(event_name, user, data))
 
     def identify(self, user):
         """Registers the user.
@@ -194,7 +194,7 @@ class LDClient(object):
         self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling identify().")
-        self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
+        self._send_event(self._event_factory_default.new_identify_event(user))
 
     def is_offline(self):
         """Returns true if the client is in offline mode.

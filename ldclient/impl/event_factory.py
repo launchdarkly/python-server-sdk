@@ -2,6 +2,10 @@
 # Event constructors are centralized here to avoid mistakes and repetitive logic.
 # The LDClient owns two instances of _EventFactory: one that always embeds evaluation reasons
 # in the events (for when variation_detail is called) and one that doesn't.
+#
+# Note that none of these methods fill in the "creationDate" property, because in the Python
+# client, that is done by DefaultEventProcessor.send_event().
+
 class _EventFactory(object):
     def __init__(self, with_reasons):
         self._with_reasons = with_reasons
@@ -58,6 +62,21 @@ class _EventFactory(object):
             e['reason'] = reason
         return e
     
+    def new_identify_event(self, user):
+        return {
+            'kind': 'identify',
+            'key': user.get('key'),
+            'user': user
+        }
+
+    def new_custom_event(self, event_name, user, data):
+        return {
+            'kind': 'custom',
+            'key': event_name,
+            'user': user,
+            'data': data
+        }
+
     def _is_experiment(self, flag, reason):
         if reason is not None:
             kind = reason['kind']
