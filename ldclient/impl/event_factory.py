@@ -29,7 +29,6 @@ class _EventFactory(object):
         return e
     
     def new_default_event(self, flag, user, default_value, reason):
-        add_experiment_data = self._is_experiment(flag, reason)
         e = {
             'kind': 'feature',
             'key': flag.get('key'),
@@ -39,11 +38,11 @@ class _EventFactory(object):
             'version': flag.get('version')
         }
         # the following properties are handled separately so we don't waste bandwidth on unused keys
-        if add_experiment_data or flag.get('trackEvents', False):
+        if flag.get('trackEvents', False):
             e['trackEvents'] = True
         if flag.get('debugEventsUntilDate', None):
             e['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
-        if add_experiment_data or self._with_reasons:
+        if self._with_reasons:
             e['reason'] = reason
         return e
     
