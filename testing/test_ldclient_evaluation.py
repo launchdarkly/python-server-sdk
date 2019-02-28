@@ -123,7 +123,7 @@ def test_variation_detail_when_user_is_none():
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
     assert expected == client.variation_detail('feature.key', None, default='default')
 
-def test_variation_when_user_has_no_key():
+def test_variation_detail_when_user_has_no_key():
     feature = make_off_flag_with_value('feature.key', 'value')
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})

@@ -200,6 +200,132 @@ def test_event_for_existing_feature_with_reason():
         e['debugEventsUntilDate'] == 1000)
 
 
+def test_event_for_existing_feature_with_tracked_rule():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [
+            {
+                'clauses': [
+                    { 'attribute': 'key', 'op': 'in', 'values': [ user['key'] ] }
+                ],
+                'variation': 0,
+                'trackEvents': True,
+                'id': 'rule_id'
+            }
+        ],
+        'variations': [ 'value' ]
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e['reason'] == { 'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'rule_id' } and
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e.get('debugEventsUntilDate') is None)
+
+
+def test_event_for_existing_feature_with_untracked_rule():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [
+            {
+                'clauses': [
+                    { 'attribute': 'key', 'op': 'in', 'values': [ user['key'] ] }
+                ],
+                'variation': 0,
+                'trackEvents': False,
+                'id': 'rule_id'
+            }
+        ],
+        'variations': [ 'value' ]
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e.get('reason') is None and
+        e['default'] == 'default' and
+        e.get('trackEvents', False) == False and
+        e.get('debugEventsUntilDate') is None)
+
+
+def test_event_for_existing_feature_with_tracked_fallthrough():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [],
+        'fallthrough': { 'variation': 0 },
+        'variations': [ 'value' ],
+        'trackEventsFallthrough': True
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e['reason'] == { 'kind': 'FALLTHROUGH' } and
+        e['default'] == 'default' and
+        e['trackEvents'] == True and
+        e.get('debugEventsUntilDate') is None)
+
+
+def test_event_for_existing_feature_with_untracked_fallthrough():
+    feature = {
+        'key': 'feature.key',
+        'version': 100,
+        'salt': u'',
+        'on': True,
+        'rules': [],
+        'fallthrough': { 'variation': 0 },
+        'variations': [ 'value' ],
+        'trackEventsFallthrough': False
+    }
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature['key']: feature}})
+    client = make_client(store)
+    assert 'value' == client.variation(feature['key'], user, default='default')
+    e = get_first_event(client)
+    assert (e['kind'] == 'feature' and
+        e['key'] == feature['key'] and
+        e['user'] == user and
+        e['version'] == feature['version'] and
+        e['value'] == 'value' and
+        e['variation'] == 0 and
+        e.get('reason') is None and
+        e['default'] == 'default' and
+        e.get('trackEvents', False) == False and
+        e.get('debugEventsUntilDate') is None)
+
+
 def test_event_for_unknown_feature():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {}})
@@ -210,7 +336,7 @@ def test_event_for_unknown_feature():
         e['key'] == 'feature.key' and
         e['user'] == user and
         e['value'] == 'default' and
-        e['variation'] == None and
+        e.get('variation') is None and
         e['default'] == 'default')
 
 
@@ -228,7 +354,7 @@ def test_event_for_existing_feature_with_no_user():
         e['user'] == None and
         e['version'] == feature['version'] and
         e['value'] == 'default' and
-        e['variation'] == None and
+        e.get('variation') is None and
         e['default'] == 'default' and
         e['trackEvents'] == True and
         e['debugEventsUntilDate'] == 1000)
@@ -249,7 +375,7 @@ def test_event_for_existing_feature_with_no_user_key():
         e['user'] == bad_user and
         e['version'] == feature['version'] and
         e['value'] == 'default' and
-        e['variation'] == None and
+        e.get('variation') is None and
         e['default'] == 'default' and
         e['trackEvents'] == True and
         e['debugEventsUntilDate'] == 1000)
