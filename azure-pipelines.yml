@@ -49,7 +49,6 @@ jobs:
           workingDirectory: $(System.DefaultWorkingDirectory)
           script: |
             python --version
-            pip install setuptools
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
