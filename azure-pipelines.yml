@@ -38,6 +38,10 @@ jobs:
             cd redis
             ./redis-server --service-install
             ./redis-server --service-start
+      - task: UsePythonVersion@0
+        inputs:
+            versionSpec: '2.7'
+            addToPath: true
       - task: PowerShell@2
         displayName: 'Setup SDK and Test'
         inputs:
@@ -45,9 +49,9 @@ jobs:
           workingDirectory: $(System.DefaultWorkingDirectory)
           script: |
             python --version
-            python -m pip install setuptools
-            python -m pip install -r test-requirements.txt
-            python -m pip install -r consul-requirements.txt
+            pip install setuptools
+            pip install -r test-requirements.txt
+            pip install -r consul-requirements.txt
             python setup.py install
             mkdir test-reports
             python -m pytest -s --junitxml=test-reports/junit.xml testing;
