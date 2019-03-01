@@ -49,4 +49,4 @@ jobs:
             pip install -r consul-requirements.txt
             python setup.py install
             mkdir test-reports
-            pytest -s --junitxml=test-reports/junit.xml testing;
+            python -m pytest -s --junitxml=test-reports/junit.xml testing;
