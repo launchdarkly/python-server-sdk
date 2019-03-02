@@ -52,7 +52,7 @@ jobs:
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
-            mkdir test-reports
+            mkdir test-reports27
             python -m pytest -s --junitxml=test-reports27/junit.xml testing;
       - task: UsePythonVersion@0
         inputs:
@@ -68,5 +68,5 @@ jobs:
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
-            mkdir test-reports
+            mkdir test-reports37
             python -m pytest -s --junitxml=test-reports37/junit.xml testing;
