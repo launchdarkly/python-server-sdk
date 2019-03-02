@@ -38,8 +38,12 @@ jobs:
             cd redis
             ./redis-server --service-install
             ./redis-server --service-start
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '2.7'
+          addToPath: true
       - task: PowerShell@2
-        displayName: 'Setup SDK and Test'
+        displayName: 'Setup SDK and Test 2.7'
         inputs:
           targetType: inline
           workingDirectory: $(System.DefaultWorkingDirectory)
@@ -48,5 +52,33 @@ jobs:
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
-            mkdir test-reports
-            pytest -s --junitxml=test-reports/junit.xml testing;
+            mkdir test-reports27
+            python -m pytest -s --junitxml=test-reports27/junit.xml testing;
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.7'
+          addToPath: true
+      - task: PowerShell@2
+        displayName: 'Setup SDK and Test 3.7'
+        inputs:
+          targetType: inline
+          workingDirectory: $(System.DefaultWorkingDirectory)
+          script: |
+            python --version
+            pip install -r test-requirements.txt
+            pip install -r consul-requirements.txt
+            python setup.py install
+            mkdir test-reports37
+            python -m pytest -s --junitxml=test-reports37/junit.xml testing;
+      - task: CopyFiles@2
+        inputs:
+          targetFolder: $(Build.ArtifactStagingDirectory)/test-reports27
+          sourceFolder: $(System.DefaultWorkingDirectory)/test-reports27
+      - task: CopyFiles@2
+        inputs:
+          targetFolder: $(Build.ArtifactStagingDirectory)/test-reports37
+          sourceFolder: $(System.DefaultWorkingDirectory)/test-reports37
+      - task: PublishBuildArtifacts@1
+        inputs:
+          pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          artifactName: reports
