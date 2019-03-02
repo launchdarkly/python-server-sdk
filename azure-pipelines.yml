@@ -70,3 +70,15 @@ jobs:
             python setup.py install
             mkdir test-reports37
             python -m pytest -s --junitxml=test-reports37/junit.xml testing;
+      - task: CopyFiles@2
+        inputs:
+          targetFolder: $(Build.ArtifactStagingDirectory)/test-reports27
+          sourceFolder: $(System.DefaultWorkingDirectory)/test-reports27
+      - task: CopyFiles@2
+        inputs:
+          targetFolder: $(Build.ArtifactStagingDirectory)/test-reports37
+          sourceFolder: $(System.DefaultWorkingDirectory)/test-reports37
+      - task: PublishBuildArtifacts@1
+        inputs:
+          pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          artifactName: reports
