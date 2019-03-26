@@ -136,7 +136,7 @@ def test_loads_flags_on_start_from_json():
 
 def test_loads_flags_on_start_from_yaml():
     if not have_yaml:
-        return
+        pytest.skip("skipping file source test with YAML because pyyaml isn't available")
     path = make_temp_file(all_properties_yaml)
     try:
         source = make_data_source(paths = path)
