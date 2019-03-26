@@ -17,6 +17,9 @@ test-template: &test-template
         command: |
           sudo pip install --upgrade pip virtualenv;
           sudo pip install -r test-requirements.txt;
+          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
+            sudo pip install -r test-filesource-optional-requirements.txt;
+          fi;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
             sudo pip install -r consul-requirements.txt;
           fi;
