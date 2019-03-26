@@ -7,4 +7,3 @@ jsonpickle==0.9.3
 pytest-capturelog>=0.7
 pytest-cov>=2.4.0
 codeclimate-test-reporter>=0.2.1
-watchdog>=0.9
