@@ -50,7 +50,15 @@ def make_off_flag_with_value(key, value):
 
 
 def get_first_event(c):
-    return c._event_processor._events.pop(0)
+    e = c._event_processor._events.pop(0)
+    c._event_processor._events = []
+    return e
+
+
+def count_events(c):
+    n = len(c._event_processor._events)
+    c._event_processor._events = []
+    return n
 
 
 def test_ctor_both_sdk_keys_set():
@@ -78,11 +86,31 @@ def test_identify():
     assert e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
 
 
+def test_identify_no_user():
+    client.identify(None)
+    assert count_events(client) == 0
+
+
+def test_identify_no_user_key():
+    client.identify({ 'name': 'nokey' })
+    assert count_events(client) == 0
+
+
 def test_track():
     client.track('my_event', user, 42)
 
     e = get_first_event(client)
     assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
+
+
+def test_track_no_user():
+    client.track('my_event', None)
+    assert count_events(client) == 0
+
+
+def test_track_no_user_key():
+    client.track('my_event', { 'name': 'nokey' })
+    assert count_events(client) == 0
 
 
 def test_defaults():
