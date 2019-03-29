@@ -12,6 +12,13 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.integrations import Files
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
+have_yaml = False
+try:
+    import yaml
+    have_yaml = True
+except ImportError:
+    pass
+
 
 all_flag_keys = [ 'flag1', 'flag2' ]
 all_properties_json = '''
@@ -128,6 +135,8 @@ def test_loads_flags_on_start_from_json():
         os.remove(path)
 
 def test_loads_flags_on_start_from_yaml():
+    if not have_yaml:
+        pytest.skip("skipping file source test with YAML because pyyaml isn't available")
     path = make_temp_file(all_properties_yaml)
     try:
         source = make_data_source(paths = path)
