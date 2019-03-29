@@ -5,6 +5,7 @@ General internal helper functions.
 
 import certifi
 import logging
+import six
 import sys
 import urllib3
 
@@ -111,3 +112,16 @@ def http_error_message(status, context, retryable_message = "will retry"):
         context,
         retryable_message if is_http_error_recoverable(status) else "giving up permanently"
         )
+
+
+def stringify_attrs(attrdict, attrs):
+    if attrdict is None:
+        return None
+    newdict = None
+    for attr in attrs:
+        val = attrdict.get(attr)
+        if val is not None and not isinstance(val, six.string_types):
+            if newdict is None:
+                newdict = attrdict.copy()
+            newdict[attr] = str(val)
+    return attrdict if newdict is None else newdict

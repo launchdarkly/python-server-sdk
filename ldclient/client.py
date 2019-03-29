@@ -174,10 +174,10 @@ class LDClient(object):
         :param dict user: the attributes of the user
         :param data: optional additional data associated with the event
         """
-        self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling track().")
-        self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
+        else:
+            self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
     def identify(self, user):
         """Registers the user.
@@ -188,10 +188,10 @@ class LDClient(object):
 
         :param dict user: attributes of the user to register
         """
-        self._sanitize_user(user)
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling identify().")
-        self._send_event({'kind': 'identify', 'key': user.get('key'), 'user': user})
+        else:
+            self._send_event({'kind': 'identify', 'key': str(user.get('key')), 'user': user})
 
     def is_offline(self):
         """Returns true if the client is in offline mode.
@@ -266,9 +266,6 @@ class LDClient(object):
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
         
-        if user is not None:
-            self._sanitize_user(user)
-
         def send_event(value, variation=None, flag=None, reason=None):
             self._send_event({'kind': 'feature', 'key': key, 'user': user,
                               'value': value, 'variation': variation, 'default': default,
@@ -422,11 +419,6 @@ class LDClient(object):
         if user.get('key') is None or self._config.sdk_key is None:
             return ""
         return hmac.new(self._config.sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
-
-    @staticmethod
-    def _sanitize_user(user):
-        if 'key' in user:
-            user['key'] = str(user['key'])
 
 
 __all__ = ['LDClient', 'Config']

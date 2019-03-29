@@ -29,25 +29,6 @@ user = {
     }
 }
 
-numeric_key_user = {}
-
-sanitized_numeric_key_user = {
-    u'key': '33',
-    u'custom': {
-        u'bizzle': u'def'
-    }
-}
-
-
-def setup_function(function):
-    global numeric_key_user
-    numeric_key_user = {
-        u'key': 33,
-        u'custom': {
-            u'bizzle': u'def'
-        }
-    }
-
 
 def make_client(store):
     return LDClient(config=Config(sdk_key = 'SDK_KEY',
@@ -69,7 +50,15 @@ def make_off_flag_with_value(key, value):
 
 
 def get_first_event(c):
-    return c._event_processor._events.pop(0)
+    e = c._event_processor._events.pop(0)
+    c._event_processor._events = []
+    return e
+
+
+def count_events(c):
+    n = len(c._event_processor._events)
+    c._event_processor._events = []
+    return n
 
 
 def test_ctor_both_sdk_keys_set():
@@ -90,11 +79,6 @@ def test_toggle_offline():
     assert offline_client.variation('feature.key', user, default=None) is None
 
 
-def test_sanitize_user():
-    client._sanitize_user(numeric_key_user)
-    assert numeric_key_user == sanitized_numeric_key_user
-
-
 def test_identify():
     client.identify(user)
 
@@ -102,11 +86,14 @@ def test_identify():
     assert e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
 
 
-def test_identify_numeric_key_user():
-    client.identify(numeric_key_user)
+def test_identify_no_user():
+    client.identify(None)
+    assert count_events(client) == 0
 
-    e = get_first_event(client)
-    assert e['kind'] == 'identify' and e['key'] == '33' and e['user'] == sanitized_numeric_key_user
+
+def test_identify_no_user_key():
+    client.identify({ 'name': 'nokey' })
+    assert count_events(client) == 0
 
 
 def test_track():
@@ -116,12 +103,14 @@ def test_track():
     assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
 
 
-def test_track_numeric_key_user():
-    client.track('my_event', numeric_key_user, 42)
+def test_track_no_user():
+    client.track('my_event', None)
+    assert count_events(client) == 0
 
-    e = get_first_event(client)
-    assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == sanitized_numeric_key_user \
-       and e['data'] == 42
+
+def test_track_no_user_key():
+    client.track('my_event', { 'name': 'nokey' })
+    assert count_events(client) == 0
 
 
 def test_defaults():
