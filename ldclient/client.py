@@ -266,9 +266,6 @@ class LDClient(object):
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
         
-        if user is not None:
-            self._sanitize_user(user)
-
         def send_event(value, variation=None, flag=None, reason=None):
             self._send_event({'kind': 'feature', 'key': key, 'user': user,
                               'value': value, 'variation': variation, 'default': default,
@@ -422,11 +419,6 @@ class LDClient(object):
         if user.get('key') is None or self._config.sdk_key is None:
             return ""
         return hmac.new(self._config.sdk_key.encode(), user.get('key').encode(), hashlib.sha256).hexdigest()
-
-    @staticmethod
-    def _sanitize_user(user):
-        if 'key' in user:
-            user['key'] = str(user['key'])
 
 
 __all__ = ['LDClient', 'Config']
