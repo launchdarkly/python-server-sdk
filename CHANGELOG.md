@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.8.4] - 2019-03-29
+### Fixed:
+- Setting user attributes to non-string values when a string was expected would cause analytics events not to be processed. Also, in the case of the "secondary" attribute, this could cause evaluations to fail for a flag with a percentage rollout. The SDK will now convert attribute values to strings as needed. ([#115](https://github.com/launchdarkly/python-client/issues/115))
+- If `track` or `identify` is called without a user, the SDK now logs a warning, and does not send an analytics event to LaunchDarkly (since it would not be processed without a user).
+
 ## [6.8.3] - 2019-02-12
 
 Note that starting with this release, generated API documentation is available online at [https://launchdarkly-python-sdk.readthedocs.io](https://launchdarkly-python-sdk.readthedocs.io). This is published automatically from the documentation comments in the code.
