@@ -17,6 +17,36 @@ filtered_user = {
     'key': 'userkey',
     'privateAttrs': [ 'name' ]
 }
+numeric_user = {
+    'key': 1,
+    'secondary': 2,
+    'ip': 3,
+    'country': 4,
+    'email': 5,
+    'firstName': 6,
+    'lastName': 7,
+    'avatar': 8,
+    'name': 9,
+    'anonymous': False,
+    'custom': {
+        'age': 99
+    }
+}
+stringified_numeric_user = {
+    'key': '1',
+    'secondary': '2',
+    'ip': '3',
+    'country': '4',
+    'email': '5',
+    'firstName': '6',
+    'lastName': '7',
+    'avatar': '8',
+    'name': '9',
+    'anonymous': False,
+    'custom': {
+        'age': 99
+    }
+}
 
 ep = None
 mock_http = None
@@ -65,6 +95,21 @@ def test_user_is_filtered_in_identify_event():
         'user': filtered_user
     }]
 
+def test_user_attrs_are_stringified_in_identify_event():
+    setup_processor(Config())
+
+    e = { 'kind': 'identify', 'user': numeric_user }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 1
+    assert output == [{
+        'kind': 'identify',
+        'creationDate': e['creationDate'],
+        'key': stringified_numeric_user['key'],
+        'user': stringified_numeric_user
+    }]
+
 def test_individual_feature_event_is_queued_with_index_event():
     setup_processor(Config())
 
@@ -95,6 +140,21 @@ def test_user_is_filtered_in_index_event():
     check_feature_event(output[1], e, False, None)
     check_summary_event(output[2])
 
+def test_user_attrs_are_stringified_in_index_event():
+    setup_processor(Config())
+
+    e = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': numeric_user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+    }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 3
+    check_index_event(output[0], e, stringified_numeric_user)
+    check_feature_event(output[1], e, False, None)
+    check_summary_event(output[2])
+
 def test_feature_event_can_contain_inline_user():
     setup_processor(Config(inline_users_in_events = True))
 
@@ -121,6 +181,20 @@ def test_user_is_filtered_in_feature_event():
     output = flush_and_get_events()
     assert len(output) == 2
     check_feature_event(output[0], e, False, filtered_user)
+    check_summary_event(output[1])
+
+def test_user_attrs_are_stringified_in_feature_event():
+    setup_processor(Config(inline_users_in_events = True))
+
+    e = {
+        'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': numeric_user,
+        'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+    }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 2
+    check_feature_event(output[0], e, False, stringified_numeric_user)
     check_summary_event(output[1])
 
 def test_index_event_is_still_generated_if_inline_users_is_true_but_feature_event_is_not_tracked():
@@ -346,6 +420,16 @@ def test_user_is_filtered_in_custom_event():
     assert len(output) == 1
     check_custom_event(output[0], e, filtered_user)
 
+def test_user_attrs_are_stringified_in_custom_event():
+    setup_processor(Config(inline_users_in_events = True))
+
+    e = { 'kind': 'custom', 'key': 'eventkey', 'user': numeric_user, 'data': { 'thing': 'stuff '} }
+    ep.send_event(e)
+
+    output = flush_and_get_events()
+    assert len(output) == 1
+    check_custom_event(output[0], e, stringified_numeric_user)
+
 def test_nothing_is_sent_if_there_are_no_events():
     setup_processor(Config())
     ep.flush()
@@ -426,7 +510,7 @@ def check_feature_event(data, source, debug, inline_user):
     assert data.get('value') == source.get('value')
     assert data.get('default') == source.get('default')
     if inline_user is None:
-        assert data['userKey'] == source['user']['key']
+        assert data['userKey'] == str(source['user']['key'])
     else:
         assert data['user'] == inline_user
 
