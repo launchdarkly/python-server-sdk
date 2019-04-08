@@ -157,6 +157,8 @@ class LDClient(object):
             return
         if self._event_processor:
             self._event_processor.stop()
+        if self._config.use_ldd:
+            return
         if self._update_processor and self._update_processor.is_alive():
             self._update_processor.stop()
 
