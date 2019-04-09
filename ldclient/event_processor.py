@@ -37,26 +37,6 @@ __CURRENT_EVENT_SCHEMA__ = 3
 __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__ = [ "key", "secondary", "ip", "country", "email", "firstName", "lastName", "avatar", "name" ]
 
 
-class NullEventProcessor(EventProcessor):
-    def __init__(self):
-        pass
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def is_alive(self):
-        return False
-
-    def send_event(self, event):
-        pass
-
-    def flush(self):
-        pass
-
-
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
