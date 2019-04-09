@@ -124,7 +124,7 @@ class LDClient(object):
     def _make_update_processor(self, config, store, ready):
         if config.update_processor_class:
             log.info("Using user-specified update processor: " + str(config.update_processor_class))
-            return self._config.update_processor_class(config, store, ready)
+            return config.update_processor_class(config, store, ready)
 
         if config.offline or config.use_ldd:
             return NullUpdateProcessor(config, store, ready)
