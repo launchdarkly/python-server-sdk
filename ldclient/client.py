@@ -8,11 +8,11 @@ import threading
 import traceback
 
 from ldclient.config import Config as Config
-from ldclient.event_processor import NullEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
+from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.interfaces import FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
@@ -94,51 +94,53 @@ class LDClient(object):
         self._store = _FeatureStoreClientWrapper(self._config.feature_store)
         """ :type: FeatureStore """
 
-        if self._config.offline or not self._config.send_events:
-            self._event_processor = NullEventProcessor()
-        else:
-            self._event_processor = self._config.event_processor_class(self._config)
-
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
-            return
 
         if self._config.use_ldd:
             log.info("Started LaunchDarkly Client in LDD mode")
-            return
+
+        self._event_processor = self._make_event_processor(self._config)
 
         update_processor_ready = threading.Event()
-
-        if self._config.update_processor_class:
-            log.info("Using user-specified update processor: " + str(self._config.update_processor_class))
-            self._update_processor = self._config.update_processor_class(
-                self._config, self._store, update_processor_ready)
-        else:
-            if self._config.feature_requester_class:
-                feature_requester = self._config.feature_requester_class(self._config)
-            else:
-                feature_requester = FeatureRequesterImpl(self._config)
-            """ :type: FeatureRequester """
-
-            if self._config.stream:
-                self._update_processor = StreamingUpdateProcessor(
-                    self._config, feature_requester, self._store, update_processor_ready)
-            else:
-                log.info("Disabling streaming API")
-                log.warn("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
-                self._update_processor = PollingUpdateProcessor(
-                    self._config, feature_requester, self._store, update_processor_ready)
-        """ :type: UpdateProcessor """
-
+        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready)
         self._update_processor.start()
-        log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
-        update_processor_ready.wait(start_wait)
+
+        if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
+            log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
+            update_processor_ready.wait(start_wait)
 
         if self._update_processor.initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warn("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
+
+    def _make_event_processor(self, config):
+        if config.offline or not config.send_events:
+            return NullEventProcessor()
+        return config.event_processor_class(config)
+
+    def _make_update_processor(self, config, store, ready):
+        if config.update_processor_class:
+            log.info("Using user-specified update processor: " + str(config.update_processor_class))
+            return config.update_processor_class(config, store, ready)
+
+        if config.offline or config.use_ldd:
+            return NullUpdateProcessor(config, store, ready)
+        
+        if config.feature_requester_class:
+            feature_requester = config.feature_requester_class(config)
+        else:
+            feature_requester = FeatureRequesterImpl(config)
+        """ :type: FeatureRequester """
+
+        if config.stream:
+            return StreamingUpdateProcessor(config, feature_requester, store, ready)
+
+        log.info("Disabling streaming API")
+        log.warn("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
+        return PollingUpdateProcessor(config, feature_requester, store, ready)
 
     def get_sdk_key(self):
         """Returns the configured SDK key.
@@ -153,13 +155,16 @@ class LDClient(object):
         Do not attempt to use the client after calling this method.
         """
         log.info("Closing LaunchDarkly client..")
-        if self.is_offline():
-            return
-        if self._event_processor:
-            self._event_processor.stop()
-        if self._update_processor and self._update_processor.is_alive():
-            self._update_processor.stop()
+        self._event_processor.stop()
+        self._update_processor.stop()
 
+    # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        self.close()
+    
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
