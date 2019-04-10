@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.9.0] - 2019-04-09
+### Added:
+- It is now possible to use the `with` statement on an LDClient object, so that `close()` will be called automatically when it goes out of scope.
+
+### Fixed:
+- Calling `close()` on the client would cause an error if the configuration included `use_ldd=True`. ([#118](https://github.com/launchdarkly/python-client/issues/118))
+
 ## [6.8.4] - 2019-03-29
 ### Fixed:
 - Setting user attributes to non-string values when a string was expected would cause analytics events not to be processed. Also, in the case of the "secondary" attribute, this could cause evaluations to fail for a flag with a percentage rollout. The SDK will now convert attribute values to strings as needed. ([#115](https://github.com/launchdarkly/python-client/issues/115))
