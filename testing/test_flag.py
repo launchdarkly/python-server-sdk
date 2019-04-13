@@ -250,6 +250,29 @@ def test_flag_returns_error_if_rule_has_rollout_with_no_variations():
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
 
+def test_user_key_is_coerced_to_string_for_evaluation():
+    clause = { 'attribute': 'key', 'op': 'in', 'values': [ '999' ] }
+    flag = _make_bool_flag_from_clause(clause)
+    user = { 'key': 999 }
+    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+
+def test_secondary_key_is_coerced_to_string_for_evaluation():
+    # We can't really verify that the rollout calculation works correctly, but we can at least
+    # make sure it doesn't error out if there's a non-string secondary value (ch35189)
+    rule = {
+        'id': 'ruleid',
+        'clauses': [
+            { 'attribute': 'key', 'op': 'in', 'values': [ 'userkey' ] }
+        ],
+        'rollout': {
+            'salt':  '',
+            'variations': [ { 'weight': 100000, 'variation': 1 } ]
+        }
+    }
+    flag = make_boolean_flag_with_rules([rule])
+    user = { 'key': 'userkey', 'secondary': 999 }
+    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+
 def test_segment_match_clause_retrieves_segment_from_store():
     store = InMemoryFeatureStore()
     segment = {

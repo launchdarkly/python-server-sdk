@@ -10,12 +10,17 @@ import six
 import sys
 
 from ldclient import operators
+from ldclient.util import stringify_attrs
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
+
+__USER_ATTRS_TO_STRINGIFY_FOR_EVALUATION__ = [ "key", "secondary" ]
+# Currently we are not stringifying the rest of the built-in attributes prior to evaluation, only for events.
+# This is because it could affect evaluation results for existing users (ch35206).
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
@@ -106,8 +111,9 @@ def error_reason(error_kind):
 
 
 def evaluate(flag, user, store, event_factory):
+    sanitized_user = stringify_attrs(user, __USER_ATTRS_TO_STRINGIFY_FOR_EVALUATION__)
     prereq_events = []
-    detail = _evaluate(flag, user, store, prereq_events, event_factory)
+    detail = _evaluate(flag, sanitized_user, store, prereq_events, event_factory)
     return EvalResult(detail = detail, events = prereq_events)
 
 def _evaluate(flag, user, store, prereq_events, event_factory):

@@ -29,30 +29,12 @@ from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
-from ldclient.util import http_error_message, is_http_error_recoverable, throw_if_unsuccessful_response
+from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
 
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 3
-
-class NullEventProcessor(EventProcessor):
-    def __init__(self):
-        pass
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def is_alive(self):
-        return False
-
-    def send_event(self, event):
-        pass
-
-    def flush(self):
-        pass
+__USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__ = [ "key", "secondary", "ip", "country", "email", "firstName", "lastName", "avatar", "name" ]
 
 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
@@ -84,9 +66,9 @@ class EventOutputFormatter(object):
                 'prereqOf': e.get('prereqOf')
             }
             if self._inline_users or is_debug:
-                out['user'] = self._user_filter.filter_user_props(e['user'])
+                out['user'] = self._process_user(e)
             else:
-                out['userKey'] = e['user'].get('key')
+                out['userKey'] = self._get_userkey(e)
             if e.get('reason'):
                 out['reason'] = e.get('reason')
             return out
@@ -94,8 +76,8 @@ class EventOutputFormatter(object):
             return {
                 'kind': 'identify',
                 'creationDate': e['creationDate'],
-                'key': e['user'].get('key'),
-                'user': self._user_filter.filter_user_props(e['user'])
+                'key': self._get_userkey(e),
+                'user': self._process_user(e)
             }
         elif kind == 'custom':
             out = {
@@ -105,15 +87,15 @@ class EventOutputFormatter(object):
                 'data': e.get('data')
             }
             if self._inline_users:
-                out['user'] = self._user_filter.filter_user_props(e['user'])
+                out['user'] = self._process_user(e)
             else:
-                out['userKey'] = e['user'].get('key')
+                out['userKey'] = self._get_userkey(e)
             return out
         elif kind == 'index':
             return {
                 'kind': 'index',
                 'creationDate': e['creationDate'],
-                'user': self._user_filter.filter_user_props(e['user'])
+                'user': self._process_user(e)
             }
         else:
             return e
@@ -146,6 +128,13 @@ class EventOutputFormatter(object):
             'endDate': summary.end_date,
             'features': flags_out
         }
+    
+    def _process_user(self, event):
+        filtered = self._user_filter.filter_user_props(event['user'])
+        return stringify_attrs(filtered, __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__)
+    
+    def _get_userkey(self, event):
+        return str(event['user'].get('key'))
 
 
 class EventPayloadSendTask(object):

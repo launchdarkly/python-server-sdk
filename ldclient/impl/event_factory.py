@@ -65,7 +65,7 @@ class _EventFactory(object):
     def new_identify_event(self, user):
         return {
             'kind': 'identify',
-            'key': user.get('key'),
+            'key': str(user.get('key')),
             'user': user
         }
 
