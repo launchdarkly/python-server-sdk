@@ -151,9 +151,23 @@ def test_identify_no_user_key():
 
 def test_track():
     with make_client() as client:
+        client.track('my_event', user)
+        e = get_first_event(client)
+        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e.get('data') is None and e.get('metricValue') is None
+
+
+def test_track_with_data():
+    with make_client() as client:
         client.track('my_event', user, 42)
         e = get_first_event(client)
-        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42
+        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42 and e.get('metricValue') is None
+
+
+def test_track_with_metric_value():
+    with make_client() as client:
+        client.track('my_event', user, 42, 1.5)
+        e = get_first_event(client)
+        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42 and e.get('metricValue') == 1.5
 
 
 def test_track_no_user():

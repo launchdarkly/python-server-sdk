@@ -69,13 +69,17 @@ class _EventFactory(object):
             'user': user
         }
 
-    def new_custom_event(self, event_name, user, data):
-        return {
+    def new_custom_event(self, event_name, user, data, metric_value):
+        e = {
             'kind': 'custom',
             'key': event_name,
-            'user': user,
-            'data': data
+            'user': user
         }
+        if data is not None:
+            e['data'] = data
+        if metric_value is not None:
+            e['metricValue'] = metric_value
+        return e
 
     def _is_experiment(self, flag, reason):
         if reason is not None:
