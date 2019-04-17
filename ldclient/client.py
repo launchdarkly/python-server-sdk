@@ -171,7 +171,7 @@ class LDClient(object):
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
-    def track(self, event_name, user, data=None):
+    def track(self, event_name, user, data=None, metric_value=None):
         """Tracks that a user performed an event.
 
         LaunchDarkly automatically tracks pageviews and clicks that are specified in the Goals
@@ -181,11 +181,14 @@ class LDClient(object):
         :param string event_name: the name of the event, which may correspond to a goal in A/B tests
         :param dict user: the attributes of the user
         :param data: optional additional data associated with the event
+        :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
+          numeric custom metrics. Can be omitted if this event is used by only non-numeric metrics.
+          This field will also be returned as part of the custom event for Data Export.
         """
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling track().")
         else:
-            self._send_event(self._event_factory_default.new_custom_event(event_name, user, data))
+            self._send_event(self._event_factory_default.new_custom_event(event_name, user, data, metric_value))
 
     def identify(self, user):
         """Registers the user.
