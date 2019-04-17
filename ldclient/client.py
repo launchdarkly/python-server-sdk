@@ -181,7 +181,9 @@ class LDClient(object):
         :param string event_name: the name of the event, which may correspond to a goal in A/B tests
         :param dict user: the attributes of the user
         :param data: optional additional data associated with the event
-        :param metric_value: optional numeric value that can be used in analytics
+        :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
+          numeric custom metrics. Can be omitted if this event is used by only non-numeric metrics.
+          This field will also be returned as part of the custom event for Data Export.
         """
         if user is None or user.get('key') is None:
             log.warn("Missing user or user key when calling track().")
