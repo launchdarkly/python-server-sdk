@@ -68,7 +68,7 @@ def set_sdk_key(sdk_key):
     sdk_key_changed = False
     try:
         __lock.rlock()
-        if sdk_key is __config.sdk_key:
+        if sdk_key == __config.sdk_key:
             log.info("New sdk_key is the same as the existing one. doing nothing.")
         else:
             sdk_key_changed = True
