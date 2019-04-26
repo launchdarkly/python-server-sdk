@@ -2,8 +2,6 @@
 
 [![Circle CI](https://img.shields.io/circleci/project/launchdarkly/python-server-sdk.png)](https://circleci.com/gh/launchdarkly/python-server-sdk)
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Flaunchdarkly%2Fpython-server-sdk.svg?type=shield)](https://app.fossa.io/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Flaunchdarkly%2Fpython-server-sdk?ref=badge_shield)
-
 [![PyPI](https://img.shields.io/pypi/v/ldclient-py.svg?maxAge=2592000)](https://pypi.python.org/pypi/ldclient-py)
 [![PyPI](https://img.shields.io/pypi/pyversions/ldclient-py.svg)](https://pypi.python.org/pypi/ldclient-py)
 
