@@ -49,7 +49,7 @@ setup(
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
-    url='https://github.com/launchdarkly/python-client',
+    url='https://github.com/launchdarkly/python-server-sdk',
     description='LaunchDarkly SDK for Python',
     long_description='LaunchDarkly SDK for Python',
     install_requires=reqs,
