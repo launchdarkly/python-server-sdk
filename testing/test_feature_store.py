@@ -1,5 +1,6 @@
 import boto3
 import json
+import os
 import pytest
 import redis
 import time
@@ -165,19 +166,23 @@ class DynamoDBTester(object):
 
 
 class TestFeatureStore:
-    params = [
-        InMemoryTester(),
-        RedisTester(CacheConfig.default()),
-        RedisTester(CacheConfig.disabled()),
-        RedisWithDeprecatedConstructorTester(CacheConfig.default()),
-        RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
-        DynamoDBTester(CacheConfig.default()),
-        DynamoDBTester(CacheConfig.disabled())
-    ]
-
-    if have_consul:
-        params.append(ConsulTester(CacheConfig.default()))
-        params.append(ConsulTester(CacheConfig.disabled()))
+    if os.environ.get('LD_SKIP_DATABASE_TESTS') == '1':
+        params = [
+            InMemoryTester()
+        ]
+    else:
+        params = [
+            InMemoryTester(),
+            RedisTester(CacheConfig.default()),
+            RedisTester(CacheConfig.disabled()),
+            RedisWithDeprecatedConstructorTester(CacheConfig.default()),
+            RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
+            DynamoDBTester(CacheConfig.default()),
+            DynamoDBTester(CacheConfig.disabled())
+        ]
+        if have_consul:
+            params.append(ConsulTester(CacheConfig.default()))
+            params.append(ConsulTester(CacheConfig.disabled()))
 
     @pytest.fixture(params=params)
     def tester(self, request):
