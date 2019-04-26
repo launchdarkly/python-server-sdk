@@ -8,7 +8,7 @@ LaunchDarkly Python SDK
 
 This is the API reference for the `LaunchDarkly <https://launchdarkly.com/>`_ SDK for Python.
 
-The latest version of the SDK can be found on `PyPI <https://pypi.org/project/ldclient-py/>`_, and the source code is on `GitHub <https://github.com/launchdarkly/python-client>`_.
+The latest version of the SDK can be found on `PyPI <https://pypi.org/project/ldclient-py/>`_, and the source code is on `GitHub <https://github.com/launchdarkly/python-server-sdk>`_.
 
 For more information, see LaunchDarkly's `Quickstart <https://docs.launchdarkly.com/docs>`_ and `SDK Reference Guide <http://docs.launchdarkly.com/docs/python-sdk-reference>`_.
 
