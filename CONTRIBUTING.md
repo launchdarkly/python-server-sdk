@@ -38,6 +38,8 @@ To run all unit tests:
 pytest
 ```
 
+By default, the full unit test suite includes live tests of the integrations for Consul, DynamoDB, and Redis. Those tests expect you to have instances of all of those databases running locally. To skip them, set the environment variable `LD_SKIP_DATABASE_TESTS=1` before running the tests.
+
 There are also integration tests that can be run against the LaunchDarkly service. To enable them, set the environment variable `LD_SDK_KEY` to a valid production SDK Key.
 
 ### Portability
