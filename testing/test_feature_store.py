@@ -172,6 +172,7 @@ class TestFeatureStore:
         ]
     else:
         params = [
+            InMemoryTester(),
             RedisTester(CacheConfig.default()),
             RedisTester(CacheConfig.disabled()),
             RedisWithDeprecatedConstructorTester(CacheConfig.default()),
