@@ -4,7 +4,7 @@ LaunchDarkly has published an [SDK contributor's guide](https://docs.launchdarkl
 
 ## Submitting bug reports and feature requests
  
-The LaunchDarkly SDK team monitors the issue tracker associated with the `launchdarkly/python-server-sdk` SDK repository. Bug reports and feature requests specific to this SDK should be filed in this issue tracker. The SDK team will respond to all newly filed issues within two business days.
+The LaunchDarkly SDK team monitors the [issue tracker](https://github.com/launchdarkly/python-server-sdk/issues) in the SDK repository. Bug reports and feature requests specific to this SDK should be filed in this issue tracker. The SDK team will respond to all newly filed issues within two business days.
 
 ## Submitting pull requests
  
@@ -14,7 +14,7 @@ We encourage pull requests and other contributions from the community. Before su
 
 ### Setup
 
-It's advisable to use `virtualenv` to create a development environment within the project directory:
+It's advisable to use [`virtualenv`](https://virtualenv.pypa.io/) to create a development environment within the project directory:
 
 ```
 mkvirtualenv python-client

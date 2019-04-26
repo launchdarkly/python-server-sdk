@@ -29,8 +29,6 @@ Generated API documentation is on [readthedocs.io](https://launchdarkly-python-s
 
 We run integration tests for all our SDKs using a centralized test harness. This approach gives us the ability to test for consistency across SDKs, as well as test networking behavior in a long-running application. These tests cover each method in the SDK, and verify that event sending, flag evaluation, stream reconnection, and other aspects of the SDK all behave correctly.
 
-[![Test Coverage](https://codeclimate.com/github/launchdarkly/python-server-sdk/badges/coverage.svg)](https://codeclimate.com/github/launchdarkly/python-server-sdk/coverage) The Code Climate coverage does not include the coverage provided by this integration test harness.
-
 ## Contributing
 
 We encourage pull requests and other contributions from the community. Check out our [contributing guidelines](CONTRIBUTING.md) for instructions on how to contribute to this SDK.
