@@ -25,7 +25,7 @@ import ldclient
 
 # -- Project information -----------------------------------------------------
 
-project = u'ldclient-py'
+project = u'launchdarkly-server-sdk'
 copyright = u'2019, LaunchDarkly'
 author = u'LaunchDarkly'
 
@@ -110,7 +110,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'ldclient-pydoc'
+htmlhelp_basename = 'launchdarkly-server-sdk-doc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -137,7 +137,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'ldclient-py.tex', u'ldclient-py Documentation',
+    (master_doc, 'launchdarkly-server-sdk.tex', u'launchdarkly-server-sdk Documentation',
      u'LaunchDarkly', 'manual'),
 ]
 
@@ -147,7 +147,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'ldclient-py', u'ldclient-py Documentation',
+    (master_doc, 'launchdarkly-server-sdk', u'launchdarkly-server-sdk Documentation',
      [author], 1)
 ]
 
@@ -158,8 +158,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'ldclient-py', u'ldclient-py Documentation',
-     author, 'ldclient-py', 'One line description of project.',
+    (master_doc, 'launchdarkly-server-sdk', u'launchdarkly-server-sdk Documentation',
+     author, 'launchdarkly-server-sdk', 'One line description of project.',
      'Miscellaneous'),
 ]
 

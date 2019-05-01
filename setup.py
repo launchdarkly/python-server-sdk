@@ -44,7 +44,7 @@ class PyTest(Command):
         raise SystemExit(errno)
 
 setup(
-    name='ldclient-py',
+    name='launchdarkly-server-sdk',
     version=ldclient_version,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
