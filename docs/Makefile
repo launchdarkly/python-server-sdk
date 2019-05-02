@@ -5,7 +5,7 @@
 
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = ldclient-py
+SPHINXPROJ    = launchdarkly-server-sdk
 SOURCEDIR     = .
 BUILDDIR      = build
 

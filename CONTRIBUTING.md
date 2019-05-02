@@ -17,8 +17,8 @@ We encourage pull requests and other contributions from the community. Before su
 It's advisable to use [`virtualenv`](https://virtualenv.pypa.io/) to create a development environment within the project directory:
 
 ```
-mkvirtualenv python-client
-source ./python-client/bin/activate
+mkvirtualenv python-server-sdk
+source ~/.virtualenvs/python-server-sdk/bin/activate
 ```
 
 To install the runtime and test requirements:

@@ -19,6 +19,8 @@ from ldclient.integrations import Consul, DynamoDB, Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
+skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
+
 
 class InMemoryTester(object):
     def init_store(self):
@@ -166,7 +168,7 @@ class DynamoDBTester(object):
 
 
 class TestFeatureStore:
-    if os.environ.get('LD_SKIP_DATABASE_TESTS') == '1':
+    if skip_db_tests:
         params = [
             InMemoryTester()
         ]
@@ -321,6 +323,7 @@ class TestFeatureStore:
         assert items == { 'flagB1': flag_b1, 'flagB2': flag_b2 }
 
 
+@pytest.mark.skipif(skip_db_tests, reason="skipping database tests")
 class TestRedisFeatureStoreExtraTests:
     def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
