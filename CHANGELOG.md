@@ -2,12 +2,19 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.9.2] - 2019-05-01
+### Changed:
+- Changed the artifact name from `ldclient-py` to `launchdarkly-server-sdk`
+- Changed repository references to use the new URL
+
+There are no other changes in this release. Substituting `ldclient-py` version 6.9.1 with `launchdarkly-server-sdk` version 6.9.2 will not affect functionality.
+
 ## [6.9.1] - 2019-04-26
 ### Fixed:
 - The `set_sdk_key` function was comparing the existing SDK key (if any) to the new one by identity (`is`) rather than equality (`==`). In Python, two strings that have the same characters may or may not be the same string instance; in the case where they were not, `set_sdk_key` would inappropriately reinitialize the client even though the SDK key had not really changed. (Thanks, [jpgimenez](https://github.com/launchdarkly/python-server-sdk/pull/121)!)
 - Running the SDK unit tests is now simpler in that the database integrations can be skipped. See `CONTRIBUTING.md`.
 
-# Note on future releases
+### Note on future releases:
 
 The LaunchDarkly SDK repositories are being renamed for consistency. This repository is now `python-server-sdk` rather than `python-client`.
 
