@@ -107,7 +107,7 @@ class _FileDataSource(UpdateProcessor):
             try:
                 resolved_paths.append(os.path.realpath(path))
             except:
-                log.warn('Cannot watch for changes to data file "%s" because it is an invalid path' % path)
+                log.warning('Cannot watch for changes to data file "%s" because it is an invalid path' % path)
         if have_watchdog and not self._force_polling:
             return _FileDataSource.WatchdogAutoUpdater(resolved_paths, self._load_all)
         else:

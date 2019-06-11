@@ -280,4 +280,4 @@ class Config(object):
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key is '':
-            log.warn("Missing or blank sdk_key.")
+            log.warning("Missing or blank sdk_key.")
