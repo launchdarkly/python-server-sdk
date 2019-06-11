@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.9.3] - 2019-06-11
+### Fixed:
+- Usages of `Logger.warn()` were causing deprecation warnings in some versions of Python. Changed these to `Logger.warning()`. ([#125](https://github.com/launchdarkly/python-server-sdk/issues/125))
+
 ## [6.9.2] - 2019-05-01
 ### Changed:
 - Changed the artifact name from `ldclient-py` to `launchdarkly-server-sdk`
