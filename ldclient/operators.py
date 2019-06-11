@@ -27,7 +27,7 @@ def _string_operator(u, c, fn):
 def _numeric_operator(u, c, fn):
     # bool is a subtype of int, and we don't want to try and compare it as a number.
     if isinstance(input, bool):
-        log.warn("Got unexpected bool type when attempting to parse time")
+        log.warning("Got unexpected bool type when attempting to parse time")
         return None
 
     if isinstance(u, Number):
@@ -44,7 +44,7 @@ def _parse_time(input):
 
     # bool is a subtype of int, and we don't want to try and compare it as a time.
     if isinstance(input, bool):
-        log.warn("Got unexpected bool type when attempting to parse time")
+        log.warning("Got unexpected bool type when attempting to parse time")
         return None
 
     if isinstance(input, Number):
@@ -56,10 +56,10 @@ def _parse_time(input):
             timestamp = (parsed_time - epoch).total_seconds()
             return timestamp * 1000.0
         except Exception as e:
-            log.warn("Couldn't parse timestamp:" + str(input) + " with message: " + str(e))
+            log.warning("Couldn't parse timestamp:" + str(input) + " with message: " + str(e))
             return None
 
-    log.warn("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
+    log.warning("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
     return None
 
 def _time_operator(u, c, fn):

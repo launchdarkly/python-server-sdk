@@ -82,7 +82,7 @@ class LDClient(object):
                             "Only one of either is expected")
 
         if sdk_key is not None:
-            log.warn("Deprecated sdk_key argument was passed to init. Use config object instead.")
+            log.warning("Deprecated sdk_key argument was passed to init. Use config object instead.")
             self._config = Config(sdk_key=sdk_key)
         else:
             self._config = config or Config.default()
@@ -113,7 +113,7 @@ class LDClient(object):
         if self._update_processor.initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
-            log.warn("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
+            log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
     def _make_event_processor(self, config):
@@ -139,7 +139,7 @@ class LDClient(object):
             return StreamingUpdateProcessor(config, feature_requester, store, ready)
 
         log.info("Disabling streaming API")
-        log.warn("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
+        log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
     def get_sdk_key(self):
@@ -180,7 +180,7 @@ class LDClient(object):
         :param data: optional additional data associated with the event
         """
         if user is None or user.get('key') is None:
-            log.warn("Missing user or user key when calling track().")
+            log.warning("Missing user or user key when calling track().")
         else:
             self._send_event({'kind': 'custom', 'key': event_name, 'user': user, 'data': data})
 
@@ -194,7 +194,7 @@ class LDClient(object):
         :param dict user: attributes of the user to register
         """
         if user is None or user.get('key') is None:
-            log.warn("Missing user or user key when calling identify().")
+            log.warning("Missing user or user key when calling identify().")
         else:
             self._send_event({'kind': 'identify', 'key': str(user.get('key')), 'user': user})
 
@@ -234,7 +234,7 @@ class LDClient(object):
 
         .. deprecated:: 2.0.0
         """
-        log.warn("Deprecated method: toggle() called. Use variation() instead.")
+        log.warning("Deprecated method: toggle() called. Use variation() instead.")
         return self.variation(key, user, default)
 
     def variation(self, key, user, default):
@@ -281,16 +281,16 @@ class LDClient(object):
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warn("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
+                log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
-                log.warn("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
+                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
                          + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
                 send_event(default, None, None, reason)
                 return EvaluationDetail(default, None, reason)
         
         if user is not None and user.get('key', "") == "":
-            log.warn("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
+            log.warning("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
         try:
             flag = self._store.get(FEATURES, key, lambda x: x)
@@ -369,18 +369,18 @@ class LDClient(object):
         :rtype: FeatureFlagsState
         """
         if self._config.offline:
-            log.warn("all_flags_state() called, but client is in offline mode. Returning empty state")
+            log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warn("all_flags_state() called before client has finished initializing! Using last known values from feature store")
+                log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
-                log.warn("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
                 return FeatureFlagsState(False)
 
         if user is None or user.get('key') is None:
-            log.warn("User or user key is None when calling all_flags_state(). Returning empty state.")
+            log.warning("User or user key is None when calling all_flags_state(). Returning empty state.")
             return FeatureFlagsState(False)
         
         state = FeatureFlagsState(True)
