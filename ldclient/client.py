@@ -397,7 +397,7 @@ class LDClient(object):
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = evaluate(flag, user, self._store, False).detail
+                detail = evaluate(flag, user, self._store, self._event_factory_default).detail
                 state.add_flag(flag, detail.value, detail.variation_index,
                     detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
