@@ -187,7 +187,7 @@ class EventBuffer(object):
     def add_event(self, event):
         if len(self._events) >= self._capacity:
             if not self._exceeded_capacity:
-                log.warning("Event queue is full-- dropped an event")
+                log.warning("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
                 self._exceeded_capacity = True
         else:
             self._events.append(event)
@@ -205,13 +205,13 @@ class EventBuffer(object):
 
 
 class EventDispatcher(object):
-    def __init__(self, queue, config, http_client):
-        self._queue = queue
+    def __init__(self, inbox, config, http_client):
+        self._inbox = inbox
         self._config = config
         self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl) if http_client is None else http_client
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
-        self._buffer = EventBuffer(config.events_max_pending)
+        self._outbox = EventBuffer(config.events_max_pending)
         self._user_keys = SimpleLRUCache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
@@ -226,7 +226,7 @@ class EventDispatcher(object):
         log.info("Starting event processor")
         while True:
             try:
-                message = self._queue.get(block=True)
+                message = self._inbox.get(block=True)
                 if message.type == 'event':
                     self._process_event(message.param)
                 elif message.type == 'flush':
@@ -248,7 +248,7 @@ class EventDispatcher(object):
             return
 
         # Always record the event in the summarizer.
-        self._buffer.add_to_summary(event)
+        self._outbox.add_to_summary(event)
 
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
@@ -271,13 +271,13 @@ class EventDispatcher(object):
 
         if add_index_event:
             ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
-            self._buffer.add_event(ie)
+            self._outbox.add_event(ie)
         if add_full_event:
-            self._buffer.add_event(event)
+            self._outbox.add_event(event)
         if add_debug_event:
             debug_event = event.copy()
             debug_event['debug'] = True
-            self._buffer.add_event(debug_event)
+            self._outbox.add_event(debug_event)
 
     # Add to the set of users we've noticed, and return true if the user was already known to us.
     def notice_user(self, user):
@@ -298,13 +298,13 @@ class EventDispatcher(object):
     def _trigger_flush(self):
         if self._disabled:
             return
-        payload = self._buffer.get_payload()
+        payload = self._outbox.get_payload()
         if len(payload.events) > 0 or len(payload.summary.counters) > 0:
             task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
                 self._handle_response)
             if self._flush_workers.execute(task.run):
                 # The events have been handed off to a flush worker; clear them from our buffer.
-                self._buffer.clear()
+                self._outbox.clear()
             else:
                 # We're already at our limit of concurrent flushes; leave the events in the buffer.
                 pass
@@ -330,22 +330,23 @@ class EventDispatcher(object):
 
 
 class DefaultEventProcessor(EventProcessor):
-    def __init__(self, config, http=None):
-        self._queue = queue.Queue(config.events_max_pending)
+    def __init__(self, config, http=None, dispatcher_class=None):
+        self._inbox = queue.Queue(config.events_max_pending)
+        self._inbox_full = False
         self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
         self._close_lock = Lock()
         self._closed = False
-        EventDispatcher(self._queue, config, http)
+        (dispatcher_class or EventDispatcher)(self._inbox, config, http)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)
-        self._queue.put(EventProcessorMessage('event', event))
+        self._post_to_inbox(EventProcessorMessage('event', event))
 
     def flush(self):
-        self._queue.put(EventProcessorMessage('flush', None))
+        self._post_to_inbox(EventProcessorMessage('flush', None))
 
     def stop(self):
         with self._close_lock:
@@ -355,10 +356,21 @@ class DefaultEventProcessor(EventProcessor):
         self._flush_timer.stop()
         self._users_flush_timer.stop()
         self.flush()
+        # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
+        # is full; an orderly shutdown can't happen unless these messages are received.
         self._post_message_and_wait('stop')
 
+    def _post_to_inbox(self, message):
+        try:
+            self._inbox.put(message, block=False)
+        except queue.Full:
+            if not self._inbox_full:
+                # possible race condition here, but it's of no real consequence - we'd just get an extra log line
+                self._inbox_full = True
+                log.warning("Events are being produced faster than they can be processed; some events will be dropped")
+
     def _flush_users(self):
-        self._queue.put(EventProcessorMessage('flush_users', None))
+        self._inbox.put(EventProcessorMessage('flush_users', None))
 
     # Used only in tests
     def _wait_until_inactive(self):
@@ -366,5 +378,12 @@ class DefaultEventProcessor(EventProcessor):
 
     def _post_message_and_wait(self, type):
         reply = Event()
-        self._queue.put(EventProcessorMessage(type, reply))
+        self._inbox.put(EventProcessorMessage(type, reply))
         reply.wait()
+
+    # These magic methods allow use of the "with" block in tests
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, tyep, value, traceback):
+        self.stop()

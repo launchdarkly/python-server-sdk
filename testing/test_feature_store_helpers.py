@@ -137,7 +137,7 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         core.error = CustomError()
-        with pytest.raises(CustomError, message="expected exception"):
+        with pytest.raises(CustomError):
             wrapper.get(THINGS, "key", lambda x: x)
 
     @pytest.mark.parametrize("cached", [False, True])
@@ -204,7 +204,7 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         core.error = CustomError()
-        with pytest.raises(CustomError, message="expected exception"):
+        with pytest.raises(CustomError):
             wrapper.all(THINGS)
 
     @pytest.mark.parametrize("cached", [False, True])
@@ -255,7 +255,7 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         core.error = CustomError()
-        with pytest.raises(CustomError, message="expected exception"):
+        with pytest.raises(CustomError):
             wrapper.upsert(THINGS, { "key": "x", "version": 1 })
 
     @pytest.mark.parametrize("cached", [False, True])
@@ -281,7 +281,7 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         core.error = CustomError()
-        with pytest.raises(CustomError, message="expected exception"):
+        with pytest.raises(CustomError):
             wrapper.delete(THINGS, "x", 1)
 
     def test_uncached_initialized_queries_state_only_until_inited(self):
