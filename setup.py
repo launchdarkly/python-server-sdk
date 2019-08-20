@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup, Command
+import ldclient
 
 import sys
 import uuid
@@ -8,9 +9,6 @@ def parse_requirements(filename):
     """ load requirements from a pip requirements file """
     lineiter = (line.strip() for line in open(filename))
     return [line for line in lineiter if line and not line.startswith("#")]
-
-
-ldclient_version='6.9.4'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt')
@@ -45,7 +43,7 @@ class PyTest(Command):
 
 setup(
     name='launchdarkly-server-sdk',
-    version=ldclient_version,
+    version=ldclient.VERSION,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
