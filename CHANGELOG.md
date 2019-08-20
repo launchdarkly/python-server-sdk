@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.10.1] - 2019-08-20
+### Fixed:
+- Fixed a bug in 6.10.0 that prevented analytics events from being generated for missing flags.
+
+## [6.10.0] - 2019-08-20
+### Added:
+- Added support for upcoming LaunchDarkly experimentation features. See `LDClient.track()`.
+
 ## [6.9.4] - 2019-08-19
 ### Fixed:
 - Under conditions where analytics events are being generated at an extremely high rate (for instance, if an application is evaluating a flag repeatedly in a tight loop on many threads), a thread could be blocked indefinitely within `variation` while waiting for the internal event processing logic to catch up with the backlog. The logic has been changed to drop events if necessary so threads will not be blocked (similar to how the SDK already drops events if the size of the event buffer is exceeded). If that happens, this warning message will be logged once: "Events are being produced faster than they can be processed; some events will be dropped". Under normal conditions this should never happen; this change is meant to avoid a concurrency bottleneck in applications that are already so busy that thread starvation is likely.
