@@ -1,5 +1,5 @@
 from setuptools import find_packages, setup, Command
-import ldclient
+from ldclient.version import VERSION
 
 import sys
 import uuid
@@ -43,7 +43,7 @@ class PyTest(Command):
 
 setup(
     name='launchdarkly-server-sdk',
-    version=ldclient.VERSION,
+    version=VERSION,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
