@@ -1,0 +1,17 @@
+repo:
+  public: python-server-sdk
+  private: python-server-sdk-private
+
+publications:
+  - url: https://pypi.org/project/launchdarkly-server-sdk/
+    description: PyPI
+  - url: https://launchdarkly-python-sdk.readthedocs.io/en/latest/
+    description: documentation (readthedocs.io)
+
+template:
+  name: python
+  env:
+    LD_SKIP_DATABASE_TESTS: 1
+
+sdk:
+  displayName: "Python"
