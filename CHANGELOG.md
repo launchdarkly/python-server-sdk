@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.10.1] - 2019-08-20
+### Fixed:
+- Fixed a bug in 6.10.0 that prevented analytics events from being generated for missing flags.
+
 ## [6.10.0] - 2019-08-20
 ### Added:
 - Added support for upcoming LaunchDarkly experimentation features. See `LDClient.track()`.
