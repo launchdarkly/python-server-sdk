@@ -385,5 +385,5 @@ class DefaultEventProcessor(EventProcessor):
     def __enter__(self):
         return self
     
-    def __exit__(self, tyep, value, traceback):
+    def __exit__(self, type, value, traceback):
         self.stop()
