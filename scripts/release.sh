@@ -13,13 +13,8 @@ echo "Starting python-server-sdk release."
 
 VERSION=$1
 
-#Update version in ldclient/version.py
+# Update version in ldclient/version.py - setup.py references this constant
 echo "VERSION = \"${VERSION}\"" > ldclient/version.py
-
-# Update version in setup.py
-SETUP_PY_TEMP=./setup.py.tmp
-sed "s/ldclient_version=.*/ldclient_version='${VERSION}'/g" setup.py > ${SETUP_PY_TEMP}
-mv ${SETUP_PY_TEMP} setup.py
 
 # Prepare distribution
 python setup.py sdist

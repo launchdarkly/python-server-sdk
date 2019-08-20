@@ -3,14 +3,18 @@ from setuptools import find_packages, setup, Command
 import sys
 import uuid
 
-
+# Get VERSION constant from ldclient.version - we can't simply import that module because
+# ldclient/__init__.py imports all kinds of stuff that requires dependencies we may not have
+# loaded yet. Based on https://packaging.python.org/guides/single-sourcing-package-version/
+version_module_globals = {}
+with open('./ldclient/version.py') as f:
+    exec(f.read(), version_module_globals)
+ldclient_version = version_module_globals['VERSION']
+    
 def parse_requirements(filename):
     """ load requirements from a pip requirements file """
     lineiter = (line.strip() for line in open(filename))
     return [line for line in lineiter if line and not line.startswith("#")]
-
-
-ldclient_version='6.10.1'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt')
