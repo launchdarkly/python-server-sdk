@@ -20,7 +20,7 @@ class EventSummarizer(object):
     """
     def summarize_event(self, event):
         if event['kind'] == 'feature':
-            counter_key = (event['key'], event.get('variation'), event['version'])
+            counter_key = (event['key'], event.get('variation'), event.get('version'))
             counter_val = self.counters.get(counter_key)
             if counter_val is None:
                 counter_val = { 'count': 1, 'value': event['value'], 'default': event.get('default') }
