@@ -259,7 +259,7 @@ class EventDispatcher(object):
         add_debug_event = False
         add_index_event = False
         if event['kind'] == "feature":
-            add_full_event = event['trackEvents']
+            add_full_event = event.get('trackEvents')
             add_debug_event = self._should_debug_event(event)
         else:
             add_full_event = True
