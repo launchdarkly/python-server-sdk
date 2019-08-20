@@ -147,7 +147,7 @@ def _check_prerequisites(flag, user, store, events, event_factory):
     for prereq in flag.get('prerequisites') or []:
         prereq_flag = store.get(FEATURES, prereq.get('key'), lambda x: x)
         if prereq_flag is None:
-            log.warn("Missing prereq flag: " + prereq.get('key'))
+            log.warning("Missing prereq flag: " + prereq.get('key'))
             failed_prereq = prereq
         else:
             prereq_res = _evaluate(prereq_flag, user, store, events, event_factory)

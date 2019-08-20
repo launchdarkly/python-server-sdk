@@ -1,33 +1,49 @@
-Contributing
-------------
+# Contributing to the LaunchDarkly Server-side SDK for Python
 
-We encourage pull-requests and other contributions from the community. We've also published an [SDK contributor's guide](http://docs.launchdarkly.com/docs/sdk-contributors-guide) that provides a detailed explanation of how our SDKs work.
+LaunchDarkly has published an [SDK contributor's guide](https://docs.launchdarkly.com/docs/sdk-contributors-guide) that provides a detailed explanation of how our SDKs work. See below for additional information on how to contribute to this SDK.
 
-Development information (for developing this module itself)
------------------------------------------------------------
+## Submitting bug reports and feature requests
+ 
+The LaunchDarkly SDK team monitors the [issue tracker](https://github.com/launchdarkly/python-server-sdk/issues) in the SDK repository. Bug reports and feature requests specific to this SDK should be filed in this issue tracker. The SDK team will respond to all newly filed issues within two business days.
 
-1. One-time setup:
+## Submitting pull requests
+ 
+We encourage pull requests and other contributions from the community. Before submitting pull requests, ensure that all temporary or unintended code is removed. Don't worry about adding reviewers to the pull request; the LaunchDarkly SDK team will add themselves. The SDK team will acknowledge all pull requests within two business days.
 
-        mkvirtualenv python-client
+## Build instructions
 
-1. When working on the project be sure to activate the python-client virtualenv using the technique of your choosing.
+### Setup
 
-1. Install requirements (run-time & test):
+It's advisable to use [`virtualenv`](https://virtualenv.pypa.io/) to create a development environment within the project directory:
 
-        pip install -r requirements.txt
-        pip install -r test-requirements.txt
+```
+mkvirtualenv python-server-sdk
+source ~/.virtualenvs/python-server-sdk/bin/activate
+```
 
-1. When running unit tests, in order for `test_feature_store.py` to run, you'll need all of the supported databases (Redis, Consul, DynamoDB) running locally on their default ports.
+To install the runtime and test requirements:
 
-1. If you want integration tests to run, set the ```LD_SDK_KEY``` environment variable to a valid production SDK Key.
+```
+pip install -r requirements.txt
+pip install -r test-requirements.txt
+```
 
-1. ```$ py.test testing```
+The additional requirements files `consul-requirements.txt`, `dynamodb-requirements.txt`, `redis-requirements.txt`, and `test-filesource-optional-requirements.txt` can also be installed if you need to test the corresponding features.
 
-1. All code must be compatible with all supported Python versions as described in README. Most portability issues are addressed by using the `six` package. We are avoiding the use of `__future__` imports, since they can easily be omitted by mistake causing code in one file to behave differently from another; instead, whenever possible, use an explicit approach that makes it clear what the desired behavior is in all Python versions (e.g. if you want to do floor division, use `//`; if you want to divide as floats, explicitly cast to floats).
+### Testing
 
-Developing with different Python versions
------------------------------------------
+To run all unit tests:
 
-Example for switching to Python 3:
+```
+pytest
+```
 
-```virtualenv -p `which python3` ~/.virtualenvs/python-client```
+By default, the full unit test suite includes live tests of the integrations for Consul, DynamoDB, and Redis. Those tests expect you to have instances of all of those databases running locally. To skip them, set the environment variable `LD_SKIP_DATABASE_TESTS=1` before running the tests.
+
+There are also integration tests that can be run against the LaunchDarkly service. To enable them, set the environment variable `LD_SDK_KEY` to a valid production SDK Key.
+
+### Portability
+
+Most portability issues are addressed by using the `six` package. We are avoiding the use of `__future__` imports, since they can easily be omitted by mistake causing code in one file to behave differently from another; instead, whenever possible, use an explicit approach that makes it clear what the desired behavior is in all Python versions (e.g. if you want to do floor division, use `//`; if you want to divide as floats, explicitly cast to floats).
+
+It is preferable to run tests against all supported minor versions of Python (as described in `README.md` under Requirements), or at least the lowest and highest versions, prior to submitting a pull request. However, LaunchDarkly's CI tests will run automatically against all supported versions.

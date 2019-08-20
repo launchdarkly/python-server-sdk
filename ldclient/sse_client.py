@@ -7,13 +7,13 @@ Based on: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb4
 
 import re
 import time
-import warnings
 
 import six
 
 import urllib3
 
 from ldclient.util import create_http_pool_manager
+from ldclient.util import log
 from ldclient.util import throw_if_unsuccessful_response
 
 # Technically, we should support streams that mix line endings.  This regex,
@@ -158,7 +158,7 @@ class Event(object):
             m = cls.sse_line_pattern.match(line)
             if m is None:
                 # Malformed line.  Discard but warn.
-                warnings.warn('Invalid SSE line: "%s"' % line, SyntaxWarning)
+                log.warning('Invalid SSE line: "%s"' % line)
                 continue
 
             name = m.groupdict()['name']

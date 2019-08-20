@@ -10,7 +10,7 @@ def parse_requirements(filename):
     return [line for line in lineiter if line and not line.startswith("#")]
 
 
-ldclient_version='6.9.0'
+ldclient_version='6.9.3'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement objects
 install_reqs = parse_requirements('requirements.txt')
@@ -44,12 +44,12 @@ class PyTest(Command):
         raise SystemExit(errno)
 
 setup(
-    name='ldclient-py',
+    name='launchdarkly-server-sdk',
     version=ldclient_version,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
-    url='https://github.com/launchdarkly/python-client',
+    url='https://github.com/launchdarkly/python-server-sdk',
     description='LaunchDarkly SDK for Python',
     long_description='LaunchDarkly SDK for Python',
     install_requires=reqs,

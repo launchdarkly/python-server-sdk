@@ -9,7 +9,7 @@
 # When done you should commit and push the changes made.
 
 set -uxe
-echo "Starting python-client release."
+echo "Starting python-server-sdk release."
 
 VERSION=$1
 
@@ -28,4 +28,4 @@ python setup.py sdist
 pip install twine
 python -m twine upload dist/*
 
-echo "Done with python-client release"
+echo "Done with python-server-sdk release"

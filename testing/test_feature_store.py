@@ -1,5 +1,6 @@
 import boto3
 import json
+import os
 import pytest
 import redis
 import time
@@ -17,6 +18,8 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDB
 from ldclient.integrations import Consul, DynamoDB, Redis
 from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
+
+skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 
 
 class InMemoryTester(object):
@@ -165,19 +168,23 @@ class DynamoDBTester(object):
 
 
 class TestFeatureStore:
-    params = [
-        InMemoryTester(),
-        RedisTester(CacheConfig.default()),
-        RedisTester(CacheConfig.disabled()),
-        RedisWithDeprecatedConstructorTester(CacheConfig.default()),
-        RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
-        DynamoDBTester(CacheConfig.default()),
-        DynamoDBTester(CacheConfig.disabled())
-    ]
-
-    if have_consul:
-        params.append(ConsulTester(CacheConfig.default()))
-        params.append(ConsulTester(CacheConfig.disabled()))
+    if skip_db_tests:
+        params = [
+            InMemoryTester()
+        ]
+    else:
+        params = [
+            InMemoryTester(),
+            RedisTester(CacheConfig.default()),
+            RedisTester(CacheConfig.disabled()),
+            RedisWithDeprecatedConstructorTester(CacheConfig.default()),
+            RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
+            DynamoDBTester(CacheConfig.default()),
+            DynamoDBTester(CacheConfig.disabled())
+        ]
+        if have_consul:
+            params.append(ConsulTester(CacheConfig.default()))
+            params.append(ConsulTester(CacheConfig.disabled()))
 
     @pytest.fixture(params=params)
     def tester(self, request):
@@ -316,6 +323,7 @@ class TestFeatureStore:
         assert items == { 'flagB1': flag_b1, 'flagB2': flag_b2 }
 
 
+@pytest.mark.skipif(skip_db_tests, reason="skipping database tests")
 class TestRedisFeatureStoreExtraTests:
     def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
