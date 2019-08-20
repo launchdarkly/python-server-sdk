@@ -1,5 +1,6 @@
 import json
 import pytest
+from threading import Thread
 import time
 
 from ldclient.config import Config
@@ -459,6 +460,35 @@ def test_will_still_send_after_429_error():
 
 def test_will_still_send_after_500_error():
     verify_recoverable_http_error(500)
+
+def test_does_not_block_on_full_inbox():
+    config = Config(events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
+    ep_inbox_holder = [ None ]
+    ep_inbox = None
+
+    def dispatcher_factory(inbox, config, http):
+        ep_inbox_holder[0] = inbox  # it's an array because otherwise it's hard for a closure to modify a variable
+        return None  # the dispatcher object itself doesn't matter, we only manipulate the inbox
+    def event_consumer():
+        while True:
+            message = ep_inbox.get(block=True)
+            if message.type == 'stop':
+                message.param.set()
+                return
+    def start_consuming_events():
+        Thread(target=event_consumer).start()
+
+    with DefaultEventProcessor(config, mock_http, dispatcher_factory) as ep:
+        ep_inbox = ep_inbox_holder[0]
+        event1 = { 'kind': 'custom', 'key': 'event1', 'user': user }
+        event2 = { 'kind': 'custom', 'key': 'event2', 'user': user }
+        ep.send_event(event1)
+        ep.send_event(event2)  # this event should be dropped - inbox is full
+        message1 = ep_inbox.get(block=False)
+        had_no_more = ep_inbox.empty()
+        start_consuming_events()
+        assert message1.param == event1
+        assert had_no_more
 
 def verify_unrecoverable_http_error(status):
     setup_processor(Config(sdk_key = 'SDK_KEY'))
