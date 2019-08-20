@@ -374,7 +374,7 @@ def test_nontracked_events_are_summarized():
 
 def test_custom_event_is_queued_with_user():
     with DefaultEventProcessor(Config(), mock_http) as ep:
-        e = { 'kind': 'custom', 'key': 'eventkey', 'user': user, 'data': { 'thing': 'stuff '} }
+        e = { 'kind': 'custom', 'key': 'eventkey', 'user': user, 'data': { 'thing': 'stuff '}, 'metricValue': 1.5 }
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -528,6 +528,7 @@ def check_custom_event(data, source, inline_user):
         assert data['userKey'] == source['user']['key']
     else:
         assert data['user'] == inline_user
+    assert data.get('metricValue') == source.get('metricValue')
 
 def check_summary_event(data):
     assert data['kind'] == 'summary'

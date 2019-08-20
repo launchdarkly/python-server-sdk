@@ -83,13 +83,16 @@ class EventOutputFormatter(object):
             out = {
                 'kind': 'custom',
                 'creationDate': e['creationDate'],
-                'key': e['key'],
-                'data': e.get('data')
+                'key': e['key']
             }
             if self._inline_users:
                 out['user'] = self._process_user(e)
             else:
                 out['userKey'] = self._get_userkey(e)
+            if e.get('data') is not None:
+                out['data'] = e['data']
+            if e.get('metricValue') is not None:
+                out['metricValue'] = e['metricValue']
             return out
         elif kind == 'index':
             return {
@@ -256,7 +259,7 @@ class EventDispatcher(object):
         add_debug_event = False
         add_index_event = False
         if event['kind'] == "feature":
-            add_full_event = event['trackEvents']
+            add_full_event = event.get('trackEvents')
             add_debug_event = self._should_debug_event(event)
         else:
             add_full_event = True
