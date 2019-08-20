@@ -1,10 +1,16 @@
 from setuptools import find_packages, setup, Command
-from ldclient.version import VERSION
 
 import sys
 import uuid
 
-
+# Get VERSION constant from ldclient.version - we can't simply import that module because
+# ldclient/__init__.py imports all kinds of stuff that requires dependencies we may not have
+# loaded yet. Based on https://packaging.python.org/guides/single-sourcing-package-version/
+version_module_globals = {}
+with open('./ldclient/version.py') as f:
+    exec(f.read(), version_module_globals)
+ldclient_version = version_module_globals['VERSION']
+    
 def parse_requirements(filename):
     """ load requirements from a pip requirements file """
     lineiter = (line.strip() for line in open(filename))
@@ -43,7 +49,7 @@ class PyTest(Command):
 
 setup(
     name='launchdarkly-server-sdk',
-    version=VERSION,
+    version=ldclient_version,
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
