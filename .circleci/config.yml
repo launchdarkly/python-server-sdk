@@ -16,7 +16,6 @@ test-template: &test-template
         name: install requirements
         command: |
           sudo pip install --upgrade pip virtualenv;
-          sudo pip install -r requirements.txt;
           sudo pip install -r test-requirements.txt;
           if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
             sudo pip install -r test-filesource-optional-requirements.txt;
