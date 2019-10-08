@@ -84,14 +84,37 @@ class UnsuccessfulResponseException(Exception):
         return self._status
 
 
-def create_http_pool_manager(num_pools=1, verify_ssl=False):
+def create_http_pool_manager(num_pools=1, verify_ssl=False, proxy_url=None):
+    """
+    Create an http pool
+
+    :param num_pools: The number of connections in the pool.
+    :param verify_ssl: If true, force the connections to verify valid SSL.
+    :param proxy_url: If set, proxy connections through the proxy at this URL.
+
+    :return: A connection pool that implements urllib3.PoolManager
+    """
     if not verify_ssl:
-        return urllib3.PoolManager(num_pools=num_pools)
-    return urllib3.PoolManager(
-        num_pools=num_pools,
-        cert_reqs='CERT_REQUIRED',
-        ca_certs=certifi.where()
-        )
+        # Case: create a manager that does not need to respect SSL
+        if proxy_url is not None:
+            return urllib3.ProxyManager(num_pools=num_pools, proxy_url=proxy_url)
+        else:
+            return urllib3.PoolManager(num_pools=num_pools)
+    else:
+        # Case: force the connection to respect SSL
+        if proxy_url is not None:
+            return urllib3.ProxyManager(
+                num_pools=num_pools,
+                cert_reqs='CERT_REQUIRED',
+                ca_certs=certifi.where(),
+                proxy_url=proxy_url
+            )
+        else:
+            return urllib3.PoolManager(
+                num_pools=num_pools,
+                cert_reqs='CERT_REQUIRED',
+                ca_certs=certifi.where()
+                )
 
 
 def throw_if_unsuccessful_response(resp):

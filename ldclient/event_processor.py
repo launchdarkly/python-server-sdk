@@ -211,7 +211,7 @@ class EventDispatcher(object):
     def __init__(self, inbox, config, http_client):
         self._inbox = inbox
         self._config = config
-        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl) if http_client is None else http_client
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl, proxy_url=config.http_proxy) if http_client is None else http_client
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
