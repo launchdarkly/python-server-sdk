@@ -1,7 +1,7 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 from queue import Queue
 from six import iteritems
+from six.moves import BaseHTTPServer
 import socket
 from threading import Thread
 
@@ -22,7 +22,7 @@ class MockServerWrapper(Thread):
         Thread.__init__(self)
         self.port = port
         self.uri = 'http://localhost:%d' % port
-        self.server = HTTPServer(('localhost', port), MockServerRequestHandler)
+        self.server = BaseHTTPServer.HTTPServer(('localhost', port), MockServerRequestHandler)
         self.server.server_wrapper = self
         self.matchers = {}
         self.requests = Queue()
@@ -55,7 +55,7 @@ class MockServerWrapper(Thread):
     def __exit__(self, type, value, traceback):
         self.close()
 
-class MockServerRequestHandler(BaseHTTPRequestHandler):
+class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     # def __init__(self, server_wrapper, request, client_address, server):
     #     self.server_wrapper = server_wrapper
     #     BaseHTTPRequestHandler.__init__(self, request, client_address, server)
