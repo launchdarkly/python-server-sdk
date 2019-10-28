@@ -1,3 +1,4 @@
+from builtins import bytes
 import json
 from six import iteritems
 from six.moves import BaseHTTPServer, queue
@@ -76,7 +77,7 @@ class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                     self.send_header(key, value)
             self.end_headers()
             if resp.body is not None:
-                self.wfile.write(resp.body)
+                self.wfile.write(bytes(resp.body, 'utf-8'))
         else:
             self.send_error(404)
 
