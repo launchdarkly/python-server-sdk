@@ -1,7 +1,6 @@
 import json
-from queue import Queue
 from six import iteritems
-from six.moves import BaseHTTPServer
+from six.moves import BaseHTTPServer, queue
 import socket
 from threading import Thread
 
@@ -25,7 +24,7 @@ class MockServerWrapper(Thread):
         self.server = BaseHTTPServer.HTTPServer(('localhost', port), MockServerRequestHandler)
         self.server.server_wrapper = self
         self.matchers = {}
-        self.requests = Queue()
+        self.requests = queue.Queue()
     
     def close(self):
         self.server.shutdown()
