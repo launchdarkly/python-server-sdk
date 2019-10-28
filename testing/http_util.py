@@ -76,7 +76,7 @@ class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                     self.send_header(key, value)
             self.end_headers()
             if resp.body is not None:
-                self.wfile.write(bytes(resp.body, 'utf-8'))
+                self.wfile.write(resp.body.encode('UTF-8'))
         else:
             self.send_error(404)
 
