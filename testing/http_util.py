@@ -1,4 +1,3 @@
-from builtins import bytes
 import json
 from six import iteritems
 from six.moves import BaseHTTPServer, queue
