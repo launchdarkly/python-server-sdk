@@ -5,6 +5,7 @@ General internal helper functions.
 
 import certifi
 import logging
+from os import environ
 import six
 import sys
 import urllib3
@@ -84,14 +85,40 @@ class UnsuccessfulResponseException(Exception):
         return self._status
 
 
-def create_http_pool_manager(num_pools=1, verify_ssl=False):
+def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None):
+    proxy_url = _get_proxy_url(target_base_uri)
+
     if not verify_ssl:
-        return urllib3.PoolManager(num_pools=num_pools)
-    return urllib3.PoolManager(
-        num_pools=num_pools,
-        cert_reqs='CERT_REQUIRED',
-        ca_certs=certifi.where()
+        if proxy_url is None:
+            print("no proxy for %s" % target_base_uri)
+            return urllib3.PoolManager(num_pools=num_pools)
+        else:
+            print("the proxy is %s for %s" % (proxy_url, target_base_uri))
+            return urllib3.ProxyManager(proxy_url, num_pools=num_pools)
+    
+    if proxy_url is None:
+        print("no proxy for %s" % target_base_uri)
+        return urllib3.PoolManager(
+            num_pools=num_pools,
+            cert_reqs='CERT_REQUIRED',
+            ca_certs=certifi.where()
+            )
+    else:
+        print("the proxy is %s for %s" % (proxy_url, target_base_uri))
+        return urllib3.ProxyManager(
+            proxy_url,
+            num_pools=num_pools,
+            cert_reqs='CERT_REQUIRED',
+            ca_certs=certifi.where()
         )
+
+def _get_proxy_url(target_base_uri):
+    if target_base_uri is None:
+        return None
+    is_https = target_base_uri.startswith('https:')
+    if is_https:
+        return environ.get('https_proxy')
+    return environ.get('http_proxy')
 
 
 def throw_if_unsuccessful_response(resp):

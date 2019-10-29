@@ -56,11 +56,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 for msg in messages:
                     if not self._running:
                         break
+                    print('*** msg: %s' % msg.event)
                     message_ok = self.process_message(self._store, self._requester, msg)
                     if message_ok is True and self._ready.is_set() is False:
+                        print('*** inited')
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             except UnsuccessfulResponseException as e:
+                print('*** nope: %s' % e)
                 log.error(http_error_message(e.status, "stream connection"))
                 if not is_http_error_recoverable(e.status):
                     self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
@@ -154,3 +157,10 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if path.startswith(kind.stream_api_path):
                 return ParsedPath(kind = kind, key = path[len(kind.stream_api_path):])
         return None
+
+    # magic methods for "with" statement (used in testing)
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        self.stop()
