@@ -65,7 +65,6 @@ class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self._do_request()
 
     def _do_request(self):
-        print('*** %s %s' % (self.command, self.path))
         server_wrapper = self.server.server_wrapper
         server_wrapper.requests.put(MockServerRequest(self.command, self.path, self.headers))
         if self.path in server_wrapper.matchers:

@@ -90,21 +90,17 @@ def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None
 
     if not verify_ssl:
         if proxy_url is None:
-            print("no proxy for %s" % target_base_uri)
             return urllib3.PoolManager(num_pools=num_pools)
         else:
-            print("the proxy is %s for %s" % (proxy_url, target_base_uri))
             return urllib3.ProxyManager(proxy_url, num_pools=num_pools)
     
     if proxy_url is None:
-        print("no proxy for %s" % target_base_uri)
         return urllib3.PoolManager(
             num_pools=num_pools,
             cert_reqs='CERT_REQUIRED',
             ca_certs=certifi.where()
             )
     else:
-        print("the proxy is %s for %s" % (proxy_url, target_base_uri))
         return urllib3.ProxyManager(
             proxy_url,
             num_pools=num_pools,
