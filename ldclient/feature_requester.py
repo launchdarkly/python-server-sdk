@@ -25,7 +25,7 @@ CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 class FeatureRequesterImpl(FeatureRequester):
     def __init__(self, config):
         self._cache = dict()
-        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl)
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl, target_base_uri=config.base_uri)
         self._config = config
 
     def get_all_data(self):
@@ -36,7 +36,7 @@ class FeatureRequesterImpl(FeatureRequester):
         }
 
     def get_one(self, kind, key):
-        return self._do_request(kind.request_api_path + '/' + key, False)
+        return self._do_request(self._config.base_uri + kind.request_api_path + '/' + key, False)
 
     def _do_request(self, uri, allow_cache):
         hdrs = _headers(self._config.sdk_key)
@@ -49,7 +49,7 @@ class FeatureRequesterImpl(FeatureRequester):
                                timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                retries=1)
         throw_if_unsuccessful_response(r)
-        if r.status == 304 and cache_entry is not None:
+        if r.status == 304 and allow_cache and cache_entry is not None:
             data = cache_entry.data
             etag = cache_entry.etag
             from_cache = True
