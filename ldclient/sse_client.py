@@ -32,7 +32,7 @@ class SSEClient(object):
         self._chunk_size = chunk_size
 
         # Optional support for passing in an HTTP client
-        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl)
+        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl, target_base_uri=url)
 
         # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs

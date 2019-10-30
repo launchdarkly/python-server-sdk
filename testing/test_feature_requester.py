@@ -125,3 +125,41 @@ def test_get_one_flag_does_not_use_etags():
         assert result == flag_data
         req = server.require_request()
         assert 'If-None-Match' not in req.headers.keys() # did not send etag from previous request
+
+def test_can_use_http_proxy_via_environment_var(monkeypatch):
+    fake_base_uri = 'http://not-real'
+    with start_server() as server:
+        monkeypatch.setenv('http_proxy', server.uri)
+        config = Config(sdk_key = 'sdk-key', base_uri = fake_base_uri)
+        fr = FeatureRequesterImpl(config)
+
+        resp_data = { 'flags': {}, 'segments': {} }
+        expected_data = { FEATURES: {}, SEGMENTS: {} }
+        server.setup_json_response(fake_base_uri + '/sdk/latest-all', resp_data)
+
+        # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
+        # HTTP client, so we should be able to see the request go through. Note that the URI path will
+        # actually be an absolute URI for a proxy request.
+        result = fr.get_all_data()
+        assert result == expected_data
+        req = server.require_request()
+        assert req.method == 'GET'
+
+def test_can_use_https_proxy_via_environment_var(monkeypatch):
+    fake_base_uri = 'https://not-real'
+    with start_server() as server:
+        monkeypatch.setenv('https_proxy', server.uri)
+        config = Config(sdk_key = 'sdk-key', base_uri = fake_base_uri)
+        fr = FeatureRequesterImpl(config)
+
+        resp_data = { 'flags': {}, 'segments': {} }
+        server.setup_json_response(fake_base_uri + '/sdk/latest-all', resp_data)
+
+        # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
+        # it can still record that it *got* the request, which proves that the request went to the proxy.
+        try:
+            fr.get_all_data()
+        except:
+            pass
+        req = server.require_request()
+        assert req.method == 'CONNECT'

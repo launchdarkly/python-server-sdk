@@ -154,3 +154,10 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if path.startswith(kind.stream_api_path):
                 return ParsedPath(kind = kind, key = path[len(kind.stream_api_path):])
         return None
+
+    # magic methods for "with" statement (used in testing)
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        self.stop()

@@ -25,7 +25,7 @@ CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 class FeatureRequesterImpl(FeatureRequester):
     def __init__(self, config):
         self._cache = dict()
-        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl)
+        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl, target_base_uri=config.base_uri)
         self._config = config
 
     def get_all_data(self):

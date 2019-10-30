@@ -55,19 +55,18 @@ class MockServerWrapper(Thread):
         self.close()
 
 class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
-    # def __init__(self, server_wrapper, request, client_address, server):
-    #     self.server_wrapper = server_wrapper
-    #     BaseHTTPRequestHandler.__init__(self, request, client_address, server)
+    def do_CONNECT(self):
+        self._do_request()
 
     def do_GET(self):
-        self._do_request('GET')
+        self._do_request()
 
     def do_POST(self):
-        self._do_request('POST')
+        self._do_request()
 
-    def _do_request(self, method):
+    def _do_request(self):
         server_wrapper = self.server.server_wrapper
-        server_wrapper.requests.put(MockServerRequest(method, self.path, self.headers))
+        server_wrapper.requests.put(MockServerRequest(self.command, self.path, self.headers))
         if self.path in server_wrapper.matchers:
             resp = server_wrapper.matchers[self.path]
             self.send_response(resp.status)
