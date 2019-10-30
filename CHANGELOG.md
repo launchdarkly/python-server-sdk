@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.10.2] - 2019-10-30
+### Fixed:
+- Since version 6.1.0, the SDK was not respecting the standard `https_proxy` environment variable for specifying a proxy (because that variable is not used by `urllib3`). This has been fixed.
+- In streaming mode, the SDK could fail to apply a feature flag update if it exceeded the LaunchDarkly service's maximum streaming message size; the service uses an alternate delivery mechanism in this case, which was broken in the SDK. This bug was also introduced in version 6.1.0.
+- Fixed the generated documentation to exclude special members like `__dict__`.
+
 ## [6.10.1] - 2019-08-20
 ### Fixed:
 - Fixed a bug in 6.10.0 that prevented analytics events from being generated for missing flags.
