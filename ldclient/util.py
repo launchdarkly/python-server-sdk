@@ -85,8 +85,8 @@ class UnsuccessfulResponseException(Exception):
         return self._status
 
 
-def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None):
-    proxy_url = _get_proxy_url(target_base_uri)
+def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None, force_proxy=None):
+    proxy_url = force_proxy or _get_proxy_url(target_base_uri)
 
     if not verify_ssl:
         if proxy_url is None:

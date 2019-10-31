@@ -212,7 +212,7 @@ class EventDispatcher(object):
         self._inbox = inbox
         self._config = config
         self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl,
-            target_base_uri=config.events_uri) if http_client is None else http_client
+            target_base_uri=config.events_uri, force_proxy=config.http_proxy) if http_client is None else http_client
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
