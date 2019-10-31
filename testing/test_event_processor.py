@@ -506,14 +506,14 @@ def _verify_http_proxy_is_used(server, config):
 def _verify_https_proxy_is_used(server, config):
     server.setup_response(config.events_uri + '/bulk', 200, None)
     with DefaultEventProcessor(config) as ep:
-            ep.send_event({ 'kind': 'identify', 'user': user })
-            ep.flush()
-            ep._wait_until_inactive()
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
 
-            # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
-            # it can still record that it *got* the request, which proves that the request went to the proxy.
-            req = server.require_request()
-            assert req.method == 'CONNECT'
+        # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
+        # it can still record that it *got* the request, which proves that the request went to the proxy.
+        req = server.require_request()
+        assert req.method == 'CONNECT'
 
 def verify_unrecoverable_http_error(status):
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
