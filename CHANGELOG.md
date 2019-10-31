@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.11.0] - 2019-10-31
+### Added:
+- The new `Config` parameter `http_proxy` allows you to specify a proxy server programmatically rather than by using environment variables. This may be helpful if you want the SDK to use a proxy, but do not want other Python code to use the proxy. (Thanks, [gangeli](https://github.com/launchdarkly/python-server-sdk/pull/130)!)
+
 ## [6.10.2] - 2019-10-30
 ### Fixed:
 - Since version 6.1.0, the SDK was not respecting the standard `https_proxy` environment variable for specifying a proxy (because that variable is not used by `urllib3`). This has been fixed.
