@@ -23,7 +23,7 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 class SSEClient(object):
     def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000,
-                 verify_ssl=False, http=None, **kwargs):
+                 verify_ssl=False, http=None, http_proxy=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
@@ -32,7 +32,8 @@ class SSEClient(object):
         self._chunk_size = chunk_size
 
         # Optional support for passing in an HTTP client
-        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl, target_base_uri=url)
+        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl, target_base_uri=url,
+            force_proxy=http_proxy)
 
         # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs

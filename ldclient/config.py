@@ -43,7 +43,8 @@ class Config(object):
                  offline=False,
                  user_keys_capacity=1000,
                  user_keys_flush_interval=300,
-                 inline_users_in_events=False):
+                 inline_users_in_events=False,
+                 http_proxy=None):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -95,6 +96,10 @@ class Config(object):
         :type event_processor_class: (ldclient.config.Config) -> EventProcessor
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
+        :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
+          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
+          variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
+          service uses HTTPS, but a Relay Proxy instance could use HTTP).
         """
         self.__sdk_key = sdk_key
 
@@ -126,6 +131,7 @@ class Config(object):
         self.__user_keys_capacity = user_keys_capacity
         self.__user_keys_flush_interval = user_keys_flush_interval
         self.__inline_users_in_events = inline_users_in_events
+        self.__http_proxy = http_proxy
 
     @classmethod
     def default(cls):
@@ -277,6 +283,10 @@ class Config(object):
     @property
     def inline_users_in_events(self):
         return self.__inline_users_in_events
+
+    @property
+    def http_proxy(self):
+        return self.__http_proxy
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key is '':
