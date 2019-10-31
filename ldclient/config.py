@@ -99,7 +99,8 @@ class Config(object):
         :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
           proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
-          service uses HTTPS, but a Relay Proxy instance could use HTTP).
+          service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
+          override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
         """
         self.__sdk_key = sdk_key
 
