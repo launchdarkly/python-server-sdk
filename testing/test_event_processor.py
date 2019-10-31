@@ -469,41 +469,51 @@ def test_does_not_block_on_full_inbox():
         assert had_no_more
 
 def test_can_use_http_proxy_via_environment_var(monkeypatch):
-    fake_events_uri = 'http://not-real'
-
     with start_server() as server:
         monkeypatch.setenv('http_proxy', server.uri)
-        config = Config(sdk_key = 'sdk-key', events_uri = fake_events_uri)
-        server.setup_response(fake_events_uri + '/bulk', 200, None)
-
-        with DefaultEventProcessor(config) as ep:
-            ep.send_event({ 'kind': 'identify', 'user': user })
-            ep.flush()
-            ep._wait_until_inactive()
-
-            # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
-            # HTTP client, so we should be able to see the request go through. Note that the URI path will
-            # actually be an absolute URI for a proxy request.
-            req = server.require_request()
-            assert req.method == 'POST'
+        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real')
+        _verify_http_proxy_is_used(server, config)
 
 def test_can_use_https_proxy_via_environment_var(monkeypatch):
-    fake_events_uri = 'https://not-real'
-
     with start_server() as server:
         monkeypatch.setenv('https_proxy', server.uri)
-        config = Config(sdk_key = 'sdk-key', events_uri = fake_events_uri)
-        server.setup_response(fake_events_uri + '/bulk', 200, None)
+        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real')
+        _verify_https_proxy_is_used(server, config)
 
-        with DefaultEventProcessor(config) as ep:
-            ep.send_event({ 'kind': 'identify', 'user': user })
-            ep.flush()
-            ep._wait_until_inactive()
+def test_can_use_http_proxy_via_config():
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real', http_proxy=server.uri)
+        _verify_http_proxy_is_used(server, config)
 
-            # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
-            # it can still record that it *got* the request, which proves that the request went to the proxy.
-            req = server.require_request()
-            assert req.method == 'CONNECT'
+def test_can_use_https_proxy_via_config():
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real', http_proxy=server.uri)
+        _verify_https_proxy_is_used(server, config)
+
+def _verify_http_proxy_is_used(server, config):
+    server.setup_response(config.events_uri + '/bulk', 200, None)
+    with DefaultEventProcessor(config) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
+        # HTTP client, so we should be able to see the request go through. Note that the URI path will
+        # actually be an absolute URI for a proxy request.
+        req = server.require_request()
+        assert req.method == 'POST'
+
+def _verify_https_proxy_is_used(server, config):
+    server.setup_response(config.events_uri + '/bulk', 200, None)
+    with DefaultEventProcessor(config) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
+        # it can still record that it *got* the request, which proves that the request went to the proxy.
+        req = server.require_request()
+        assert req.method == 'CONNECT'
 
 def verify_unrecoverable_http_error(status):
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
