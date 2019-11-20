@@ -15,7 +15,7 @@ from ldclient.versioned_data_kind import FEATURES
 class _RedisFeatureStoreCore(FeatureStoreCore):
     def __init__(self, url, prefix, max_connections):
         if not have_redis:
-            raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")        
+            raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
         self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
         self.test_update_hook = None  # exposed for testing
@@ -43,7 +43,7 @@ class _RedisFeatureStoreCore(FeatureStoreCore):
         r = redis.Redis(connection_pool=self._pool)
         all_items = r.hgetall(self._items_key(kind))
 
-        if all_items is None or all_items is "":
+        if all_items is None or all_items == "":
             all_items = {}
 
         results = {}
@@ -56,7 +56,7 @@ class _RedisFeatureStoreCore(FeatureStoreCore):
         r = redis.Redis(connection_pool=self._pool)
         item_json = r.hget(self._items_key(kind), key)
 
-        if item_json is None or item_json is "":
+        if item_json is None or item_json == "":
             log.debug("RedisFeatureStore: key %s not found in '%s'. Returning None.", key, kind.namespace)
             return None
 

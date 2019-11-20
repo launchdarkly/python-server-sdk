@@ -63,7 +63,7 @@ class FixedThreadPool(object):
     def _run_worker(self):
         while True:
             item = self._job_queue.get(block = True)
-            if item is 'stop':
+            if item == 'stop':
                 return
             try:
                 item()
