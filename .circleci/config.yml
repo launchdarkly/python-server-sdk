@@ -115,6 +115,9 @@ jobs:
     executor:
       name: win/vs2019
       shell: powershell.exe
+    parameters:
+      py3:
+        type: boolean
     steps:
       - checkout
       - when:
