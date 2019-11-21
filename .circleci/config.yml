@@ -154,6 +154,7 @@ jobs:
       - run:
           name: install requirements
           command: |
+            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
@@ -161,6 +162,7 @@ jobs:
           name: run tests
           command: |
             mkdir test-reports
+            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"
             python -m pytest -s --junitxml=test-reports/junit.xml testing;
       - store_test_results:
           path: test-reports
