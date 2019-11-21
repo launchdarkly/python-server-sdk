@@ -96,7 +96,7 @@ jobs:
   test-3.8:
     <<: *test-template
     docker:
-      - image: circleci/python:3.8-stretch
+      - image: circleci/python:3.8-buster
       - image: redis
       - image: amazon/dynamodb-local
       - image: consul
