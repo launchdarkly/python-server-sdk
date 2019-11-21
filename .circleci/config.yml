@@ -113,9 +113,15 @@ jobs:
     steps:
       - checkout
       - run:
-          name: set up DynamoDB
+          name: install Python 2.7
           command: |
             $ProgressPreference = "SilentlyContinue"  # prevents console errors from CircleCI host
+            iwr -outf python-2.7.16.amd64.msi https://www.python.org/ftp/python/2.7.16/python-2.7.16.amd64.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I python-2.7.16.amd64.msi /quiet'
+      - run:
+          name: set up DynamoDB
+          command: |
+            $ProgressPreference = "SilentlyContinue"
             iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
             mkdir dynamo
             Expand-Archive -Path dynamo.zip -DestinationPath dynamo
