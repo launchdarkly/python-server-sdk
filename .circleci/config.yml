@@ -13,7 +13,12 @@ workflows:
       - test-3-6
       - test-3-7
       - test-3-8
-      - test-windows
+      - test-windows:
+          name: Windows - Py2.7
+          py3: false
+      - test-windows:
+          name: Windows - Py3
+          py3: true
 
 test-template: &test-template
   steps:
@@ -112,12 +117,24 @@ jobs:
       shell: powershell.exe
     steps:
       - checkout
+      - when:
+          condition: <<parameters.py3>>
+          steps:
+            - run:
+                name: install Python 3
+                command: choco install python
+      - unless:
+          condition: <<parameters.py3>>
+          steps:
+            - run:
+                name: install Python 2.7
+                command: |
+                  $ProgressPreference = "SilentlyContinue"  # prevents console errors from CircleCI host
+                  iwr -outf python-2.7.16.amd64.msi https://www.python.org/ftp/python/2.7.16/python-2.7.16.amd64.msi
+                  Start-Process msiexec.exe -Wait -ArgumentList '/I python-2.7.16.amd64.msi /quiet'
       - run:
-          name: install Python 2.7
-          command: |
-            $ProgressPreference = "SilentlyContinue"  # prevents console errors from CircleCI host
-            iwr -outf python-2.7.16.amd64.msi https://www.python.org/ftp/python/2.7.16/python-2.7.16.amd64.msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/I python-2.7.16.amd64.msi /quiet'
+          name: install Python 3
+          command: choco install python
       - run:
           name: set up DynamoDB
           command: |
@@ -153,16 +170,16 @@ jobs:
       - run:
           name: install requirements
           command: |
-            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"
+            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"  # has no effect if 2.7 isn't installed
             python --version
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
       - run:
-          name: run tests
+          name: run tests (2.7)
           command: |
             mkdir test-reports
-            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"
+            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"  # has no effect if 2.7 isn't installed
             python -m pytest -s --junitxml=test-reports/junit.xml testing;
       - store_test_results:
           path: test-reports
