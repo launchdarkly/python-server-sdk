@@ -125,7 +125,7 @@ jobs:
           steps:
             - run:
                 name: install Python 3
-                command: choco install python
+                command: choco install python --no-progress
       - unless:
           condition: <<parameters.py3>>
           steps:
