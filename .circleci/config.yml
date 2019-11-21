@@ -6,110 +6,105 @@ orbs:
 workflows:
   test:
     jobs:
-      - test-2-7
-      - test-3-3
-      - test-3-4
-      - test-3-5
-      - test-3-6
-      - test-3-7
-      - test-3-8
+      - test-linux:
+          name: Python 2.7
+          docker-image: circleci/python:2.7-jessie
+          test-with-codeclimate: true  # we only need to run CodeClimate in one job
+      - test-linux:
+          name: Python 3.3
+          docker-image: circleci/python:3.3-jessie
+          consul-supported: false  # Consul isn't supported in 3.3
+          filesource-supported: false  # FileDataSource isn't supported in 3.3
+          test-packaging: false  # packaging test requires virtualenv, which isn't supported in 3.3
+      - test-linux:
+          name: Python 3.4
+          docker-image: circleci/python:3.4-jessie
+          consul-supported: false  # Consul isn't supported in 3.4
+      - test-linux:
+          name: Python 3.5
+          docker-image: circleci/python:3.5-jessie
+      - test-linux:
+          name: Python 3.6
+          docker-image: circleci/python:3.6-jessie
+      - test-linux:
+          name: Python 3.7
+          docker-image: circleci/python:3.7-stretch
+      - test-linux:
+          name: Python 3.8
+          docker-image: circleci/python:3.8-buster
       - test-windows:
-          name: Windows - Py2.7
+          name: Windows Py2.7
           py3: false
       - test-windows:
-          name: Windows - Py3
+          name: Windows Py3.3
           py3: true
 
-test-template: &test-template
-  steps:
-    - checkout
-    - run:
-        name: install requirements
-        command: |
-          sudo pip install --upgrade pip virtualenv;
-          sudo pip install -r test-requirements.txt;
-          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
-            sudo pip install -r test-filesource-optional-requirements.txt;
-          fi;
-          if [[ "$CIRCLE_JOB" != "test-3.3" ]] && [[ "$CIRCLE_JOB" != "test-3.4" ]]; then
-            sudo pip install -r consul-requirements.txt;
-          fi;
-          sudo python setup.py install;
-          pip freeze
-    - run:
-        name: run tests
-        command: |
-          mkdir test-reports;
-          if [[ "$CIRCLE_JOB" == "test-2.7" ]]; then
-            pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning;
-            sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"';
-          else
-            pytest -s --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning;
-          fi
-    - run:
-        name: test packaging/install
-        # Note, virtualenv isn't supported on Python 3.3 and this test requires virtualenv. But we
-        # never build our published package on 3.3 anyway.
-        command: |
-          if [[ "$CIRCLE_JOB" != "test-3.3" ]]; then
-            sudo rm -rf dist *.egg-info;
-            ./test-packaging/test-packaging.sh;
-          fi
-    - store_test_results:
-        path: test-reports
-    - store_artifacts:
-        path: test-reports
-
 jobs:
-  test-2-7:
-    <<: *test-template
+  test-linux:
+    parameters:
+      docker-image:
+        type: string
+      consul-supported:
+        type: boolean
+        default: true
+      filesource-supported:
+        type: boolean
+        default: true
+      test-packaging:
+        type: boolean
+        default: true
+      test-with-codeclimate:
+        type: boolean
+        default: false
     docker:
-      - image: circleci/python:2.7-jessie
+      - image: <<parameters.docker-image>>
       - image: redis
       - image: amazon/dynamodb-local
       - image: consul
-  test-3-3:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.3-jessie
-      - image: redis
-      - image: amazon/dynamodb-local
-      # python-consul doesn't support Python 3.3
-  test-3-4:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.4-jessie
-      - image: redis
-      - image: amazon/dynamodb-local
-      # python-consul doesn't support Python 3.4
-  test-3-5:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.5-jessie
-      - image: redis
-      - image: amazon/dynamodb-local
-      - image: consul
-  test-3-6:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.6-jessie
-      - image: redis
-      - image: amazon/dynamodb-local
-      - image: consul
-  test-3-7:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.7-stretch
-      - image: redis
-      - image: amazon/dynamodb-local
-      - image: consul
-  test-3-8:
-    <<: *test-template
-    docker:
-      - image: circleci/python:3.8-buster
-      - image: redis
-      - image: amazon/dynamodb-local
-      - image: consul
+    steps:
+      - checkout
+      - run:
+          name: install requirements
+          command: |
+            sudo pip install --upgrade pip virtualenv;
+            sudo pip install -r test-requirements.txt;
+            if [[ "<<parameters.filesource-supported>>" == "true" ]]; then
+              sudo pip install -r test-filesource-optional-requirements.txt;
+            fi;
+            if [[ "<<parameters.consul-supported>>" == "true" ]]; then
+              sudo pip install -r consul-requirements.txt;
+            fi;
+            sudo python setup.py install;
+            pip freeze
+      - when:
+          condition: <<parameters.test-with-codeclimate>>
+          steps:
+            - run:
+                name: run tests (with CodeClimate)
+                command: |
+                  mkdir test-reports
+                  pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning
+                  sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'
+      - unless:
+          condition: <<parameters.test-with-codeclimate>>
+          steps:
+            - run:
+                name: run tests
+                command: |
+                  mkdir test-reports
+                  pytest -s --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning
+      - when:
+          condition: <<parameters.test-packaging>>
+          steps:
+            - run:
+                name: test packaging/install
+                command: |
+                  sudo rm -rf dist *.egg-info
+                  ./test-packaging/test-packaging.sh
+      - store_test_results:
+          path: test-reports
+      - store_artifacts:
+          path: test-reports
 
   test-windows:
     executor:
