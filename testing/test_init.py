@@ -3,7 +3,7 @@ from pprint import pprint
 import ldclient
 from ldclient import Config
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 mylogger = logging.getLogger()
 
 
