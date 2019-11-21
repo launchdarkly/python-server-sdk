@@ -164,7 +164,7 @@ class DynamoDBTester(object):
         for resp in client.get_paginator('scan').paginate(**req):
             for item in resp['Items']:
                 delete_requests.append({ 'DeleteRequest': { 'Key': item } })
-        _DynamoDBHelpers.batch_write_requests(client, self.table_name, delete_requests)        
+        _DynamoDBHelpers.batch_write_requests(client, self.table_name, delete_requests)
 
 
 class TestFeatureStore:
@@ -243,7 +243,7 @@ class TestFeatureStore:
     def test_get_all_versions(self, store):
         store = self.base_initialized_store(store)
         result = store.all(FEATURES, lambda x: x)
-        assert len(result) is 2
+        assert len(result) == 2
         assert result.get('foo') == self.make_feature('foo', 10)
         assert result.get('bar') == self.make_feature('bar', 10)
 

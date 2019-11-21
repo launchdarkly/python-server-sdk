@@ -422,7 +422,7 @@ def test_sdk_key_is_sent():
         ep.flush()
         ep._wait_until_inactive()
 
-        assert mock_http.request_headers.get('Authorization') is 'SDK_KEY'
+        assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)

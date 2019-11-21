@@ -184,7 +184,7 @@ def _get_value_for_variation_or_rollout(flag, vr, user, reason):
 
 
 def _get_user_attribute(user, attr):
-    if attr is 'secondary':
+    if attr == 'secondary':
         return None, True
     if attr in __BUILTINS__:
         return user.get(attr), False
