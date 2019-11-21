@@ -136,9 +136,6 @@ jobs:
                   iwr -outf python-2.7.16.amd64.msi https://www.python.org/ftp/python/2.7.16/python-2.7.16.amd64.msi
                   Start-Process msiexec.exe -Wait -ArgumentList '/I python-2.7.16.amd64.msi /quiet'
       - run:
-          name: install Python 3
-          command: choco install python
-      - run:
           name: set up DynamoDB
           command: |
             $ProgressPreference = "SilentlyContinue"
