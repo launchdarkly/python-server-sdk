@@ -2,6 +2,12 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.11.1] - 2019-11-21
+### Fixed:
+- Fixed an incompatibility with Python 3.3 due to an unpinned dependency on `expiringdict`.
+- Fixed usages that caused a `SyntaxWarning` in Python 3.8. (Thanks, [bunchesofdonald](https://github.com/launchdarkly/python-server-sdk/pull/133)!)
+- Updated CI scripts so a `SyntaxWarning` will always cause a build failure, and added a 3.8 build.
+
 ## [6.11.0] - 2019-10-31
 ### Added:
 - The new `Config` parameter `http_proxy` allows you to specify a proxy server programmatically rather than by using environment variables. This may be helpful if you want the SDK to use a proxy, but do not want other Python code to use the proxy. (Thanks, [gangeli](https://github.com/launchdarkly/python-server-sdk/pull/130)!)
