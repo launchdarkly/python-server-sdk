@@ -290,5 +290,5 @@ class Config(object):
         return self.__http_proxy
 
     def _validate(self):
-        if self.offline is False and self.sdk_key is None or self.sdk_key is '':
+        if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
