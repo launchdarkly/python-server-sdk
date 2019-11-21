@@ -130,7 +130,7 @@ jobs:
             mkdir consul
             Expand-Archive -Path consul.zip -DestinationPath consul
             cd consul
-            sc.exe create "Consul" binPath="$(System.DefaultWorkingDirectory)/consul/consul.exe agent -dev"
+            sc.exe create "Consul" binPath="$(Get-Location)/consul.exe agent -dev"
             sc.exe start "Consul"
       - run:
           name: start Redis
