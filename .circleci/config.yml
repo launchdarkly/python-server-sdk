@@ -1,6 +1,9 @@
-version: 2
+version: 2.1
+
+orbs:
+   win: circleci/windows@1.0.0
+
 workflows:
-  version: 2
   test:
     jobs:
       - test-2.7
@@ -10,6 +13,8 @@ workflows:
       - test-3.6
       - test-3.7
       - test-3.8
+      - test-windows
+
 test-template: &test-template
   steps:
     - checkout
@@ -100,3 +105,58 @@ jobs:
       - image: redis
       - image: amazon/dynamodb-local
       - image: consul
+
+  test-windows:
+    executor:
+      name: win/vs2019
+      shell: powershell.exe
+    steps:
+      - checkout
+      - run:
+          name: set up DynamoDB
+          command: |
+            $ProgressPreference = "SilentlyContinue"  # prevents console errors from CircleCI host
+            iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
+            mkdir dynamo
+            Expand-Archive -Path dynamo.zip -DestinationPath dynamo
+            cd dynamo
+            javaw -D"java.library.path=./DynamoDBLocal_lib" -jar DynamoDBLocal.jar
+          background: true
+      - run:
+          name: set up Consul
+          command: |
+            $ProgressPreference = "SilentlyContinue"
+            iwr -outf consul.zip https://releases.hashicorp.com/consul/1.4.2/consul_1.4.2_windows_amd64.zip
+            mkdir consul
+            Expand-Archive -Path consul.zip -DestinationPath consul
+            cd consul
+            sc.exe create "Consul" binPath="$(System.DefaultWorkingDirectory)/consul/consul.exe agent -dev"
+            sc.exe start "Consul"
+      - run:
+          name: start Redis
+          command: |
+            $ProgressPreference = "SilentlyContinue"
+            iwr -outf redis.zip https://github.com/MicrosoftArchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip
+            mkdir redis
+            Expand-Archive -Path redis.zip -DestinationPath redis
+            cd redis
+            ./redis-server --service-install
+            ./redis-server --service-start
+            Start-Sleep -s 5
+            ./redis-cli ping
+      - run: python --version
+      - run:
+          name: install requirements
+          command: |
+            pip install -r test-requirements.txt
+            pip install -r consul-requirements.txt
+            python setup.py install
+      - run:
+          name: run tests
+          command: |
+            mkdir test-reports
+            python -m pytest -s --junitxml=test-reports/junit.xml testing;
+      - store_test_results:
+          path: test-reports
+      - store_artifacts:
+          path: test-reports
