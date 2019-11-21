@@ -31,10 +31,10 @@ test-template: &test-template
         command: |
           mkdir test-reports;
           if [[ "$CIRCLE_JOB" == "test-2.7" ]]; then
-            python -W error:SyntaxWarning -m pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing;
+            python -W error::SyntaxWarning -m pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing;
             sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"';
           else
-            pytest -W error:SyntaxWarning -m pytest -s --junitxml=test-reports/junit.xml testing;
+            pytest -W error::SyntaxWarning -m pytest -s --junitxml=test-reports/junit.xml testing;
           fi
     - run:
         name: test packaging/install
