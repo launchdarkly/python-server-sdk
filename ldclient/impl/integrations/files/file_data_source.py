@@ -80,7 +80,7 @@ class _FileDataSource(UpdateProcessor):
     
     def _parse_content(self, content):
         if have_yaml:
-            return yaml.load(content)  # pyyaml correctly parses JSON too
+            return yaml.safe_load(content)  # pyyaml correctly parses JSON too
         return json.loads(content)
     
     def _add_item(self, all_data, kind, item):

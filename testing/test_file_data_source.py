@@ -246,3 +246,28 @@ def test_evaluates_simplified_flag_with_client_as_expected():
         os.remove(path)
         if client is not None:
             client.close()
+
+unsafe_yaml_caused_method_to_be_called = False
+
+def arbitrary_method_called_from_yaml(x):
+    global unsafe_yaml_caused_method_to_be_called
+    unsafe_yaml_caused_method_to_be_called = True
+
+def test_does_not_allow_unsafe_yaml():
+    if not have_yaml:
+        pytest.skip("skipping file source test with YAML because pyyaml isn't available")
+
+    # This extended syntax defined by pyyaml allows arbitrary code execution. We should be using
+    # yaml.safe_load() which does not support such things.
+    unsafe_yaml = '''
+!!python/object/apply:testing.test_file_data_source.arbitrary_method_called_from_yaml ["hi"]
+'''
+    path = make_temp_file(unsafe_yaml)
+    try:
+        factory = Files.new_data_source(paths = path)
+        client = LDClient(config=Config(update_processor_class = factory, send_events = False))
+    finally:
+        os.remove(path)
+        if client is not None:
+            client.close()
+    assert unsafe_yaml_caused_method_to_be_called == False
