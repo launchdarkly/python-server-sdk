@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.11.2] - 2019-12-09
+### Fixed:
+- Changed `Files.new_data_source()` to use `yaml.safe_load()` instead of `yaml.load()` for YAML/JSON test data parsing. This disables `pyyaml` extended syntax features that could allow arbitrary code execution. ([#136](https://github.com/launchdarkly/python-server-sdk/issues/136))
+
 ## [6.11.1] - 2019-11-21
 ### Fixed:
 - Fixed an incompatibility with Python 3.3 due to an unpinned dependency on `expiringdict`.
