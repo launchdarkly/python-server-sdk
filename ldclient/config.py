@@ -44,7 +44,11 @@ class Config(object):
                  user_keys_capacity=1000,
                  user_keys_flush_interval=300,
                  inline_users_in_events=False,
-                 http_proxy=None):
+                 http_proxy=None,
+                 diagnostic_opt_out=False,
+                 diagnostic_recording_interval=900,
+                 wrapper_name=None,
+                 wrapper_version=None):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -101,6 +105,15 @@ class Config(object):
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
+        :param bool diagnostic_opt_out: TODO TODO TODO
+        :param int diagnostic_recording_interval: TODO TODO TODO
+        :param string wrapper_name: For use by wrapper libraries to set an identifying name for the wrapper
+          being used. This will be sent in HTTP headers during requests to the LaunchDarkly servers to allow
+          recording metrics on the usage of these wrapper libraries.
+        :param string wrapper_version: For use by wrapper libraries to report the version of the library in
+          use. If `wrapper_name` is not set, this field will be ignored. Otherwise the version string will
+          be included in the HTTP headers along with the `wrapper_name` during requests to the LaunchDarkly
+          servers.
         """
         self.__sdk_key = sdk_key
 
@@ -133,6 +146,10 @@ class Config(object):
         self.__user_keys_flush_interval = user_keys_flush_interval
         self.__inline_users_in_events = inline_users_in_events
         self.__http_proxy = http_proxy
+        self.__diagnostic_opt_out = diagnostic_opt_out
+        self.__diagnostic_recording_interval = diagnostic_recording_interval
+        self.__wrapper_name = wrapper_name
+        self.__wrapper_version = wrapper_version
 
     @classmethod
     def default(cls):
@@ -171,7 +188,11 @@ class Config(object):
                       offline=self.__offline,
                       user_keys_capacity=self.__user_keys_capacity,
                       user_keys_flush_interval=self.__user_keys_flush_interval,
-                      inline_users_in_events=self.__inline_users_in_events)
+                      inline_users_in_events=self.__inline_users_in_events,
+                      diagnostic_opt_out=self.__diagnostic_opt_out,
+                      diagnostic_recording_interval=self.__diagnostic_recording_interval,
+                      wrapper_name=self.__wrapper_name,
+                      wrapper_version=self.__wrapper_version)
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -288,6 +309,22 @@ class Config(object):
     @property
     def http_proxy(self):
         return self.__http_proxy
+
+    @property
+    def diagnostic_opt_out(self):
+        return self.__diagnostic_opt_out
+
+    @property
+    def diagnostic_recording_interval(self):
+        return self.__diagnostic_recording_interval
+
+    @property
+    def wrapper_name(self):
+        return self.__wrapper_name
+
+    @property
+    def wrapper_version(self):
+        return self.__wrapper_version
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':

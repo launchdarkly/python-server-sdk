@@ -42,6 +42,35 @@ def test_sends_headers():
             req = server.await_request()
             assert req.headers['Authorization'] == 'sdk-key'
             assert req.headers['User-Agent'] == 'PythonClient/' + VERSION
+            assert req.headers['X-LaunchDarkly-Wrapper'] is None
+
+def test_sends_wrapper_header():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', stream_uri = server.uri,
+                        wrapper_name = 'Flask', wrapper_version = '0.1.0')
+        server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
+
+        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+            sp.start()
+            req = server.await_request()
+            assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask/0.1.0'
+
+def test_sends_wrapper_header_without_version():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', stream_uri = server.uri,
+                        wrapper_name = 'Flask')
+        server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
+
+        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+            sp.start()
+            req = server.await_request()
+            assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask'
 
 def test_can_use_http_proxy_via_environment_var(monkeypatch):
     with start_server() as server:

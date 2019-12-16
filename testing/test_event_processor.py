@@ -424,6 +424,30 @@ def test_sdk_key_is_sent():
 
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
+def test_wrapper_header_not_sent_when_not_set():
+    with DefaultEventProcessor(Config(), mock_http) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') is None
+
+def test_wrapper_header_sent_when_set():
+    with DefaultEventProcessor(Config(wrapper_name = "Flask", wrapper_version = "0.0.1"), mock_http) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask/0.0.1"
+
+def test_wrapper_header_sent_without_version():
+    with DefaultEventProcessor(Config(wrapper_name = "Flask"), mock_http) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
+
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)
 

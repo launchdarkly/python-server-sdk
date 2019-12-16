@@ -162,7 +162,7 @@ class EventPayloadSendTask(object):
         try:
             json_body = json.dumps(output_events)
             log.debug('Sending events payload: ' + json_body)
-            hdrs = _headers(self._config.sdk_key)
+            hdrs = _headers(self._config)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
             uri = self._config.events_uri
             r = self._http.request('POST', uri,
