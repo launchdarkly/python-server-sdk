@@ -186,9 +186,11 @@ class EventBuffer(object):
         self._events = []
         self._summarizer = EventSummarizer()
         self._exceeded_capacity = False
+        self._dropped_events = 0
     
     def add_event(self, event):
         if len(self._events) >= self._capacity:
+            self._dropped_events = self._dropped_events + 1
             if not self._exceeded_capacity:
                 log.warning("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
                 self._exceeded_capacity = True
@@ -198,7 +200,12 @@ class EventBuffer(object):
     
     def add_to_summary(self, event):
         self._summarizer.summarize_event(event)
-    
+
+    def get_and_clear_dropped_count(self):
+        ret = self._dropped_events
+        self._dropped_events = 0
+        return ret
+
     def get_payload(self):
         return FlushPayload(self._events, self._summarizer.snapshot())
     
@@ -219,6 +226,7 @@ class EventDispatcher(object):
         self._user_keys = SimpleLRUCache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
+        self._deduplicated_users = 0
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
 
@@ -237,6 +245,8 @@ class EventDispatcher(object):
                     self._trigger_flush()
                 elif message.type == 'flush_users':
                     self._user_keys.clear()
+                elif message.type == 'diagnostic':
+                    self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
                     self._flush_workers.wait()
                     message.param.set()
@@ -269,9 +279,12 @@ class EventDispatcher(object):
         # an identify event for that user.
         if not (add_full_event and self._config.inline_users_in_events):
             user = event.get('user')
-            if user and not self.notice_user(user):
-                if event['kind'] != 'identify':
-                    add_index_event = True
+            if user and 'key' in user:
+                is_index_event = event['kind'] == 'identify'
+                already_seen = self.notice_user(user)
+                add_index_event = not is_index_event and not already_seen
+                if not is_index_event and already_seen:
+                    self._deduplicated_users = self._deduplicated_users + 1
 
         if add_index_event:
             ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
@@ -326,6 +339,10 @@ class EventDispatcher(object):
                 self._disabled = True
                 return
 
+    def _send_and_reset_diagnostics(self):
+        dropped_event_count = self._outbox.get_and_clear_dropped_count()
+        return
+
     def _do_shutdown(self):
         self._flush_workers.stop()
         self._flush_workers.wait()
@@ -341,6 +358,9 @@ class DefaultEventProcessor(EventProcessor):
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
+        if not config.diagnostic_opt_out:
+            self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer.start()
         self._close_lock = Lock()
         self._closed = False
         (dispatcher_class or EventDispatcher)(self._inbox, config, http)
@@ -375,6 +395,9 @@ class DefaultEventProcessor(EventProcessor):
 
     def _flush_users(self):
         self._inbox.put(EventProcessorMessage('flush_users', None))
+
+    def _send_diagnostic(self):
+        self._inbox.put(EventProcessorMessage('diagnostic', None))
 
     # Used only in tests
     def _wait_until_inactive(self):
