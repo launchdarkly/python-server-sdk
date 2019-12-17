@@ -34,7 +34,7 @@ def test_get_all_data_sends_headers():
         req = server.require_request()
         assert req.headers['Authorization'] == 'sdk-key'
         assert req.headers['User-Agent'] == 'PythonClient/' + VERSION
-        assert req.headers['X-LaunchDarkly-Wrapper'] is None
+        assert req.headers.get('X-LaunchDarkly-Wrapper') is None
 
 def test_get_all_data_sends_wrapper_header():
     with start_server() as server:
@@ -47,7 +47,7 @@ def test_get_all_data_sends_wrapper_header():
 
         fr.get_all_data()
         req = server.require_request()
-        assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask/0.1.0'
+        assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
 
 def test_get_all_data_sends_wrapper_header_without_version():
     with start_server() as server:
@@ -60,7 +60,7 @@ def test_get_all_data_sends_wrapper_header_without_version():
 
         fr.get_all_data()
         req = server.require_request()
-        assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask'
+        assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
 
 def test_get_all_data_can_use_cached_data():
     with start_server() as server:
@@ -123,7 +123,7 @@ def test_get_one_flag_sends_headers():
         req = server.require_request()
         assert req.headers['Authorization'] == 'sdk-key'
         assert req.headers['User-Agent'] == 'PythonClient/' + VERSION
-        assert req.headers['X-LaunchDarkly-Wrapper'] is None
+        assert req.headers.get('X-LaunchDarkly-Wrapper') is None
 
 def test_get_one_flag_sends_wrapper_header():
     with start_server() as server:
@@ -135,7 +135,7 @@ def test_get_one_flag_sends_wrapper_header():
         server.setup_json_response('/sdk/latest-flags/' + key, flag_data)
         fr.get_one(FEATURES, key)
         req = server.require_request()
-        assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask/0.1.0'
+        assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
 
 def test_get_one_flag_sends_wrapper_header_without_version():
     with start_server() as server:
@@ -147,7 +147,7 @@ def test_get_one_flag_sends_wrapper_header_without_version():
         server.setup_json_response('/sdk/latest-flags/' + key, flag_data)
         fr.get_one(FEATURES, key)
         req = server.require_request()
-        assert req.headers['X-LaunchDarkly-Wrapper'] == 'Flask'
+        assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
 
 def test_get_one_flag_throws_on_error():
     with start_server() as server:
