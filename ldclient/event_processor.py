@@ -30,7 +30,7 @@ from ldclient.util import _headers
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
-
+from ldclient.diagnostics import create_diagnostic_init, create_diagnostic_statistics
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 3
@@ -341,6 +341,7 @@ class EventDispatcher(object):
 
     def _send_and_reset_diagnostics(self):
         dropped_event_count = self._outbox.get_and_clear_dropped_count()
+        stats_event = create_diagnostic_statistics(1, 0, 0, dropped_event_count, self._deduplicated_users, 0)
         return
 
     def _do_shutdown(self):

@@ -147,7 +147,7 @@ class Config(object):
         self.__inline_users_in_events = inline_users_in_events
         self.__http_proxy = http_proxy
         self.__diagnostic_opt_out = diagnostic_opt_out
-        self.__diagnostic_recording_interval = diagnostic_recording_interval
+        self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
         self.__wrapper_version = wrapper_version
 

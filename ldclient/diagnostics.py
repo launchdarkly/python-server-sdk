@@ -1,7 +1,7 @@
-DEFAULT_CONFIG = Config('sdk_key')
-DEFAULT_BASE_URI = DEFAULT_CONFIG.base_uri
-DEFAULT_EVENTS_URI = DEFAULT_CONFIG.events_uri
-DEFAULT_STREAM_BASE_URI = DEFAULT_CONFIG.stream_base_uri
+#DEFAULT_CONFIG = Config.default()
+#DEFAULT_BASE_URI = DEFAULT_CONFIG.base_uri
+#DEFAULT_EVENTS_URI = DEFAULT_CONFIG.events_uri
+#DEFAULT_STREAM_BASE_URI = DEFAULT_CONFIG.stream_base_uri
 
 def diagnostic_base_fields(kind, creation_date, diagnostic_id):
     return {'kind': kind,
@@ -17,22 +17,20 @@ def create_diagnostic_statistics(creation_date, diagnostic_id, data_since_date, 
     return base_object
 
 def create_diagnostic_config_object(config):
-    return {'customBaseURI': config.base_uri != DEFAULT_BASE_URI,
-            'customEventsURI': config.events_uri != DEFAULT_EVENTS_URI,
-            'customStreamURI': config.stream_base_uri != DEFAULT_STREAM_BASE_URI,
+    default_config = Config.default()
+    return {'customBaseURI': config.base_uri != default_config.base_uri,
+            'customEventsURI': config.events_uri != default_config.events_uri,
+            'customStreamURI': config.stream_base_uri != default_config.stream_base_uri,
             'eventsCapacity': config.events_max_pending,
             'connectTimeoutMillis': config.connect_timeout * 1000,
             'socketTimeoutMillis': config.read_timeout * 1000,
             'eventsFlushIntervalMillis': config.flush_interval * 1000,
-            'usingProxy': False, #TODO
-            'usingProxyAuthenticator': False, #TODO
+            'usingProxy': config.http_proxy is not None,
             'streamingDisabled': not config.stream,
-            'usingRelayDaemon': False, #TODO
+            'usingRelayDaemon': config.use_ldd,
             'offline': config.offline, #Check if this actually makes sense
             'allAttributesPrivate': config.all_attributes_private,
             'pollingIntervalMillis': config.poll_interval * 1000,
-            #'startWaitMillis': check,
-            #'samplingInterval': check,
             #'reconnectTimeMillis': check,
             'userKeysCapacity': config.user_keys_capacity,
             'userKeysFlushIntervalMillis': config.user_keys_flush_interval * 1000,
@@ -41,11 +39,14 @@ def create_diagnostic_config_object(config):
             #'featureStoreFactory': check,
             }
 
-def create_diagnostic_sdk_object():
-    return {}
+def create_diagnostic_sdk_object(config):
+    return {'name': 'python-server-sdk',
+            'version': VERSION,
+            'wrapperName': config.wrapper_name,
+            'wrapperVersion': config.wrapper_version}
 
 def create_diagnostic_platform_object():
-    return {}
+    return {'name': 'python'}
 
 def create_diagnostic_init(creation_date, diagnostic_id, config):
     base_object = diagnostic_base_fields('diagnostic-init', creation_date, diagnostic_id)
