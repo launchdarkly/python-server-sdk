@@ -198,13 +198,13 @@ def _variation_index_for_user(feature, rule, user):
     if rule.get('variation') is not None:
         return rule['variation']
 
-    if rule.get('rollout') is not None:
+    if rule.get('rollout') is not None and rule['rollout'].get('variations') is not None and len(rule['rollout'].get('variations')) > 0:
         bucket_by = 'key'
         if rule['rollout'].get('bucketBy') is not None:
             bucket_by = rule['rollout']['bucketBy']
         bucket = _bucket_user(user, feature['key'], feature['salt'], bucket_by)
         sum = 0.0
-        for wv in rule['rollout'].get('variations') or []:
+        for wv in rule['rollout'].get('variations'):
             sum += wv.get('weight', 0.0) / 100000.0
             if bucket < sum:
                 return wv.get('variation')
