@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.11.3] - 2019-12-30
+### Fixed:
+- In rare circumstances (depending on the exact data in the flag configuration, the flag's salt value, and the user properties), a percentage rollout could fail and return a default value, logging the error "variation/rollout object with no variation or rollout". This would happen if the user's hashed value fell exactly at the end of the last "bucket" (the last variation defined in the rollout). This has been fixed so that the user will get the last variation.
+
 ## [6.11.2] - 2019-12-09
 ### Fixed:
 - Changed `Files.new_data_source()` to use `yaml.safe_load()` instead of `yaml.load()` for YAML/JSON test data parsing. This disables `pyyaml` extended syntax features that could allow arbitrary code execution. ([#136](https://github.com/launchdarkly/python-server-sdk/issues/136))
