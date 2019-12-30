@@ -216,6 +216,11 @@ class Config(object):
     def get_latest_flags_uri(self):
         return self.__base_uri + GET_LATEST_FEATURES_PATH
 
+    # for internal use only
+    @property
+    def events_base_uri(self):
+        return self.__events_uri
+
     # for internal use only - should construct the URL path in the events code, not here
     @property
     def events_uri(self):

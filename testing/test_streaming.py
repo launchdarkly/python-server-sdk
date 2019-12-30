@@ -22,7 +22,7 @@ def test_uses_stream_uri():
         config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
         server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
 
-        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
             sp.start()
             req = server.await_request()
             assert req.method == 'GET'
@@ -37,7 +37,7 @@ def test_sends_headers():
         config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
         server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
 
-        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
             sp.start()
             req = server.await_request()
             assert req.headers.get('Authorization') == 'sdk-key'
@@ -53,7 +53,7 @@ def test_sends_wrapper_header():
                         wrapper_name = 'Flask', wrapper_version = '0.1.0')
         server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
 
-        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
             sp.start()
             req = server.await_request()
             assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
@@ -67,7 +67,7 @@ def test_sends_wrapper_header_without_version():
                         wrapper_name = 'Flask')
         server.setup_response('/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
 
-        with StreamingUpdateProcessor(config, None, store, ready) as sp:
+        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
             sp.start()
             req = server.await_request()
             assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
@@ -98,7 +98,7 @@ def _verify_http_proxy_is_used(server, config):
     store = InMemoryFeatureStore()
     ready = Event()
     server.setup_response(config.stream_base_uri + '/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
-    with StreamingUpdateProcessor(config, None, store, ready) as sp:
+    with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
         sp.start()
         # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
         # HTTP client, so we should be able to see the request go through. Note that the URI path will
@@ -112,7 +112,7 @@ def _verify_https_proxy_is_used(server, config):
     store = InMemoryFeatureStore()
     ready = Event()
     server.setup_response(config.stream_base_uri + '/all', 200, fake_event, { 'Content-Type': 'text/event-stream' })
-    with StreamingUpdateProcessor(config, None, store, ready) as sp:
+    with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
         sp.start()
         # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
         # it can still record that it *got* the request, which proves that the request went to the proxy.

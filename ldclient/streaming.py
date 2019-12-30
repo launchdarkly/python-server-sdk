@@ -27,7 +27,7 @@ ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, config, requester, store, ready):
+    def __init__(self, config, requester, store, ready, diagnostic_accumulator):
         Thread.__init__(self)
         self.daemon = True
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
@@ -36,6 +36,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._store = store
         self._running = False
         self._ready = ready
+        self._diagnostic_accumulator = diagnostic_accumulator
+        self._es_started = None
 
         # We need to suppress the default logging behavior of the backoff package, because
         # it logs messages at ERROR level with variable content (the delay time) which will
@@ -52,11 +54,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = True
         while self._running:
             try:
+                self._es_started = int(time.time() * 1000)
                 messages = self._connect()
                 for msg in messages:
                     if not self._running:
                         break
                     message_ok = self.process_message(self._store, self._requester, msg)
+                    self._record_stream_init(False)
+                    self._es_started = None
                     if message_ok is True and self._ready.is_set() is False:
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
@@ -70,6 +75,11 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 log.warning("Caught exception. Restarting stream connection after one second. %s" % e)
                 # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
             time.sleep(1)
+
+    def _record_stream_init(self, failed):
+        if self._diagnostic_accumulator and self._es_started:
+            current_time = int(time.time() * 1000)
+            self._diagnostic_accumulator.record_stream_init(current_time, current_time - self._es_started, failed)
 
     def _backoff_expo():
         return backoff.expo(max_value=30)

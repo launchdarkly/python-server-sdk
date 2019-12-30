@@ -105,8 +105,13 @@ class LDClient(object):
 
         self._event_processor = self._make_event_processor(self._config)
 
+        if callable(getattr(self._event_processor, 'retrieve_diagnostic_accumulator', None)):
+            diagnostic_accumulator = self._event_processor.retrieve_diagnostic_accumulator()
+        else:
+            diagnostic_accumulator = None
+
         update_processor_ready = threading.Event()
-        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready)
+        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
         self._update_processor.start()
 
         if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
@@ -124,7 +129,7 @@ class LDClient(object):
             return NullEventProcessor()
         return config.event_processor_class(config)
 
-    def _make_update_processor(self, config, store, ready):
+    def _make_update_processor(self, config, store, ready, diagnostic_accumulator):
         if config.update_processor_class:
             log.info("Using user-specified update processor: " + str(config.update_processor_class))
             return config.update_processor_class(config, store, ready)
@@ -139,7 +144,7 @@ class LDClient(object):
         """ :type: FeatureRequester """
 
         if config.stream:
-            return StreamingUpdateProcessor(config, feature_requester, store, ready)
+            return StreamingUpdateProcessor(config, feature_requester, store, ready, diagnostic_accumulator)
 
         log.info("Disabling streaming API")
         log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
