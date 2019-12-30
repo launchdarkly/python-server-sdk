@@ -1,6 +1,7 @@
+import math
 import pytest
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.flag import EvaluationDetail, EvalResult, _bucket_user, evaluate
+from ldclient.flag import EvaluationDetail, EvalResult, _bucket_user, _variation_index_for_user, evaluate
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -384,7 +385,47 @@ def _make_bool_flag_from_clause(clause):
         'variations': [ False, True ]
     }
 
+def test_variation_index_is_returned_for_bucket():
+    user = { 'key': 'userkey' }
+    flag = { 'key': 'flagkey', 'salt': 'salt' }
 
+    # First verify that with our test inputs, the bucket value will be greater than zero and less than 100000,
+    # so we can construct a rollout whose second bucket just barely contains that value
+    bucket_value = math.trunc(_bucket_user(user, flag['key'], flag['salt'], 'key') * 100000)
+    assert bucket_value > 0 and bucket_value < 100000
+    
+    bad_variation_a = 0
+    matched_variation = 1
+    bad_variation_b = 2
+    rule = {
+        'rollout': {
+            'variations': [
+                { 'variation': bad_variation_a, 'weight': bucket_value }, # end of bucket range is not inclusive, so it will *not* match the target value
+                { 'variation': matched_variation, 'weight': 1 }, # size of this bucket is 1, so it only matches that specific value
+                { 'variation': bad_variation_b, 'weight': 100000 - (bucket_value + 1) }
+            ]
+        }
+    }
+    result_variation = _variation_index_for_user(flag, rule, user)
+    assert result_variation == matched_variation
+
+def test_last_bucket_is_used_if_bucket_value_equals_total_weight():
+    user = { 'key': 'userkey' }
+    flag = { 'key': 'flagkey', 'salt': 'salt' }
+
+    # We'll construct a list of variations that stops right at the target bucket value
+    bucket_value = math.trunc(_bucket_user(user, flag['key'], flag['salt'], 'key') * 100000)
+    
+    rule = {
+        'rollout': {
+            'variations': [
+                { 'variation': 0, 'weight': bucket_value }
+            ]
+        }
+    }
+    result_variation = _variation_index_for_user(flag, rule, user)
+    assert result_variation == 0
+    
 def test_bucket_by_user_key():
     user = { u'key': u'userKeyA' }
     bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
