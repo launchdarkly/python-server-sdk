@@ -214,7 +214,7 @@ def _variation_index_for_user(feature, rule, user):
         # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
         # this case (or changing the scaling, which would potentially change the results for *all* users), we
         # will simply put the user in the last bucket.
-        return rule['rollout'].get('variations')[len(rule['rollout'].get('variations'))].get('variation')
+        return rule['rollout'].get('variations')[-1].get('variation')
 
     return None
 
