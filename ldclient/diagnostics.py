@@ -6,6 +6,8 @@ import threading
 import time
 import uuid
 
+from ldclient.version import VERSION
+
 class _DiagnosticAccumulator(object):
     def __init__(self, diagnostic_id):
         self.diagnostic_id = diagnostic_id
@@ -81,7 +83,7 @@ def _create_diagnostic_config_object(config):
 
 def _create_diagnostic_sdk_object(config):
     return {'name': 'python-server-sdk',
-            'version': 6, #VERSION,
+            'version': VERSION,
             'wrapperName': config.wrapper_name,
             'wrapperVersion': config.wrapper_version}
 

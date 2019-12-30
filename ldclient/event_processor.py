@@ -224,7 +224,7 @@ class EventBuffer(object):
     
     def add_event(self, event):
         if len(self._events) >= self._capacity:
-            self._dropped_events = self._dropped_events + 1
+            self._dropped_events += 1
             if not self._exceeded_capacity:
                 log.warning("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
                 self._exceeded_capacity = True
@@ -236,9 +236,9 @@ class EventBuffer(object):
         self._summarizer.summarize_event(event)
 
     def get_and_clear_dropped_count(self):
-        ret = self._dropped_events
+        dropped_count = self._dropped_events
         self._dropped_events = 0
-        return ret
+        return dropped_count
 
     def get_payload(self):
         return FlushPayload(self._events, self._summarizer.snapshot())
@@ -319,7 +319,7 @@ class EventDispatcher(object):
                 already_seen = self.notice_user(user)
                 add_index_event = not is_index_event and not already_seen
                 if not is_index_event and already_seen:
-                    self._deduplicated_users = self._deduplicated_users + 1
+                    self._deduplicated_users += 1
 
         if add_index_event:
             ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
