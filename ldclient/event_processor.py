@@ -351,6 +351,8 @@ class EventDispatcher(object):
         if self._disabled:
             return
         payload = self._outbox.get_payload()
+        if self._diagnostic_accumulator:
+            self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
         if len(payload.events) > 0 or len(payload.summary.counters) > 0:
             task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
                 self._handle_response)
@@ -375,7 +377,7 @@ class EventDispatcher(object):
                 return
 
     def _send_and_reset_diagnostics(self):
-        if (self._diagnostic_accumulator):
+        if self._diagnostic_accumulator:
             dropped_event_count = self._outbox.get_and_clear_dropped_count()
             stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_users)
             self._deduplicated_users = 0
