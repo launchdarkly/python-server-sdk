@@ -198,13 +198,17 @@ def _variation_index_for_user(feature, rule, user):
     if rule.get('variation') is not None:
         return rule['variation']
 
-    if rule.get('rollout') is not None and rule['rollout'].get('variations') is not None and len(rule['rollout'].get('variations')) > 0:
+    rollout = rule.get('rollout')
+    if rollout is None:
+        return None
+    variations = rollout.get('variations')
+    if variations is not None and len(variations) > 0:
         bucket_by = 'key'
-        if rule['rollout'].get('bucketBy') is not None:
-            bucket_by = rule['rollout']['bucketBy']
+        if rollout.get('bucketBy') is not None:
+            bucket_by = rollout['bucketBy']
         bucket = _bucket_user(user, feature['key'], feature['salt'], bucket_by)
         sum = 0.0
-        for wv in rule['rollout'].get('variations'):
+        for wv in variations:
             sum += wv.get('weight', 0.0) / 100000.0
             if bucket < sum:
                 return wv.get('variation')
@@ -214,7 +218,7 @@ def _variation_index_for_user(feature, rule, user):
         # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
         # this case (or changing the scaling, which would potentially change the results for *all* users), we
         # will simply put the user in the last bucket.
-        return rule['rollout'].get('variations')[-1].get('variation')
+        return variations[-1].get('variation')
 
     return None
 
