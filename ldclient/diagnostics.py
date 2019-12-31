@@ -73,13 +73,11 @@ def _create_diagnostic_config_object(config):
             'usingRelayDaemon': config.use_ldd,
             'allAttributesPrivate': config.all_attributes_private,
             'pollingIntervalMillis': config.poll_interval * 1000,
-            #'reconnectTimeMillis': check,
             'userKeysCapacity': config.user_keys_capacity,
             'userKeysFlushIntervalMillis': config.user_keys_flush_interval * 1000,
             'inlineUsersInEvents': config.inline_users_in_events,
             'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
-            #'featureStoreFactory': check,
-            }
+            'featureStoreFactory': config.feature_store.__class__.__name__}
 
 def _create_diagnostic_sdk_object(config):
     return {'name': 'python-server-sdk',
