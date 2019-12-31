@@ -1,7 +1,3 @@
-#DEFAULT_CONFIG = Config.default()
-#DEFAULT_BASE_URI = DEFAULT_CONFIG.base_uri
-#DEFAULT_EVENTS_URI = DEFAULT_CONFIG.events_uri
-#DEFAULT_STREAM_BASE_URI = DEFAULT_CONFIG.stream_base_uri
 import threading
 import time
 import uuid

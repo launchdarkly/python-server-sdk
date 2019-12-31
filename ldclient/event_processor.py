@@ -185,12 +185,7 @@ class DiagnosticEventSendTask(object):
         self._response_fn = response_fn
 
     def run_thread(self):
-        try:
-            Thread(target = self._do_send()).start()
-        except Exception:
-            log.warning(
-                'Unhandled exception in event processor. Analytics events were not processed.',
-                exc_info=True)
+        Thread(target = self._do_send).start()
 
     def _do_send(self):
         # noinspection PyBroadException

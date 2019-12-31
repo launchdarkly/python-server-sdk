@@ -60,19 +60,24 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     if not self._running:
                         break
                     message_ok = self.process_message(self._store, self._requester, msg)
-                    self._record_stream_init(False)
-                    self._es_started = None
+                    if message_ok:
+                        self._record_stream_init(False)
+                        self._es_started = None
                     if message_ok is True and self._ready.is_set() is False:
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             except UnsuccessfulResponseException as e:
                 log.error(http_error_message(e.status, "stream connection"))
+                self._record_stream_init(True)
+                self._es_started = None
                 if not is_http_error_recoverable(e.status):
                     self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
                     self.stop()
                     break
             except Exception as e:
                 log.warning("Caught exception. Restarting stream connection after one second. %s" % e)
+                self._record_stream_init(True)
+                self._es_started = None
                 # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
             time.sleep(1)
 
