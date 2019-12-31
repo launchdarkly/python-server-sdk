@@ -5,6 +5,7 @@
 import threading
 import time
 import uuid
+import platform
 
 from ldclient.version import VERSION
 
@@ -86,4 +87,9 @@ def _create_diagnostic_sdk_object(config):
             'wrapperVersion': config.wrapper_version}
 
 def _create_diagnostic_platform_object():
-    return {'name': 'python'}
+    return {'name': 'python',
+            'osArch': platform.machine(),
+            'osName': platform.system(),
+            'osVersion': platform.release(),
+            'pythonVersion': platform.python_version(),
+            'pythonImplementation': platform.python_implementation()}
