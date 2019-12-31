@@ -2,7 +2,7 @@ import json
 import uuid
 
 from ldclient.config import Config
-from ldclient.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator
+from ldclient.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
 
 def test_create_diagnostic_id():
     test_config = Config(sdk_key = "SDK_KEY")
@@ -21,12 +21,71 @@ def test_create_diagnostic_init():
     assert diag_init['kind'] == 'diagnostic-init'
     assert diag_init['id'] == diag_id
     assert diag_init['creationDate'] == 100
-    assert diag_init['sdk']
-    assert diag_init['platform']
-    assert diag_init['configuration']
+
+    assert diag_init['sdk']['name'] == 'python-server-sdk'
+    assert diag_init['sdk']['version']
+    assert diag_init['sdk']['wrapperName'] == 'django'
+    assert diag_init['sdk']['wrapperVersion'] == '5.1.1'
+
+    assert len(diag_init['platform']) == 6
+    assert diag_init['platform']['name'] == 'python'
+    assert all(x in diag_init['platform'].keys() for x in ['osArch', 'osName', 'osVersion', 'pythonVersion', 'pythonImplementation'])
+
+    assert diag_init['configuration'] == _create_diagnostic_config_object(test_config)
 
     # Verify converts to json without failure
     json.dumps(diag_init)
+
+def test_create_diagnostic_config_defaults():
+    test_config = Config()
+    diag_config = _create_diagnostic_config_object(test_config)
+
+    assert len(diag_config) == 17
+    assert diag_config['customBaseURI'] is False
+    assert diag_config['customEventsURI'] is False
+    assert diag_config['customStreamURI'] is False
+    assert diag_config['eventsCapacity'] == 10000
+    assert diag_config['connectTimeoutMillis'] == 10000
+    assert diag_config['socketTimeoutMillis'] == 15000
+    assert diag_config['eventsFlushIntervalMillis'] == 5000
+    assert diag_config['usingProxy'] is False
+    assert diag_config['streamingDisabled'] is False
+    assert diag_config['usingRelayDaemon'] is False
+    assert diag_config['allAttributesPrivate'] is False
+    assert diag_config['pollingIntervalMillis'] == 30000
+    assert diag_config['userKeysCapacity'] == 1000
+    assert diag_config['userKeysFlushIntervalMillis'] == 300000
+    assert diag_config['inlineUsersInEvents'] is False
+    assert diag_config['diagnosticRecordingIntervalMillis'] == 900000
+    assert diag_config['featureStoreFactory'] == 'InMemoryFeatureStore'
+
+def test_create_diagnostic_config_custom():
+    test_config = Config(base_uri='https://test.com', events_uri='https://test.com',
+                         connect_timeout=1, read_timeout=1, events_max_pending=10,
+                         flush_interval=1, stream_uri='https://test.com',
+                         stream=False, poll_interval=60, use_ldd=True, feature_store = 5,
+                         all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
+                         inline_users_in_events=True, http_proxy='', diagnostic_recording_interval=60)
+    diag_config = _create_diagnostic_config_object(test_config)
+
+    assert len(diag_config) == 17
+    assert diag_config['customBaseURI'] is True
+    assert diag_config['customEventsURI'] is True
+    assert diag_config['customStreamURI'] is True
+    assert diag_config['eventsCapacity'] == 10
+    assert diag_config['connectTimeoutMillis'] == 1000
+    assert diag_config['socketTimeoutMillis'] == 1000
+    assert diag_config['eventsFlushIntervalMillis'] == 1000
+    assert diag_config['usingProxy'] is True
+    assert diag_config['streamingDisabled'] is True
+    assert diag_config['usingRelayDaemon'] is True
+    assert diag_config['allAttributesPrivate'] is True
+    assert diag_config['pollingIntervalMillis'] == 60000
+    assert diag_config['userKeysCapacity'] == 10
+    assert diag_config['userKeysFlushIntervalMillis'] == 60000
+    assert diag_config['inlineUsersInEvents'] is True
+    assert diag_config['diagnosticRecordingIntervalMillis'] == 60000
+    assert diag_config['featureStoreFactory'] == 'int'
 
 def test_diagnostic_accumulator():
     test_config = Config(sdk_key = "SDK_KEY")
