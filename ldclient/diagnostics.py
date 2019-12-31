@@ -1,3 +1,8 @@
+"""
+Implementation details of the diagnostic event generation.
+"""
+# currently excluded from documentation - see docs/README.md
+
 import threading
 import time
 import uuid
@@ -32,7 +37,7 @@ class _DiagnosticAccumulator(object):
 
         current_time = int(time.time() * 1000)
         periodic_event = _diagnostic_base_fields('diagnostic', current_time, self.diagnostic_id)
-        periodic_event.update({'dataSincedate': self.data_since_date,
+        periodic_event.update({'dataSinceDate': self.data_since_date,
                                'droppedEvents': dropped_events,
                                'deduplicatedUsers': deduplicated_users,
                                'eventsInLastBatch': events_in_batch,
