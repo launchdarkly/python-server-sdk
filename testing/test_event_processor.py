@@ -449,6 +449,12 @@ def test_wrapper_header_sent_without_version():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
 
+def test_sdk_key_is_sent_on_diagnostic_request():
+    with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
+
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)
 

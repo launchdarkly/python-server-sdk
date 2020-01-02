@@ -178,16 +178,12 @@ class EventPayloadSendTask(object):
 
 
 class DiagnosticEventSendTask(object):
-    def __init__(self, http, config, event_body, response_fn):
+    def __init__(self, http, config, event_body):
         self._http = http
         self._config = config
         self._event_body = event_body
-        self._response_fn = response_fn
 
-    def run_thread(self):
-        Thread(target = self._do_send).start()
-
-    def _do_send(self):
+    def run(self):
         # noinspection PyBroadException
         try:
             json_body = json.dumps(self._event_body)
@@ -259,6 +255,13 @@ class EventDispatcher(object):
         self._diagnostic_accumulator = diagnostic_accumulator
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
+        self._diagnostic_flush_workers = FixedThreadPool(1, "ldclient.diag_flush") if not config.diagnostic_opt_out else None
+        if not config.diagnostic_opt_out:
+            init_event = create_diagnostic_init(diagnostic_accumulator.data_since_date,
+                                                diagnostic_accumulator.diagnostic_id,
+                                                config)
+            task = DiagnosticEventSendTask(self._http, self._config, init_event)
+            self._diagnostic_flush_workers.execute(task.run)
 
         self._main_thread = Thread(target=self._run_main_loop)
         self._main_thread.daemon = True
@@ -279,6 +282,8 @@ class EventDispatcher(object):
                     self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
                     self._flush_workers.wait()
+                    if not self._config.diagnostic_opt_out:
+                        self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
                     self._do_shutdown()
@@ -372,11 +377,12 @@ class EventDispatcher(object):
                 return
 
     def _send_and_reset_diagnostics(self):
-        if self._diagnostic_accumulator:
+        if not self._config.diagnostic_opt_out:
             dropped_event_count = self._outbox.get_and_clear_dropped_count()
             stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_users)
             self._deduplicated_users = 0
-            DiagnosticEventSendTask(self._http, self._config, stats_event, None).run_thread()
+            task = DiagnosticEventSendTask(self._http, self._config, stats_event)
+            self._diagnostic_flush_workers.execute(task.run)
 
     def _do_shutdown(self):
         self._flush_workers.stop()
@@ -393,24 +399,19 @@ class DefaultEventProcessor(EventProcessor):
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
-        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl,
-                                              target_base_uri=config.events_uri,
-                                              force_proxy=config.http_proxy) if http is None else http
         if not config.diagnostic_opt_out:
             diagnostic_id = create_diagnostic_id(config)
             self._diagnostic_accumulator = _DiagnosticAccumulator(diagnostic_id)
-            init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date, diagnostic_id, config)
-            DiagnosticEventSendTask(self._http, config, init_event, None).run_thread()
-
             self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
+            self._diagnostic_event_timer = None
             self._diagnostic_accumulator = None
 
         self._close_lock = Lock()
         self._closed = False
 
-        (dispatcher_class or EventDispatcher)(self._inbox, config, self._http, self._diagnostic_accumulator)
+        (dispatcher_class or EventDispatcher)(self._inbox, config, http, self._diagnostic_accumulator)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)
@@ -426,6 +427,8 @@ class DefaultEventProcessor(EventProcessor):
             self._closed = True
         self._flush_timer.stop()
         self._users_flush_timer.stop()
+        if self._diagnostic_event_timer:
+            self._diagnostic_event_timer.stop()
         self.flush()
         # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
         # is full; an orderly shutdown can't happen unless these messages are received.
