@@ -152,5 +152,4 @@ def test_records_diagnostic_on_stream_init_failure():
             server.await_request()
             recorded_inits = diag_accum.create_event_and_reset(0, 0)['streamInits']
 
-            assert len(recorded_inits) == 1
             assert recorded_inits[0]['failed'] is True

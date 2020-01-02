@@ -449,11 +449,66 @@ def test_wrapper_header_sent_without_version():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
 
+def test_event_schema_set_on_event_send():
+    with DefaultTestProcessor() as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') == "3"
+
 def test_sdk_key_is_sent_on_diagnostic_request():
     with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
-
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
+
+def test_event_schema_not_set_on_diagnostic_send():
+    with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
+        ep._wait_until_inactive()
+        assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') is None
+
+def test_init_diagnostic_event_sent():
+    with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
+        diag_init = flush_and_get_events(ep)
+        # Fields are tested in test_diagnostics.py
+        assert len(diag_init) == 6
+        assert diag_init['kind'] == 'diagnostic-init'
+
+def test_periodic_diagnostic_includes_events_in_batch():
+    with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
+        # Ignore init event
+        flush_and_get_events(ep)
+        # Send a payload with a single event
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        flush_and_get_events(ep)
+
+        ep._send_diagnostic()
+        diag_event = flush_and_get_events(ep)
+        assert len(diag_event) == 8
+        assert diag_event['kind'] == 'diagnostic'
+        assert diag_event['eventsInLastBatch'] == 1
+        assert diag_event['deduplicatedUsers'] == 0
+
+def test_periodic_diagnostic_includes_deduplicated_users():
+    with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
+        # Ignore init event
+        flush_and_get_events(ep)
+        # Send two eval events with the same user to cause a user deduplication
+        e0 = {
+            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+        }
+        e1 = e0.copy();
+        ep.send_event(e0)
+        ep.send_event(e1)
+        flush_and_get_events(ep)
+
+        ep._send_diagnostic()
+        diag_event = flush_and_get_events(ep)
+        assert len(diag_event) == 8
+        assert diag_event['kind'] == 'diagnostic'
+        assert diag_event['eventsInLastBatch'] == 3
+        assert diag_event['deduplicatedUsers'] == 1
 
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)
