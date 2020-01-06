@@ -1,2 +1,2 @@
-pyyaml>=3.0
+pyyaml>=3.0,<5.2
 watchdog>=0.9
