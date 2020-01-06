@@ -4,7 +4,6 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
-from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
 
@@ -133,7 +132,7 @@ class Config(object):
         self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.__event_processor_class = DefaultEventProcessor if not event_processor_class else event_processor_class
+        self.__event_processor_class = event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout

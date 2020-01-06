@@ -30,7 +30,7 @@ from ldclient.util import _headers
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
-from ldclient.diagnostics import create_diagnostic_init, create_diagnostic_id, _DiagnosticAccumulator
+from ldclient.diagnostics import create_diagnostic_init
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 3
@@ -392,7 +392,7 @@ class EventDispatcher(object):
 
 
 class DefaultEventProcessor(EventProcessor):
-    def __init__(self, config, http=None, dispatcher_class=None):
+    def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
         self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
@@ -400,18 +400,15 @@ class DefaultEventProcessor(EventProcessor):
         self._flush_timer.start()
         self._users_flush_timer.start()
         if not config.diagnostic_opt_out:
-            diagnostic_id = create_diagnostic_id(config)
-            self._diagnostic_accumulator = _DiagnosticAccumulator(diagnostic_id)
             self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None
-            self._diagnostic_accumulator = None
 
         self._close_lock = Lock()
         self._closed = False
 
-        (dispatcher_class or EventDispatcher)(self._inbox, config, http, self._diagnostic_accumulator)
+        (dispatcher_class or EventDispatcher)(self._inbox, config, http, diagnostic_accumulator)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)
@@ -433,9 +430,6 @@ class DefaultEventProcessor(EventProcessor):
         # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
         # is full; an orderly shutdown can't happen unless these messages are received.
         self._post_message_and_wait('stop')
-
-    def retrieve_diagnostic_accumulator(self):
-        return self._diagnostic_accumulator
 
     def _post_to_inbox(self, message):
         try:

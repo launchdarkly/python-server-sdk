@@ -4,6 +4,7 @@ from threading import Thread
 import time
 
 from ldclient.config import Config
+from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.util import log
 from testing.http_util import start_server
@@ -66,7 +67,9 @@ class DefaultTestProcessor(DefaultEventProcessor):
     def __init__(self, **kwargs):
         if not 'diagnostic_opt_out' in kwargs:
             kwargs['diagnostic_opt_out'] = True
-        DefaultEventProcessor.__init__(self, Config(**kwargs), mock_http)
+        config = Config(**kwargs)
+        diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
+        DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator = diagnostic_accumulator)
 
 def test_identify_event_is_queued():
     with DefaultTestProcessor() as ep:
@@ -557,23 +560,23 @@ def test_does_not_block_on_full_inbox():
 def test_can_use_http_proxy_via_environment_var(monkeypatch):
     with start_server() as server:
         monkeypatch.setenv('http_proxy', server.uri)
-        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real')
+        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real', diagnostic_opt_out = True)
         _verify_http_proxy_is_used(server, config)
 
 def test_can_use_https_proxy_via_environment_var(monkeypatch):
     with start_server() as server:
         monkeypatch.setenv('https_proxy', server.uri)
-        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real')
+        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real', diagnostic_opt_out = True)
         _verify_https_proxy_is_used(server, config)
 
 def test_can_use_http_proxy_via_config():
     with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real', http_proxy=server.uri)
+        config = Config(sdk_key = 'sdk-key', events_uri = 'http://not-real', http_proxy=server.uri, diagnostic_opt_out = True)
         _verify_http_proxy_is_used(server, config)
 
 def test_can_use_https_proxy_via_config():
     with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real', http_proxy=server.uri)
+        config = Config(sdk_key = 'sdk-key', events_uri = 'https://not-real', http_proxy=server.uri, diagnostic_opt_out = True)
         _verify_https_proxy_is_used(server, config)
 
 def _verify_http_proxy_is_used(server, config):

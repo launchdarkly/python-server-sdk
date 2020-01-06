@@ -8,6 +8,8 @@ import threading
 import traceback
 
 from ldclient.config import Config as Config
+from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
+from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
@@ -103,12 +105,7 @@ class LDClient(object):
         if self._config.use_ldd:
             log.info("Started LaunchDarkly Client in LDD mode")
 
-        self._event_processor = self._make_event_processor(self._config)
-
-        if callable(getattr(self._event_processor, 'retrieve_diagnostic_accumulator', None)):
-            diagnostic_accumulator = self._event_processor.retrieve_diagnostic_accumulator()
-        else:
-            diagnostic_accumulator = None
+        diagnostic_accumulator = self._set_event_processor(self._config)
 
         update_processor_ready = threading.Event()
         self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
@@ -124,10 +121,17 @@ class LDClient(object):
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
-    def _make_event_processor(self, config):
+    def _set_event_processor(self, config):
         if config.offline or not config.send_events:
-            return NullEventProcessor()
-        return config.event_processor_class(config)
+            self._event_processor = NullEventProcessor()
+            return None
+        if not config.event_processor_class:
+            diagnostic_id = create_diagnostic_id(config)
+            diagnostic_accumulator = _DiagnosticAccumulator(diagnostic_id)
+            self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator = diagnostic_accumulator)
+            return diagnostic_accumulator
+        self._event_processor = config.event_processor_class(config)
+        return None
 
     def _make_update_processor(self, config, store, ready, diagnostic_accumulator):
         if config.update_processor_class:
