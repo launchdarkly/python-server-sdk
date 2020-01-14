@@ -8,6 +8,8 @@ import threading
 import traceback
 
 from ldclient.config import Config as Config
+from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
+from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
@@ -103,10 +105,10 @@ class LDClient(object):
         if self._config.use_ldd:
             log.info("Started LaunchDarkly Client in LDD mode")
 
-        self._event_processor = self._make_event_processor(self._config)
+        diagnostic_accumulator = self._set_event_processor(self._config)
 
         update_processor_ready = threading.Event()
-        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready)
+        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
         self._update_processor.start()
 
         if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
@@ -119,12 +121,19 @@ class LDClient(object):
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
-    def _make_event_processor(self, config):
+    def _set_event_processor(self, config):
         if config.offline or not config.send_events:
-            return NullEventProcessor()
-        return config.event_processor_class(config)
+            self._event_processor = NullEventProcessor()
+            return None
+        if not config.event_processor_class:
+            diagnostic_id = create_diagnostic_id(config)
+            diagnostic_accumulator = _DiagnosticAccumulator(diagnostic_id)
+            self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator = diagnostic_accumulator)
+            return diagnostic_accumulator
+        self._event_processor = config.event_processor_class(config)
+        return None
 
-    def _make_update_processor(self, config, store, ready):
+    def _make_update_processor(self, config, store, ready, diagnostic_accumulator):
         if config.update_processor_class:
             log.info("Using user-specified update processor: " + str(config.update_processor_class))
             return config.update_processor_class(config, store, ready)
@@ -139,7 +148,7 @@ class LDClient(object):
         """ :type: FeatureRequester """
 
         if config.stream:
-            return StreamingUpdateProcessor(config, feature_requester, store, ready)
+            return StreamingUpdateProcessor(config, feature_requester, store, ready, diagnostic_accumulator)
 
         log.info("Disabling streaming API")
         log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")

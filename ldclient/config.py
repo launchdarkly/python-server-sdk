@@ -4,7 +4,6 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
-from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
 
@@ -44,7 +43,11 @@ class Config(object):
                  user_keys_capacity=1000,
                  user_keys_flush_interval=300,
                  inline_users_in_events=False,
-                 http_proxy=None):
+                 http_proxy=None,
+                 diagnostic_opt_out=False,
+                 diagnostic_recording_interval=900,
+                 wrapper_name=None,
+                 wrapper_version=None):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -101,6 +104,20 @@ class Config(object):
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
+        :param bool diagnostic_opt_out: Unless the diagnosticOptOut field is set to True, the client will send
+          some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
+          improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
+          the SDK's configuration, and the platform the SDK is being run on; as well as payloads sent
+          periodically with information on irregular occurrences such as dropped events.
+        :param int diagnostic_recording_interval: The interval in seconds at which periodic diagnostic data is
+          sent. The default is 900 seconds (every 15 minutes) and the minimum value is 60 seconds.
+        :param string wrapper_name: For use by wrapper libraries to set an identifying name for the wrapper
+          being used. This will be sent in HTTP headers during requests to the LaunchDarkly servers to allow
+          recording metrics on the usage of these wrapper libraries.
+        :param string wrapper_version: For use by wrapper libraries to report the version of the library in
+          use. If `wrapper_name` is not set, this field will be ignored. Otherwise the version string will
+          be included in the HTTP headers along with the `wrapper_name` during requests to the LaunchDarkly
+          servers.
         """
         self.__sdk_key = sdk_key
 
@@ -115,7 +132,7 @@ class Config(object):
         self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
-        self.__event_processor_class = DefaultEventProcessor if not event_processor_class else event_processor_class
+        self.__event_processor_class = event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
@@ -133,6 +150,10 @@ class Config(object):
         self.__user_keys_flush_interval = user_keys_flush_interval
         self.__inline_users_in_events = inline_users_in_events
         self.__http_proxy = http_proxy
+        self.__diagnostic_opt_out = diagnostic_opt_out
+        self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
+        self.__wrapper_name = wrapper_name
+        self.__wrapper_version = wrapper_version
 
     @classmethod
     def default(cls):
@@ -171,7 +192,11 @@ class Config(object):
                       offline=self.__offline,
                       user_keys_capacity=self.__user_keys_capacity,
                       user_keys_flush_interval=self.__user_keys_flush_interval,
-                      inline_users_in_events=self.__inline_users_in_events)
+                      inline_users_in_events=self.__inline_users_in_events,
+                      diagnostic_opt_out=self.__diagnostic_opt_out,
+                      diagnostic_recording_interval=self.__diagnostic_recording_interval,
+                      wrapper_name=self.__wrapper_name,
+                      wrapper_version=self.__wrapper_version)
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -189,6 +214,11 @@ class Config(object):
     @property
     def get_latest_flags_uri(self):
         return self.__base_uri + GET_LATEST_FEATURES_PATH
+
+    # for internal use only
+    @property
+    def events_base_uri(self):
+        return self.__events_uri
 
     # for internal use only - should construct the URL path in the events code, not here
     @property
@@ -288,6 +318,22 @@ class Config(object):
     @property
     def http_proxy(self):
         return self.__http_proxy
+
+    @property
+    def diagnostic_opt_out(self):
+        return self.__diagnostic_opt_out
+
+    @property
+    def diagnostic_recording_interval(self):
+        return self.__diagnostic_recording_interval
+
+    @property
+    def wrapper_name(self):
+        return self.__wrapper_name
+
+    @property
+    def wrapper_version(self):
+        return self.__wrapper_version
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
