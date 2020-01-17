@@ -2,6 +2,7 @@ import json
 import pytest
 from threading import Thread
 import time
+import uuid
 
 from ldclient.config import Config
 from ldclient.event_processor import DefaultEventProcessor
@@ -540,6 +541,31 @@ def verify_recoverable_http_error(status):
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is not None
+
+def test_event_payload_id_is_sent():
+    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        headerVal = mock_http.request_headers.get('X-LaunchDarkly-Payload-ID')
+        assert headerVal is not None
+        # Throws on invalid UUID
+        uuid.UUID(headerVal)
+
+def test_event_payload_id_changes_between_requests():
+    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        firstPayloadId = mock_http.recorded_requests[0][0].get('X-LaunchDarkly-Payload-ID')
+        secondPayloadId = mock_http.recorded_requests[1][0].get('X-LaunchDarkly-Payload-ID')
+        assert firstPayloadId != secondPayloadId
 
 def flush_and_get_events(ep):
     ep.flush()

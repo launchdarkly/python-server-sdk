@@ -11,6 +11,7 @@ from threading import Event, Lock, Thread
 import six
 import time
 import urllib3
+import uuid
 
 # noinspection PyBroadException
 try:
@@ -26,7 +27,7 @@ from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
-from ldclient.util import _headers
+from ldclient.util import _headers, _retryable_statuses
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
@@ -140,6 +141,18 @@ class EventOutputFormatter(object):
         return str(event['user'].get('key'))
 
 
+class _EventRetry(urllib3.Retry):
+    def __init__(self):
+        urllib3.Retry.__init__(self, total=1,
+                               method_whitelist=False, # Enable retry on POST
+                               status_forcelist=_retryable_statuses,
+                               raise_on_status=False)
+
+    # Override backoff time to be flat 1 second
+    def get_backoff_time(self):
+        return 1
+
+
 class EventPayloadSendTask(object):
     def __init__(self, http, config, formatter, payload, response_fn):
         self._http = http
@@ -164,12 +177,13 @@ class EventPayloadSendTask(object):
             log.debug('Sending events payload: ' + json_body)
             hdrs = _headers(self._config.sdk_key)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+            hdrs['X-LaunchDarkly-Payload-ID'] = str(uuid.uuid4())
             uri = self._config.events_uri
             r = self._http.request('POST', uri,
                                    headers=hdrs,
                                    timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                    body=json_body,
-                                   retries=1)
+                                   retries=_EventRetry())
             self._response_fn(r)
             return r
         except Exception as e:

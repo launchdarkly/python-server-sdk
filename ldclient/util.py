@@ -37,6 +37,7 @@ else:
     # noinspection PyUnresolvedReferences
     __BASE_TYPES__ = (str, float, int, bool, unicode)
 
+_retryable_statuses = [400, 408, 429]
 
 def _headers(sdk_key):
     return {'Authorization': sdk_key, 'User-Agent': 'PythonClient/' + VERSION,
@@ -124,7 +125,7 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     if status >= 400 and status < 500:
-        return (status == 400) or (status == 408) or (status == 429)  # all other 4xx besides these are unrecoverable
+        return status in _retryable_statuses # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
 
 
