@@ -104,11 +104,11 @@ class Config(object):
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
-        :param bool diagnostic_opt_out: Unless the diagnosticOptOut field is set to True, the client will send
+        :param bool diagnostic_opt_out: Unless this field is set to True, the client will send
           some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
           improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
-          the SDK's configuration, and the platform the SDK is being run on; as well as payloads sent
-          periodically with information on irregular occurrences such as dropped events.
+          the SDK's configuration, and the platform the SDK is being run on, as well as periodic information
+          on irregular occurrences such as dropped events.
         :param int diagnostic_recording_interval: The interval in seconds at which periodic diagnostic data is
           sent. The default is 900 seconds (every 15 minutes) and the minimum value is 60 seconds.
         :param string wrapper_name: For use by wrapper libraries to set an identifying name for the wrapper
