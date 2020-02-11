@@ -40,7 +40,7 @@ class FeatureRequesterImpl(FeatureRequester):
         return self._do_request(self._config.base_uri + kind.request_api_path + '/' + key, False)
 
     def _do_request(self, uri, allow_cache):
-        hdrs = _headers(self._config.sdk_key)
+        hdrs = _headers(self._config)
         if allow_cache:
             cache_entry = self._cache.get(uri)
             if cache_entry is not None:

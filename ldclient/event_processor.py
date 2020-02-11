@@ -11,6 +11,7 @@ from threading import Event, Lock, Thread
 import six
 import time
 import urllib3
+import uuid
 
 # noinspection PyBroadException
 try:
@@ -26,11 +27,11 @@ from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
-from ldclient.util import _headers
+from ldclient.util import _headers, _retryable_statuses
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
-
+from ldclient.diagnostics import create_diagnostic_init
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 3
@@ -140,6 +141,18 @@ class EventOutputFormatter(object):
         return str(event['user'].get('key'))
 
 
+class _EventRetry(urllib3.Retry):
+    def __init__(self):
+        urllib3.Retry.__init__(self, total=1,
+                               method_whitelist=False, # Enable retry on POST
+                               status_forcelist=_retryable_statuses,
+                               raise_on_status=False)
+
+    # Override backoff time to be flat 1 second
+    def get_backoff_time(self):
+        return 1
+
+
 class EventPayloadSendTask(object):
     def __init__(self, http, config, formatter, payload, response_fn):
         self._http = http
@@ -162,19 +175,45 @@ class EventPayloadSendTask(object):
         try:
             json_body = json.dumps(output_events)
             log.debug('Sending events payload: ' + json_body)
-            hdrs = _headers(self._config.sdk_key)
+            hdrs = _headers(self._config)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+            hdrs['X-LaunchDarkly-Payload-ID'] = str(uuid.uuid4())
             uri = self._config.events_uri
             r = self._http.request('POST', uri,
                                    headers=hdrs,
                                    timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                    body=json_body,
-                                   retries=1)
+                                   retries=_EventRetry())
             self._response_fn(r)
             return r
         except Exception as e:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed. [%s]', e)
+
+
+class DiagnosticEventSendTask(object):
+    def __init__(self, http, config, event_body):
+        self._http = http
+        self._config = config
+        self._event_body = event_body
+
+    def run(self):
+        # noinspection PyBroadException
+        try:
+            json_body = json.dumps(self._event_body)
+            log.debug('Sending diagnostic event: ' + json_body)
+            hdrs = _headers(self._config)
+            uri = self._config.events_base_uri + '/diagnostic'
+            r = self._http.request('POST', uri,
+                                   headers=hdrs,
+                                   timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
+                                   body=json_body,
+                                   retries=1)
+            if (self._response_fn):
+                self._response_fn(r)
+        except Exception as e:
+            log.warning(
+                'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
 
 
 FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
@@ -186,9 +225,11 @@ class EventBuffer(object):
         self._events = []
         self._summarizer = EventSummarizer()
         self._exceeded_capacity = False
+        self._dropped_events = 0
     
     def add_event(self, event):
         if len(self._events) >= self._capacity:
+            self._dropped_events += 1
             if not self._exceeded_capacity:
                 log.warning("Exceeded event queue capacity. Increase capacity to avoid dropping events.")
                 self._exceeded_capacity = True
@@ -198,7 +239,12 @@ class EventBuffer(object):
     
     def add_to_summary(self, event):
         self._summarizer.summarize_event(event)
-    
+
+    def get_and_clear_dropped_count(self):
+        dropped_count = self._dropped_events
+        self._dropped_events = 0
+        return dropped_count
+
     def get_payload(self):
         return FlushPayload(self._events, self._summarizer.snapshot())
     
@@ -208,7 +254,7 @@ class EventBuffer(object):
 
 
 class EventDispatcher(object):
-    def __init__(self, inbox, config, http_client):
+    def __init__(self, inbox, config, http_client, diagnostic_accumulator=None):
         self._inbox = inbox
         self._config = config
         self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl,
@@ -219,8 +265,17 @@ class EventDispatcher(object):
         self._user_keys = SimpleLRUCache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
+        self._deduplicated_users = 0
+        self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
+        self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
+        if self._diagnostic_accumulator is not None:
+            init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date,
+                                                self._diagnostic_accumulator.diagnostic_id,
+                                                config)
+            task = DiagnosticEventSendTask(self._http, self._config, init_event)
+            self._diagnostic_flush_workers.execute(task.run)
 
         self._main_thread = Thread(target=self._run_main_loop)
         self._main_thread.daemon = True
@@ -237,8 +292,12 @@ class EventDispatcher(object):
                     self._trigger_flush()
                 elif message.type == 'flush_users':
                     self._user_keys.clear()
+                elif message.type == 'diagnostic':
+                    self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
                     self._flush_workers.wait()
+                    if self._diagnostic_accumulator is not None:
+                        self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
                     self._do_shutdown()
@@ -269,9 +328,12 @@ class EventDispatcher(object):
         # an identify event for that user.
         if not (add_full_event and self._config.inline_users_in_events):
             user = event.get('user')
-            if user and not self.notice_user(user):
-                if event['kind'] != 'identify':
-                    add_index_event = True
+            if user and 'key' in user:
+                is_index_event = event['kind'] == 'identify'
+                already_seen = self.notice_user(user)
+                add_index_event = not is_index_event and not already_seen
+                if not is_index_event and already_seen:
+                    self._deduplicated_users += 1
 
         if add_index_event:
             ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
@@ -303,6 +365,8 @@ class EventDispatcher(object):
         if self._disabled:
             return
         payload = self._outbox.get_payload()
+        if self._diagnostic_accumulator:
+            self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
         if len(payload.events) > 0 or len(payload.summary.counters) > 0:
             task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
                 self._handle_response)
@@ -326,6 +390,14 @@ class EventDispatcher(object):
                 self._disabled = True
                 return
 
+    def _send_and_reset_diagnostics(self):
+        if self._diagnostic_accumulator is not None:
+            dropped_event_count = self._outbox.get_and_clear_dropped_count()
+            stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_users)
+            self._deduplicated_users = 0
+            task = DiagnosticEventSendTask(self._http, self._config, stats_event)
+            self._diagnostic_flush_workers.execute(task.run)
+
     def _do_shutdown(self):
         self._flush_workers.stop()
         self._flush_workers.wait()
@@ -334,16 +406,23 @@ class EventDispatcher(object):
 
 
 class DefaultEventProcessor(EventProcessor):
-    def __init__(self, config, http=None, dispatcher_class=None):
+    def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
         self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
+        if diagnostic_accumulator is not None:
+            self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer.start()
+        else:
+            self._diagnostic_event_timer = None
+
         self._close_lock = Lock()
         self._closed = False
-        (dispatcher_class or EventDispatcher)(self._inbox, config, http)
+
+        (dispatcher_class or EventDispatcher)(self._inbox, config, http, diagnostic_accumulator)
 
     def send_event(self, event):
         event['creationDate'] = int(time.time() * 1000)
@@ -359,6 +438,8 @@ class DefaultEventProcessor(EventProcessor):
             self._closed = True
         self._flush_timer.stop()
         self._users_flush_timer.stop()
+        if self._diagnostic_event_timer:
+            self._diagnostic_event_timer.stop()
         self.flush()
         # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
         # is full; an orderly shutdown can't happen unless these messages are received.
@@ -375,6 +456,9 @@ class DefaultEventProcessor(EventProcessor):
 
     def _flush_users(self):
         self._inbox.put(EventProcessorMessage('flush_users', None))
+
+    def _send_diagnostic(self):
+        self._inbox.put(EventProcessorMessage('diagnostic', None))
 
     # Used only in tests
     def _wait_until_inactive(self):

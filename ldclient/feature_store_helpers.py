@@ -4,10 +4,10 @@ This submodule contains support code for writing feature store implementations.
 
 from expiringdict import ExpiringDict
 
-from ldclient.interfaces import FeatureStore
+from ldclient.interfaces import DiagnosticDescription, FeatureStore
 
 
-class CachingStoreWrapper(FeatureStore):
+class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """A partial implementation of :class:`ldclient.interfaces.FeatureStore`.
 
     This class delegates the basic functionality to an implementation of
@@ -100,6 +100,11 @@ class CachingStoreWrapper(FeatureStore):
             self._inited = True
         return result
 
+    def describe_configuration(self, config):
+        if callable(getattr(self._core, 'describe_configuration', None)):
+            return self._core.describe_configuration(config)
+        return "custom"
+    
     @staticmethod
     def _item_cache_key(kind, key):
         return "{0}:{1}".format(kind.namespace, key)

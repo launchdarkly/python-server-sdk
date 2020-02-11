@@ -15,9 +15,17 @@ def test_copy_config():
     assert new_config.stream is False
 
 def test_can_set_valid_poll_interval():
-	config = Config(sdk_key = "SDK_KEY", poll_interval = 31)
-	assert config.poll_interval == 31
+    config = Config(sdk_key = "SDK_KEY", poll_interval = 31)
+    assert config.poll_interval == 31
 
 def test_minimum_poll_interval_is_enforced():
-	config = Config(sdk_key = "SDK_KEY", poll_interval = 29)
-	assert config.poll_interval == 30
+    config = Config(sdk_key = "SDK_KEY", poll_interval = 29)
+    assert config.poll_interval == 30
+
+def test_can_set_valid_diagnostic_interval():
+    config = Config(sdk_key = "SDK_KEY", diagnostic_recording_interval=61)
+    assert config.diagnostic_recording_interval == 61
+
+def test_minimum_diagnostic_interval_is_enforced():
+    config = Config(sdk_key = "SDK_KEY", diagnostic_recording_interval=59)
+    assert config.diagnostic_recording_interval == 60

@@ -53,17 +53,20 @@ class MockResponse(object):
 
 class MockHttp(object):
     def __init__(self):
+        self._recorded_requests = []
         self._request_data = None
         self._request_headers = None
+        self._response_func = None
         self._response_status = 200
         self._server_time = None
 
     def request(self, method, uri, headers, timeout, body, retries):
-        self._request_headers = headers
-        self._request_data = body
+        self._recorded_requests.append((headers, body))
         resp_hdr = dict()
         if self._server_time is not None:
             resp_hdr['date'] = formatdate(self._server_time / 1000, localtime=False, usegmt=True)
+        if self._response_func is not None:
+            return self._response_func()
         return MockResponse(self._response_status, resp_hdr)
 
     def clear(self):
@@ -71,21 +74,29 @@ class MockHttp(object):
 
     @property
     def request_data(self):
-        return self._request_data
+        if len(self._recorded_requests) != 0:
+            return self._recorded_requests[-1][1]
 
     @property
     def request_headers(self):
-        return self._request_headers
+        if len(self._recorded_requests) != 0:
+            return self._recorded_requests[-1][0]
+
+    @property
+    def recorded_requests(self):
+        return self._recorded_requests
 
     def set_response_status(self, status):
         self._response_status = status
-    
+
+    def set_response_func(self, response_func):
+        self._response_func = response_func
+
     def set_server_time(self, timestamp):
         self._server_time = timestamp
 
     def reset(self):
-        self._request_headers = None
-        self._request_data = None
+        self._recorded_requests = []
 
 class MockUpdateProcessor(UpdateProcessor):
     def __init__(self, config, store, ready):

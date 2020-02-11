@@ -37,18 +37,28 @@ else:
     # noinspection PyUnresolvedReferences
     __BASE_TYPES__ = (str, float, int, bool, unicode)
 
+_retryable_statuses = [400, 408, 429]
 
-def _headers(sdk_key):
-    return {'Authorization': sdk_key, 'User-Agent': 'PythonClient/' + VERSION,
-            'Content-Type': "application/json"}
+def _base_headers(config):
+    headers = {'Authorization': config.sdk_key,
+               'User-Agent': 'PythonClient/' + VERSION}
+    if isinstance(config.wrapper_name, str) and config.wrapper_name != "":
+        wrapper_version = ""
+        if isinstance(config.wrapper_version, str) and config.wrapper_version != "":
+            wrapper_version = "/" + config.wrapper_version
+        headers.update({'X-LaunchDarkly-Wrapper': config.wrapper_name + wrapper_version})
+    return headers
 
+def _headers(config):
+    base_headers = _base_headers(config)
+    base_headers.update({'Content-Type': "application/json"})
+    return base_headers
 
-def _stream_headers(sdk_key, client="PythonClient"):
-    return {'Authorization': sdk_key,
-            'User-Agent': '{0}/{1}'.format(client, VERSION),
-            'Cache-Control': 'no-cache',
-            'Accept': "text/event-stream"}
-
+def _stream_headers(config):
+    base_headers = _base_headers(config)
+    base_headers.update({ 'Cache-Control': "no-cache"
+                        , 'Accept': "text/event-stream" })
+    return base_headers
 
 def check_uwsgi():
     if 'uwsgi' in sys.modules:
@@ -124,7 +134,7 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     if status >= 400 and status < 500:
-        return (status == 400) or (status == 408) or (status == 429)  # all other 4xx besides these are unrecoverable
+        return status in _retryable_statuses # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
 
 

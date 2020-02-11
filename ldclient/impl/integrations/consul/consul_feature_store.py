@@ -10,7 +10,7 @@ except ImportError:
 from ldclient import log
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import FeatureStore, FeatureStoreCore
+from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
 # 
 # Internal implementation of the Consul feature store.
@@ -33,7 +33,7 @@ from ldclient.interfaces import FeatureStore, FeatureStoreCore
 # process that did the Init will also receive the new data shortly and do its own Upsert.
 # 
 
-class _ConsulFeatureStoreCore(FeatureStoreCore):
+class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
     def __init__(self, host, port, prefix, consul_opts):
         if not have_consul:
             raise NotImplementedError("Cannot use Consul feature store because the python-consul package is not installed")
@@ -115,6 +115,9 @@ class _ConsulFeatureStoreCore(FeatureStoreCore):
         index, resp = self._client.kv.get(self._inited_key())
         return (resp is not None)
 
+    def describe_configuration(self, config):
+        return 'Consul'
+    
     def _kind_key(self, kind):
         return self._prefix + kind.namespace
 

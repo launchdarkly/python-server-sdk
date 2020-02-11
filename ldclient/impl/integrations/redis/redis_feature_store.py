@@ -8,11 +8,11 @@ except ImportError:
     pass
 
 from ldclient import log
-from ldclient.interfaces import FeatureStoreCore
+from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
 
 
-class _RedisFeatureStoreCore(FeatureStoreCore):
+class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
     def __init__(self, url, prefix, max_connections):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
@@ -96,6 +96,9 @@ class _RedisFeatureStoreCore(FeatureStoreCore):
         r = redis.Redis(connection_pool=self._pool)
         return r.exists(self._items_key(FEATURES))
 
+    def describe_configuration(self, config):
+        return 'Redis'
+    
     def _before_update_transaction(self, base_key, key):
         # exposed for testing
         pass
