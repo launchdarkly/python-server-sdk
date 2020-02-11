@@ -67,3 +67,5 @@ p2venv
 *.iml
 .vagrant
 test-packaging-venv
+
+.vscode/

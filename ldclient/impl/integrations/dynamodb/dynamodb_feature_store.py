@@ -10,7 +10,7 @@ except ImportError:
 from ldclient import log
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import FeatureStore, FeatureStoreCore
+from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
 # 
 # Internal implementation of the DynamoDB feature store.
@@ -120,6 +120,9 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         resp = self._get_item_by_keys(self._inited_key(), self._inited_key())
         return resp.get('Item') is not None and len(resp['Item']) > 0
 
+    def describe_configuration(self, config):
+        return 'DynamoDB'
+    
     def _prefixed_namespace(self, base):
         return base if self._prefix is None else (self._prefix + ':' + base)
 

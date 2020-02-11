@@ -8,7 +8,7 @@ storage systems; those are in :class:`ldclient.integrations`.
 
 from collections import OrderedDict, defaultdict
 from ldclient.util import log
-from ldclient.interfaces import FeatureStore
+from ldclient.interfaces import DiagnosticDescription, FeatureStore
 from ldclient.rwlock import ReadWriteLock
 from six import iteritems
 
@@ -75,7 +75,7 @@ class CacheConfig:
         return self._capacity
 
 
-class InMemoryFeatureStore(FeatureStore):
+class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     """The default feature store implementation, which holds all data in a thread-safe data structure in memory.
     """
 
@@ -163,6 +163,9 @@ class InMemoryFeatureStore(FeatureStore):
             return self._initialized
         finally:
             self._lock.runlock()
+    
+    def describe_configuration(self, config):
+        return 'memory'
 
 
 class _FeatureStoreDataSetSorter:

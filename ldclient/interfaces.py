@@ -269,3 +269,19 @@ class FeatureRequester(object):
         :return:
         """
         pass
+
+
+class DiagnosticDescription(object):
+    """
+    Optional interface for components to describe their own configuration.
+    """
+
+    @abstractmethod
+    def describe_configuration(self, config):
+        """
+        Used internally by the SDK to inspect the configuration.
+        :param ldclient.config.Config config: the full configuration, in case this component depends on properties outside itself
+        :return: a string describing the type of the component, or None
+        :rtype: string
+        """
+        pass

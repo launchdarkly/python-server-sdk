@@ -3,6 +3,8 @@ import uuid
 
 from ldclient.config import Config
 from ldclient.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
+from ldclient.feature_store import CacheConfig
+from ldclient.feature_store_helpers import CachingStoreWrapper
 
 def test_create_diagnostic_id():
     test_config = Config(sdk_key = "SDK_KEY")
@@ -57,13 +59,14 @@ def test_create_diagnostic_config_defaults():
     assert diag_config['userKeysFlushIntervalMillis'] == 300000
     assert diag_config['inlineUsersInEvents'] is False
     assert diag_config['diagnosticRecordingIntervalMillis'] == 900000
-    assert diag_config['featureStoreFactory'] == 'InMemoryFeatureStore'
+    assert diag_config['dataStoreType'] == 'memory'
 
 def test_create_diagnostic_config_custom():
+    test_store = CachingStoreWrapper(_TestStoreForDiagnostics(), CacheConfig.default())
     test_config = Config(base_uri='https://test.com', events_uri='https://test.com',
                          connect_timeout=1, read_timeout=1, events_max_pending=10,
                          flush_interval=1, stream_uri='https://test.com',
-                         stream=False, poll_interval=60, use_ldd=True, feature_store = 5,
+                         stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
                          all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
                          inline_users_in_events=True, http_proxy='', diagnostic_recording_interval=60)
     diag_config = _create_diagnostic_config_object(test_config)
@@ -85,7 +88,11 @@ def test_create_diagnostic_config_custom():
     assert diag_config['userKeysFlushIntervalMillis'] == 60000
     assert diag_config['inlineUsersInEvents'] is True
     assert diag_config['diagnosticRecordingIntervalMillis'] == 60000
-    assert diag_config['featureStoreFactory'] == 'int'
+    assert diag_config['dataStoreType'] == 'MyFavoriteStore'
+
+class _TestStoreForDiagnostics(object):
+    def describe_configuration(self, config):
+        return 'MyFavoriteStore'
 
 def test_diagnostic_accumulator():
     test_config = Config(sdk_key = "SDK_KEY")
