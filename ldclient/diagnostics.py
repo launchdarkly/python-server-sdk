@@ -79,7 +79,7 @@ def _create_diagnostic_config_object(config):
             'userKeysFlushIntervalMillis': config.user_keys_flush_interval * 1000,
             'inlineUsersInEvents': config.inline_users_in_events,
             'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
-            'featureStoreFactory': config.feature_store.__class__.__name__}
+            'dataStoreType': _get_component_type_name(config.feature_store, config, 'memory')}
 
 def _create_diagnostic_sdk_object(config):
     return {'name': 'python-server-sdk',
@@ -90,7 +90,20 @@ def _create_diagnostic_sdk_object(config):
 def _create_diagnostic_platform_object():
     return {'name': 'python',
             'osArch': platform.machine(),
-            'osName': platform.system(),
+            'osName': _normalize_os_name(platform.system()),
             'osVersion': platform.release(),
             'pythonVersion': platform.python_version(),
             'pythonImplementation': platform.python_implementation()}
+
+def _get_component_type_name(component, config, default_name):
+    if component is not None:
+        if callable(getattr(component, 'describe_configuration', None)):
+            return component.describe_configuration(config)
+        return "custom"
+    return default_name
+
+def _normalize_os_name(name):
+    if name == 'Darwin':
+        return 'MacOS'
+    # Python already returns 'Linux' or 'Windows' for Linux or Windows, which is what we want
+    return name
