@@ -127,7 +127,7 @@ class LDClient(object):
             return None
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
-            diagnostic_accumulator = _DiagnosticAccumulator(diagnostic_id)
+            diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
             self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator = diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)

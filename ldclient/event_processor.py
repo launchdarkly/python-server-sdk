@@ -11,6 +11,7 @@ from threading import Event, Lock, Thread
 import six
 import time
 import urllib3
+import uuid
 
 # noinspection PyBroadException
 try:
@@ -26,7 +27,7 @@ from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
-from ldclient.util import _headers
+from ldclient.util import _headers, _retryable_statuses
 from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
@@ -140,6 +141,18 @@ class EventOutputFormatter(object):
         return str(event['user'].get('key'))
 
 
+class _EventRetry(urllib3.Retry):
+    def __init__(self):
+        urllib3.Retry.__init__(self, total=1,
+                               method_whitelist=False, # Enable retry on POST
+                               status_forcelist=_retryable_statuses,
+                               raise_on_status=False)
+
+    # Override backoff time to be flat 1 second
+    def get_backoff_time(self):
+        return 1
+
+
 class EventPayloadSendTask(object):
     def __init__(self, http, config, formatter, payload, response_fn):
         self._http = http
@@ -164,12 +177,13 @@ class EventPayloadSendTask(object):
             log.debug('Sending events payload: ' + json_body)
             hdrs = _headers(self._config)
             hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+            hdrs['X-LaunchDarkly-Payload-ID'] = str(uuid.uuid4())
             uri = self._config.events_uri
             r = self._http.request('POST', uri,
                                    headers=hdrs,
                                    timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                    body=json_body,
-                                   retries=1)
+                                   retries=_EventRetry())
             self._response_fn(r)
             return r
         except Exception as e:
@@ -252,13 +266,13 @@ class EventDispatcher(object):
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
         self._deduplicated_users = 0
-        self._diagnostic_accumulator = diagnostic_accumulator
+        self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
-        self._diagnostic_flush_workers = FixedThreadPool(1, "ldclient.diag_flush") if not config.diagnostic_opt_out else None
-        if not config.diagnostic_opt_out:
-            init_event = create_diagnostic_init(diagnostic_accumulator.data_since_date,
-                                                diagnostic_accumulator.diagnostic_id,
+        self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
+        if self._diagnostic_accumulator is not None:
+            init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date,
+                                                self._diagnostic_accumulator.diagnostic_id,
                                                 config)
             task = DiagnosticEventSendTask(self._http, self._config, init_event)
             self._diagnostic_flush_workers.execute(task.run)
@@ -282,7 +296,7 @@ class EventDispatcher(object):
                     self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
                     self._flush_workers.wait()
-                    if not self._config.diagnostic_opt_out:
+                    if self._diagnostic_accumulator is not None:
                         self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
@@ -377,7 +391,7 @@ class EventDispatcher(object):
                 return
 
     def _send_and_reset_diagnostics(self):
-        if not self._config.diagnostic_opt_out:
+        if self._diagnostic_accumulator is not None:
             dropped_event_count = self._outbox.get_and_clear_dropped_count()
             stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_users)
             self._deduplicated_users = 0
@@ -399,7 +413,7 @@ class DefaultEventProcessor(EventProcessor):
         self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
-        if not config.diagnostic_opt_out:
+        if diagnostic_accumulator is not None:
             self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
