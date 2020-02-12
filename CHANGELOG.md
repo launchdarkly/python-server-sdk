@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.12.1] - 2020-02-12
+### Fixed:
+- When diagnostic events are enabled (as they are by default), the SDK was logging spurious warning messages saying &#34;Unhandled exception in event processor. Diagnostic event was not sent. [&#39;DiagnosticEventSendTask&#39; object has no attribute &#39;_response_fn&#39;]&#34;. The events were still being sent; the misleading message has been removed.
+
 ## [6.12.0] - 2020-02-11
 Note: if you are using the LaunchDarkly Relay Proxy to forward events, update the Relay to version 5.10.0 or later before updating to this Python SDK version.
 
