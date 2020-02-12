@@ -209,8 +209,6 @@ class DiagnosticEventSendTask(object):
                                    timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                    body=json_body,
                                    retries=1)
-            if (self._response_fn):
-                self._response_fn(r)
         except Exception as e:
             log.warning(
                 'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
