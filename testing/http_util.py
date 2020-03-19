@@ -2,6 +2,7 @@ import json
 from six import iteritems
 from six.moves import BaseHTTPServer, queue
 import socket
+import ssl
 from threading import Thread
 
 def get_available_port():
@@ -12,16 +13,28 @@ def get_available_port():
     return port
 
 def start_server():
-    sw = MockServerWrapper(get_available_port())
+    sw = MockServerWrapper(get_available_port(), False)
+    sw.start()
+    return sw
+
+def start_secure_server():
+    sw = MockServerWrapper(get_available_port(), True)
     sw.start()
     return sw
 
 class MockServerWrapper(Thread):
-    def __init__(self, port):
+    def __init__(self, port, secure):
         Thread.__init__(self)
         self.port = port
-        self.uri = 'http://localhost:%d' % port
+        self.uri = '%s://localhost:%d' % ('https' if secure else 'http', port)
         self.server = BaseHTTPServer.HTTPServer(('localhost', port), MockServerRequestHandler)
+        if secure:
+            self.server.socket = ssl.wrap_socket(   
+                self.server.socket,
+                certfile='./testing/selfsigned.pem', # this is a pre-generated self-signed cert that is valid for 100 years
+                keyfile='./testing/selfsigned.key',
+                server_side=True
+            )
         self.server.server_wrapper = self
         self.matchers = {}
         self.requests = queue.Queue()
