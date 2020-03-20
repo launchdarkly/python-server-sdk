@@ -98,24 +98,21 @@ class UnsuccessfulResponseException(Exception):
 def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None, force_proxy=None):
     proxy_url = force_proxy or _get_proxy_url(target_base_uri)
 
-    if not verify_ssl:
-        if proxy_url is None:
-            return urllib3.PoolManager(num_pools=num_pools)
-        else:
-            return urllib3.ProxyManager(proxy_url, num_pools=num_pools)
-    
+    cert_reqs = 'CERT_REQUIRED' if verify_ssl else 'CERT_NONE'
+    ca_certs = certifi.where() if verify_ssl else None
+
     if proxy_url is None:
         return urllib3.PoolManager(
             num_pools=num_pools,
-            cert_reqs='CERT_REQUIRED',
-            ca_certs=certifi.where()
+            cert_reqs=cert_reqs,
+            ca_certs=ca_certs
             )
     else:
         return urllib3.ProxyManager(
             proxy_url,
             num_pools=num_pools,
-            cert_reqs='CERT_REQUIRED',
-            ca_certs=certifi.where()
+            cert_reqs=cert_reqs,
+            ca_certs = ca_certs
         )
 
 def _get_proxy_url(target_base_uri):
