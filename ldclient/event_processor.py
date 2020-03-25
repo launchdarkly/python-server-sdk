@@ -22,13 +22,13 @@ except:
 
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.fixed_thread_pool import FixedThreadPool
+from ldclient.impl.http import _http_factory
 from ldclient.lru_cache import SimpleLRUCache
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import _headers, _retryable_statuses
-from ldclient.util import create_http_pool_manager
 from ldclient.util import log
 from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
 from ldclient.diagnostics import create_diagnostic_init
@@ -255,8 +255,7 @@ class EventDispatcher(object):
     def __init__(self, inbox, config, http_client, diagnostic_accumulator=None):
         self._inbox = inbox
         self._config = config
-        self._http = create_http_pool_manager(num_pools=1, verify_ssl=config.verify_ssl,
-            target_base_uri=config.events_uri, force_proxy=config.http_proxy) if http_client is None else http_client
+        self._http = _http_factory(config).create_pool_manager(1, config.events_uri) if http_client is None else http_client
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)

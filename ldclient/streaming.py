@@ -12,9 +12,10 @@ import backoff
 import logging
 import time
 
+from ldclient.impl.http import _http_factory
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
-from ldclient.util import _stream_headers, log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
+from ldclient.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
@@ -101,11 +102,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _connect(self):
         return SSEClient(
             self._uri,
-            headers=_stream_headers(self._config),
-            connect_timeout=self._config.connect_timeout,
-            read_timeout=stream_read_timeout,
-            verify_ssl=self._config.verify_ssl,
-            http_proxy=self._config.http_proxy)
+            http_factory = _http_factory(self._config)
+        )
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")

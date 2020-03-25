@@ -1,4 +1,5 @@
-from ldclient.client import LDClient, Config
+from ldclient.client import LDClient
+from ldclient.config import Config, HTTPConfig
 from testing.http_util import start_secure_server
 import pytest
 import sys
@@ -9,7 +10,7 @@ import sys
 # problem.
 
 @pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 3, reason = "test is skipped in Python 3.3")
-def test_cannot_connect_with_selfsigned_cert_if_ssl_verify_is_true():
+def test_cannot_connect_with_selfsigned_cert_by_default():
     with start_secure_server() as server:
         server.setup_json_response('/sdk/latest-all', { 'flags': {}, 'segments': {} })
         config = Config(
@@ -30,6 +31,34 @@ def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
             stream = False,
             send_events = False,
             verify_ssl = False
+        )
+        with LDClient(config = config) as client:
+            assert client.is_initialized()
+
+@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 3, reason = "test is skipped in Python 3.3")
+def test_can_connect_with_selfsigned_cert_if_disable_ssl_verification_is_true():
+    with start_secure_server() as server:
+        server.setup_json_response('/sdk/latest-all', { 'flags': {}, 'segments': {} })
+        config = Config(
+            sdk_key = 'sdk_key',
+            base_uri = server.uri,
+            stream = False,
+            send_events = False,
+            http = HTTPConfig(disable_ssl_verification = True)
+        )
+        with LDClient(config = config) as client:
+            assert client.is_initialized()
+
+@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 3, reason = "test is skipped in Python 3.3")
+def test_can_connect_with_selfsigned_cert_by_setting_ca_certs():
+    with start_secure_server() as server:
+        server.setup_json_response('/sdk/latest-all', { 'flags': {}, 'segments': {} })
+        config = Config(
+            sdk_key = 'sdk_key',
+            base_uri = server.uri,
+            stream = False,
+            send_events = False,
+            http = HTTPConfig(ca_certs = './testing/selfsigned.pem')
         )
         with LDClient(config = config) as client:
             assert client.is_initialized()

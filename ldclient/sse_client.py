@@ -12,7 +12,8 @@ import six
 
 import urllib3
 
-from ldclient.util import create_http_pool_manager
+from ldclient.config import HTTPConfig
+from ldclient.impl.http import HTTPFactory
 from ldclient.util import log
 from ldclient.util import throw_if_unsuccessful_response
 
@@ -23,7 +24,7 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 class SSEClient(object):
     def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000,
-                 verify_ssl=False, http=None, http_proxy=None, **kwargs):
+                 verify_ssl=False, http=None, http_proxy=None, http_factory=None, **kwargs):
         self.url = url
         self.last_id = last_id
         self.retry = retry
@@ -31,9 +32,28 @@ class SSEClient(object):
         self._read_timeout = read_timeout
         self._chunk_size = chunk_size
 
+        if http_factory:
+            self._timeout = http_factory.timeout
+            base_headers = http_factory.base_headers
+        else:
+            # for backward compatibility in case anyone else is using this class
+            self._timeout = urllib3.Timeout(connect=self._connect_timeout, read=self._read_timeout)
+            base_headers = {}
+        
         # Optional support for passing in an HTTP client
-        self.http = create_http_pool_manager(num_pools=1, verify_ssl=verify_ssl, target_base_uri=url,
-            force_proxy=http_proxy)
+        if http:
+            self.http = http
+        else:
+            hf = http_factory
+            if hf is None: # build from individual parameters which we're only retaining for backward compatibility
+                hc = HTTPConfig(
+                    connect_timeout=connect_timeout,
+                    read_timeout=read_timeout,
+                    disable_ssl_verification=not verify_ssl,
+                    http_proxy=http_proxy
+                )
+                hf = HTTPFactory({}, hc)
+            self.http = hf.create_pool_manager(1, url)
 
         # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs
@@ -41,6 +61,9 @@ class SSEClient(object):
         # The SSE spec requires making requests with Cache-Control: nocache
         if 'headers' not in self.requests_kwargs:
             self.requests_kwargs['headers'] = {}
+        
+        self.requests_kwargs['headers'].update(base_headers)
+
         self.requests_kwargs['headers']['Cache-Control'] = 'no-cache'
 
         # The 'Accept' header is not required, but explicit > implicit
@@ -59,7 +82,7 @@ class SSEClient(object):
         self.resp = self.http.request(
             'GET',
             self.url,
-            timeout=urllib3.Timeout(connect=self._connect_timeout, read=self._read_timeout),
+            timeout=self._timeout,
             preload_content=False,
             retries=0, # caller is responsible for implementing appropriate retry semantics, e.g. backoff
             **self.requests_kwargs)

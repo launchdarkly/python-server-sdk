@@ -11,6 +11,71 @@ GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
 
 
+class HTTPConfig(object):
+    """Advanced HTTP configuration options for the SDK client.
+
+    This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
+    If you need to set these, construct an `HTTPConfig` instance and pass it as the `http` parameter when
+    you construct the main :class:`Config` for the SDK client.
+
+    For some of these properties, :class:`Config` also has properties with the same names; the latter are
+    deprecated and will be removed in the future, and if you specify an `HTTPConfig` instance then the
+    corresponding `Config` properties will be ignored.
+    """
+    def __init__(self,
+                 connect_timeout=10,
+                 read_timeout=15,
+                 http_proxy=None,
+                 ca_certs=None,
+                 cert_file=None,
+                 disable_ssl_verification=False):
+        """
+        :param float connect_timeout: The connect timeout for network connections in seconds.
+        :param float read_timeout: The read timeout for network connections in seconds.
+        :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
+          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
+          variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
+          service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
+          override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
+        :param string ca_certs: If using a custom certificate authority, set this to the file path of the
+          certificate bundle.
+        :param string cert_file: If using a custom client certificate, set this to the file path of the
+          certificate.
+        :param bool disable_ssl_verification: If true, completely disables SSL verification and certificate
+          verification for secure requests. This is unsafe and should not be used in a production environment;
+          instead, use a self-signed certificate and set `ca_certs`.
+        """
+        self.__connect_timeout = connect_timeout
+        self.__read_timeout = read_timeout
+        self.__http_proxy = http_proxy
+        self.__ca_certs = ca_certs
+        self.__cert_file = cert_file
+        self.__disable_ssl_verification = disable_ssl_verification
+
+    @property
+    def connect_timeout(self):
+        return self.__connect_timeout
+
+    @property
+    def read_timeout(self):
+        return self.__read_timeout
+
+    @property
+    def http_proxy(self):
+        return self.__http_proxy
+
+    @property
+    def ca_certs(self):
+        return self.__ca_certs
+
+    @property
+    def cert_file(self):
+        return self.__cert_file
+
+    @property
+    def disable_ssl_verification(self):
+        return self.__disable_ssl_verification
+
 class Config(object):
     """Advanced configuration options for the SDK client.
 
@@ -47,15 +112,18 @@ class Config(object):
                  diagnostic_opt_out=False,
                  diagnostic_recording_interval=900,
                  wrapper_name=None,
-                 wrapper_version=None):
+                 wrapper_version=None,
+                 http=None):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
           value.
         :param string events_uri: The URL for the LaunchDarkly events server. Most users should use the
           default value.
-        :param float connect_timeout: The connect timeout for network connections in seconds.
-        :param float read_timeout: The read timeout for network connections in seconds.
+        :param float connect_timeout: Deprecated; use `http` instead and specify the `connect_timeout` as
+          part of :class:`HTTPConfig`.
+        :param float read_timeout: Deprecated; use `http` instead and specify the `read_timeout` as
+          part of :class:`HTTPConfig`.
         :param int events_upload_max_batch_size: The maximum number of analytics events that the client will
           send at once.
         :param int events_max_pending: The capacity of the events buffer. The client buffers up to this many
@@ -67,6 +135,8 @@ class Config(object):
           use the default value.
         :param bool stream: Whether or not the streaming API should be used to receive flag updates. By
           default, it is enabled. Streaming should only be disabled on the advice of LaunchDarkly support.
+        :param bool verify_ssl:  Deprecated; use `http` instead and specify `disable_ssl_verification` as
+          part of :class:`HTTPConfig` if you want to turn off SSL verification (not recommended).
         :param bool send_events: Whether or not to send events back to LaunchDarkly. This differs from
           `offline` in that it affects only the sending of client-side events, not streaming or polling for
           events from the server. By default, events will be sent.
@@ -99,11 +169,8 @@ class Config(object):
         :type event_processor_class: (ldclient.config.Config) -> EventProcessor
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
-        :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
-          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
-          variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
-          service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
-          override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
+        :param http_proxy:  Deprecated; use `http` instead and specify the `http_proxy` as part of
+          :class:`HTTPConfig`.
         :param bool diagnostic_opt_out: Unless this field is set to True, the client will send
           some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
           improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
@@ -118,6 +185,8 @@ class Config(object):
           use. If `wrapper_name` is not set, this field will be ignored. Otherwise the version string will
           be included in the HTTP headers along with the `wrapper_name` during requests to the LaunchDarkly
           servers.
+        :param HTTPConfig http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
+          :class:`HTTPConfig`.
         """
         self.__sdk_key = sdk_key
 
@@ -154,6 +223,7 @@ class Config(object):
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
         self.__wrapper_version = wrapper_version
+        self.__http = http
 
     @classmethod
     def default(cls):
@@ -196,7 +266,8 @@ class Config(object):
                       diagnostic_opt_out=self.__diagnostic_opt_out,
                       diagnostic_recording_interval=self.__diagnostic_recording_interval,
                       wrapper_name=self.__wrapper_name,
-                      wrapper_version=self.__wrapper_version)
+                      wrapper_version=self.__wrapper_version,
+                      http=self.__http)
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -335,6 +406,19 @@ class Config(object):
     def wrapper_version(self):
         return self.__wrapper_version
 
+    @property
+    def http(self):
+        if self.__http is None:
+            return HTTPConfig(
+                connect_timeout=self.__connect_timeout,
+                read_timeout=self.__read_timeout,
+                http_proxy=self.__http_proxy,
+                ca_certs=None,
+                cert_file=None,
+                disable_ssl_verification=not self.__verify_ssl
+            )
+        return self.__http
+    
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
