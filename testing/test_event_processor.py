@@ -8,7 +8,7 @@ from ldclient.config import Config
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.util import log
-from testing.http_util import start_server
+from testing.http_util import start_server, BasicResponse
 from testing.stub_util import MockResponse, MockHttp
 
 
@@ -581,7 +581,7 @@ def test_can_use_https_proxy_via_config():
         _verify_https_proxy_is_used(server, config)
 
 def _verify_http_proxy_is_used(server, config):
-    server.setup_response(config.events_uri + '/bulk', 200, None)
+    server.for_path(config.events_uri + '/bulk', BasicResponse(200))
     with DefaultEventProcessor(config) as ep:
         ep.send_event({ 'kind': 'identify', 'user': user })
         ep.flush()
@@ -594,7 +594,7 @@ def _verify_http_proxy_is_used(server, config):
         assert req.method == 'POST'
 
 def _verify_https_proxy_is_used(server, config):
-    server.setup_response(config.events_uri + '/bulk', 200, None)
+    server.for_path(config.events_uri + '/bulk', BasicResponse(200))
     with DefaultEventProcessor(config) as ep:
         ep.send_event({ 'kind': 'identify', 'user': user })
         ep.flush()

@@ -4,7 +4,7 @@ from os import environ
 import urllib3
 
 def _base_headers(config):
-    headers = {'Authorization': config.sdk_key,
+    headers = {'Authorization': config.sdk_key or '',
                'User-Agent': 'PythonClient/' + VERSION}
     if isinstance(config.wrapper_name, str) and config.wrapper_name != "":
         wrapper_version = ""

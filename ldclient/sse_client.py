@@ -111,14 +111,19 @@ class SSEClient(object):
                     raise EOFError()
                 self.buf += nextline.decode("utf-8")
             except (StopIteration, EOFError) as e:
-                time.sleep(self.retry / 1000.0)
-                self._connect()
+                if self.retry:
+                    # This retry logic is not what we want in the SDK. It's retained here for backward compatibility in case
+                    # anyone else is using SSEClient.
+                    time.sleep(self.retry / 1000.0)
+                    self._connect()
 
-                # The SSE spec only supports resuming from a whole message, so
-                # if we have half a message we should throw it out.
-                head, sep, tail = self.buf.rpartition('\n')
-                self.buf = head + sep
-                continue
+                    # The SSE spec only supports resuming from a whole message, so
+                    # if we have half a message we should throw it out.
+                    head, sep, tail = self.buf.rpartition('\n')
+                    self.buf = head + sep
+                    continue
+                else:
+                    raise
 
         split = re.split(end_of_field, self.buf)
         head = split[0]

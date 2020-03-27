@@ -92,6 +92,7 @@ class Config(object):
                  flush_interval=5,
                  stream_uri='https://stream.launchdarkly.com',
                  stream=True,
+                 initial_reconnect_delay=1,
                  verify_ssl=True,
                  defaults=None,
                  send_events=None,
@@ -135,6 +136,10 @@ class Config(object):
           use the default value.
         :param bool stream: Whether or not the streaming API should be used to receive flag updates. By
           default, it is enabled. Streaming should only be disabled on the advice of LaunchDarkly support.
+        :param float initial_reconnect_delay: The initial reconnect delay (in seconds) for the streaming
+          connection. The streaming service uses a backoff algorithm (with jitter) every time the connection needs
+          to be reestablished. The delay for the first reconnection will start near this value, and then
+          increase exponentially for any subsequent connection failures.
         :param bool verify_ssl:  Deprecated; use `http` instead and specify `disable_ssl_verification` as
           part of :class:`HTTPConfig` if you want to turn off SSL verification (not recommended).
         :param bool send_events: Whether or not to send events back to LaunchDarkly. This differs from
@@ -198,6 +203,7 @@ class Config(object):
         self.__stream_uri = stream_uri.rstrip('\\')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
+        self.__initial_reconnect_delay = initial_reconnect_delay
         self.__poll_interval = max(poll_interval, 30)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
@@ -248,6 +254,7 @@ class Config(object):
                       flush_interval=self.__flush_interval,
                       stream_uri=self.__stream_uri,
                       stream=self.__stream,
+                      initial_reconnect_delay=self.__initial_reconnect_delay,
                       verify_ssl=self.__verify_ssl,
                       defaults=self.__defaults,
                       send_events=self.__send_events,
@@ -314,6 +321,9 @@ class Config(object):
     def stream(self):
         return self.__stream
 
+    @property
+    def initial_reconnect_delay(self):
+        return self.__initial_reconnect_delay
     @property
     def poll_interval(self):
         return self.__poll_interval

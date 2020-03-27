@@ -122,6 +122,20 @@ def get():
         __lock.unlock()
 
 
+# for testing only
+def _reset_client():
+    global __client
+    global __lock
+    try:
+        __lock.lock()
+        c = __client
+        __client = None
+    finally:
+        __lock.unlock()
+    if c:
+        c.close()
+
+
 # currently hidden from documentation - see docs/README.md
 class NullHandler(logging.Handler):
     """A :class:`logging.Handler` implementation that does nothing.
