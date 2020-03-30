@@ -1,8 +1,39 @@
 from email.utils import formatdate
-from requests.structures import CaseInsensitiveDict
+import json
 
+from testing.http_util import ChunkedResponse, JsonResponse
 from ldclient.interfaces import EventProcessor, FeatureRequester, FeatureStore, UpdateProcessor
 
+
+def make_items_map(items = []):
+    ret = {}
+    for item in items:
+        ret[item['key']] = item
+    return ret
+
+def make_put_event(flags = [], segments = []):
+    data = { "data": { "flags": make_items_map(flags), "segments": make_items_map(segments) } }
+    return 'event:put\ndata: %s\n\n' % json.dumps(data)
+
+def make_patch_event(kind, item):
+    path = '%s%s' % (kind.stream_api_path, item['key'])
+    data = { "path": path, "data": item }
+    return 'event:patch\ndata: %s\n\n' % json.dumps(data)
+
+def make_delete_event(kind, key, version):
+    path = '%s%s' % (kind.stream_api_path, key)
+    data = { "path": path, "version": version }
+    return 'event:delete\ndata: %s\n\n' % json.dumps(data)
+
+def stream_content(event = None):
+    stream = ChunkedResponse({ 'Content-Type': 'text/event-stream' })
+    if event:
+        stream.push(event)
+    return stream
+
+def poll_content(flags = [], segments = []):
+    data = { "flags": make_items_map(flags), "segments": make_items_map(segments) }
+    return JsonResponse(data)
 
 class MockEventProcessor(EventProcessor):
     def __init__(self, *_):

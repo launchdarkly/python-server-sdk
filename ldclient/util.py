@@ -3,14 +3,13 @@ General internal helper functions.
 """
 # currently excluded from documentation - see docs/README.md
 
-import certifi
 import logging
 from os import environ
 import six
 import sys
 import urllib3
 
-from ldclient.version import VERSION
+from ldclient.impl.http import HTTPFactory, _base_headers
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
@@ -39,25 +38,9 @@ else:
 
 _retryable_statuses = [400, 408, 429]
 
-def _base_headers(config):
-    headers = {'Authorization': config.sdk_key,
-               'User-Agent': 'PythonClient/' + VERSION}
-    if isinstance(config.wrapper_name, str) and config.wrapper_name != "":
-        wrapper_version = ""
-        if isinstance(config.wrapper_version, str) and config.wrapper_version != "":
-            wrapper_version = "/" + config.wrapper_version
-        headers.update({'X-LaunchDarkly-Wrapper': config.wrapper_name + wrapper_version})
-    return headers
-
 def _headers(config):
     base_headers = _base_headers(config)
     base_headers.update({'Content-Type': "application/json"})
-    return base_headers
-
-def _stream_headers(config):
-    base_headers = _base_headers(config)
-    base_headers.update({ 'Cache-Control': "no-cache"
-                        , 'Accept': "text/event-stream" })
     return base_headers
 
 def check_uwsgi():
@@ -93,35 +76,6 @@ class UnsuccessfulResponseException(Exception):
     @property
     def status(self):
         return self._status
-
-
-def create_http_pool_manager(num_pools=1, verify_ssl=False, target_base_uri=None, force_proxy=None):
-    proxy_url = force_proxy or _get_proxy_url(target_base_uri)
-
-    cert_reqs = 'CERT_REQUIRED' if verify_ssl else 'CERT_NONE'
-    ca_certs = certifi.where() if verify_ssl else None
-
-    if proxy_url is None:
-        return urllib3.PoolManager(
-            num_pools=num_pools,
-            cert_reqs=cert_reqs,
-            ca_certs=ca_certs
-            )
-    else:
-        return urllib3.ProxyManager(
-            proxy_url,
-            num_pools=num_pools,
-            cert_reqs=cert_reqs,
-            ca_certs = ca_certs
-        )
-
-def _get_proxy_url(target_base_uri):
-    if target_base_uri is None:
-        return None
-    is_https = target_base_uri.startswith('https:')
-    if is_https:
-        return environ.get('https_proxy')
-    return environ.get('http_proxy')
 
 
 def throw_if_unsuccessful_response(resp):

@@ -8,18 +8,24 @@ from collections import namedtuple
 import json
 from threading import Thread
 
-import backoff
 import logging
+import math
 import time
 
+from ldclient.impl.http import HTTPFactory, _http_factory
+from ldclient.impl.retry_delay import RetryDelayStrategy, DefaultBackoffStrategy, DefaultJitterStrategy
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
-from ldclient.util import _stream_headers, log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
+from ldclient.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
+
+MAX_RETRY_DELAY = 30
+BACKOFF_RESET_INTERVAL = 60
+JITTER_RATIO = 0.5
 
 STREAM_ALL_PATH = '/all'
 
@@ -38,6 +44,11 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
         self._es_started = None
+        self._retry_delay = RetryDelayStrategy(
+            config.initial_reconnect_delay,
+            BACKOFF_RESET_INTERVAL,
+            DefaultBackoffStrategy(MAX_RETRY_DELAY),
+            DefaultJitterStrategy(JITTER_RATIO))
 
         # We need to suppress the default logging behavior of the backoff package, because
         # it logs messages at ERROR level with variable content (the delay time) which will
@@ -52,13 +63,20 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
+        attempts = 0
         while self._running:
+            if attempts > 0:
+                delay = self._retry_delay.next_retry_delay(time.time())
+                log.info("Will reconnect after delay of %fs" % delay)
+                time.sleep(delay)
+            attempts += 1
             try:
                 self._es_started = int(time.time() * 1000)
                 messages = self._connect()
                 for msg in messages:
                     if not self._running:
                         break
+                    self._retry_delay.set_good_since(time.time())
                     message_ok = self.process_message(self._store, self._requester, msg)
                     if message_ok:
                         self._record_stream_init(False)
@@ -75,37 +93,25 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     self.stop()
                     break
             except Exception as e:
-                log.warning("Caught exception. Restarting stream connection after one second. %s" % e)
+                log.warning("Unexpected error on stream connection: %s, will retry" % e)
                 self._record_stream_init(True)
                 self._es_started = None
                 # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
-            time.sleep(1)
 
     def _record_stream_init(self, failed):
         if self._diagnostic_accumulator and self._es_started:
             current_time = int(time.time() * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, current_time - self._es_started, failed)
 
-    def _backoff_expo():
-        return backoff.expo(max_value=30)
-
-    def should_not_retry(e):
-        return isinstance(e, UnsuccessfulResponseException) and (not is_http_error_recoverable(e.status))
-
-    def log_backoff_message(props):
-        log.error("Streaming connection failed, will attempt to restart")
-        log.info("Will reconnect after delay of %fs", props['wait'])
-
-    @backoff.on_exception(_backoff_expo, BaseException, max_tries=None, jitter=backoff.full_jitter,
-                          on_backoff=log_backoff_message, giveup=should_not_retry)
     def _connect(self):
+        # We don't want the stream to use the same read timeout as the rest of the SDK.
+        http_factory = _http_factory(self._config)
+        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
         return SSEClient(
             self._uri,
-            headers=_stream_headers(self._config),
-            connect_timeout=self._config.connect_timeout,
-            read_timeout=stream_read_timeout,
-            verify_ssl=self._config.verify_ssl,
-            http_proxy=self._config.http_proxy)
+            retry = None,  # we're implementing our own retry
+            http_factory = stream_http_factory
+        )
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")

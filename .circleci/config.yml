@@ -171,7 +171,7 @@ jobs:
             pip install -r consul-requirements.txt
             python setup.py install
       - run:
-          name: run tests (2.7)
+          name: run tests
           command: |
             mkdir test-reports
             $env:Path += ";C:\Python27\;C:\Python27\Scripts\"  # has no effect if 2.7 isn't installed
