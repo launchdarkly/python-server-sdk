@@ -12,7 +12,7 @@ import logging
 import math
 import time
 
-from ldclient.impl.http import _http_factory
+from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.retry_delay import RetryDelayStrategy, DefaultBackoffStrategy, DefaultJitterStrategy
 from ldclient.interfaces import UpdateProcessor
 from ldclient.sse_client import SSEClient
@@ -75,8 +75,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 messages = self._connect()
                 for msg in messages:
                     if not self._running:
-                        log.warning("but I'm done")
                         break
+                    self._retry_delay.set_good_since(time.time())
                     message_ok = self.process_message(self._store, self._requester, msg)
                     if message_ok:
                         self._record_stream_init(False)
@@ -104,10 +104,13 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             self._diagnostic_accumulator.record_stream_init(current_time, current_time - self._es_started, failed)
 
     def _connect(self):
+        # We don't want the stream to use the same read timeout as the rest of the SDK.
+        http_factory = _http_factory(self._config)
+        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
         return SSEClient(
             self._uri,
             retry = None,  # we're implementing our own retry
-            http_factory = _http_factory(self._config)
+            http_factory = stream_http_factory
         )
 
     def stop(self):

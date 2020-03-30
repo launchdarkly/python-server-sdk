@@ -17,14 +17,21 @@ def _http_factory(config):
     return HTTPFactory(_base_headers(config), config.http)
 
 class HTTPFactory(object):
-    def __init__(self, base_headers, http_config):
+    def __init__(self, base_headers, http_config, override_read_timeout=None):
         self.__base_headers = base_headers
         self.__http_config = http_config
-        self.__timeout = urllib3.Timeout(connect=http_config.connect_timeout, read=http_config.read_timeout)
+        self.__timeout = urllib3.Timeout(
+            connect=http_config.connect_timeout,
+            read=http_config.read_timeout if override_read_timeout is None else override_read_timeout
+        )
     
     @property
     def base_headers(self):
         return self.__base_headers
+    
+    @property
+    def http_config(self):
+        return self.__http_config
     
     @property
     def timeout(self):

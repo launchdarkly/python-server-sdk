@@ -28,8 +28,6 @@ class SSEClient(object):
         self.url = url
         self.last_id = last_id
         self.retry = retry
-        self._connect_timeout = connect_timeout
-        self._read_timeout = read_timeout
         self._chunk_size = chunk_size
 
         if http_factory:
@@ -37,7 +35,7 @@ class SSEClient(object):
             base_headers = http_factory.base_headers
         else:
             # for backward compatibility in case anyone else is using this class
-            self._timeout = urllib3.Timeout(connect=self._connect_timeout, read=self._read_timeout)
+            self._timeout = urllib3.Timeout(connect=connect_timeout, read=read_timeout)
             base_headers = {}
         
         # Optional support for passing in an HTTP client
