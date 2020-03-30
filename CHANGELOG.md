@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.13.0] - 2020-03-30
+### Added:
+- The new `Config` parameter `initial_reconnect_delay` allows customizing of the base retry delay for stream connections (that is, the delay for the first reconnection after a failure; subsequent retries use an exponential backoff).
+- The new `Config` parameter `http` and the `HTTPConfig` class allow advanced configuration of the SDK&#39;s network behavior, such as specifying a custom certificate authority for connecting to a proxy/gateway that uses a self-signed certificate.
+
+### Changed:
+- The retry delay for stream connections has been changed as follows: it uses an exponential backoff no matter what type of error occurred (previously, some kinds of errors had a hard-coded 1-second delay), and each delay is reduced by a random jitter of 0-50% rather than 0-100%. Also, if a connection remains active for at least 60 seconds, the backoff is reset to the initial value. This makes the Python SDK&#39;s behavior consistent with other LaunchDarkly SDKs.
+
+### Deprecated:
+- The existing `Config` properties `connect_timeout`, `read_timeout`, and `verify_ssl` are now deprecated and superseded by the equivalent properties in `HTTPConfig`.
+
 ## [6.12.2] - 2020-03-19
 ### Fixed:
 - Setting `verify_ssl` to `False` in the client configuration did not have the expected effect of completely turning off SSL/TLS verification, because it still left _certificate_ verification in effect, so it would allow a totally insecure connection but reject a secure connection whose certificate had an unknown CA. This has been changed so that it will turn off certificate verification as well. _This is not a recommended practice_ and a future version of the SDK will add a way to specify a custom certificate authority instead (to support, for instance, using the Relay Proxy with a self-signed certificate).
