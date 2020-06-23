@@ -141,17 +141,18 @@ class LDClient(object):
         if config.offline or config.use_ldd:
             return NullUpdateProcessor(config, store, ready)
         
+        if config.stream:
+            return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
+
+        log.info("Disabling streaming API")
+        log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
+
         if config.feature_requester_class:
             feature_requester = config.feature_requester_class(config)
         else:
             feature_requester = FeatureRequesterImpl(config)
         """ :type: FeatureRequester """
 
-        if config.stream:
-            return StreamingUpdateProcessor(config, feature_requester, store, ready, diagnostic_accumulator)
-
-        log.info("Disabling streaming API")
-        log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
     def get_sdk_key(self):
