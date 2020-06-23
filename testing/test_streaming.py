@@ -30,7 +30,7 @@ def test_request_properties():
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.method == 'GET'
@@ -48,7 +48,7 @@ def test_sends_wrapper_header():
                             wrapper_name = 'Flask', wrapper_version = '0.1.0')
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
@@ -63,7 +63,7 @@ def test_sends_wrapper_header_without_version():
                             wrapper_name = 'Flask')
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
@@ -79,7 +79,7 @@ def test_receives_put_event():
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -99,7 +99,7 @@ def test_receives_patch_events():
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -123,7 +123,7 @@ def test_receives_delete_events():
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -148,7 +148,7 @@ def test_reconnects_if_stream_is_broken():
                 config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
                 server.for_path('/all', SequentialHandler(stream1, stream2))
 
-                with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+                with StreamingUpdateProcessor(config, store, ready, None) as sp:
                     sp.start()
                     server.await_request
                     ready.wait(start_wait)
@@ -169,7 +169,7 @@ def test_retries_on_network_error():
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
             server.for_path('/all', two_errors_then_success)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()                
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -187,7 +187,7 @@ def test_recoverable_http_error(status):
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
             server.for_path('/all', two_errors_then_success)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()                
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -204,7 +204,7 @@ def test_unrecoverable_http_error(status):
             config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
             server.for_path('/all', error_then_success)
 
-            with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()                
                 ready.wait(5)
                 assert not sp.initialized()
@@ -237,7 +237,7 @@ def _verify_http_proxy_is_used(server, config):
     ready = Event()
     with stream_content(make_put_event()) as stream:
         server.for_path(config.stream_base_uri + '/all', stream)
-        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+        with StreamingUpdateProcessor(config, store, ready, None) as sp:
             sp.start()
             # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
             # HTTP client, so we should be able to see the request go through. Note that the URI path will
@@ -252,7 +252,7 @@ def _verify_https_proxy_is_used(server, config):
     ready = Event()
     with stream_content(make_put_event()) as stream:
         server.for_path(config.stream_base_uri + '/all', stream)
-        with StreamingUpdateProcessor(config, None, store, ready, None) as sp:
+        with StreamingUpdateProcessor(config, store, ready, None) as sp:
             sp.start()
             # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
             # it can still record that it *got* the request, which proves that the request went to the proxy.
@@ -268,7 +268,7 @@ def test_records_diagnostic_on_stream_init_success():
             server.for_path('/all', stream)
             diag_accum = _DiagnosticAccumulator(1)
 
-            with StreamingUpdateProcessor(config, None, store, ready, diag_accum) as sp:
+            with StreamingUpdateProcessor(config, store, ready, diag_accum) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 recorded_inits = diag_accum.create_event_and_reset(0, 0)['streamInits']
@@ -286,7 +286,7 @@ def test_records_diagnostic_on_stream_init_failure():
             server.for_path('/all', error_then_success)
             diag_accum = _DiagnosticAccumulator(1)
 
-            with StreamingUpdateProcessor(config, None, store, ready, diag_accum) as sp:
+            with StreamingUpdateProcessor(config, store, ready, diag_accum) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 recorded_inits = diag_accum.create_event_and_reset(0, 0)['streamInits']
