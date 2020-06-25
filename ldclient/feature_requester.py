@@ -27,29 +27,20 @@ class FeatureRequesterImpl(FeatureRequester):
         self._cache = dict()
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
+        self._poll_uri = config.base_uri + LATEST_ALL_URI
 
     def get_all_data(self):
-        all_data = self._do_request(self._config.base_uri + LATEST_ALL_URI, True)
-        return {
-            FEATURES: all_data['flags'],
-            SEGMENTS: all_data['segments']
-        }
-
-    def get_one(self, kind, key):
-        return self._do_request(self._config.base_uri + kind.request_api_path + '/' + key, False)
-
-    def _do_request(self, uri, allow_cache):
+        uri = self._poll_uri
         hdrs = _headers(self._config)
-        if allow_cache:
-            cache_entry = self._cache.get(uri)
-            if cache_entry is not None:
-                hdrs['If-None-Match'] = cache_entry.etag
+        cache_entry = self._cache.get(uri)
+        if cache_entry is not None:
+            hdrs['If-None-Match'] = cache_entry.etag
         r = self._http.request('GET', uri,
                                headers=hdrs,
                                timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
                                retries=1)
         throw_if_unsuccessful_response(r)
-        if r.status == 304 and allow_cache and cache_entry is not None:
+        if r.status == 304 and cache_entry is not None:
             data = cache_entry.data
             etag = cache_entry.etag
             from_cache = True
@@ -57,8 +48,12 @@ class FeatureRequesterImpl(FeatureRequester):
             data = json.loads(r.data.decode('UTF-8'))
             etag = r.getheader('ETag')
             from_cache = False
-            if allow_cache and etag is not None:
+            if etag is not None:
                 self._cache[uri] = CacheEntry(data=data, etag=etag)
         log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]",
             uri, r.status, from_cache, etag)
-        return data
+
+        return {
+            FEATURES: data['flags'],
+            SEGMENTS: data['segments']
+        }
