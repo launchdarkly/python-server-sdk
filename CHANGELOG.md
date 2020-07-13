@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.13.1] - 2020-07-13
+### Fixed:
+- A problem with the SDK&#39;s use of `urllib3.Retry` could prevent analytics event delivery from being retried after a network error or server error. ([#143](https://github.com/launchdarkly/python-server-sdk/issues/143))
+
 ## [6.13.0] - 2020-03-30
 ### Added:
 - The new `Config` parameter `initial_reconnect_delay` allows customizing of the base retry delay for stream connections (that is, the delay for the first reconnection after a failure; subsequent retries use an exponential backoff).
