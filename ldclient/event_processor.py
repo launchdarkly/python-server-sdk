@@ -28,9 +28,8 @@ from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import UnsuccessfulResponseException
-from ldclient.util import _headers, _retryable_statuses
 from ldclient.util import log
-from ldclient.util import http_error_message, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response
+from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response, _headers
 from ldclient.diagnostics import create_diagnostic_init
 
 __MAX_FLUSH_THREADS__ = 5
@@ -141,18 +140,6 @@ class EventOutputFormatter(object):
         return str(event['user'].get('key'))
 
 
-class _EventRetry(urllib3.Retry):
-    def __init__(self):
-        urllib3.Retry.__init__(self, total=1,
-                               method_whitelist=False, # Enable retry on POST
-                               status_forcelist=_retryable_statuses,
-                               raise_on_status=False)
-
-    # Override backoff time to be flat 1 second
-    def get_backoff_time(self):
-        return 1
-
-
 class EventPayloadSendTask(object):
     def __init__(self, http, config, formatter, payload, response_fn):
         self._http = http
@@ -175,16 +162,17 @@ class EventPayloadSendTask(object):
         try:
             json_body = json.dumps(output_events)
             log.debug('Sending events payload: ' + json_body)
-            hdrs = _headers(self._config)
-            hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
-            hdrs['X-LaunchDarkly-Payload-ID'] = str(uuid.uuid4())
-            uri = self._config.events_uri
-            r = self._http.request('POST', uri,
-                                   headers=hdrs,
-                                   timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
-                                   body=json_body,
-                                   retries=_EventRetry())
-            self._response_fn(r)
+            payload_id = str(uuid.uuid4())
+            r = _post_events_with_retry(
+                self._http,
+                self._config,
+                self._config.events_uri,
+                payload_id,
+                json_body,
+                "%d events" % len(self._payload.events)
+            )
+            if r:
+                self._response_fn(r)
             return r
         except Exception as e:
             log.warning(
@@ -202,13 +190,14 @@ class DiagnosticEventSendTask(object):
         try:
             json_body = json.dumps(self._event_body)
             log.debug('Sending diagnostic event: ' + json_body)
-            hdrs = _headers(self._config)
-            uri = self._config.events_base_uri + '/diagnostic'
-            r = self._http.request('POST', uri,
-                                   headers=hdrs,
-                                   timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
-                                   body=json_body,
-                                   retries=1)
+            _post_events_with_retry(
+                self._http,
+                self._config,
+                self._config.events_base_uri + '/diagnostic',
+                None,
+                json_body,
+                "diagnostic event"
+            )
         except Exception as e:
             log.warning(
                 'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
@@ -381,11 +370,9 @@ class EventDispatcher(object):
             if server_date is not None:
                 timestamp = int(time.mktime(server_date) * 1000)
                 self._last_known_past_time = timestamp
-        if r.status > 299:
-            log.error(http_error_message(r.status, "event delivery", "some events were dropped"))
-            if not is_http_error_recoverable(r.status):
-                self._disabled = True
-                return
+        if r.status > 299 and not is_http_error_recoverable(r.status):
+            self._disabled = True
+            return
 
     def _send_and_reset_diagnostics(self):
         if self._diagnostic_accumulator is not None:
@@ -472,3 +459,43 @@ class DefaultEventProcessor(EventProcessor):
     
     def __exit__(self, type, value, traceback):
         self.stop()
+
+
+def _post_events_with_retry(
+    http_client,
+    config,
+    uri,
+    payload_id,
+    body,
+    events_description
+):
+    hdrs = _headers(config)
+    hdrs['Content-Type'] = 'application/json'
+    if payload_id:
+        hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+        hdrs['X-LaunchDarkly-Payload-ID'] = payload_id
+    can_retry = True
+    context = "posting %s" % events_description
+    while True:
+        next_action_message = "will retry" if can_retry else "some events were dropped"
+        try:
+            r = http_client.request(
+                'POST',
+                uri,
+                headers=hdrs,
+                body=body,
+                timeout=urllib3.Timeout(connect=config.connect_timeout, read=config.read_timeout),
+                retries=0
+            )
+            if r.status < 300:
+                return r
+            recoverable = check_if_error_is_recoverable_and_log(context, r.status, None, next_action_message)
+            if not recoverable:
+                return r
+        except Exception as e:
+            check_if_error_is_recoverable_and_log(context, None, str(e), next_action_message)
+        if not can_retry:
+            return None
+        can_retry = False
+        # fixed delay of 1 second for event retries
+        time.sleep(1)

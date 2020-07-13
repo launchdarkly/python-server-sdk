@@ -33,12 +33,11 @@ ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, config, requester, store, ready, diagnostic_accumulator):
+    def __init__(self, config, store, ready, diagnostic_accumulator):
         Thread.__init__(self)
         self.daemon = True
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
         self._config = config
-        self._requester = requester
         self._store = store
         self._running = False
         self._ready = ready
@@ -77,7 +76,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     if not self._running:
                         break
                     self._retry_delay.set_good_since(time.time())
-                    message_ok = self.process_message(self._store, self._requester, msg)
+                    message_ok = self.process_message(self._store, msg)
                     if message_ok:
                         self._record_stream_init(False)
                         self._es_started = None
@@ -122,7 +121,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     # Returns True if we initialized the feature store
     @staticmethod
-    def process_message(store, requester, msg):
+    def process_message(store, msg):
         if msg.event == 'put':
             all_data = json.loads(msg.data)
             init_data = {
@@ -143,18 +142,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 store.upsert(target.kind, obj)
             else:
                 log.warning("Patch for unknown path: %s", path)
-        elif msg.event == "indirect/patch":
-            path = msg.data
-            log.debug("Received indirect/patch event for %s", path)
-            target = StreamingUpdateProcessor._parse_path(path)
-            if target is not None:
-                store.upsert(target.kind, requester.get_one(target.kind, target.key))
-            else:
-                log.warning("Indirect patch for unknown path: %s", path)
-        elif msg.event == "indirect/put":
-            log.debug("Received indirect/put event")
-            store.init(requester.get_all_data())
-            return True
         elif msg.event == 'delete':
             payload = json.loads(msg.data)
             path = payload['path']

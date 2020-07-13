@@ -67,9 +67,6 @@ class MockFeatureRequester(FeatureRequester):
             raise self.exception
         return self.all_data
 
-    def get_one(self, kind, key):
-        pass
-
 class MockResponse(object):
     def __init__(self, status, headers):
         self._status = status

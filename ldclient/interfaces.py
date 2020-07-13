@@ -263,13 +263,6 @@ class FeatureRequester(object):
         """
         pass
 
-    def get_one(self, kind, key):
-        """
-        Gets one Feature flag
-        :return:
-        """
-        pass
-
 
 class DiagnosticDescription(object):
     """

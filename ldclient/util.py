@@ -89,13 +89,26 @@ def is_http_error_recoverable(status):
     return True  # all other errors are recoverable
 
 
+def http_error_description(status):
+    return "HTTP error %d%s" % (status, " (invalid SDK key)" if (status == 401 or status == 403) else "")
+
+
 def http_error_message(status, context, retryable_message = "will retry"):
-    return "Received HTTP error %d%s for %s - %s" % (
-        status,
-        " (invalid SDK key)" if (status == 401 or status == 403) else "",
+    return "Received %s for %s - %s" % (
+        http_error_description(status),
         context,
         retryable_message if is_http_error_recoverable(status) else "giving up permanently"
         )
+
+
+def check_if_error_is_recoverable_and_log(error_context, status_code, error_desc, recoverable_message):
+    if status_code and (error_desc is None):
+        error_desc = http_error_description(status_code)
+    if status_code and not is_http_error_recoverable(status_code):
+        log.error("Error %s (giving up permanently): %s" % (error_context, error_desc))
+        return False
+    log.warning("Error %s (%s): %s" % (error_context, recoverable_message, error_desc))
+    return True
 
 
 def stringify_attrs(attrdict, attrs):
