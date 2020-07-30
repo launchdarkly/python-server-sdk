@@ -1,6 +1,5 @@
 import json
 import os
-import six
 import traceback
 
 have_yaml = False
@@ -30,22 +29,22 @@ class _FileDataSource(UpdateProcessor):
         self._ready = ready
         self._inited = False
         self._paths = paths
-        if isinstance(self._paths, six.string_types):
+        if isinstance(self._paths, str):
             self._paths = [ self._paths ]
         self._auto_update = auto_update
         self._auto_updater = None
         self._poll_interval = poll_interval
         self._force_polling = force_polling
-        
+
     def start(self):
         self._load_all()
 
         if self._auto_update:
             self._auto_updater = self._start_auto_updater()
-        
+
         # We will signal readiness immediately regardless of whether the file load succeeded or failed -
         # the difference can be detected by checking initialized()
-        self._ready.set() 
+        self._ready.set()
 
     def stop(self):
         if self._auto_updater:
@@ -65,24 +64,24 @@ class _FileDataSource(UpdateProcessor):
                 return
         self._store.init(all_data)
         self._inited = True
-    
+
     def _load_file(self, path, all_data):
         content = None
         with open(path, 'r') as f:
             content = f.read()
         parsed = self._parse_content(content)
-        for key, flag in six.iteritems(parsed.get('flags', {})):
+        for key, flag in parsed.get('flags', {}).items():
             self._add_item(all_data, FEATURES, flag)
-        for key, value in six.iteritems(parsed.get('flagValues', {})):
+        for key, value in parsed.get('flagValues', {}).items():
             self._add_item(all_data, FEATURES, self._make_flag_with_value(key, value))
-        for key, segment in six.iteritems(parsed.get('segments', {})):
+        for key, segment in parsed.get('segments', {}).items():
             self._add_item(all_data, SEGMENTS, segment)
-    
+
     def _parse_content(self, content):
         if have_yaml:
             return yaml.safe_load(content)  # pyyaml correctly parses JSON too
         return json.loads(content)
-    
+
     def _add_item(self, all_data, kind, item):
         items = all_data[kind]
         key = item.get('key')
@@ -112,10 +111,10 @@ class _FileDataSource(UpdateProcessor):
             return _FileDataSource.WatchdogAutoUpdater(resolved_paths, self._load_all)
         else:
             return _FileDataSource.PollingAutoUpdater(resolved_paths, self._load_all, self._poll_interval)
-    
+
     # Watch for changes to data files using the watchdog package. This uses native OS filesystem notifications
     # if available for the current platform.
-    class WatchdogAutoUpdater(object):
+    class WatchdogAutoUpdater:
         def __init__(self, resolved_paths, reloader):
             watched_files = set(resolved_paths)
 
@@ -123,11 +122,11 @@ class _FileDataSource(UpdateProcessor):
                 def on_any_event(self, event):
                     if event.src_path in watched_files:
                         reloader()
-            
+
             dir_paths = set()
             for path in resolved_paths:
                 dir_paths.add(os.path.dirname(path))
-            
+
             self._observer = watchdog.observers.Observer()
             handler = LDWatchdogHandler()
             for path in dir_paths:
@@ -140,21 +139,21 @@ class _FileDataSource(UpdateProcessor):
 
     # Watch for changes to data files by polling their modification times. This is used if auto-update is
     # on but the watchdog package is not installed.
-    class PollingAutoUpdater(object):
+    class PollingAutoUpdater:
         def __init__(self, resolved_paths, reloader, interval):
             self._paths = resolved_paths
             self._reloader = reloader
             self._file_times = self._check_file_times()
             self._timer = RepeatingTimer(interval, self._poll)
             self._timer.start()
-        
+
         def stop(self):
             self._timer.stop()
-        
+
         def _poll(self):
             new_times = self._check_file_times()
             changed = False
-            for file_path, file_time in six.iteritems(self._file_times):
+            for file_path, file_time in self._file_times.items():
                 if new_times.get(file_path) is not None and new_times.get(file_path) != file_time:
                     changed = True
                     break

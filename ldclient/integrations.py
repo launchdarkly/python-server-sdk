@@ -11,10 +11,10 @@ from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
 
 
-class Consul(object):
+class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
     """
-    
+
     """The key prefix that is used if you do not specify one."""
     DEFAULT_PREFIX = "launchdarkly"
 
@@ -53,10 +53,10 @@ class Consul(object):
         return CachingStoreWrapper(core, caching)
 
 
-class DynamoDB(object):
+class DynamoDB:
     """Provides factory methods for integrations between the LaunchDarkly SDK and DynamoDB.
     """
-    
+
     @staticmethod
     def new_feature_store(table_name,
                           prefix=None,
@@ -95,13 +95,13 @@ class DynamoDB(object):
         return CachingStoreWrapper(core, caching)
 
 
-class Redis(object):
+class Redis:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Redis.
     """
     DEFAULT_URL = 'redis://localhost:6379/0'
     DEFAULT_PREFIX = 'launchdarkly'
     DEFAULT_MAX_CONNECTIONS = 16
-    
+
     @staticmethod
     def new_feature_store(url='redis://localhost:6379/0',
                           prefix='launchdarkly',
@@ -134,7 +134,7 @@ class Redis(object):
         return wrapper
 
 
-class Files(object):
+class Files:
     """Provides factory methods for integrations with filesystem data.
     """
 
@@ -162,7 +162,7 @@ class Files(object):
         Note that in order to use YAML, you will need to install the ``pyyaml`` package.
 
         If the data source encounters any error in any file-- malformed content, a missing file, or a
-        duplicate key-- it will not load flags from any of the files.      
+        duplicate key-- it will not load flags from any of the files.
 
         :param array paths: the paths of the source files for loading flag data. These may be absolute paths
           or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``

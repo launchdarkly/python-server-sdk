@@ -10,7 +10,7 @@ version_module_globals = {}
 with open('./ldclient/version.py') as f:
     exec(f.read(), version_module_globals)
 ldclient_version = version_module_globals['VERSION']
-    
+
 def parse_requirements(filename):
     """ load requirements from a pip requirements file """
     lineiter = (line.strip() for line in open(filename))
@@ -61,8 +61,6 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',

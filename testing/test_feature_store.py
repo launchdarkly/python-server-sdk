@@ -22,7 +22,7 @@ from ldclient.versioned_data_kind import FEATURES
 skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 
 
-class InMemoryTester(object):
+class InMemoryTester:
     def init_store(self):
         return InMemoryFeatureStore()
 
@@ -31,13 +31,13 @@ class InMemoryTester(object):
         return False
 
 
-class RedisTester(object):
+class RedisTester:
     redis_host = 'localhost'
     redis_port = 6379
 
     def __init__(self, cache_config):
         self._cache_config = cache_config
-    
+
     def init_store(self, prefix=None):
         self._clear_data()
         return Redis.new_feature_store(caching=self._cache_config, prefix=prefix)
@@ -61,7 +61,7 @@ class RedisWithDeprecatedConstructorTester(RedisTester):
         return True
 
 
-class ConsulTester(object):
+class ConsulTester:
     def __init__(self, cache_config):
         self._cache_config = cache_config
 
@@ -80,7 +80,7 @@ class ConsulTester(object):
             client.kv.delete(key)
 
 
-class DynamoDBTester(object):
+class DynamoDBTester:
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
     options = {
@@ -92,7 +92,7 @@ class DynamoDBTester(object):
 
     def __init__(self, cache_config):
         self._cache_config = cache_config
-    
+
     def init_store(self, prefix=None):
         self._create_table()
         self._clear_data()
@@ -148,7 +148,7 @@ class DynamoDBTester(object):
                 return
             except client.exceptions.ResourceNotFoundException:
                 time.sleep(0.5)
-        
+
     def _clear_data(self):
         client = boto3.client('dynamodb', **self.options)
         delete_requests = []
@@ -226,7 +226,7 @@ class TestFeatureStore:
 
     def test_not_initialized_before_init(self, store):
         assert store.initialized is False
-    
+
     def test_initialized(self, store):
         store = self.base_initialized_store(store)
         assert store.initialized is True

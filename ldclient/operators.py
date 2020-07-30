@@ -11,18 +11,13 @@ from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
 from numbers import Number
 
-import six
 import pyrfc3339
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
 def _string_operator(u, c, fn):
-    if isinstance(u, six.string_types):
-        if isinstance(c, six.string_types):
-            return fn(u, c)
-    return False
-
+    return fn(u, c) if isinstance(u, str) and isinstance(c, str) else False
 
 def _numeric_operator(u, c, fn):
     # bool is a subtype of int, and we don't want to try and compare it as a number.
@@ -50,7 +45,7 @@ def _parse_time(input):
     if isinstance(input, Number):
         return float(input)
 
-    if isinstance(input, six.string_types):
+    if isinstance(input, str):
         try:
             parsed_time = pyrfc3339.parse(input)
             timestamp = (parsed_time - epoch).total_seconds()

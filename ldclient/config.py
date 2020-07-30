@@ -11,7 +11,7 @@ GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
 
 
-class HTTPConfig(object):
+class HTTPConfig:
     """Advanced HTTP configuration options for the SDK client.
 
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
@@ -76,7 +76,7 @@ class HTTPConfig(object):
     def disable_ssl_verification(self):
         return self.__disable_ssl_verification
 
-class Config(object):
+class Config:
     """Advanced configuration options for the SDK client.
 
     To use these options, create an instance of ``Config`` and pass it to either :func:`ldclient.set_config()`
@@ -428,7 +428,7 @@ class Config(object):
                 disable_ssl_verification=not self.__verify_ssl
             )
         return self.__http
-    
+
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")

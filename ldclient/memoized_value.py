@@ -5,7 +5,7 @@ Internal helper class for caching. No longer used.
 
 from threading import RLock
 
-class MemoizedValue(object):
+class MemoizedValue
     """Simple implementation of a thread-safe memoized value whose generator function will never be
     run more than once, and whose value can be overridden by explicit assignment.
 

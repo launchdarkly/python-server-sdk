@@ -90,7 +90,7 @@ def test_create_diagnostic_config_custom():
     assert diag_config['diagnosticRecordingIntervalMillis'] == 60000
     assert diag_config['dataStoreType'] == 'MyFavoriteStore'
 
-class _TestStoreForDiagnostics(object):
+class _TestStoreForDiagnostics:
     def describe_configuration(self, config):
         return 'MyFavoriteStore'
 

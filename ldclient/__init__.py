@@ -2,8 +2,6 @@
 The ldclient module contains the most common top-level entry points for the SDK.
 """
 
-import logging
-
 from ldclient.rwlock import ReadWriteLock
 from ldclient.version import VERSION
 from .client import *
@@ -136,27 +134,4 @@ def _reset_client():
         c.close()
 
 
-# currently hidden from documentation - see docs/README.md
-class NullHandler(logging.Handler):
-    """A :class:`logging.Handler` implementation that does nothing.
-
-    .. deprecated:: 6.0.0
-      You should not need to use this class. It was originally used in order to support Python 2.6,
-      which requires that at least one logging handler must always be configured. However, the SDK
-      no longer supports Python 2.6.
-    """
-    def emit(self, record):
-        pass
-
-
-if not log.handlers:
-    log.addHandler(NullHandler())
-
-try:
-    # noinspection PyUnresolvedReferences
-    unicode
-except NameError:
-    __BASE_TYPES__ = (str, float, int, bool)
-else:
-    # noinspection PyUnresolvedReferences
-    __BASE_TYPES__ = (str, float, int, bool, unicode)
+__BASE_TYPES__ = (str, float, int, bool)

@@ -1,10 +1,10 @@
 import json
-from six import iteritems, string_types
-from six.moves import BaseHTTPServer, queue
 import socket
 import ssl
 from threading import Thread
 import time
+import queue
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 def get_available_port():
     s = socket.socket(socket.AF_INET, type = socket.SOCK_STREAM)
@@ -44,9 +44,9 @@ class MockServerWrapper(Thread):
         Thread.__init__(self)
         self.port = port
         self.uri = '%s://localhost:%d' % ('https' if secure else 'http', port)
-        self.server = BaseHTTPServer.HTTPServer(('localhost', port), MockServerRequestHandler)
+        self.server = HTTPServer(('localhost', port), MockServerRequestHandler)
         if secure:
-            self.server.socket = ssl.wrap_socket(   
+            self.server.socket = ssl.wrap_socket(
                 self.server.socket,
                 certfile='./testing/selfsigned.pem', # this is a pre-generated self-signed cert that is valid for 100 years
                 keyfile='./testing/selfsigned.key',
@@ -55,24 +55,24 @@ class MockServerWrapper(Thread):
         self.server.server_wrapper = self
         self.matchers = {}
         self.requests = queue.Queue()
-    
+
     def close(self):
         self.server.shutdown()
         self.server.server_close()
-    
+
     def run(self):
         self.server.serve_forever(0.1)  # 0.1 seconds is how often it'll check to see if it is shutting down
-    
+
     def for_path(self, uri_path, content):
         self.matchers[uri_path] = content
         return self
 
     def await_request(self):
         return self.requests.get()
-    
+
     def require_request(self):
         return self.requests.get(block=False)
-    
+
     def should_have_requests(self, count):
         if self.requests.qsize() != count:
             rs = []
@@ -87,7 +87,7 @@ class MockServerWrapper(Thread):
     def __exit__(self, type, value, traceback):
         self.close()
 
-class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class MockServerRequestHandler(BaseHTTPRequestHandler):
     def do_CONNECT(self):
         self._do_request()
 
@@ -106,7 +106,7 @@ class MockServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-class MockServerRequest(object):
+class MockServerRequest:
     def __init__(self, request):
         self.method = request.command
         self.path = request.path
@@ -116,23 +116,23 @@ class MockServerRequest(object):
             self.body = request.rfile.read(content_length).decode('UTF-8')
         else:
             self.body = None
-    
+
     def __str__(self):
         return "%s %s" % (self.method, self.path)
 
-class BasicResponse(object):
+class BasicResponse:
     def __init__(self, status, body = None, headers = None):
         self.status = status
         self.body = body
         self.headers = headers or {}
 
     def add_headers(self, headers):
-        for key, value in iteritems(headers or {}):
+        for key, value in (headers or {}).items():
             self.headers[key] = value
-        
+
     def write(self, request):
         request.send_response(self.status)
-        for key, value in iteritems(self.headers):
+        for key, value in self.headers.items():
             request.send_header(key, value)
         request.end_headers()
         if self.body:
@@ -144,22 +144,22 @@ class JsonResponse(BasicResponse):
         h.update({ 'Content-Type': 'application/json' })
         BasicResponse.__init__(self, 200, json.dumps(data or {}), h)
 
-class ChunkedResponse(object):
+class ChunkedResponse:
     def __init__(self, headers = None):
         self.queue = queue.Queue()
         self.headers = headers or {}
-    
+
     def push(self, chunk):
         if chunk is not None:
             self.queue.put(chunk)
-    
+
     def close(self):
         self.queue.put(None)
-        
+
     def write(self, request):
         request.send_response(200)
         request.send_header('Transfer-Encoding', 'chunked')
-        for key, value in iteritems(self.headers):
+        for key, value in self.headers.items():
             request.send_header(key, value)
         request.end_headers()
         request.wfile.flush()
@@ -179,11 +179,11 @@ class ChunkedResponse(object):
     def __exit__(self, type, value, traceback):
         self.close()
 
-class CauseNetworkError(object):
+class CauseNetworkError:
     def write(self, request):
         raise Exception('intentional error')
 
-class SequentialHandler(object):
+class SequentialHandler:
     def __init__(self, *argv):
         self.handlers = argv
         self.counter = 0

@@ -10,7 +10,6 @@ from collections import OrderedDict, defaultdict
 from ldclient.util import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStore
 from ldclient.rwlock import ReadWriteLock
-from six import iteritems
 
 
 class CacheConfig:
@@ -41,15 +40,15 @@ class CacheConfig:
         :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig()
-    
+
     @staticmethod
     def disabled():
         """Returns an instance of CacheConfig specifying that caching should be disabled.
-        
+
         :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig(expiration = 0)
-    
+
     @property
     def enabled(self):
         """Returns True if caching is enabled in this configuration.
@@ -57,7 +56,7 @@ class CacheConfig:
         :rtype: bool
         """
         return self._expiration > 0
-    
+
     @property
     def expiration(self):
         """Returns the configured cache TTL, in seconds.
@@ -65,7 +64,7 @@ class CacheConfig:
         :rtype: float
         """
         return self._expiration
-    
+
     @property
     def capacity(self):
         """Returns the configured maximum number of cacheable items.
@@ -163,7 +162,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             return self._initialized
         finally:
             self._lock.runlock()
-    
+
     def describe_configuration(self, config):
         return 'memory'
 
@@ -191,7 +190,7 @@ class _FeatureStoreDataSetSorter:
             items = all_data[kind]
             outer_hash[kind] = _FeatureStoreDataSetSorter._sort_collection(kind, items)
         return outer_hash
-    
+
     @staticmethod
     def _sort_collection(kind, input):
         if len(input) == 0 or not hasattr(kind, 'get_dependency_keys'):
@@ -203,11 +202,11 @@ class _FeatureStoreDataSetSorter:
         items_out = OrderedDict()
         while len(remaining_items) > 0:
             # pick a random item that hasn't been updated yet
-            for key, item in iteritems(remaining_items):
+            for key, item in remaining_items.items():
                 _FeatureStoreDataSetSorter._add_with_dependencies_first(item, dependency_fn, remaining_items, items_out)
                 break
         return items_out
-    
+
     @staticmethod
     def _add_with_dependencies_first(item, dependency_fn, remaining_items, items_out):
         key = item.get('key')

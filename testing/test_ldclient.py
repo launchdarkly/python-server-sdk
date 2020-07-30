@@ -11,11 +11,7 @@ import logging
 import pytest
 from testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
 from testing.sync_util import wait_until
-
-try:
-    import queue
-except:
-    import Queue as queue
+import queue
 
 
 unreachable_uri="http://fake"

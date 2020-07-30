@@ -10,7 +10,7 @@ import platform
 
 from ldclient.version import VERSION
 
-class _DiagnosticAccumulator(object):
+class _DiagnosticAccumulator:
     def __init__(self, diagnostic_id):
         self.diagnostic_id = diagnostic_id
         self.data_since_date = int(time.time() * 1000)

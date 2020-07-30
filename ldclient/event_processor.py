@@ -8,17 +8,10 @@ from email.utils import parsedate
 import errno
 import json
 from threading import Event, Lock, Thread
-import six
 import time
-import urllib3
 import uuid
-
-# noinspection PyBroadException
-try:
-    import queue
-except:
-    # noinspection PyUnresolvedReferences,PyPep8Naming
-    import Queue as queue
+import queue
+import urllib3
 
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.fixed_thread_pool import FixedThreadPool
@@ -40,7 +33,7 @@ __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__ = [ "key", "secondary", "ip", "country", 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
-class EventOutputFormatter(object):
+class EventOutputFormatter:
     def __init__(self, config):
         self._inline_users = config.inline_users_in_events
         self._user_filter = UserFilter(config)
@@ -50,7 +43,7 @@ class EventOutputFormatter(object):
         if len(summary.counters) > 0:
             events_out.append(self.make_summary_event(summary))
         return events_out
-    
+
     def make_output_event(self, e):
         kind = e['kind']
         if kind == 'feature':
@@ -131,16 +124,16 @@ class EventOutputFormatter(object):
             'endDate': summary.end_date,
             'features': flags_out
         }
-    
+
     def _process_user(self, event):
         filtered = self._user_filter.filter_user_props(event['user'])
         return stringify_attrs(filtered, __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__)
-    
+
     def _get_userkey(self, event):
         return str(event['user'].get('key'))
 
 
-class EventPayloadSendTask(object):
+class EventPayloadSendTask:
     def __init__(self, http, config, formatter, payload, response_fn):
         self._http = http
         self._config = config
@@ -179,7 +172,7 @@ class EventPayloadSendTask(object):
                 'Unhandled exception in event processor. Analytics events were not processed. [%s]', e)
 
 
-class DiagnosticEventSendTask(object):
+class DiagnosticEventSendTask:
     def __init__(self, http, config, event_body):
         self._http = http
         self._config = config
@@ -206,14 +199,14 @@ class DiagnosticEventSendTask(object):
 FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
 
 
-class EventBuffer(object):
+class EventBuffer:
     def __init__(self, capacity):
         self._capacity = capacity
         self._events = []
         self._summarizer = EventSummarizer()
         self._exceeded_capacity = False
         self._dropped_events = 0
-    
+
     def add_event(self, event):
         if len(self._events) >= self._capacity:
             self._dropped_events += 1
@@ -223,7 +216,7 @@ class EventBuffer(object):
         else:
             self._events.append(event)
             self._exceeded_capacity = False
-    
+
     def add_to_summary(self, event):
         self._summarizer.summarize_event(event)
 
@@ -234,13 +227,13 @@ class EventBuffer(object):
 
     def get_payload(self):
         return FlushPayload(self._events, self._summarizer.snapshot())
-    
+
     def clear(self):
         self._events = []
         self._summarizer.clear()
 
 
-class EventDispatcher(object):
+class EventDispatcher:
     def __init__(self, inbox, config, http_client, diagnostic_accumulator=None):
         self._inbox = inbox
         self._config = config
@@ -291,7 +284,7 @@ class EventDispatcher(object):
                     return
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
-    
+
     def _process_event(self, event):
         if self._disabled:
             return
@@ -456,7 +449,7 @@ class DefaultEventProcessor(EventProcessor):
     # These magic methods allow use of the "with" block in tests
     def __enter__(self):
         return self
-    
+
     def __exit__(self, type, value, traceback):
         self.stop()
 

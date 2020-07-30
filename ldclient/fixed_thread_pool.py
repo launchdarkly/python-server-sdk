@@ -4,20 +4,14 @@ Internal helper class for thread management.
 # currently excluded from documentation - see docs/README.md
 
 from threading import Event, Lock, Thread
-
-# noinspection PyBroadException
-try:
-    import queue
-except:
-    # noinspection PyUnresolvedReferences,PyPep8Naming
-    import Queue as queue
+import queue
 
 from ldclient.util import log
 
 """
 A simple fixed-size thread pool that rejects jobs when its limit is reached.
 """
-class FixedThreadPool(object):
+class FixedThreadPool:
     def __init__(self, size, name):
         self._size = size
         self._lock = Lock()
@@ -29,7 +23,7 @@ class FixedThreadPool(object):
             thread.name = "%s.%d" % (name, i + 1)
             thread.daemon = True
             thread.start()
-    
+
     """
     Schedules a job for execution if there is an available worker thread, and returns
     true if successful; returns false if all threads are busy.
@@ -41,7 +35,7 @@ class FixedThreadPool(object):
             self._busy_count = self._busy_count + 1
         self._job_queue.put(jobFn)
         return True
-    
+
     """
     Waits until all currently busy worker threads have completed their jobs.
     """
@@ -52,14 +46,14 @@ class FixedThreadPool(object):
                     return
                 self._event.clear()
             self._event.wait()
-    
+
     """
     Tells all the worker threads to terminate once all active jobs have completed.
     """
     def stop(self):
         for i in range(0, self._size):
             self._job_queue.put('stop')
-    
+
     def _run_worker(self):
         while True:
             item = self._job_queue.get(block = True)

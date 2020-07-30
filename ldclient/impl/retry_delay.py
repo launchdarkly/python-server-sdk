@@ -2,7 +2,7 @@ from random import Random
 
 # This implementation is based on the equivalent code in the Go eventsource library.
 
-class RetryDelayStrategy(object):
+class RetryDelayStrategy:
     """Encapsulation of configurable backoff/jitter behavior, used for stream connections.
 
     - The system can either be in a "good" state or a "bad" state. The initial state is "bad"; the
@@ -24,7 +24,7 @@ class RetryDelayStrategy(object):
         self.__jitter = jitter_strategy
         self.__retry_count = 0
         self.__good_since = None
-    
+
     def next_retry_delay(self, current_time):
         """Computes the next retry interval. This also sets the current state to "bad".
 
@@ -43,14 +43,14 @@ class RetryDelayStrategy(object):
         if self.__jitter:
             delay = self.__jitter.apply_jitter(delay)
         return delay
-    
+
     def set_good_since(self, good_since):
         """Marks the current state as "good" and records the time.
 
         :param float good_since: the time that the state became "good", in seconds
         """
         self.__good_since = good_since
-    
+
     def set_base_delay(self, base_delay):
         """Changes the initial retry delay and resets the backoff (if any) so the next retry will use
         that value.
@@ -62,7 +62,7 @@ class RetryDelayStrategy(object):
         self.__base_delay = base_delay
         self.__retry_count = 0
 
-class DefaultBackoffStrategy(object):
+class DefaultBackoffStrategy:
     """The default implementation of exponential backoff, which doubles the delay each time up to
     the specified maximum.
 
@@ -72,12 +72,12 @@ class DefaultBackoffStrategy(object):
     """
     def __init__(self, max_delay):
         self.__max_delay = max_delay
-    
+
     def apply_backoff(self, delay, retry_count):
         d = delay * (2 ** retry_count)
         return d if d <= self.__max_delay else self.__max_delay
 
-class DefaultJitterStrategy(object):
+class DefaultJitterStrategy:
     """The default implementation of jitter, which subtracts a pseudo-random amount from each delay.
     """
     def __init__(self, ratio, rand_seed = None):
@@ -88,6 +88,6 @@ class DefaultJitterStrategy(object):
         """
         self.__ratio = ratio
         self.__random = Random(rand_seed)
-    
+
     def apply_jitter(self, delay):
         return delay - (self.__random.random() * self.__ratio * delay)

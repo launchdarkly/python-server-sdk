@@ -1,7 +1,6 @@
 import json
 import os
 import pytest
-import six
 import tempfile
 import threading
 import time
@@ -106,7 +105,7 @@ def make_data_source(**kwargs):
 
 def make_temp_file(content):
     f, path = tempfile.mkstemp()
-    os.write(f, six.b(content))
+    os.write(f, content.encode("latin-1"))
     os.close(f)
     return path
 

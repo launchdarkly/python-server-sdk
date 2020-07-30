@@ -3,9 +3,6 @@ Internal helper class for filtering out private attributes.
 """
 # currently excluded from documentation - see docs/README.md
 
-import six
-
-
 class UserFilter:
     IGNORE_ATTRS = frozenset(['key', 'custom', 'anonymous'])
     ALLOWED_TOP_LEVEL_ATTRS = frozenset(['key', 'secondary', 'ip', 'country', 'email',
@@ -14,7 +11,7 @@ class UserFilter:
     def __init__(self, config):
         self._private_attribute_names = config.private_attribute_names
         self._all_attributes_private = config.all_attributes_private
-    
+
     def _is_private_attr(self, name, user_private_attrs):
         if name in UserFilter.IGNORE_ATTRS:
             return False
@@ -28,7 +25,7 @@ class UserFilter:
         user_private_attrs = user_props.get('privateAttributeNames', [])
 
         def filter_private_attrs(attrs, allowed_attrs = frozenset()):
-            for key, value in six.iteritems(attrs):
+            for key, value in attrs.items():
                 if (not allowed_attrs) or (key in allowed_attrs):
                     if self._is_private_attr(key, user_private_attrs):
                         all_private_attrs.add(key)

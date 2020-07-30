@@ -67,7 +67,7 @@ class MockFeatureRequester(FeatureRequester):
             raise self.exception
         return self.all_data
 
-class MockResponse(object):
+class MockResponse:
     def __init__(self, status, headers):
         self._status = status
         self._headers = headers
@@ -79,7 +79,7 @@ class MockResponse(object):
     def getheader(self, name):
         return self._headers.get(name.lower())
 
-class MockHttp(object):
+class MockHttp:
     def __init__(self):
         self._recorded_requests = []
         self._request_data = None
@@ -146,22 +146,22 @@ class CapturingFeatureStore(FeatureStore):
     def init(self, all_data):
         self.data = all_data
 
-    def get(self, kind, key, callback=lambda x: x):    
+    def get(self, kind, key, callback=lambda x: x):
         pass
-    
+
     def all(self, kind, callback=lambda x: x):
         pass
-    
+
     def delete(self, kind, key, version):
         pass
-    
+
     def upsert(self, kind, item):
         pass
-    
+
     @property
     def initialized(self):
         return True
-    
+
     @property
     def received_data(self):
         return self.data

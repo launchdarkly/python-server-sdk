@@ -21,13 +21,7 @@ from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
-# noinspection PyBroadException
-try:
-    import queue
-except:
-    # noinspection PyUnresolvedReferences,PyPep8Naming
-    import Queue as queue  # Python 3
+import queue
 
 from threading import Lock
 
@@ -40,7 +34,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
 
     def __init__(self, store):
         self.store = store
-    
+
     def init(self, all_data):
         return self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data))
 
@@ -61,14 +55,14 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return self.store.initialized
 
 
-class LDClient(object):
+class LDClient:
     """The LaunchDarkly SDK client object.
 
     Applications should configure the client at startup time and continue to use it throughout the lifetime
     of the application, rather than creating instances on the fly. The best way to do this is with the
     singleton methods :func:`ldclient.set_sdk_key()`, :func:`ldclient.set_config()`, and :func:`ldclient.get()`.
     However, you may also call the constructor directly if you need to maintain multiple instances.
-    
+
     Client instances are thread-safe.
     """
     def __init__(self, sdk_key=None, config=None, start_wait=5):
@@ -140,7 +134,7 @@ class LDClient(object):
 
         if config.offline or config.use_ldd:
             return NullUpdateProcessor(config, store, ready)
-        
+
         if config.stream:
             return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
 
@@ -164,7 +158,7 @@ class LDClient(object):
 
     def close(self):
         """Releases all threads and network connections used by the LaunchDarkly client.
-        
+
         Do not attempt to use the client after calling this method.
         """
         log.info("Closing LaunchDarkly client..")
@@ -174,10 +168,10 @@ class LDClient(object):
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):
         return self
-    
+
     def __exit__(self, type, value, traceback):
         self.close()
-    
+
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
@@ -263,15 +257,15 @@ class LDClient(object):
         :return: one of the flag's variation values, or the default value
         """
         return self._evaluate_internal(key, user, default, self._event_factory_default).value
-    
+
     def variation_detail(self, key, user, default):
         """Determines the variation of a feature flag for a user, like :func:`variation()`, but also
         provides additional information about how this value was calculated, in the form of an
         :class:`ldclient.flag.EvaluationDetail` object.
-        
+
         Calling this method also causes the "reason" data to be included in analytics events,
         if you are capturing detailed event data for this flag.
-        
+
         :param string key: the unique key for the feature flag
         :param dict user: a dictionary containing parameters for the end user requesting the flag
         :param object default: the default value of the flag, to be used if the value is not
@@ -280,13 +274,13 @@ class LDClient(object):
         :rtype: EvaluationDetail
         """
         return self._evaluate_internal(key, user, default, self._event_factory_with_reasons)
-    
+
     def _evaluate_internal(self, key, user, default, event_factory):
         default = self._config.get_default(key, default)
 
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
-        
+
         if not self.is_initialized():
             if self._store.initialized:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
@@ -296,7 +290,7 @@ class LDClient(object):
                 reason = error_reason('CLIENT_NOT_READY')
                 self._send_event(event_factory.new_unknown_flag_event(key, user, default, reason))
                 return EvaluationDetail(default, None, reason)
-        
+
         if user is not None and user.get('key', "") == "":
             log.warning("User key is blank. Flag evaluation will proceed, but the user will not be stored in LaunchDarkly.")
 
@@ -333,10 +327,10 @@ class LDClient(object):
                 reason = error_reason('EXCEPTION')
                 self._send_event(event_factory.new_default_event(flag, user, default, reason))
                 return EvaluationDetail(default, None, reason)
-    
+
     def all_flags(self, user):
         """Returns all feature flag values for the given user.
-        
+
         This method is deprecated - please use :func:`all_flags_state()` instead. Current versions of the
         client-side SDK will not generate analytics events correctly if you pass the result of ``all_flags``.
 
@@ -349,13 +343,13 @@ class LDClient(object):
         if not state.valid:
             return None
         return state.to_values_map()
-    
+
     def all_flags_state(self, user, **kwargs):
         """Returns an object that encapsulates the state of all feature flags for a given user,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
         `Bootstrapping <https://docs.launchdarkly.com/docs/js-sdk-reference#section-bootstrapping>`_.
-        
+
         This method does not send analytics events back to LaunchDarkly.
 
         :param dict user: the end user requesting the feature flags
@@ -390,7 +384,7 @@ class LDClient(object):
         if user is None or user.get('key') is None:
             log.warning("User or user key is None when calling all_flags_state(). Returning empty state.")
             return FeatureFlagsState(False)
-        
+
         state = FeatureFlagsState(True)
         client_only = kwargs.get('client_side_only', False)
         with_reasons = kwargs.get('with_reasons', False)
@@ -402,7 +396,7 @@ class LDClient(object):
         except Exception as e:
             log.error("Unable to read flags for all_flag_state: %s" % repr(e))
             return FeatureFlagsState(False)
-        
+
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
@@ -415,16 +409,16 @@ class LDClient(object):
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 state.add_flag(flag, None, None, reason if with_reasons else None, details_only_if_tracked)
-        
+
         return state
-    
+
     def secure_mode_hash(self, user):
         """Computes an HMAC signature of a user signed with the client's SDK key,
         for use with the JavaScript SDK.
 
         For more information, see the JavaScript SDK Reference Guide on
         `Secure mode <https://github.com/launchdarkly/js-client#secure-mode>`_.
-        
+
         :param dict user: the attributes of the user
         :return: a hash string that can be passed to the front end
         :rtype: string

@@ -7,7 +7,7 @@ They may be useful in writing new implementations of these components, or for te
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 
-class FeatureStore(object):
+class FeatureStore:
     """
     Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
     Implementations should permit concurrent access and updates.
@@ -15,10 +15,10 @@ class FeatureStore(object):
     An "object", for ``FeatureStore``, is simply a dict of arbitrary data which must have at least
     three properties: ``key`` (its unique key), ``version`` (the version number provided by
     LaunchDarkly), and ``deleted`` (True if this is a placeholder for a deleted object).
-    
+
     Delete and upsert requests are versioned: if the version number in the request is less than
     the currently stored version of the object, the request should be ignored.
-    
+
     These semantics support the primary use case for the store, which synchronizes a collection
     of objects based on update messages that may be received out-of-order.
     """
@@ -101,7 +101,7 @@ class FeatureStore(object):
         """
 
 
-class FeatureStoreCore(object):
+class FeatureStoreCore:
     """
     Interface for a simplified subset of the functionality of :class:`FeatureStore`, to be used
     in conjunction with :class:`ldclient.feature_store_helpers.CachingStoreWrapper`. This allows
@@ -181,7 +181,7 @@ class FeatureStoreCore(object):
 
 
 # Internal use only. Common methods for components that perform a task in the background.
-class BackgroundOperation(object):
+class BackgroundOperation:
 
     # noinspection PyMethodMayBeStatic
     def start(self):
@@ -221,7 +221,7 @@ class UpdateProcessor(BackgroundOperation):
         """
 
 
-class EventProcessor(object):
+class EventProcessor:
     """
     Interface for the component that buffers analytics events and sends them to LaunchDarkly.
     The default implementation can be replaced for testing purposes.
@@ -242,7 +242,7 @@ class EventProcessor(object):
         until a later time. However, calling ``stop()`` will synchronously deliver any events that were
         not yet delivered prior to shutting down.
         """
-    
+
     @abstractmethod
     def stop(self):
         """
@@ -250,7 +250,7 @@ class EventProcessor(object):
         """
 
 
-class FeatureRequester(object):
+class FeatureRequester:
     """
     Interface for the component that acquires feature flag data in polling mode. The default
     implementation can be replaced for testing purposes.
@@ -264,7 +264,7 @@ class FeatureRequester(object):
         pass
 
 
-class DiagnosticDescription(object):
+class DiagnosticDescription:
     """
     Optional interface for components to describe their own configuration.
     """
