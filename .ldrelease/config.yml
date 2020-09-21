@@ -8,6 +8,11 @@ publications:
   - url: https://launchdarkly-python-sdk.readthedocs.io/en/latest/
     description: documentation (readthedocs.io)
 
+releasableBranches:
+  - name: master
+    description: 7.x
+  - name: 6.x
+
 template:
   name: python
   env:
