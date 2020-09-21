@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [6.13.2] - 2020-09-21
+### Fixed:
+- The SDK was not recognizing proxy authorization parameters included in a proxy URL (example: `http://username:password@proxyhost:port`). It will now use these parameters if present, regardless of whether you set the proxy URL programmatically or in an environment variable. (Thanks, [gangeli](https://github.com/launchdarkly/python-server-sdk/pull/145)!)
+
 ## [6.13.1] - 2020-07-13
 ### Fixed:
 - A problem with the SDK&#39;s use of `urllib3.Retry` could prevent analytics event delivery from being retried after a network error or server error. ([#143](https://github.com/launchdarkly/python-server-sdk/issues/143))
