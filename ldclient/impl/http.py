@@ -54,11 +54,18 @@ class HTTPFactory(object):
                 ca_certs=ca_certs
                 )
         else:
+            # Get proxy authentication, if provided
+            url = urllib3.util.parse_url(proxy_url)
+            proxy_headers = None
+            if url.auth != None:
+                proxy_headers = urllib3.util.make_headers(proxy_basic_auth=url.auth)
+            # Create a proxied connection
             return urllib3.ProxyManager(
                 proxy_url,
                 num_pools=num_pools,
                 cert_reqs=cert_reqs,
-                ca_certs = ca_certs
+                ca_certs = ca_certs,
+                proxy_headers=proxy_headers
             )
 
 def _get_proxy_url(target_base_uri):
