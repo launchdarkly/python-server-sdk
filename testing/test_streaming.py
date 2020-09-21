@@ -10,6 +10,7 @@ from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from testing.http_util import start_server, BasicResponse, CauseNetworkError, SequentialHandler
+from testing.proxy_test_util import do_proxy_tests
 from testing.stub_util import make_delete_event, make_patch_event, make_put_event, stream_content
 
 brief_delay = 0.001
@@ -210,54 +211,24 @@ def test_unrecoverable_http_error(status):
                 assert not sp.initialized()
                 server.should_have_requests(1)
 
-def test_can_use_http_proxy_via_environment_var(monkeypatch):
-    with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', stream_uri = 'http://not-real')
-        monkeypatch.setenv('http_proxy', server.uri)
-        _verify_http_proxy_is_used(server, config)
-
-def test_can_use_https_proxy_via_environment_var(monkeypatch):
-    with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', stream_uri = 'https://not-real')
-        monkeypatch.setenv('https_proxy', server.uri)
-        _verify_https_proxy_is_used(server, config)
-
-def test_can_use_http_proxy_via_config():
-    with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', stream_uri = 'http://not-real', http_proxy=server.uri)
-        _verify_http_proxy_is_used(server, config)
-
-def test_can_use_https_proxy_via_config():
-    with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', stream_uri = 'https://not-real', http_proxy=server.uri)
-        _verify_https_proxy_is_used(server, config)
-
-def _verify_http_proxy_is_used(server, config):
-    store = InMemoryFeatureStore()
-    ready = Event()
-    with stream_content(make_put_event()) as stream:
-        server.for_path(config.stream_base_uri + '/all', stream)
-        with StreamingUpdateProcessor(config, store, ready, None) as sp:
-            sp.start()
-            # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
-            # HTTP client, so we should be able to see the request go through. Note that the URI path will
-            # actually be an absolute URI for a proxy request.
-            req = server.await_request()
-            assert req.method == 'GET'
-            ready.wait(start_wait)
-            assert sp.initialized()
-
-def _verify_https_proxy_is_used(server, config):
-    store = InMemoryFeatureStore()
-    ready = Event()
-    with stream_content(make_put_event()) as stream:
-        server.for_path(config.stream_base_uri + '/all', stream)
-        with StreamingUpdateProcessor(config, store, ready, None) as sp:
-            sp.start()
-            # Our simple stub server implementation can't really do HTTPS proxying, so the request will fail, but
-            # it can still record that it *got* the request, which proves that the request went to the proxy.
-            req = server.await_request()
-            assert req.method == 'CONNECT'
+def test_http_proxy(monkeypatch):
+    def _stream_processor_proxy_test(server, config, secure):
+        store = InMemoryFeatureStore()
+        ready = Event()
+        with stream_content(make_put_event()) as stream:
+            server.for_path(config.stream_base_uri + '/all', stream)
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                # Wait till the server has received a request. We need to do this even though do_proxy_tests also
+                # does it, because if we return too soon out of this block, the object returned by stream_content
+                # could be closed and the test server would no longer work.
+                server.wait_until_request_received()
+                if not secure:
+                    # We only do this part with HTTP, because with HTTPS we don't have a real enough proxy server
+                    # for the stream connection to work correctly - we can only detect the request.
+                    ready.wait(start_wait)
+                    assert sp.initialized()
+    do_proxy_tests(_stream_processor_proxy_test, 'GET', monkeypatch)
 
 def test_records_diagnostic_on_stream_init_success():
     store = InMemoryFeatureStore()
