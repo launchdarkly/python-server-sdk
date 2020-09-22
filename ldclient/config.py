@@ -37,6 +37,7 @@ class HTTPConfig:
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
+          The URL may contain authentication parameters in the form http://username:password@host:port.
         :param string ca_certs: If using a custom certificate authority, set this to the file path of the
           certificate bundle.
         :param string cert_file: If using a custom client certificate, set this to the file path of the
