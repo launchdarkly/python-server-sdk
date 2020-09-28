@@ -81,7 +81,7 @@ class EvaluationDetail:
         """
         return self.__reason
 
-    def is_default_value(self) -> bool:
+    def is_default_value(self):
         """Returns True if the flag evaluated to the default value rather than one of its
         variations.
 
@@ -89,16 +89,16 @@ class EvaluationDetail:
         """
         return self.__variation_index is None
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other):
         return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
 
-    def __ne__(self, other) -> bool:
+    def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __str__(self) -> str:
+    def __str__(self):
         return "(value=%s, variation_index=%s, reason=%s)" % (self.value, self.variation_index, self.reason)
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return self.__str__()
 
 

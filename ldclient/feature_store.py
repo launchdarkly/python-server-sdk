@@ -11,6 +11,7 @@ from ldclient.util import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStore
 from ldclient.rwlock import ReadWriteLock
 
+
 class CacheConfig:
     """Encapsulates caching parameters for feature store implementations that support local caching.
     """
@@ -19,8 +20,8 @@ class CacheConfig:
     DEFAULT_CAPACITY = 1000
 
     def __init__(self,
-                 expiration: float = DEFAULT_EXPIRATION,
-                 capacity: int = DEFAULT_CAPACITY):
+                 expiration = DEFAULT_EXPIRATION,
+                 capacity = DEFAULT_CAPACITY):
         """Constructs an instance of CacheConfig.
 
         :param float expiration: the cache TTL, in seconds. Items will be evicted from the cache after
@@ -49,7 +50,7 @@ class CacheConfig:
         return CacheConfig(expiration = 0)
 
     @property
-    def enabled(self) -> bool:
+    def enabled(self):
         """Returns True if caching is enabled in this configuration.
 
         :rtype: bool
@@ -57,7 +58,7 @@ class CacheConfig:
         return self._expiration > 0
 
     @property
-    def expiration(self) -> float:
+    def expiration(self):
         """Returns the configured cache TTL, in seconds.
 
         :rtype: float
@@ -65,7 +66,7 @@ class CacheConfig:
         return self._expiration
 
     @property
-    def capacity(self) -> int:
+    def capacity(self):
         """Returns the configured maximum number of cacheable items.
 
         :rtype: int

@@ -13,7 +13,7 @@ from ldclient.versioned_data_kind import FEATURES
 
 
 class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
-    def __init__(self, url: str, prefix: str, max_connections: int):
+    def __init__(self, url, prefix, max_connections):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'

@@ -10,7 +10,6 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDB
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
 
-from typing import List
 
 class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
@@ -20,11 +19,11 @@ class Consul:
     DEFAULT_PREFIX = "launchdarkly"
 
     @staticmethod
-    def new_feature_store(host: str=None,
-                          port: int=None,
-                          prefix: str=None,
-                          consul_opts: dict=None,
-                          caching: CacheConfig=CacheConfig.default()):
+    def new_feature_store(host=None,
+                          port=None,
+                          prefix=None,
+                          consul_opts=None,
+                          caching=CacheConfig.default()):
         """Creates a Consul-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -59,10 +58,10 @@ class DynamoDB:
     """
 
     @staticmethod
-    def new_feature_store(table_name: str,
-                          prefix: str=None,
-                          dynamodb_opts: dict={},
-                          caching: CacheConfig=CacheConfig.default()):
+    def new_feature_store(table_name,
+                          prefix=None,
+                          dynamodb_opts={},
+                          caching=CacheConfig.default()):
         """Creates a DynamoDB-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -104,10 +103,10 @@ class Redis:
     DEFAULT_MAX_CONNECTIONS = 16
 
     @staticmethod
-    def new_feature_store(url: str='redis://localhost:6379/0',
-                          prefix: str='launchdarkly',
-                          max_connections: int=16,
-                          caching: CacheConfig=CacheConfig.default()):
+    def new_feature_store(url='redis://localhost:6379/0',
+                          prefix='launchdarkly',
+                          max_connections=16,
+                          caching=CacheConfig.default()):
         """Creates a Redis-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -140,7 +139,7 @@ class Files:
     """
 
     @staticmethod
-    def new_data_source(paths: List[str], auto_update: bool=False, poll_interval: float=1, force_polling: bool=False):
+    def new_data_source(paths, auto_update=False, poll_interval=1, force_polling=False):
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
         actual LaunchDarkly connection.

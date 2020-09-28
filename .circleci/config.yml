@@ -7,6 +7,16 @@ workflows:
   test:
     jobs:
       - test-linux:
+          name: Python 3.3
+          docker-image: circleci/python:3.3-jessie
+          consul-supported: false  # Consul isn't supported in 3.3
+          filesource-supported: false  # FileDataSource isn't supported in 3.3
+          test-packaging: false  # packaging test requires virtualenv, which isn't supported in 3.3
+      - test-linux:
+          name: Python 3.4
+          docker-image: circleci/python:3.4-jessie
+          consul-supported: false  # Consul isn't supported in 3.4
+      - test-linux:
           name: Python 3.5
           docker-image: circleci/python:3.5-jessie
       - test-linux:
@@ -18,9 +28,6 @@ workflows:
       - test-linux:
           name: Python 3.8
           docker-image: circleci/python:3.8-buster
-      - test-linux:
-          name: Python 3.9 prerelease
-          docker-image: circleci/python:3.9.0rc2
       - test-windows:
           name: Windows Py3.3
           py3: true

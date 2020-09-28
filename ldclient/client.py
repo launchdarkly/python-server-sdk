@@ -65,7 +65,7 @@ class LDClient:
 
     Client instances are thread-safe.
     """
-    def __init__(self, sdk_key: str=None, config: Config=None, start_wait: float=5):
+    def __init__(self, sdk_key=None, config=None, start_wait=5):
         """Constructs a new LDClient instance.
 
         :param string sdk_key: the SDK key for your LaunchDarkly environment
@@ -115,7 +115,7 @@ class LDClient:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
                      "Feature Flags may not yet be available.")
 
-    def _set_event_processor(self, config: Config):
+    def _set_event_processor(self, config):
         if config.offline or not config.send_events:
             self._event_processor = NullEventProcessor()
             return None
@@ -175,7 +175,7 @@ class LDClient:
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
-    def track(self, event_name: str, user: dict, data=None, metric_value=None):
+    def track(self, event_name, user, data=None, metric_value=None):
         """Tracks that a user performed an event.
 
         LaunchDarkly automatically tracks pageviews and clicks that are specified in the Goals
@@ -194,7 +194,7 @@ class LDClient:
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name, user, data, metric_value))
 
-    def identify(self, user: dict):
+    def identify(self, user):
         """Registers the user.
 
         This simply creates an analytics event that will transmit the given user properties to
@@ -208,14 +208,14 @@ class LDClient:
         else:
             self._send_event(self._event_factory_default.new_identify_event(user))
 
-    def is_offline(self) -> bool:
+    def is_offline(self):
         """Returns true if the client is in offline mode.
 
         :rtype: bool
         """
         return self._config.offline
 
-    def is_initialized(self) -> bool:
+    def is_initialized(self):
         """Returns true if the client has successfully connected to LaunchDarkly.
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
@@ -247,7 +247,7 @@ class LDClient:
         log.warning("Deprecated method: toggle() called. Use variation() instead.")
         return self.variation(key, user, default)
 
-    def variation(self, key: str, user: dict, default: object) -> object:
+    def variation(self, key, user, default):
         """Determines the variation of a feature flag for a user.
 
         :param string key: the unique key for the feature flag
@@ -258,7 +258,7 @@ class LDClient:
         """
         return self._evaluate_internal(key, user, default, self._event_factory_default).value
 
-    def variation_detail(self, key: str, user: dict, default: object) -> EvaluationDetail:
+    def variation_detail(self, key, user, default):
         """Determines the variation of a feature flag for a user, like :func:`variation()`, but also
         provides additional information about how this value was calculated, in the form of an
         :class:`ldclient.flag.EvaluationDetail` object.
@@ -328,7 +328,7 @@ class LDClient:
                 self._send_event(event_factory.new_default_event(flag, user, default, reason))
                 return EvaluationDetail(default, None, reason)
 
-    def all_flags(self, user: dict) -> dict:
+    def all_flags(self, user):
         """Returns all feature flag values for the given user.
 
         This method is deprecated - please use :func:`all_flags_state()` instead. Current versions of the
@@ -344,7 +344,7 @@ class LDClient:
             return None
         return state.to_values_map()
 
-    def all_flags_state(self, user: dict, **kwargs) -> FeatureFlagsState:
+    def all_flags_state(self, user, **kwargs):
         """Returns an object that encapsulates the state of all feature flags for a given user,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
@@ -412,7 +412,7 @@ class LDClient:
 
         return state
 
-    def secure_mode_hash(self, user: dict) -> str:
+    def secure_mode_hash(self, user):
         """Computes an HMAC signature of a user signed with the client's SDK key,
         for use with the JavaScript SDK.
 
