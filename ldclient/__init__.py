@@ -22,7 +22,7 @@ __config = Config()
 __lock = ReadWriteLock()
 
 
-def set_config(config):
+def set_config(config: Config):
     """Sets the configuration for the shared SDK client instance.
 
     If this is called prior to :func:`ldclient.get()`, it stores the configuration that will be used when the
@@ -48,7 +48,7 @@ def set_config(config):
         __lock.unlock()
 
 
-def set_sdk_key(sdk_key):
+def set_sdk_key(sdk_key: str):
     """Sets the SDK key for the shared SDK client instance.
 
     If this is called prior to :func:`ldclient.get()`, it stores the SDK key that will be used when the client is
@@ -87,7 +87,7 @@ def set_sdk_key(sdk_key):
             __lock.unlock()
 
 
-def get():
+def get() -> LDClient:
     """Returns the shared SDK client instance, using the current global configuration.
 
     To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_sdk_key()` or

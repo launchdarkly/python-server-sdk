@@ -5,7 +5,9 @@ They may be useful in writing new implementations of these components, or for te
 """
 
 from abc import ABCMeta, abstractmethod, abstractproperty
+from .versioned_data_kind import VersionedDataKind
 
+from typing import Mapping
 
 class FeatureStore:
     """
@@ -41,7 +43,7 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def all(self, kind, callback=lambda x: x):
+    def all(self, kind: VersionedDataKind, callback=lambda x: x):
         """
         Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
         to objects can be transformed by the specified callback.
@@ -54,7 +56,7 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def init(self, all_data):
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
         """
         Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
         will be removed. Implementations can assume that this set of objects is up to date-- there is no
@@ -65,7 +67,7 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def delete(self, kind, key, version):
+    def delete(self, kind: VersionedDataKind, key: str, version: int):
         """
         Deletes the object associated with the specified key, if it exists and its version is less than
         the specified version. The object should be replaced in the data store by a
@@ -80,7 +82,7 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def upsert(self, kind, item):
+    def upsert(self, kind: VersionedDataKind, item: dict):
         """
         Updates or inserts the object associated with the specified key. If an item with the same key
         already exists, it should update it only if the new item's version property is greater than
@@ -89,11 +91,11 @@ class FeatureStore:
         :param kind: The kind of object to update
         :type kind: VersionedDataKind
         :param item: The object to update or insert
-        :type feature: dict
+        :type item: dict
         """
 
     @abstractproperty
-    def initialized(self):
+    def initialized(self) -> bool:
         """
         Returns whether the store has been initialized yet or not
 
@@ -112,7 +114,7 @@ class FeatureStoreCore:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get_internal(self, kind, key):
+    def get_internal(self, kind: VersionedDataKind, key: str) -> dict:
         """
         Returns the object to which the specified key is mapped, or None if no such item exists.
         The method should not attempt to filter out any items based on their deleted property,
@@ -127,7 +129,7 @@ class FeatureStoreCore:
         """
 
     @abstractmethod
-    def get_all_internal(self, callback):
+    def get_all_internal(self, callback: VersionedDataKind) -> Mapping[str, dict]:
         """
         Returns a dictionary of all associated objects of a given kind. The method should not attempt
         to filter out any items based on their deleted property, nor to cache any items.
@@ -139,7 +141,7 @@ class FeatureStoreCore:
         """
 
     @abstractmethod
-    def init_internal(self, all_data):
+    def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
         """
         Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
         will be removed. Implementations can assume that this set of objects is up to date-- there is no
@@ -151,7 +153,7 @@ class FeatureStoreCore:
         """
 
     @abstractmethod
-    def upsert_internal(self, kind, item):
+    def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
         """
         Updates or inserts the object associated with the specified key. If an item with the same key
         already exists, it should update it only if the new item's version property is greater than
@@ -169,7 +171,7 @@ class FeatureStoreCore:
         """
 
     @abstractmethod
-    def initialized_internal(self):
+    def initialized_internal(self) -> bool:
         """
         Returns true if this store has been initialized. In a shared data store, it should be able to
         detect this even if initInternal was called in a different process, i.e. the test should be

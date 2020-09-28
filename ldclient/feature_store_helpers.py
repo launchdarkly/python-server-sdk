@@ -4,8 +4,8 @@ This submodule contains support code for writing feature store implementations.
 
 from expiringdict import ExpiringDict
 
-from ldclient.interfaces import DiagnosticDescription, FeatureStore
-
+from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
+from ldclient.feature_store import CacheConfig
 
 class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """A partial implementation of :class:`ldclient.interfaces.FeatureStore`.
@@ -17,7 +17,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """
     __INITED_CACHE_KEY__ = "$inited"
 
-    def __init__(self, core, cache_config):
+    def __init__(self, core: FeatureStoreCore, cache_config: CacheConfig):
         """Constructs an instance by wrapping a core implementation object.
 
         :param FeatureStoreCore core: the implementation object
@@ -84,7 +84,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             self._cache.pop(self._all_cache_key(kind), None)
 
     @property
-    def initialized(self):
+    def initialized(self) -> bool:
         """
         """
         if self._inited:
@@ -100,7 +100,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             self._inited = True
         return result
 
-    def describe_configuration(self, config):
+    def describe_configuration(self, config) -> str:
         if callable(getattr(self._core, 'describe_configuration', None)):
             return self._core.describe_configuration(config)
         return "custom"

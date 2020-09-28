@@ -3,9 +3,13 @@ This submodule contains the :class:`Config` class for custom configuration of th
 
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
+from __future__ import annotations
+
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
+
+from typing import Callable
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -23,12 +27,12 @@ class HTTPConfig:
     corresponding `Config` properties will be ignored.
     """
     def __init__(self,
-                 connect_timeout=10,
-                 read_timeout=15,
-                 http_proxy=None,
-                 ca_certs=None,
-                 cert_file=None,
-                 disable_ssl_verification=False):
+                 connect_timeout: float=10,
+                 read_timeout: float=15,
+                 http_proxy: str=None,
+                 ca_certs: str=None,
+                 cert_file: str=None,
+                 disable_ssl_verification: bool=False):
         """
         :param float connect_timeout: The connect timeout for network connections in seconds.
         :param float read_timeout: The read timeout for network connections in seconds.
@@ -54,27 +58,27 @@ class HTTPConfig:
         self.__disable_ssl_verification = disable_ssl_verification
 
     @property
-    def connect_timeout(self):
+    def connect_timeout(self) -> float:
         return self.__connect_timeout
 
     @property
-    def read_timeout(self):
+    def read_timeout(self) -> float:
         return self.__read_timeout
 
     @property
-    def http_proxy(self):
+    def http_proxy(self) -> str:
         return self.__http_proxy
 
     @property
-    def ca_certs(self):
+    def ca_certs(self) -> str:
         return self.__ca_certs
 
     @property
-    def cert_file(self):
+    def cert_file(self) -> str:
         return self.__cert_file
 
     @property
-    def disable_ssl_verification(self):
+    def disable_ssl_verification(self) -> bool:
         return self.__disable_ssl_verification
 
 class Config:
@@ -84,38 +88,38 @@ class Config:
     if you are using the singleton client, or the :class:`ldclient.client.LDClient` constructor otherwise.
     """
     def __init__(self,
-                 sdk_key=None,
-                 base_uri='https://app.launchdarkly.com',
-                 events_uri='https://events.launchdarkly.com',
-                 connect_timeout=10,
-                 read_timeout=15,
-                 events_max_pending=10000,
-                 flush_interval=5,
-                 stream_uri='https://stream.launchdarkly.com',
-                 stream=True,
-                 initial_reconnect_delay=1,
-                 verify_ssl=True,
-                 defaults=None,
-                 send_events=None,
-                 events_enabled=True,
-                 update_processor_class=None,
-                 poll_interval=30,
-                 use_ldd=False,
-                 feature_store=None,
-                 feature_requester_class=None,
-                 event_processor_class=None,
+                 sdk_key: str=None,
+                 base_uri: str='https://app.launchdarkly.com',
+                 events_uri: str='https://events.launchdarkly.com',
+                 connect_timeout: float=10,
+                 read_timeout: float=15,
+                 events_max_pending: int=10000,
+                 flush_interval: float=5,
+                 stream_uri: str='https://stream.launchdarkly.com',
+                 stream: bool=True,
+                 initial_reconnect_delay: float=1,
+                 verify_ssl: bool=True,
+                 defaults: dict=None,
+                 send_events: bool=None,
+                 events_enabled: bool=True,
+                 update_processor_class: Callable[[str, Config, FeatureStore], UpdateProcessor]=None,
+                 poll_interval: float=30,
+                 use_ldd: bool=False,
+                 feature_store: FeatureStore=None,
+                 feature_requester_class: Callable[[str, Config, FeatureStore], FeatureRequester]=None,
+                 event_processor_class: Callable[[Config], EventProcessor]=None,
                  private_attribute_names=(),
-                 all_attributes_private=False,
-                 offline=False,
-                 user_keys_capacity=1000,
-                 user_keys_flush_interval=300,
-                 inline_users_in_events=False,
-                 http_proxy=None,
-                 diagnostic_opt_out=False,
-                 diagnostic_recording_interval=900,
-                 wrapper_name=None,
-                 wrapper_version=None,
-                 http=None):
+                 all_attributes_private: bool=False,
+                 offline: bool=False,
+                 user_keys_capacity: int=1000,
+                 user_keys_flush_interval: float=300,
+                 inline_users_in_events: bool=False,
+                 http_proxy=None, # deprecated: will not type hint
+                 diagnostic_opt_out: bool=False,
+                 diagnostic_recording_interval: int=900,
+                 wrapper_name: str=None,
+                 wrapper_version: str=None,
+                 http: HTTPConfig=None):
         """
         :param string sdk_key: The SDK key for your LaunchDarkly account.
         :param string base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -233,14 +237,14 @@ class Config:
         self.__http = http
 
     @classmethod
-    def default(cls):
+    def default(cls) -> Config:
         """Returns a ``Config`` instance with default values for all properties.
 
         :rtype: ldclient.config.Config
         """
         return cls()
 
-    def copy_with_new_sdk_key(self, new_sdk_key):
+    def copy_with_new_sdk_key(self, new_sdk_key: str) -> Config:
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
 
         :param string new_sdk_key: the new SDK key
