@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-
+# type: ignore
 # Hi There!
 # You may be wondering what this giant blob of binary data here is, you might
 # even be worried that we're up to something nefarious (good for you for being
@@ -3020,7 +3020,6 @@ mH1szWdxTVmKQB+pisiXvm43FLwGlW0kHFWj8Pfe+/9+GP1/axf19w==
 import sys
 import base64
 import zlib
-
 
 class DictImporter:
 

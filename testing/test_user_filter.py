@@ -5,7 +5,7 @@ from ldclient.user_filter import UserFilter
 
 base_config = Config()
 config_with_all_attrs_private = Config(all_attributes_private = True)
-config_with_some_attrs_private = Config(private_attribute_names=[u'firstName', u'bizzle'])
+config_with_some_attrs_private = Config(private_attribute_names=set([u'firstName', u'bizzle']))
 
 # users to serialize
 

@@ -2,10 +2,12 @@
 This submodule contains support code for writing feature store implementations.
 """
 
+from typing import Dict, Mapping, Any
 from expiringdict import ExpiringDict
 
-from ldclient.interfaces import DiagnosticDescription, FeatureStore
-
+from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
+from ldclient.versioned_data_kind import VersionedDataKind
+from ldclient.feature_store import CacheConfig
 
 class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """A partial implementation of :class:`ldclient.interfaces.FeatureStore`.
@@ -17,11 +19,11 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """
     __INITED_CACHE_KEY__ = "$inited"
 
-    def __init__(self, core, cache_config):
+    def __init__(self, core: FeatureStoreCore, cache_config: CacheConfig):
         """Constructs an instance by wrapping a core implementation object.
 
-        :param FeatureStoreCore core: the implementation object
-        :param ldclient.feature_store.CacheConfig cache_config: the caching parameters
+        :param core: the implementation object
+        :param cache_config: the caching parameters
         """
         self._core = core
         if cache_config.enabled:
@@ -30,7 +32,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             self._cache = None
         self._inited = False
 
-    def init(self, all_data):
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         """
         """
         self._core.init_internal(all_data)
@@ -84,7 +86,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             self._cache.pop(self._all_cache_key(kind), None)
 
     @property
-    def initialized(self):
+    def initialized(self) -> bool:
         """
         """
         if self._inited:

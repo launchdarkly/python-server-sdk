@@ -67,17 +67,17 @@ def _time_operator(u, c, fn):
 
 def _parse_semver(input):
     try:
-        semver.parse(input)
+        semver.VersionInfo.parse(input)
         return input
     except ValueError as e:
         try:
             input = _add_zero_version_component(input)
-            semver.parse(input)
+            semver.VersionInfo.parse(input)
             return input
         except ValueError as e:
             try:
                 input = _add_zero_version_component(input)
-                semver.parse(input)
+                semver.VersionInfo.parse(input)
                 return input
             except ValueError as e:
                 return None
@@ -190,4 +190,4 @@ ops = {
     "semVerGreaterThan": _semver_greater_than
 }
 
-ops = defaultdict(lambda: False, ops)
+ops = defaultdict(lambda: lambda l, r: False, ops)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#
+# type: ignore
 # Configuration file for the Sphinx documentation builder.
 #
 # This file does only contain a selection of the most common options. For a
@@ -46,6 +46,7 @@ release = ldclient.__version__
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx_autodoc_typehints',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
 ]

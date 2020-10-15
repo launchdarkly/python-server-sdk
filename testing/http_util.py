@@ -76,7 +76,7 @@ class MockServerWrapper(Thread):
     def wait_until_request_received(self):
         req = self.requests.get()
         self.requests.put(req)
-
+        
     def should_have_requests(self, count):
         if self.requests.qsize() != count:
             rs = []

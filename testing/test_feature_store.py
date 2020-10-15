@@ -5,6 +5,8 @@ import pytest
 import redis
 import time
 
+from typing import List
+
 # Consul is only supported in some Python versions
 have_consul = False
 try:
@@ -21,8 +23,10 @@ from ldclient.versioned_data_kind import FEATURES
 
 skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 
+class Tester:
+    pass
 
-class InMemoryTester:
+class InMemoryTester(Tester):
     def init_store(self):
         return InMemoryFeatureStore()
 
@@ -31,7 +35,7 @@ class InMemoryTester:
         return False
 
 
-class RedisTester:
+class RedisTester(Tester):
     redis_host = 'localhost'
     redis_port = 6379
 
@@ -61,7 +65,7 @@ class RedisWithDeprecatedConstructorTester(RedisTester):
         return True
 
 
-class ConsulTester:
+class ConsulTester(Tester):
     def __init__(self, cache_config):
         self._cache_config = cache_config
 
@@ -80,7 +84,7 @@ class ConsulTester:
             client.kv.delete(key)
 
 
-class DynamoDBTester:
+class DynamoDBTester(Tester):
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
     options = {
@@ -168,12 +172,13 @@ class DynamoDBTester:
 
 
 class TestFeatureStore:
+    params = [] # type: List[Tester]
     if skip_db_tests:
-        params = [
+        params += [
             InMemoryTester()
         ]
     else:
-        params = [
+        params += [
             InMemoryTester(),
             RedisTester(CacheConfig.default()),
             RedisTester(CacheConfig.disabled()),

@@ -10,6 +10,7 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDB
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
 
+from typing import List, Callable, Mapping, Any
 
 class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
@@ -19,11 +20,11 @@ class Consul:
     DEFAULT_PREFIX = "launchdarkly"
 
     @staticmethod
-    def new_feature_store(host=None,
-                          port=None,
-                          prefix=None,
-                          consul_opts=None,
-                          caching=CacheConfig.default()):
+    def new_feature_store(host: str=None,
+                          port: int=None,
+                          prefix: str=None,
+                          consul_opts: dict=None,
+                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a Consul-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -40,13 +41,13 @@ class Consul:
         Note that ``python-consul`` is not available for Python 3.3 or 3.4, so this feature cannot be
         used in those Python versions.
 
-        :param string host: hostname of the Consul server (uses ``localhost`` if omitted)
-        :param int port: port of the Consul server (uses 8500 if omitted)
-        :param string prefix: a namespace prefix to be prepended to all Consul keys
-        :param dict consul_opts: optional parameters for configuring the Consul client, if you need
+        :param host: hostname of the Consul server (uses ``localhost`` if omitted)
+        :param port: port of the Consul server (uses 8500 if omitted)
+        :param prefix: a namespace prefix to be prepended to all Consul keys
+        :param consul_opts: optional parameters for configuring the Consul client, if you need
           to set any of them besides host and port, as defined in the
           `python-consul API <https://python-consul.readthedocs.io/en/latest/#consul>`_
-        :param CacheConfig caching: specifies whether local caching should be enabled and if so,
+        :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         """
         core = _ConsulFeatureStoreCore(host, port, prefix, consul_opts)
@@ -58,10 +59,10 @@ class DynamoDB:
     """
 
     @staticmethod
-    def new_feature_store(table_name,
-                          prefix=None,
-                          dynamodb_opts={},
-                          caching=CacheConfig.default()):
+    def new_feature_store(table_name: str,
+                          prefix: str=None,
+                          dynamodb_opts: Mapping[str, Any]={},
+                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a DynamoDB-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -84,11 +85,11 @@ class DynamoDB:
         environment variables and/or local configuration files, as described in the AWS SDK documentation.
         You may also pass configuration settings in ``dynamodb_opts``.
 
-        :param string table_name: the name of an existing DynamoDB table
-        :param string prefix: an optional namespace prefix to be prepended to all DynamoDB keys
-        :param dict dynamodb_opts: optional parameters for configuring the DynamoDB client, as defined in
+        :param table_name: the name of an existing DynamoDB table
+        :param prefix: an optional namespace prefix to be prepended to all DynamoDB keys
+        :param dynamodb_opts: optional parameters for configuring the DynamoDB client, as defined in
           the `boto3 API <https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client>`_
-        :param CacheConfig caching: specifies whether local caching should be enabled and if so,
+        :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         """
         core = _DynamoDBFeatureStoreCore(table_name, prefix, dynamodb_opts)
@@ -103,10 +104,10 @@ class Redis:
     DEFAULT_MAX_CONNECTIONS = 16
 
     @staticmethod
-    def new_feature_store(url='redis://localhost:6379/0',
-                          prefix='launchdarkly',
-                          max_connections=16,
-                          caching=CacheConfig.default()):
+    def new_feature_store(url: str='redis://localhost:6379/0',
+                          prefix: str='launchdarkly',
+                          max_connections: int=16,
+                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a Redis-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
@@ -120,17 +121,17 @@ class Redis:
             store = Redis.new_feature_store()
             config = Config(feature_store=store)
 
-        :param string url: the URL of the Redis host; defaults to ``DEFAULT_URL``
-        :param string prefix: a namespace prefix to be prepended to all Redis keys; defaults to
+        :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
+        :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
-        :param int max_connections: the maximum number of Redis connections to keep in the
+        :param max_connections: the maximum number of Redis connections to keep in the
           connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
-        :param CacheConfig caching: specifies whether local caching should be enabled and if so,
+        :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         """
         core = _RedisFeatureStoreCore(url, prefix, max_connections)
         wrapper = CachingStoreWrapper(core, caching)
-        wrapper.core = core  # exposed for testing
+        wrapper._core = core  # exposed for testing
         return wrapper
 
 
@@ -139,7 +140,10 @@ class Files:
     """
 
     @staticmethod
-    def new_data_source(paths, auto_update=False, poll_interval=1, force_polling=False):
+    def new_data_source(paths: List[str], 
+                        auto_update: bool=False, 
+                        poll_interval: float=1, 
+                        force_polling: bool=False) -> object:
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
         actual LaunchDarkly connection.
@@ -164,18 +168,18 @@ class Files:
         If the data source encounters any error in any file-- malformed content, a missing file, or a
         duplicate key-- it will not load flags from any of the files.
 
-        :param array paths: the paths of the source files for loading flag data. These may be absolute paths
+        :param paths: the paths of the source files for loading flag data. These may be absolute paths
           or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``
           package is installed, in which case YAML is also allowed.
-        :param bool auto_update: (default: false) True if the data source should watch for changes to the source file(s)
+        :param auto_update: (default: false) True if the data source should watch for changes to the source file(s)
           and reload flags whenever there is a change. The default implementation of this feature is based on
           polling the filesystem, which may not perform well; if you install the ``watchdog`` package, its
           native file watching mechanism will be used instead. Note that auto-updating will only work if all
           of the files you specified have valid directory paths at startup time.
-        :param float poll_interval: (default: 1) the minimum interval, in seconds, between checks for file
+        :param poll_interval: (default: 1) the minimum interval, in seconds, between checks for file
           modifications-- used only if ``auto_update`` is true, and if the native file-watching mechanism from
           ``watchdog`` is not being used.
-        :param bool force_polling: (default: false) True if the data source should implement auto-update via
+        :param force_polling: (default: false) True if the data source should implement auto-update via
           polling the filesystem even if a native mechanism is available. This is mainly for SDK testing.
 
         :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property

@@ -22,7 +22,7 @@ __config = Config()
 __lock = ReadWriteLock()
 
 
-def set_config(config):
+def set_config(config: Config):
     """Sets the configuration for the shared SDK client instance.
 
     If this is called prior to :func:`ldclient.get()`, it stores the configuration that will be used when the
@@ -30,7 +30,7 @@ def set_config(config):
     re-initialized with the new configuration (this will result in the next call to :func:`ldclient.get()`
     returning a new client instance).
 
-    :param ldclient.config.Config config: the client configuration
+    :param config: the client configuration
     """
     global __config
     global __client
@@ -38,7 +38,7 @@ def set_config(config):
     try:
         __lock.lock()
         if __client:
-            log.info("Reinitializing LaunchDarkly Client " + version.VERSION + " with new config")
+            log.info("Reinitializing LaunchDarkly Client " + VERSION + " with new config")
             new_client = LDClient(config=config, start_wait=start_wait)
             old_client = __client
             __client = new_client
@@ -48,7 +48,7 @@ def set_config(config):
         __lock.unlock()
 
 
-def set_sdk_key(sdk_key):
+def set_sdk_key(sdk_key: str):
     """Sets the SDK key for the shared SDK client instance.
 
     If this is called prior to :func:`ldclient.get()`, it stores the SDK key that will be used when the client is
@@ -58,7 +58,7 @@ def set_sdk_key(sdk_key):
 
     If you need to set any configuration options other than the SDK key, use :func:`ldclient.set_config()` instead.
 
-    :param string sdk_key: the new SDK key
+    :param sdk_key: the new SDK key
     """
     global __config
     global __client
@@ -78,7 +78,7 @@ def set_sdk_key(sdk_key):
             __lock.lock()
             __config = __config.copy_with_new_sdk_key(new_sdk_key=sdk_key)
             if __client:
-                log.info("Reinitializing LaunchDarkly Client " + version.VERSION + " with new sdk key")
+                log.info("Reinitializing LaunchDarkly Client " + VERSION + " with new sdk key")
                 new_client = LDClient(config=__config, start_wait=start_wait)
                 old_client = __client
                 __client = new_client
@@ -87,7 +87,7 @@ def set_sdk_key(sdk_key):
             __lock.unlock()
 
 
-def get():
+def get() -> LDClient:
     """Returns the shared SDK client instance, using the current global configuration.
 
     To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_sdk_key()` or
@@ -97,8 +97,6 @@ def get():
 
     If you need to create multiple client instances with different configurations, instead of this
     singleton approach you can call the :class:`ldclient.client.LDClient` constructor directly instead.
-
-    :rtype: ldclient.client.LDClient
     """
     global __config
     global __client
@@ -113,7 +111,7 @@ def get():
     try:
         __lock.lock()
         if not __client:
-            log.info("Initializing LaunchDarkly Client " + version.VERSION)
+            log.info("Initializing LaunchDarkly Client " + VERSION)
             __client = LDClient(config=__config, start_wait=start_wait)
         return __client
     finally:
