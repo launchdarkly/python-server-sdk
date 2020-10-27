@@ -1,14 +1,14 @@
 import json
 import uuid
 
-from ldclient.config import Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 
 def test_create_diagnostic_id():
-    test_config = Config(sdk_key = "SDK_KEY")
-    diag_id = create_diagnostic_id(test_config);
+    test_config = Config(sdk_key = "SDK_KEY", http=HTTPConfig())
+    diag_id = create_diagnostic_id(test_config)
     assert len(diag_id) == 2
     uid = diag_id['diagnosticId']
     # Will throw if invalid UUID4
@@ -17,7 +17,7 @@ def test_create_diagnostic_id():
 
 def test_create_diagnostic_init():
     test_config = Config(sdk_key = "SDK_KEY", wrapper_name='django', wrapper_version = '5.1.1')
-    diag_id = create_diagnostic_id(test_config);
+    diag_id = create_diagnostic_id(test_config)
     diag_init = create_diagnostic_init(100, diag_id, test_config)
     assert len(diag_init) == 6
     assert diag_init['kind'] == 'diagnostic-init'
@@ -64,11 +64,10 @@ def test_create_diagnostic_config_defaults():
 def test_create_diagnostic_config_custom():
     test_store = CachingStoreWrapper(_TestStoreForDiagnostics(), CacheConfig.default())
     test_config = Config(base_uri='https://test.com', events_uri='https://test.com',
-                         connect_timeout=1, read_timeout=1, events_max_pending=10,
-                         flush_interval=1, stream_uri='https://test.com',
+                         events_max_pending=10, flush_interval=1, stream_uri='https://test.com',
                          stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
                          all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
-                         inline_users_in_events=True, http_proxy='', diagnostic_recording_interval=60)
+                         inline_users_in_events=True, http=HTTPConfig(http_proxy = 'proxy', read_timeout=1, connect_timeout=1), diagnostic_recording_interval=60)
     diag_config = _create_diagnostic_config_object(test_config)
 
     assert len(diag_config) == 17

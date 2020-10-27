@@ -477,7 +477,7 @@ def _post_events_with_retry(
                 uri,
                 headers=hdrs,
                 body=body,
-                timeout=urllib3.Timeout(connect=config.connect_timeout, read=config.read_timeout),
+                timeout=urllib3.Timeout(connect=config.http.connect_timeout, read=config.http.read_timeout),
                 retries=0
             )
             if r.status < 300:

@@ -4,7 +4,7 @@ from threading import Thread
 import time
 import uuid
 
-from ldclient.config import Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.util import log
@@ -215,7 +215,7 @@ def test_two_events_for_same_user_only_produce_one_index_event():
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
             'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
         }
-        e1 = e0.copy();
+        e1 = e0.copy()
         ep.send_event(e0)
         ep.send_event(e1)
 
@@ -232,8 +232,8 @@ def test_new_index_event_is_added_if_user_cache_has_been_cleared():
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
             'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
         }
-        e1 = e0.copy();
-        ep.send_event(e0);
+        e1 = e0.copy()
+        ep.send_event(e0)
         time.sleep(0.2)
         ep.send_event(e1)
 

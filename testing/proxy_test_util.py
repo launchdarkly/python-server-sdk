@@ -31,7 +31,7 @@ def do_proxy_tests(action, action_method, monkeypatch):
                 base_uri = target_uri,
                 events_uri = target_uri,
                 stream_uri = target_uri,
-                http = None if use_env_vars else HTTPConfig(http_proxy=proxy_uri),
+                http = HTTPConfig(http_proxy=proxy_uri),
                 diagnostic_opt_out = True)
             try:
                 action(server, config, secure)

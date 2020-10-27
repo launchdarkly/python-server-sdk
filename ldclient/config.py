@@ -20,10 +20,6 @@ class HTTPConfig:
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
     If you need to set these, construct an `HTTPConfig` instance and pass it as the `http` parameter when
     you construct the main :class:`Config` for the SDK client.
-
-    For some of these properties, :class:`Config` also has properties with the same names; the latter are
-    deprecated and will be removed in the future, and if you specify an `HTTPConfig` instance then the
-    corresponding `Config` properties will be ignored.
     """
     def __init__(self,
                  connect_timeout: float=10,
@@ -89,18 +85,15 @@ class Config:
                  sdk_key: Optional[str]=None,
                  base_uri: str='https://app.launchdarkly.com',
                  events_uri: str='https://events.launchdarkly.com',
-                 connect_timeout=10, # deprecated
-                 read_timeout=15, # deprecated
                  events_max_pending: int=10000,
                  flush_interval: float=5,
                  stream_uri: str='https://stream.launchdarkly.com',
                  stream: bool=True,
                  initial_reconnect_delay: float=1,
-                 verify_ssl=True, # deprecated
                  defaults: dict={},
                  send_events: Optional[bool]=None,
                  events_enabled: bool=True,
-                 update_processor_class: Callable[[str, 'Config', FeatureStore], UpdateProcessor]=None, 
+                 update_processor_class: Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]=None, 
                  poll_interval: float=30,
                  use_ldd: bool=False,
                  feature_store: Optional[FeatureStore]=None,
@@ -112,22 +105,17 @@ class Config:
                  user_keys_capacity: int=1000,
                  user_keys_flush_interval: float=300,
                  inline_users_in_events: bool=False,
-                 http_proxy=None, # deprecated
                  diagnostic_opt_out: bool=False,
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
                  wrapper_version: Optional[str]=None,
-                 http: Optional[HTTPConfig]=None):
+                 http: HTTPConfig=HTTPConfig()):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
           value.
         :param events_uri: The URL for the LaunchDarkly events server. Most users should use the
           default value.
-        :param connect_timeout: Deprecated; use `http` instead and specify the `connect_timeout` as
-          part of :class:`HTTPConfig`.
-        :param read_timeout: Deprecated; use `http` instead and specify the `read_timeout` as
-          part of :class:`HTTPConfig`.
         :param events_max_pending: The capacity of the events buffer. The client buffers up to this many
           events in memory before flushing. If the capacity is exceeded before the buffer is flushed, events
           will be discarded.
@@ -141,8 +129,6 @@ class Config:
           connection. The streaming service uses a backoff algorithm (with jitter) every time the connection needs
           to be reestablished. The delay for the first reconnection will start near this value, and then
           increase exponentially for any subsequent connection failures.
-        :param verify_ssl:  Deprecated; use `http` instead and specify `disable_ssl_verification` as
-          part of :class:`HTTPConfig` if you want to turn off SSL verification (not recommended).
         :param send_events: Whether or not to send events back to LaunchDarkly. This differs from
           `offline` in that it affects only the sending of client-side events, not streaming or polling for
           events from the server. By default, events will be sent.
@@ -171,8 +157,6 @@ class Config:
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
           config, and FeatureStore implementation
-        :param http_proxy:  Deprecated; use `http` instead and specify the `http_proxy` as part of
-          :class:`HTTPConfig`.
         :param diagnostic_opt_out: Unless this field is set to True, the client will send
           some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
           improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
@@ -203,11 +187,8 @@ class Config:
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
         self.__feature_requester_class = feature_requester_class
-        self.__connect_timeout = connect_timeout
-        self.__read_timeout = read_timeout
         self.__events_max_pending = events_max_pending
         self.__flush_interval = flush_interval
-        self.__verify_ssl = verify_ssl
         self.__defaults = defaults
         if offline is True:
             send_events = False
@@ -218,7 +199,6 @@ class Config:
         self.__user_keys_capacity = user_keys_capacity
         self.__user_keys_flush_interval = user_keys_flush_interval
         self.__inline_users_in_events = inline_users_in_events
-        self.__http_proxy = http_proxy
         self.__diagnostic_opt_out = diagnostic_opt_out
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
@@ -239,14 +219,11 @@ class Config:
         return Config(sdk_key=new_sdk_key,
                       base_uri=self.__base_uri,
                       events_uri=self.__events_uri,
-                      connect_timeout=self.__connect_timeout,
-                      read_timeout=self.__read_timeout,
                       events_max_pending=self.__events_max_pending,
                       flush_interval=self.__flush_interval,
                       stream_uri=self.__stream_uri,
                       stream=self.__stream,
                       initial_reconnect_delay=self.__initial_reconnect_delay,
-                      verify_ssl=self.__verify_ssl,
                       defaults=self.__defaults,
                       send_events=self.__send_events,
                       update_processor_class=self.__update_processor_class,
@@ -336,14 +313,6 @@ class Config:
         return self.__feature_requester_class
 
     @property
-    def connect_timeout(self) -> float:
-        return self.__connect_timeout
-
-    @property
-    def read_timeout(self) -> float:
-        return self.__read_timeout
-
-    @property
     def events_enabled(self) -> bool:
         return self.__send_events
 
@@ -358,10 +327,6 @@ class Config:
     @property
     def flush_interval(self) -> float:
         return self.__flush_interval
-
-    @property
-    def verify_ssl(self) -> bool:
-        return self.__verify_ssl
 
     @property
     def private_attribute_names(self) -> list:
@@ -388,10 +353,6 @@ class Config:
         return self.__inline_users_in_events
 
     @property
-    def http_proxy(self):
-        return self.__http_proxy
-
-    @property
     def diagnostic_opt_out(self) -> bool:
         return self.__diagnostic_opt_out
 
@@ -409,15 +370,6 @@ class Config:
 
     @property
     def http(self) -> HTTPConfig:
-        if self.__http is None:
-            return HTTPConfig(
-                connect_timeout=self.__connect_timeout,
-                read_timeout=self.__read_timeout,
-                http_proxy=self.__http_proxy,
-                ca_certs=None,
-                cert_file=None,
-                disable_ssl_verification=not self.__verify_ssl
-            )
         return self.__http
 
     def _validate(self):

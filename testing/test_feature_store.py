@@ -18,7 +18,6 @@ except ImportError:
 from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
 from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
 from ldclient.integrations import Consul, DynamoDB, Redis
-from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
@@ -53,17 +52,6 @@ class RedisTester(Tester):
     def _clear_data(self):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.flushdb()
-
-
-class RedisWithDeprecatedConstructorTester(RedisTester):
-    def init_store(self, prefix=None):
-        self._clear_data()
-        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0), prefix=prefix)
-
-    @property
-    def supports_prefix(self):
-        return True
-
 
 class ConsulTester(Tester):
     def __init__(self, cache_config):
@@ -182,8 +170,6 @@ class TestFeatureStore:
             InMemoryTester(),
             RedisTester(CacheConfig.default()),
             RedisTester(CacheConfig.disabled()),
-            RedisWithDeprecatedConstructorTester(CacheConfig.default()),
-            RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
             DynamoDBTester(CacheConfig.default()),
             DynamoDBTester(CacheConfig.disabled())
         ]
@@ -332,7 +318,7 @@ class TestFeatureStore:
 class TestRedisFeatureStoreExtraTests:
     def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-        store = RedisFeatureStore()
+        store = Redis.new_feature_store()
         store.init({ FEATURES: {} })
 
         other_version = {u'key': u'flagkey', u'version': 2}
@@ -340,7 +326,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        store.core.test_update_hook = hook
+        store._core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 1 }
 
@@ -350,7 +336,7 @@ class TestRedisFeatureStoreExtraTests:
 
     def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-        store = RedisFeatureStore()
+        store = Redis.new_feature_store()
         store.init({ FEATURES: {} })
 
         other_version = {u'key': u'flagkey', u'version': 2}
@@ -358,7 +344,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        store.core.test_update_hook = hook
+        store._core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 5 }
 

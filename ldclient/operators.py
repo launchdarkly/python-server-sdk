@@ -5,7 +5,7 @@ Implementation details of feature flag evaluation.
 
 import logging
 import re
-import semver
+from semver import VersionInfo
 import sys
 from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
@@ -67,17 +67,17 @@ def _time_operator(u, c, fn):
 
 def _parse_semver(input):
     try:
-        semver.VersionInfo.parse(input)
+        VersionInfo.parse(input)
         return input
     except ValueError as e:
         try:
             input = _add_zero_version_component(input)
-            semver.VersionInfo.parse(input)
+            VersionInfo.parse(input)
             return input
         except ValueError as e:
             try:
                 input = _add_zero_version_component(input)
-                semver.VersionInfo.parse(input)
+                VersionInfo.parse(input)
                 return input
             except ValueError as e:
                 return None
@@ -143,15 +143,15 @@ def _after(u, c):
 
 
 def _semver_equal(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) == 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) == 0)
 
 
 def _semver_less_than(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) < 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) < 0)
 
 
 def _semver_greater_than(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) > 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) > 0)
 
 
 _ZERO = timedelta(0)

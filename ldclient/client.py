@@ -10,7 +10,7 @@ import hmac
 import threading
 import traceback
 
-from ldclient.config import Config as Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
@@ -69,24 +69,15 @@ class LDClient:
 
     Client instances are thread-safe.
     """
-    def __init__(self, sdk_key: str=None, config: Config=None, start_wait: float=5):
+    def __init__(self, config: Config, start_wait: float=5):
         """Constructs a new LDClient instance.
 
-        :param sdk_key: the SDK key for your LaunchDarkly environment
         :param config: optional custom configuration
         :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
         """
         check_uwsgi()
 
-        if config is not None and config.sdk_key is not None and sdk_key is not None:
-            raise Exception("LaunchDarkly client init received both sdk_key and config with sdk_key. "
-                            "Only one of either is expected")
-
-        if sdk_key is not None:
-            log.warning("Deprecated sdk_key argument was passed to init. Use config object instead.")
-            self._config = Config(sdk_key=sdk_key)
-        else:
-            self._config = config or Config.default()
+        self._config = config
         self._config._validate()
 
         self._event_processor = None
@@ -237,14 +228,6 @@ class LDClient:
             return
         return self._event_processor.flush()
 
-    def toggle(self, key, user, default):
-        """Deprecated synonym for :func:`variation()`.
-
-        .. deprecated:: 2.0.0
-        """
-        log.warning("Deprecated method: toggle() called. Use variation() instead.")
-        return self.variation(key, user, default)
-
     def variation(self, key: str, user: dict, default: Any) -> Any:
         """Determines the variation of a feature flag for a user.
 
@@ -324,21 +307,6 @@ class LDClient:
                 reason = error_reason('EXCEPTION')
                 self._send_event(event_factory.new_default_event(flag, user, default, reason))
                 return EvaluationDetail(default, None, reason)
-
-    def all_flags(self, user: dict) -> Optional[dict]:
-        """Returns all feature flag values for the given user.
-
-        This method is deprecated - please use :func:`all_flags_state()` instead. Current versions of the
-        client-side SDK will not generate analytics events correctly if you pass the result of ``all_flags``.
-
-        :param user: the end user requesting the feature flags
-        :return: a dictionary of feature flag keys to values; returns None if the client is offline,
-          has not been initialized, or the user is None or has no key
-        """
-        state = self.all_flags_state(user)
-        if not state.valid:
-            return None
-        return state.to_values_map()
 
     def all_flags_state(self, user: dict, **kwargs) -> FeatureFlagsState:
         """Returns an object that encapsulates the state of all feature flags for a given user,
