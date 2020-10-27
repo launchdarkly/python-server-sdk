@@ -18,7 +18,7 @@ __BUILTINS__ = ["key", "ip", "country", "email",
 start_wait = 5
 
 __client = None
-__config = Config()
+__config = None
 __lock = ReadWriteLock()
 
 
@@ -48,52 +48,12 @@ def set_config(config: Config):
         __lock.unlock()
 
 
-def set_sdk_key(sdk_key: str):
-    """Sets the SDK key for the shared SDK client instance.
-
-    If this is called prior to :func:`ldclient.get()`, it stores the SDK key that will be used when the client is
-    initialized. If it is called after the client has already been initialized, the client will be
-    re-initialized with the new SDK key (this will result in the next call to :func:`ldclient.get()` returning a
-    new client instance).
-
-    If you need to set any configuration options other than the SDK key, use :func:`ldclient.set_config()` instead.
-
-    :param sdk_key: the new SDK key
-    """
-    global __config
-    global __client
-    global __lock
-    sdk_key_changed = False
-    try:
-        __lock.rlock()
-        if sdk_key == __config.sdk_key:
-            log.info("New sdk_key is the same as the existing one. doing nothing.")
-        else:
-            sdk_key_changed = True
-    finally:
-        __lock.runlock()
-
-    if sdk_key_changed:
-        try:
-            __lock.lock()
-            __config = __config.copy_with_new_sdk_key(new_sdk_key=sdk_key)
-            if __client:
-                log.info("Reinitializing LaunchDarkly Client " + VERSION + " with new sdk key")
-                new_client = LDClient(config=__config, start_wait=start_wait)
-                old_client = __client
-                __client = new_client
-                old_client.close()
-        finally:
-            __lock.unlock()
-
-
 def get() -> LDClient:
     """Returns the shared SDK client instance, using the current global configuration.
 
-    To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_sdk_key()` or
-    :func:`ldclient.set_config()` at startup time. Then ``get()`` will return the same shared
-    :class:`ldclient.client.LDClient` instance each time. The client will be initialized if it has
-    not been already.
+    To use the SDK as a singleton, first make sure you have called :func:`ldclient.set_config()`
+    at startup time. Then ``get()`` will return the same shared :class:`ldclient.client.LDClient`
+    instance each time. The client will be initialized if it has not been already.
 
     If you need to create multiple client instances with different configurations, instead of this
     singleton approach you can call the :class:`ldclient.client.LDClient` constructor directly instead.
@@ -105,6 +65,8 @@ def get() -> LDClient:
         __lock.rlock()
         if __client:
             return __client
+        if __config is None:
+            raise Exception("set_config was not called")
     finally:
         __lock.runlock()
 

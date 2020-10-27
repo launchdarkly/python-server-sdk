@@ -3,9 +3,9 @@ from ldclient.client import Config
 from ldclient.user_filter import UserFilter
 
 
-base_config = Config()
-config_with_all_attrs_private = Config(all_attributes_private = True)
-config_with_some_attrs_private = Config(private_attribute_names=set([u'firstName', u'bizzle']))
+base_config = Config("fake_sdk_key")
+config_with_all_attrs_private = Config("fake_sdk_key", all_attributes_private = True)
+config_with_some_attrs_private = Config("fake_sdk_key", private_attribute_names=set([u'firstName', u'bizzle']))
 
 # users to serialize
 

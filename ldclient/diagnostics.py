@@ -8,6 +8,7 @@ import time
 import uuid
 import platform
 
+from ldclient.config import Config
 from ldclient.version import VERSION
 
 class _DiagnosticAccumulator:
@@ -62,7 +63,7 @@ def _diagnostic_base_fields(kind, creation_date, diagnostic_id):
             'id': diagnostic_id}
 
 def _create_diagnostic_config_object(config):
-    default_config = config.default()
+    default_config = Config("SDK_KEY")
     return {'customBaseURI': config.base_uri != default_config.base_uri,
             'customEventsURI': config.events_uri != default_config.events_uri,
             'customStreamURI': config.stream_base_uri != default_config.stream_base_uri,

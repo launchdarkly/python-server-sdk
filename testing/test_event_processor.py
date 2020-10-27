@@ -13,7 +13,7 @@ from testing.proxy_test_util import do_proxy_tests
 from testing.stub_util import MockResponse, MockHttp
 
 
-default_config = Config()
+default_config = Config("fake_sdk_key")
 user = {
     'key': 'userkey',
     'name': 'Red'
@@ -69,6 +69,8 @@ class DefaultTestProcessor(DefaultEventProcessor):
     def __init__(self, **kwargs):
         if not 'diagnostic_opt_out' in kwargs:
             kwargs['diagnostic_opt_out'] = True
+        if not 'sdk_key' in kwargs:
+            kwargs['sdk_key'] = 'SDK_KEY'
         config = Config(**kwargs)
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
         DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator = diagnostic_accumulator)
@@ -531,7 +533,7 @@ def test_will_still_send_after_500_error():
     verify_recoverable_http_error(500)
 
 def test_does_not_block_on_full_inbox():
-    config = Config(events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
+    config = Config("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
     ep_inbox_holder = [ None ]
     ep_inbox = None
 

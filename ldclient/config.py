@@ -82,7 +82,7 @@ class Config:
     if you are using the singleton client, or the :class:`ldclient.client.LDClient` constructor otherwise.
     """
     def __init__(self,
-                 sdk_key: Optional[str]=None,
+                 sdk_key: str,
                  base_uri: str='https://app.launchdarkly.com',
                  events_uri: str='https://events.launchdarkly.com',
                  events_max_pending: int=10000,
@@ -111,7 +111,7 @@ class Config:
                  wrapper_version: Optional[str]=None,
                  http: HTTPConfig=HTTPConfig()):
         """
-        :param sdk_key: The SDK key for your LaunchDarkly account.
+        :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
           value.
         :param events_uri: The URL for the LaunchDarkly events server. Most users should use the
@@ -204,12 +204,6 @@ class Config:
         self.__wrapper_name = wrapper_name
         self.__wrapper_version = wrapper_version
         self.__http = http
-
-    @classmethod
-    def default(cls) -> 'Config':
-        """Returns a ``Config`` instance with default values for all properties.
-        """
-        return cls()
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.

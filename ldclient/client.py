@@ -64,8 +64,8 @@ class LDClient:
 
     Applications should configure the client at startup time and continue to use it throughout the lifetime
     of the application, rather than creating instances on the fly. The best way to do this is with the
-    singleton methods :func:`ldclient.set_sdk_key()`, :func:`ldclient.set_config()`, and :func:`ldclient.get()`.
-    However, you may also call the constructor directly if you need to maintain multiple instances.
+    singleton methods :func:`ldclient.set_config()` and :func:`ldclient.get()`. However, you may also call
+    the constructor directly if you need to maintain multiple instances.
 
     Client instances are thread-safe.
     """

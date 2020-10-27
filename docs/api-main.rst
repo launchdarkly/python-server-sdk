@@ -5,7 +5,7 @@ ldclient module
 ---------------
 
 .. automodule:: ldclient
-    :members: get,set_config,set_sdk_key
+    :members: get,set_config
 
 ldclient.client module
 ----------------------

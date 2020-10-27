@@ -39,7 +39,7 @@ def test_create_diagnostic_init():
     json.dumps(diag_init)
 
 def test_create_diagnostic_config_defaults():
-    test_config = Config()
+    test_config = Config("SDK_KEY")
     diag_config = _create_diagnostic_config_object(test_config)
 
     assert len(diag_config) == 17
@@ -63,7 +63,7 @@ def test_create_diagnostic_config_defaults():
 
 def test_create_diagnostic_config_custom():
     test_store = CachingStoreWrapper(_TestStoreForDiagnostics(), CacheConfig.default())
-    test_config = Config(base_uri='https://test.com', events_uri='https://test.com',
+    test_config = Config("SDK_KEY", base_uri='https://test.com', events_uri='https://test.com',
                          events_max_pending=10, flush_interval=1, stream_uri='https://test.com',
                          stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
                          all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
@@ -95,7 +95,7 @@ class _TestStoreForDiagnostics:
 
 def test_diagnostic_accumulator():
     test_config = Config(sdk_key = "SDK_KEY")
-    diag_id = create_diagnostic_id(test_config);
+    diag_id = create_diagnostic_id(test_config)
     diag_accum = _DiagnosticAccumulator(diag_id)
 
     # Test default periodic event
