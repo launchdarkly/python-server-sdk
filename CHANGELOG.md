@@ -14,8 +14,8 @@ This major release is for Python compatibility updates and removal of deprecated
 
 ### Removed:
 - Removed `ldclient.set_sdk_key()`. The correct way to do this now, if you are using the singleton client method `ldclient.get()`, is to call `ldclient.set_config()` with a `Config` object that contains the SDK key.
-- Removed the optional SDK key parameter from the [`LDClient`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.client.LDClient) constructor. You must now provide a configuration parameter of type [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config), and set the SDK key within the `Config` constructor: `LDClient(Config(sdk_key = &#34;my-sdk-key&#34;, [any other config options]))`. Previously, it was possible to specify the SDK key as a single string parameter and omit the `Config` object—`LDClient(&#34;my-sdk-key&#34;)`—although this would cause a deprecation warning to be logged; specifying both a key and a `Config` was always an error.
-- Removed the individual HTTP-related parameters such as `connect_timeout` from the [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config) type. The correct way to set these now is with the [`HTTPConfig`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.HTTPConfig) sub-configuration object: `Config(sdk_key = &#34;my-sdk-key&#34;, http = HTTPConfig(connect_timeout = 10))`.
+- Removed the optional SDK key parameter from the [`LDClient`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.client.LDClient) constructor. You must now provide a configuration parameter of type [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config), and set the SDK key within the `Config` constructor: `LDClient(Config(sdk_key = "my-sdk-key", [any other config options]))`. Previously, it was possible to specify the SDK key as a single string parameter and omit the `Config` object—`LDClient("my-sdk-key")`—although this would cause a deprecation warning to be logged; specifying both a key and a `Config` was always an error.
+- Removed the individual HTTP-related parameters such as `connect_timeout` from the [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config) type. The correct way to set these now is with the [`HTTPConfig`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.HTTPConfig) sub-configuration object: `Config(sdk_key = "my-sdk-key", http = HTTPConfig(connect_timeout = 10))`.
 - Removed all other types, parameters, and methods that were deprecated as of the last 6.x release.
 
 
@@ -44,7 +44,7 @@ This major release is for Python compatibility updates and removal of deprecated
 
 ## [6.12.1] - 2020-02-12
 ### Fixed:
-- When diagnostic events are enabled (as they are by default), the SDK was logging spurious warning messages saying &#34;Unhandled exception in event processor. Diagnostic event was not sent. [&#39;DiagnosticEventSendTask&#39; object has no attribute &#39;_response_fn&#39;]&#34;. The events were still being sent; the misleading message has been removed.
+- When diagnostic events are enabled (as they are by default), the SDK was logging spurious warning messages saying "Unhandled exception in event processor. Diagnostic event was not sent. [&#39;DiagnosticEventSendTask&#39; object has no attribute &#39;_response_fn&#39;]". The events were still being sent; the misleading message has been removed.
 
 ## [6.12.0] - 2020-02-11
 Note: if you are using the LaunchDarkly Relay Proxy to forward events, update the Relay to version 5.10.0 or later before updating to this Python SDK version.
