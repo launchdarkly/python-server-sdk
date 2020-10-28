@@ -2,6 +2,23 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.0.0] - 2020-10-28
+This major release is for Python compatibility updates and removal of deprecated APIs. It introduces no new functionality except type hints.
+
+### Added:
+- Added [type hints](https://docs.python.org/3/library/typing.html) to all SDK methods. Python by itself does not enforce these, but commonly used development tools can provide static checking to trigger warnings or errors if the wrong type is used.
+
+### Changed:
+- Python 2.7, 3.3, and 3.4 are no longer supported. The minimum Python version is now 3.5.
+- The first parameter to the `Config` constructor, `sdk_key`, is now required. Previously it was possible to omit the `sdk_key` from the `Config` and specify it separately when initializing the SDK. Now, it is always in the `Config`.
+
+### Removed:
+- Removed `ldclient.set_sdk_key()`. The correct way to do this now, if you are using the singleton client method `ldclient.get()`, is to call `ldclient.set_config()` with a `Config` object that contains the SDK key.
+- Removed the optional SDK key parameter from the [`LDClient`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.client.LDClient) constructor. You must now provide a configuration parameter of type [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config), and set the SDK key within the `Config` constructor: `LDClient(Config(sdk_key = &#34;my-sdk-key&#34;, [any other config options]))`. Previously, it was possible to specify the SDK key as a single string parameter and omit the `Config` object—`LDClient(&#34;my-sdk-key&#34;)`—although this would cause a deprecation warning to be logged; specifying both a key and a `Config` was always an error.
+- Removed the individual HTTP-related parameters such as `connect_timeout` from the [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config) type. The correct way to set these now is with the [`HTTPConfig`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.HTTPConfig) sub-configuration object: `Config(sdk_key = &#34;my-sdk-key&#34;, http = HTTPConfig(connect_timeout = 10))`.
+- Removed all other types, parameters, and methods that were deprecated as of the last 6.x release.
+
+
 ## [6.13.2] - 2020-09-21
 ### Fixed:
 - The SDK was not recognizing proxy authorization parameters included in a proxy URL (example: `http://username:password@proxyhost:port`). It will now use these parameters if present, regardless of whether you set the proxy URL programmatically or in an environment variable. (Thanks, [gangeli](https://github.com/launchdarkly/python-server-sdk/pull/145)!)
