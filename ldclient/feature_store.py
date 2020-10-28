@@ -6,71 +6,63 @@ received from LaunchDarkly. This submodule does not include specific integration
 storage systems; those are in :class:`ldclient.integrations`.
 """
 
+from typing import Callable, Any
+
 from collections import OrderedDict, defaultdict
 from ldclient.util import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStore
 from ldclient.rwlock import ReadWriteLock
-from six import iteritems
+from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class CacheConfig:
     """Encapsulates caching parameters for feature store implementations that support local caching.
     """
 
-    DEFAULT_EXPIRATION = 15
+    DEFAULT_EXPIRATION = 15.0
     DEFAULT_CAPACITY = 1000
 
     def __init__(self,
-                 expiration = DEFAULT_EXPIRATION,
-                 capacity = DEFAULT_CAPACITY):
+                 expiration: float = DEFAULT_EXPIRATION,
+                 capacity: int = DEFAULT_CAPACITY):
         """Constructs an instance of CacheConfig.
 
-        :param float expiration: the cache TTL, in seconds. Items will be evicted from the cache after
+        :param expiration: the cache TTL, in seconds. Items will be evicted from the cache after
           this amount of time from the time when they were originally cached. If the time is less than or
           equal to zero, caching is disabled.
-        :param int capacity: the maximum number of items that can be in the cache at a time
+        :param capacity: the maximum number of items that can be in the cache at a time
         """
         self._expiration = expiration
         self._capacity = capacity
 
     @staticmethod
-    def default():
+    def default() -> 'CacheConfig':
         """Returns an instance of CacheConfig with default properties. By default, caching is enabled.
         This is the same as calling the constructor with no parameters.
-
-        :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig()
-    
+
     @staticmethod
-    def disabled():
+    def disabled() -> 'CacheConfig':
         """Returns an instance of CacheConfig specifying that caching should be disabled.
-        
-        :rtype: ldclient.feature_store.CacheConfig
         """
         return CacheConfig(expiration = 0)
-    
-    @property
-    def enabled(self):
-        """Returns True if caching is enabled in this configuration.
 
-        :rtype: bool
+    @property
+    def enabled(self) -> bool:
+        """Returns True if caching is enabled in this configuration.
         """
         return self._expiration > 0
-    
-    @property
-    def expiration(self):
-        """Returns the configured cache TTL, in seconds.
 
-        :rtype: float
+    @property
+    def expiration(self) -> float:
+        """Returns the configured cache TTL, in seconds.
         """
         return self._expiration
-    
-    @property
-    def capacity(self):
-        """Returns the configured maximum number of cacheable items.
 
-        :rtype: int
+    @property
+    def capacity(self) -> int:
+        """Returns the configured maximum number of cacheable items.
         """
         return self._capacity
 
@@ -86,7 +78,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
         self._initialized = False
         self._items = defaultdict(dict)
 
-    def get(self, kind, key, callback):
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any]=lambda x: x) -> Any:
         """
         """
         try:
@@ -127,7 +119,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             self._lock.runlock()
 
     # noinspection PyShadowingNames
-    def delete(self, kind, key, version):
+    def delete(self, kind, key: str, version: int):
         """
         """
         try:
@@ -155,7 +147,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             self._lock.runlock()
 
     @property
-    def initialized(self):
+    def initialized(self) -> bool:
         """
         """
         try:
@@ -163,7 +155,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             return self._initialized
         finally:
             self._lock.runlock()
-    
+
     def describe_configuration(self, config):
         return 'memory'
 
@@ -191,7 +183,7 @@ class _FeatureStoreDataSetSorter:
             items = all_data[kind]
             outer_hash[kind] = _FeatureStoreDataSetSorter._sort_collection(kind, items)
         return outer_hash
-    
+
     @staticmethod
     def _sort_collection(kind, input):
         if len(input) == 0 or not hasattr(kind, 'get_dependency_keys'):
@@ -203,11 +195,11 @@ class _FeatureStoreDataSetSorter:
         items_out = OrderedDict()
         while len(remaining_items) > 0:
             # pick a random item that hasn't been updated yet
-            for key, item in iteritems(remaining_items):
+            for key, item in remaining_items.items():
                 _FeatureStoreDataSetSorter._add_with_dependencies_first(item, dependency_fn, remaining_items, items_out)
                 break
         return items_out
-    
+
     @staticmethod
     def _add_with_dependencies_first(item, dependency_fn, remaining_items, items_out):
         key = item.get('key')

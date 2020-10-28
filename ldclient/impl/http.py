@@ -16,7 +16,7 @@ def _base_headers(config):
 def _http_factory(config):
     return HTTPFactory(_base_headers(config), config.http)
 
-class HTTPFactory(object):
+class HTTPFactory:
     def __init__(self, base_headers, http_config, override_read_timeout=None):
         self.__base_headers = base_headers
         self.__http_config = http_config
@@ -24,19 +24,19 @@ class HTTPFactory(object):
             connect=http_config.connect_timeout,
             read=http_config.read_timeout if override_read_timeout is None else override_read_timeout
         )
-    
+
     @property
     def base_headers(self):
         return self.__base_headers
-    
+
     @property
     def http_config(self):
         return self.__http_config
-    
+
     @property
     def timeout(self):
         return self.__timeout
-    
+
     def create_pool_manager(self, num_pools, target_base_uri):
         proxy_url = self.__http_config.http_proxy or _get_proxy_url(target_base_uri)
 

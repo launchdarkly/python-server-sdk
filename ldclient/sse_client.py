@@ -8,8 +8,6 @@ Based on: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb4
 import re
 import time
 
-import six
-
 import urllib3
 
 from ldclient.config import HTTPConfig
@@ -22,7 +20,7 @@ from ldclient.util import throw_if_unsuccessful_response
 end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
-class SSEClient(object):
+class SSEClient:
     def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000,
                  verify_ssl=False, http=None, http_proxy=None, http_factory=None, **kwargs):
         self.url = url
@@ -37,7 +35,7 @@ class SSEClient(object):
             # for backward compatibility in case anyone else is using this class
             self._timeout = urllib3.Timeout(connect=connect_timeout, read=read_timeout)
             base_headers = {}
-        
+
         # Optional support for passing in an HTTP client
         if http:
             self.http = http
@@ -59,7 +57,7 @@ class SSEClient(object):
         # The SSE spec requires making requests with Cache-Control: nocache
         if 'headers' not in self.requests_kwargs:
             self.requests_kwargs['headers'] = {}
-        
+
         self.requests_kwargs['headers'].update(base_headers)
 
         self.requests_kwargs['headers']['Cache-Control'] = 'no-cache'
@@ -141,15 +139,8 @@ class SSEClient(object):
 
         return msg
 
-    # The following two lines make our iterator class compatible with both Python 2.x and 3.x,
-    # even though they expect different magic method names. We could accomplish the same thing
-    # by importing builtins.object and deriving from that, but this way it's easier to see
-    # what we're doing.
-    if six.PY2:
-        next = __next__
 
-
-class Event(object):
+class Event:
 
     sse_line_pattern = re.compile('(?P<name>[^:]*):?( ?(?P<value>.*))?')
 

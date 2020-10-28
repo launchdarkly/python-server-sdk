@@ -5,7 +5,6 @@ General internal helper functions.
 
 import logging
 from os import environ
-import six
 import sys
 import urllib3
 
@@ -13,13 +12,7 @@ from ldclient.impl.http import HTTPFactory, _base_headers
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
-
-# noinspection PyBroadException
-try:
-    import queue
-except:
-    # noinspection PyUnresolvedReferences,PyPep8Naming
-    import Queue as queue
+import queue
 
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
@@ -27,14 +20,8 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 __BUILTINS__ = ["key", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
 
-try:
-    # noinspection PyUnresolvedReferences
-    unicode
-except NameError:
-    __BASE_TYPES__ = (str, float, int, bool)
-else:
-    # noinspection PyUnresolvedReferences
-    __BASE_TYPES__ = (str, float, int, bool, unicode)
+__BASE_TYPES__ = (str, float, int, bool)
+
 
 _retryable_statuses = [400, 408, 429]
 
@@ -56,8 +43,7 @@ def check_uwsgi():
                     'To learn more, see http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
 
 
-class Event(object):
-
+class Event:
     def __init__(self, data='', event='message', event_id=None, retry=None):
         self.data = data
         self.event = event
@@ -117,7 +103,7 @@ def stringify_attrs(attrdict, attrs):
     newdict = None
     for attr in attrs:
         val = attrdict.get(attr)
-        if val is not None and not isinstance(val, six.string_types):
+        if val is not None and not isinstance(val, str):
             if newdict is None:
                 newdict = attrdict.copy()
             newdict[attr] = str(val)

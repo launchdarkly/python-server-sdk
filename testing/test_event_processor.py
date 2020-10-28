@@ -4,7 +4,7 @@ from threading import Thread
 import time
 import uuid
 
-from ldclient.config import Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.util import log
@@ -13,7 +13,7 @@ from testing.proxy_test_util import do_proxy_tests
 from testing.stub_util import MockResponse, MockHttp
 
 
-default_config = Config()
+default_config = Config("fake_sdk_key")
 user = {
     'key': 'userkey',
     'name': 'Red'
@@ -69,6 +69,8 @@ class DefaultTestProcessor(DefaultEventProcessor):
     def __init__(self, **kwargs):
         if not 'diagnostic_opt_out' in kwargs:
             kwargs['diagnostic_opt_out'] = True
+        if not 'sdk_key' in kwargs:
+            kwargs['sdk_key'] = 'SDK_KEY'
         config = Config(**kwargs)
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
         DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator = diagnostic_accumulator)
@@ -215,7 +217,7 @@ def test_two_events_for_same_user_only_produce_one_index_event():
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
             'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
         }
-        e1 = e0.copy();
+        e1 = e0.copy()
         ep.send_event(e0)
         ep.send_event(e1)
 
@@ -232,8 +234,8 @@ def test_new_index_event_is_added_if_user_cache_has_been_cleared():
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
             'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
         }
-        e1 = e0.copy();
-        ep.send_event(e0);
+        e1 = e0.copy()
+        ep.send_event(e0)
         time.sleep(0.2)
         ep.send_event(e1)
 
@@ -531,7 +533,7 @@ def test_will_still_send_after_500_error():
     verify_recoverable_http_error(500)
 
 def test_does_not_block_on_full_inbox():
-    config = Config(events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
+    config = Config("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
     ep_inbox_holder = [ None ]
     ep_inbox = None
 

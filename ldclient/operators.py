@@ -5,24 +5,19 @@ Implementation details of feature flag evaluation.
 
 import logging
 import re
-import semver
+from semver import VersionInfo
 import sys
 from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
 from numbers import Number
 
-import six
 import pyrfc3339
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
 def _string_operator(u, c, fn):
-    if isinstance(u, six.string_types):
-        if isinstance(c, six.string_types):
-            return fn(u, c)
-    return False
-
+    return fn(u, c) if isinstance(u, str) and isinstance(c, str) else False
 
 def _numeric_operator(u, c, fn):
     # bool is a subtype of int, and we don't want to try and compare it as a number.
@@ -50,7 +45,7 @@ def _parse_time(input):
     if isinstance(input, Number):
         return float(input)
 
-    if isinstance(input, six.string_types):
+    if isinstance(input, str):
         try:
             parsed_time = pyrfc3339.parse(input)
             timestamp = (parsed_time - epoch).total_seconds()
@@ -72,17 +67,17 @@ def _time_operator(u, c, fn):
 
 def _parse_semver(input):
     try:
-        semver.parse(input)
+        VersionInfo.parse(input)
         return input
     except ValueError as e:
         try:
             input = _add_zero_version_component(input)
-            semver.parse(input)
+            VersionInfo.parse(input)
             return input
         except ValueError as e:
             try:
                 input = _add_zero_version_component(input)
-                semver.parse(input)
+                VersionInfo.parse(input)
                 return input
             except ValueError as e:
                 return None
@@ -148,15 +143,15 @@ def _after(u, c):
 
 
 def _semver_equal(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) == 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) == 0)
 
 
 def _semver_less_than(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) < 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) < 0)
 
 
 def _semver_greater_than(u, c):
-    return _semver_operator(u, c, lambda u, c: semver.compare(u, c) > 0)
+    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) > 0)
 
 
 _ZERO = timedelta(0)
@@ -195,4 +190,4 @@ ops = {
     "semVerGreaterThan": _semver_greater_than
 }
 
-ops = defaultdict(lambda: False, ops)
+ops = defaultdict(lambda: lambda l, r: False, ops)

@@ -8,12 +8,12 @@
 ## LaunchDarkly overview
 
 [LaunchDarkly](https://www.launchdarkly.com) is a feature management platform that serves over 100 billion feature flags daily to help teams build better software, faster. [Get started](https://docs.launchdarkly.com/docs/getting-started) using LaunchDarkly today!
- 
+
 [![Twitter Follow](https://img.shields.io/twitter/follow/launchdarkly.svg?style=social&label=Follow&maxAge=2592000)](https://twitter.com/intent/follow?screen_name=launchdarkly)
 
 ## Supported Python versions
 
-This version of the LaunchDarkly SDK is compatible with Python 2.7 and 3.3 through 3.7. It is tested with the most recent patch releases of those versions. Python 2.6 is no longer supported.
+This version of the LaunchDarkly SDK is compatible with Python 3.5 through 3.9. It is tested with the most recent patch releases of those versions. Python versions 2.7 to 3.4 are no longer supported.
 
 ## Getting started
 

@@ -37,7 +37,7 @@ class FeatureRequesterImpl(FeatureRequester):
             hdrs['If-None-Match'] = cache_entry.etag
         r = self._http.request('GET', uri,
                                headers=hdrs,
-                               timeout=urllib3.Timeout(connect=self._config.connect_timeout, read=self._config.read_timeout),
+                               timeout=urllib3.Timeout(connect=self._config.http.connect_timeout, read=self._config.http.read_timeout),
                                retries=1)
         throw_if_unsuccessful_response(r)
         if r.status == 304 and cache_entry is not None:

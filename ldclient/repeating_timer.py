@@ -5,7 +5,7 @@ Internal helper class for repeating tasks.
 
 from threading import Event, Thread
 
-class RepeatingTimer(object):
+class RepeatingTimer:
     def __init__(self, interval, callable):
         self._interval = interval
         self._action = callable

@@ -8,9 +8,10 @@ import time
 import uuid
 import platform
 
+from ldclient.config import Config
 from ldclient.version import VERSION
 
-class _DiagnosticAccumulator(object):
+class _DiagnosticAccumulator:
     def __init__(self, diagnostic_id):
         self.diagnostic_id = diagnostic_id
         self.data_since_date = int(time.time() * 1000)
@@ -62,15 +63,15 @@ def _diagnostic_base_fields(kind, creation_date, diagnostic_id):
             'id': diagnostic_id}
 
 def _create_diagnostic_config_object(config):
-    default_config = config.default()
+    default_config = Config("SDK_KEY")
     return {'customBaseURI': config.base_uri != default_config.base_uri,
             'customEventsURI': config.events_uri != default_config.events_uri,
             'customStreamURI': config.stream_base_uri != default_config.stream_base_uri,
             'eventsCapacity': config.events_max_pending,
-            'connectTimeoutMillis': config.connect_timeout * 1000,
-            'socketTimeoutMillis': config.read_timeout * 1000,
+            'connectTimeoutMillis': config.http.connect_timeout * 1000,
+            'socketTimeoutMillis': config.http.read_timeout * 1000,
             'eventsFlushIntervalMillis': config.flush_interval * 1000,
-            'usingProxy': config.http_proxy is not None,
+            'usingProxy': config.http.http_proxy is not None,
             'streamingDisabled': not config.stream,
             'usingRelayDaemon': config.use_ldd,
             'allAttributesPrivate': config.all_attributes_private,

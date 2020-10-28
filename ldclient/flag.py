@@ -6,7 +6,7 @@ from collections import namedtuple
 import hashlib
 import logging
 
-import six
+from typing import Optional, List, Any
 import sys
 
 from ldclient import operators
@@ -25,42 +25,40 @@ __USER_ATTRS_TO_STRINGIFY_FOR_EVALUATION__ = [ "key", "secondary" ]
 log = logging.getLogger(sys.modules[__name__].__name__)
 
 
-class EvaluationDetail(object):
+class EvaluationDetail:
     """
     The return type of :func:`ldclient.client.LDClient.variation_detail()`, combining the result of a
     flag evaluation with information about how it was calculated.
     """
-    def __init__(self, value, variation_index, reason):
+    def __init__(self, value: object, variation_index: Optional[int], reason: dict):
         """Constructs an instance.
         """
         self.__value = value
         self.__variation_index = variation_index
         self.__reason = reason
-    
+
     @property
-    def value(self):
+    def value(self) -> object:
         """The result of the flag evaluation. This will be either one of the flag's
         variations or the default value that was passed to the
         :func:`ldclient.client.LDClient.variation_detail()` method.
         """
         return self.__value
-    
+
     @property
-    def variation_index(self):
+    def variation_index(self) -> Optional[int]:
         """The index of the returned value within the flag's list of variations, e.g.
         0 for the first variation -- or None if the default value was returned.
-
-        :rtype: int or None
         """
         return self.__variation_index
-    
+
     @property
-    def reason(self):
+    def reason(self) -> dict:
         """A dictionary describing the main factor that influenced the flag evaluation value.
         It contains the following properties:
 
         * ``kind``: The general category of reason, as follows:
-        
+
           * ``"OFF"``: the flag was off
           * ``"FALLTHROUGH"`` -- the flag was on but the user did not match any targets or rules
           * ``"TARGET_MATCH"`` -- the user was specifically targeted for this flag
@@ -77,49 +75,46 @@ class EvaluationDetail(object):
 
         * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
           e.g. ``"FLAG_NOT_FOUND"``
-
-        :rtype: dict
         """
         return self.__reason
-    
-    def is_default_value(self):
+
+    def is_default_value(self) -> bool:
+
         """Returns True if the flag evaluated to the default value rather than one of its
         variations.
-
-        :rtype: bool
         """
         return self.__variation_index is None
-    
-    def __eq__(self, other):
+
+    def __eq__(self, other) -> bool:
         return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not self.__eq__(other)
-    
-    def __str__(self):
+
+    def __str__(self) -> str:
         return "(value=%s, variation_index=%s, reason=%s)" % (self.value, self.variation_index, self.reason)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 
 EvalResult = namedtuple('EvalResult', ['detail', 'events'])
 
 
-def error_reason(error_kind):
+def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}
 
 
-def evaluate(flag, user, store, event_factory):
+def evaluate(flag, user, store, event_factory) -> EvalResult:
     sanitized_user = stringify_attrs(user, __USER_ATTRS_TO_STRINGIFY_FOR_EVALUATION__)
-    prereq_events = []
+    prereq_events = [] # type: List[Any]
     detail = _evaluate(flag, sanitized_user, store, prereq_events, event_factory)
     return EvalResult(detail = detail, events = prereq_events)
 
 def _evaluate(flag, user, store, prereq_events, event_factory):
     if not flag.get('on', False):
         return _get_off_value(flag, {'kind': 'OFF'})
-    
+
     prereq_failure_reason = _check_prerequisites(flag, user, store, prereq_events, event_factory)
     if prereq_failure_reason is not None:
         return _get_off_value(flag, prereq_failure_reason)
@@ -240,12 +235,7 @@ def _bucket_user(user, key, salt, bucket_by):
 
 
 def _bucketable_string_value(u_value):
-    if isinstance(u_value, six.string_types):
-        return u_value
-    if isinstance(u_value, six.integer_types):
-        return str(u_value)
-    return None
-
+    return str(u_value) if isinstance(u_value, (str, int)) else None
 
 def _rule_matches_user(rule, user, store):
     for clause in rule.get('clauses') or []:

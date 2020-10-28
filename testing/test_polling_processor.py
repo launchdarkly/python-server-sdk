@@ -47,7 +47,7 @@ def test_successful_request_puts_feature_data_in_store():
             "segkey": segment
         }
     }
-    setup_processor(Config())
+    setup_processor(Config("SDK_KEY"))
     ready.wait()
     assert store.get(FEATURES, "flagkey", lambda x: x) == flag
     assert store.get(SEGMENTS, "segkey", lambda x: x) == segment
@@ -60,7 +60,7 @@ def test_successful_request_puts_feature_data_in_store():
 def test_general_connection_error_does_not_cause_immediate_failure(ignore_mock):
     mock_requester.exception = Exception("bad")
     start_time = time.time()
-    setup_processor(Config())
+    setup_processor(Config("SDK_KEY"))
     ready.wait(0.3)
     assert not pp.initialized()
     assert mock_requester.request_count >= 2
@@ -86,7 +86,7 @@ def test_http_503_error_does_not_cause_immediate_failure():
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
 def verify_unrecoverable_http_error(status, ignore_mock):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    setup_processor(Config())
+    setup_processor(Config("SDK_KEY"))
     finished = ready.wait(0.5)
     assert finished
     assert not pp.initialized()
@@ -95,7 +95,7 @@ def verify_unrecoverable_http_error(status, ignore_mock):
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
 def verify_recoverable_http_error(status, ignore_mock):
     mock_requester.exception = UnsuccessfulResponseException(status)
-    setup_processor(Config())
+    setup_processor(Config("SDK_KEY"))
     finished = ready.wait(0.5)
     assert not finished
     assert not pp.initialized()

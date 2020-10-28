@@ -1,7 +1,6 @@
 import json
 import os
 import pytest
-import six
 import tempfile
 import threading
 import time
@@ -101,12 +100,12 @@ def teardown_function():
 
 def make_data_source(**kwargs):
     global data_source
-    data_source = Files.new_data_source(**kwargs)(Config(), store, ready)
+    data_source = Files.new_data_source(**kwargs)(Config("SDK_KEY"), store, ready)
     return data_source
 
 def make_temp_file(content):
     f, path = tempfile.mkstemp()
-    os.write(f, six.b(content))
+    os.write(f, content.encode("latin-1"))
     os.close(f)
     return path
 
@@ -227,7 +226,7 @@ def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
         factory = Files.new_data_source(paths = path)
-        client = LDClient(config=Config(update_processor_class = factory, send_events = False))
+        client = LDClient(config=Config('SDK_KEY', update_processor_class = factory, send_events = False))
         value = client.variation('flag1', { 'key': 'user' }, '')
         assert value == 'on'
     finally:
@@ -239,7 +238,7 @@ def test_evaluates_simplified_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:
         factory = Files.new_data_source(paths = path)
-        client = LDClient(config=Config(update_processor_class = factory, send_events = False))
+        client = LDClient(config=Config('SDK_KEY', update_processor_class = factory, send_events = False))
         value = client.variation('flag2', { 'key': 'user' }, '')
         assert value == 'value2'
     finally:
@@ -265,7 +264,7 @@ def test_does_not_allow_unsafe_yaml():
     path = make_temp_file(unsafe_yaml)
     try:
         factory = Files.new_data_source(paths = path)
-        client = LDClient(config=Config(update_processor_class = factory, send_events = False))
+        client = LDClient(config=Config('SDK_KEY', update_processor_class = factory, send_events = False))
     finally:
         os.remove(path)
         if client is not None:

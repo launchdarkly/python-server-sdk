@@ -11,11 +11,7 @@ import logging
 import pytest
 from testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
 from testing.sync_util import wait_until
-
-try:
-    import queue
-except:
-    import Queue as queue
+import queue
 
 
 unreachable_uri="http://fake"
@@ -76,12 +72,6 @@ def count_events(c):
     n = len(c._event_processor._events)
     c._event_processor._events = []
     return n
-
-
-def test_ctor_both_sdk_keys_set():
-    with pytest.raises(Exception):
-        config = Config(sdk_key="sdk key a", offline=True)
-        LDClient(sdk_key="sdk key b", config=config)
 
 
 def test_client_has_null_event_processor_if_offline():
@@ -183,14 +173,15 @@ def test_track_no_user_key():
 
 
 def test_defaults():
-    config=Config(base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
+    config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
     with LDClient(config=config) as client:
         assert "bar" == client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient(config=Config(base_uri="http://localhost:3000",
+    my_client = LDClient(config=Config("SDK_KEY",
+                                       base_uri="http://localhost:3000",
                                        defaults={"foo": expected},
                                        event_processor_class=MockEventProcessor,
                                        update_processor_class=MockUpdateProcessor,
@@ -202,7 +193,8 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    my_client = LDClient(config=Config(base_uri="http://localhost:3000",
+    my_client = LDClient(config=Config("SDK_KEY",
+                                       base_uri="http://localhost:3000",
                                        defaults={"foo": "bar"},
                                        event_processor_class=MockEventProcessor,
                                        update_processor_class=MockUpdateProcessor))

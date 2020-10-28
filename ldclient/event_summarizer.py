@@ -9,7 +9,7 @@ from collections import namedtuple
 EventSummary = namedtuple('EventSummary', ['start_date', 'end_date', 'counters'])
 
 
-class EventSummarizer(object):
+class EventSummarizer:
     def __init__(self):
         self.start_date = 0
         self.end_date = 0

@@ -5,6 +5,8 @@ import pytest
 import redis
 import time
 
+from typing import List
+
 # Consul is only supported in some Python versions
 have_consul = False
 try:
@@ -16,13 +18,14 @@ except ImportError:
 from ldclient.feature_store import CacheConfig, InMemoryFeatureStore
 from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
 from ldclient.integrations import Consul, DynamoDB, Redis
-from ldclient.redis_feature_store import RedisFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 skip_db_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 
+class Tester:
+    pass
 
-class InMemoryTester(object):
+class InMemoryTester(Tester):
     def init_store(self):
         return InMemoryFeatureStore()
 
@@ -31,13 +34,13 @@ class InMemoryTester(object):
         return False
 
 
-class RedisTester(object):
+class RedisTester(Tester):
     redis_host = 'localhost'
     redis_port = 6379
 
     def __init__(self, cache_config):
         self._cache_config = cache_config
-    
+
     def init_store(self, prefix=None):
         self._clear_data()
         return Redis.new_feature_store(caching=self._cache_config, prefix=prefix)
@@ -50,18 +53,7 @@ class RedisTester(object):
         r = redis.StrictRedis(host=self.redis_host, port=self.redis_port, db=0)
         r.flushdb()
 
-
-class RedisWithDeprecatedConstructorTester(RedisTester):
-    def init_store(self, prefix=None):
-        self._clear_data()
-        return RedisFeatureStore(expiration=(30 if self._cache_config.enabled else 0), prefix=prefix)
-
-    @property
-    def supports_prefix(self):
-        return True
-
-
-class ConsulTester(object):
+class ConsulTester(Tester):
     def __init__(self, cache_config):
         self._cache_config = cache_config
 
@@ -80,7 +72,7 @@ class ConsulTester(object):
             client.kv.delete(key)
 
 
-class DynamoDBTester(object):
+class DynamoDBTester(Tester):
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
     options = {
@@ -92,7 +84,7 @@ class DynamoDBTester(object):
 
     def __init__(self, cache_config):
         self._cache_config = cache_config
-    
+
     def init_store(self, prefix=None):
         self._create_table()
         self._clear_data()
@@ -148,7 +140,7 @@ class DynamoDBTester(object):
                 return
             except client.exceptions.ResourceNotFoundException:
                 time.sleep(0.5)
-        
+
     def _clear_data(self):
         client = boto3.client('dynamodb', **self.options)
         delete_requests = []
@@ -168,17 +160,16 @@ class DynamoDBTester(object):
 
 
 class TestFeatureStore:
+    params = [] # type: List[Tester]
     if skip_db_tests:
-        params = [
+        params += [
             InMemoryTester()
         ]
     else:
-        params = [
+        params += [
             InMemoryTester(),
             RedisTester(CacheConfig.default()),
             RedisTester(CacheConfig.disabled()),
-            RedisWithDeprecatedConstructorTester(CacheConfig.default()),
-            RedisWithDeprecatedConstructorTester(CacheConfig.disabled()),
             DynamoDBTester(CacheConfig.default()),
             DynamoDBTester(CacheConfig.disabled())
         ]
@@ -226,7 +217,7 @@ class TestFeatureStore:
 
     def test_not_initialized_before_init(self, store):
         assert store.initialized is False
-    
+
     def test_initialized(self, store):
         store = self.base_initialized_store(store)
         assert store.initialized is True
@@ -327,7 +318,7 @@ class TestFeatureStore:
 class TestRedisFeatureStoreExtraTests:
     def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-        store = RedisFeatureStore()
+        store = Redis.new_feature_store()
         store.init({ FEATURES: {} })
 
         other_version = {u'key': u'flagkey', u'version': 2}
@@ -335,7 +326,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        store.core.test_update_hook = hook
+        store._core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 1 }
 
@@ -345,7 +336,7 @@ class TestRedisFeatureStoreExtraTests:
 
     def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = redis.StrictRedis(host='localhost', port=6379, db=0)
-        store = RedisFeatureStore()
+        store = Redis.new_feature_store()
         store.init({ FEATURES: {} })
 
         other_version = {u'key': u'flagkey', u'version': 2}
@@ -353,7 +344,7 @@ class TestRedisFeatureStoreExtraTests:
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
-        store.core.test_update_hook = hook
+        store._core.test_update_hook = hook
 
         feature = { u'key': 'flagkey', u'version': 5 }
 

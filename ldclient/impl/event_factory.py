@@ -6,10 +6,10 @@
 # Note that none of these methods fill in the "creationDate" property, because in the Python
 # client, that is done by DefaultEventProcessor.send_event().
 
-class _EventFactory(object):
+class _EventFactory:
     def __init__(self, with_reasons):
         self._with_reasons = with_reasons
-    
+
     def new_eval_event(self, flag, user, detail, default_value, prereq_of_flag = None):
         add_experiment_data = self._is_experiment(flag, detail.reason)
         e = {
@@ -31,7 +31,7 @@ class _EventFactory(object):
         if add_experiment_data or self._with_reasons:
             e['reason'] = detail.reason
         return e
-    
+
     def new_default_event(self, flag, user, default_value, reason):
         e = {
             'kind': 'feature',
@@ -49,7 +49,7 @@ class _EventFactory(object):
         if self._with_reasons:
             e['reason'] = reason
         return e
-    
+
     def new_unknown_flag_event(self, key, user, default_value, reason):
         e = {
             'kind': 'feature',
@@ -61,7 +61,7 @@ class _EventFactory(object):
         if self._with_reasons:
             e['reason'] = reason
         return e
-    
+
     def new_identify_event(self, user):
         return {
             'kind': 'identify',

@@ -12,22 +12,22 @@ from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
-# 
+#
 # Internal implementation of the DynamoDB feature store.
-# 
+#
 # Implementation notes:
-# 
+#
 # * Feature flags, segments, and any other kind of entity the LaunchDarkly client may wish
 # to store, are all put in the same table. The only two required attributes are "key" (which
 # is present in all storeable entities) and "namespace" (a parameter from the client that is
 # used to disambiguate between flags and segments).
-# 
+#
 # * Because of DynamoDB's restrictions on attribute values (e.g. empty strings are not
 # allowed), the standard DynamoDB marshaling mechanism with one attribute per object property
 # is not used. Instead, the entire object is serialized to JSON and stored in a single
 # attribute, "item". The "version" property is also stored as a separate attribute since it
 # is used for updates.
-# 
+#
 # * Since DynamoDB doesn't have transactions, the init() method - which replaces the entire data
 # store - is not atomic, so there can be a race condition if another process is adding new data
 # via upsert(). To minimize this, we don't delete all the data at the start; instead, we update
@@ -35,10 +35,10 @@ from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStor
 # deleting new data from another process, but that would be the case anyway if the init()
 # happened to execute later than the upsert(); we are relying on the fact that normally the
 # process that did the init() will also receive the new data shortly and do its own upsert().
-# 
+#
 # * DynamoDB has a maximum item size of 400KB. Since each feature flag or user segment is
 # stored as a single item, this mechanism will not work for extremely large flags or segments.
-# 
+#
 
 class _DynamoDBFeatureStoreCore(FeatureStoreCore):
     PARTITION_KEY = 'namespace'
@@ -73,7 +73,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         for combined_key in unused_old_keys:
             if combined_key[0] != inited_key:
                 requests.append({ 'DeleteRequest': { 'Key': self._make_keys(combined_key[0], combined_key[1]) } })
-        
+
         # Now set the special key that we check in initialized_internal()
         requests.append({ 'PutRequest': { 'Item': self._make_keys(inited_key, inited_key) } })
 
@@ -122,7 +122,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
 
     def describe_configuration(self, config):
         return 'DynamoDB'
-    
+
     def _prefixed_namespace(self, base):
         return base if self._prefix is None else (self._prefix + ':' + base)
 
@@ -131,13 +131,13 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
 
     def _inited_key(self):
         return self._prefixed_namespace('$inited')
-    
+
     def _make_keys(self, namespace, key):
         return {
             self.PARTITION_KEY: { 'S': namespace },
             self.SORT_KEY: { 'S': key }
         }
-    
+
     def _make_query_for_kind(self, kind):
         return {
             'TableName': self._table_name,
@@ -171,14 +171,14 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
                     key = item[self.SORT_KEY]['S']
                     keys.add((namespace, key))
         return keys
-    
+
     def _marshal_item(self, kind, item):
         json_str = json.dumps(item)
         ret = self._make_keys(self._namespace_for_kind(kind), item['key'])
         ret[self.VERSION_ATTRIBUTE] = { 'N': str(item['version']) }
         ret[self.ITEM_JSON_ATTRIBUTE] = { 'S': json_str }
         return ret
-    
+
     def _unmarshal_item(self, item):
         if item is None:
             return None
@@ -186,7 +186,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         return None if json_attr is None else json.loads(json_attr['S'])
 
 
-class _DynamoDBHelpers(object):
+class _DynamoDBHelpers:
     @staticmethod
     def batch_write_requests(client, table_name, requests):
         batch_size = 25

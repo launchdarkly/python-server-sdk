@@ -129,7 +129,7 @@ def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
             base_uri = server.uri,
             stream = False,
             send_events = False,
-            verify_ssl = False
+            http = HTTPConfig(disable_ssl_verification=True)
         )
         with LDClient(config = config) as client:
             assert client.is_initialized()

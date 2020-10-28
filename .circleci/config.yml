@@ -7,20 +7,6 @@ workflows:
   test:
     jobs:
       - test-linux:
-          name: Python 2.7
-          docker-image: circleci/python:2.7-jessie
-          test-with-codeclimate: true  # we only need to run CodeClimate in one job
-      - test-linux:
-          name: Python 3.3
-          docker-image: circleci/python:3.3-jessie
-          consul-supported: false  # Consul isn't supported in 3.3
-          filesource-supported: false  # FileDataSource isn't supported in 3.3
-          test-packaging: false  # packaging test requires virtualenv, which isn't supported in 3.3
-      - test-linux:
-          name: Python 3.4
-          docker-image: circleci/python:3.4-jessie
-          consul-supported: false  # Consul isn't supported in 3.4
-      - test-linux:
           name: Python 3.5
           docker-image: circleci/python:3.5-jessie
       - test-linux:
@@ -32,11 +18,11 @@ workflows:
       - test-linux:
           name: Python 3.8
           docker-image: circleci/python:3.8-buster
+      - test-linux:
+          name: Python 3.9
+          docker-image: circleci/python:3.9-rc-buster
       - test-windows:
-          name: Windows Py2.7
-          py3: false
-      - test-windows:
-          name: Windows Py3.3
+          name: Windows Python 3
           py3: true
 
 jobs:
@@ -44,18 +30,15 @@ jobs:
     parameters:
       docker-image:
         type: string
-      consul-supported:
-        type: boolean
-        default: true
-      filesource-supported:
-        type: boolean
-        default: true
       test-packaging:
         type: boolean
         default: true
       test-with-codeclimate:
         type: boolean
         default: false
+      test-with-mypy:
+        type: boolean
+        default: true
     docker:
       - image: <<parameters.docker-image>>
       - image: redis
@@ -68,12 +51,8 @@ jobs:
           command: |
             sudo pip install --upgrade pip virtualenv;
             sudo pip install -r test-requirements.txt;
-            if [[ "<<parameters.filesource-supported>>" == "true" ]]; then
-              sudo pip install -r test-filesource-optional-requirements.txt;
-            fi;
-            if [[ "<<parameters.consul-supported>>" == "true" ]]; then
-              sudo pip install -r consul-requirements.txt;
-            fi;
+            sudo pip install -r test-filesource-optional-requirements.txt;
+            sudo pip install -r consul-requirements.txt;
             sudo python setup.py install;
             pip freeze
       - when:
@@ -101,6 +80,15 @@ jobs:
                 command: |
                   sudo rm -rf dist *.egg-info
                   ./test-packaging/test-packaging.sh
+      - when:
+          condition: <<parameters.test-with-mypy>>
+          steps:
+            - run:
+                name: verify typehints
+                command: |
+                  pip install mypy
+                  export PATH="/home/circleci/.local/bin:$PATH"
+                  mypy --config-file mypy.ini --python-version 3.5 ldclient/*.py testing/*.py
       - store_test_results:
           path: test-reports
       - store_artifacts:
@@ -115,21 +103,9 @@ jobs:
         type: boolean
     steps:
       - checkout
-      - when:
-          condition: <<parameters.py3>>
-          steps:
-            - run:
-                name: install Python 3
-                command: choco install python --no-progress
-      - unless:
-          condition: <<parameters.py3>>
-          steps:
-            - run:
-                name: install Python 2.7
-                command: |
-                  $ProgressPreference = "SilentlyContinue"  # prevents console errors from CircleCI host
-                  iwr -outf python-2.7.16.amd64.msi https://www.python.org/ftp/python/2.7.16/python-2.7.16.amd64.msi
-                  Start-Process msiexec.exe -Wait -ArgumentList '/I python-2.7.16.amd64.msi /quiet'
+      - run:
+          name: install Python 3
+          command: choco install python --no-progress
       - run:
           name: set up DynamoDB
           command: |
@@ -165,7 +141,6 @@ jobs:
       - run:
           name: install requirements
           command: |
-            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"  # has no effect if 2.7 isn't installed
             python --version
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
@@ -174,7 +149,6 @@ jobs:
           name: run tests
           command: |
             mkdir test-reports
-            $env:Path += ";C:\Python27\;C:\Python27\Scripts\"  # has no effect if 2.7 isn't installed
             python -m pytest -s --junitxml=test-reports/junit.xml testing;
       - store_test_results:
           path: test-reports

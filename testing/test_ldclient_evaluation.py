@@ -166,27 +166,27 @@ def test_all_flags_returns_values():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
-    result = client.all_flags(user)
+    result = client.all_flags_state(user).to_values_map()
     assert result == { 'key1': 'value1', 'key2': 'value2' }
 
 def test_all_flags_returns_none_if_user_is_none():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
-    result = client.all_flags(None)
-    assert result is None
+    result = client.all_flags_state(None)
+    assert not result.valid
 
 def test_all_flags_returns_none_if_user_has_no_key():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
-    result = client.all_flags({ })
-    assert result is None
+    result = client.all_flags_state({ })
+    assert not result.valid
 
 def test_all_flags_returns_none_if_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
-    assert client.all_flags({ "key": "user" }) is None
+    assert not client.all_flags_state({ "key": "user" }).valid
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]
 
@@ -195,7 +195,7 @@ def test_all_flags_state_returns_state():
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
     state = client.all_flags_state(user)
-    assert state.valid == True
+    assert state.valid
     result = state.to_json_dict()
     assert result == {
         'key1': 'value1',
@@ -220,7 +220,7 @@ def test_all_flags_state_returns_state_with_reasons():
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
     state = client.all_flags_state(user, with_reasons=True)
-    assert state.valid == True
+    assert state.valid
     result = state.to_json_dict()
     assert result == {
         'key1': 'value1',
@@ -277,7 +277,7 @@ def test_all_flags_state_can_be_filtered_for_client_side_flags():
     client = make_client(store)
 
     state = client.all_flags_state(user, client_side_only=True)
-    assert state.valid == True
+    assert state.valid
     values = state.to_values_map()
     assert values == { 'client-side-1': 'value1', 'client-side-2': 'value2' }
 
