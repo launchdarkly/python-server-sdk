@@ -34,13 +34,16 @@ def check_uwsgi():
     if 'uwsgi' in sys.modules:
         # noinspection PyPackageRequirements,PyUnresolvedReferences
         import uwsgi
+        if not hasattr(uwsgi, 'opt'):
+            # means that we are not running under uwsgi
+            return
 
         if uwsgi.opt.get('enable-threads'):
             return
         if uwsgi.opt.get('threads') is not None and int(uwsgi.opt.get('threads')) > 1:
             return
         log.error("The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
-                    'To learn more, see http://docs.launchdarkly.com/v1.0/docs/python-sdk-reference#configuring-uwsgi')
+                    'To learn more, see https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi')
 
 
 class Event:
