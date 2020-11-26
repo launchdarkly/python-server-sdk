@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.0.1] - 2020-11-25
+### Fixed:
+- The logic for detecting uWSGI did not account for undocumented behavior in some environments where the `uwsgi` module is present in an incomplete state; this could cause an error on startup in such environments. Also, the log message about threading options related to uWSGI contained a broken link. (Thanks, [andrefreitas](https://github.com/launchdarkly/python-server-sdk/pull/148)!)
+
 ## [7.0.0] - 2020-10-28
 This major release is for Python compatibility updates and removal of deprecated APIs. It introduces no new functionality except type hints.
 
