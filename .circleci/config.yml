@@ -86,9 +86,8 @@ jobs:
             - run:
                 name: verify typehints
                 command: |
-                  pip install mypy
                   export PATH="/home/circleci/.local/bin:$PATH"
-                  mypy --config-file mypy.ini --python-version 3.5 ldclient/*.py testing/*.py
+                  mypy --config-file mypy.ini ldclient testing
       - store_test_results:
           path: test-reports
       - store_artifacts:

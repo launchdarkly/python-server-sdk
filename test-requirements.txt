@@ -7,3 +7,4 @@ jsonpickle==0.9.3
 pytest-cov>=2.4.0
 codeclimate-test-reporter>=0.2.1
 pytest-mypy==0.7
+mypy==0.800
