@@ -247,6 +247,14 @@ def test_new_index_event_is_added_if_user_cache_has_been_cleared():
 
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     with DefaultTestProcessor() as ep:
+        # Pick a server time that is somewhat behind the client time
+        server_time = now() - 20000
+
+        # Send and flush an event we don't care about, just to set the last server time
+        mock_http.set_server_time(server_time)
+        ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
+        flush_and_get_events(ep)
+
         future_time = now() + 100000
         e = {
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
@@ -263,6 +271,14 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
 
 def test_event_can_be_both_tracked_and_debugged():
     with DefaultTestProcessor() as ep:
+        # Pick a server time that is somewhat behind the client time
+        server_time = now() - 20000
+
+        # Send and flush an event we don't care about, just to set the last server time
+        mock_http.set_server_time(server_time)
+        ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
+        flush_and_get_events(ep)
+
         future_time = now() + 100000
         e = {
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
