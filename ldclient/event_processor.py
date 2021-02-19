@@ -4,7 +4,7 @@ Implementation details of the analytics event delivery component.
 # currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
-from email.utils import parsedate
+from email.utils import parsedate_tz, mktime_tz
 import errno
 import json
 from threading import Event, Lock, Thread
@@ -366,9 +366,9 @@ class EventDispatcher(object):
     def _handle_response(self, r):
         server_date_str = r.getheader('Date')
         if server_date_str is not None:
-            server_date = parsedate(server_date_str)
+            server_date = parsedate_tz(server_date_str)
             if server_date is not None:
-                timestamp = int(time.mktime(server_date) * 1000)
+                timestamp = int(mktime_tz(server_date) * 1000)
                 self._last_known_past_time = timestamp
         if r.status > 299 and not is_http_error_recoverable(r.status):
             self._disabled = True
