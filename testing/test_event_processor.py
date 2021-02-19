@@ -280,6 +280,33 @@ def test_event_can_be_both_tracked_and_debugged():
         check_feature_event(output[2], e, True, user)
         check_summary_event(output[3])
 
+def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_before_expiration_time():
+    with DefaultTestProcessor() as ep:
+        # Pick a server time that slightly different from client time
+        server_time = now() + 1000
+
+        # Send and flush an event we don't care about, just to set the last server time
+        mock_http.set_server_time(server_time)
+        ep.send_event({ 'kind': 'identify', 'user': { 'key': 'otherUser' }})
+        flush_and_get_events(ep)
+
+        # Now send an event with debug mode on, with a "debug until" time that is further in
+        # the future than both the client time and the server time
+        debug_until = server_time + 10000
+        e = {
+            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
+            'variation': 1, 'value': 'value', 'default': 'default',
+            'trackEvents': False, 'debugEventsUntilDate': debug_until
+        }
+        ep.send_event(e)
+
+        # Should get a summary event only, not a full feature event
+        output = flush_and_get_events(ep)
+        assert len(output) == 3
+        check_index_event(output[0], e, user)
+        check_feature_event(output[1], e, True, user)  # debug event
+        check_summary_event(output[2])
+
 def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_server_time():
     with DefaultTestProcessor() as ep:
         # Pick a server time that is somewhat behind the client time
