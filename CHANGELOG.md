@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.0.2] - 2021-02-18
+### Fixed:
+- The SDK could fail to send debug events when event debugging was enabled on the LaunchDarkly dashboard, if the application server&#39;s time zone was not GMT.
+
 ## [7.0.1] - 2020-11-25
 ### Fixed:
 - The logic for detecting uWSGI did not account for undocumented behavior in some environments where the `uwsgi` module is present in an incomplete state; this could cause an error on startup in such environments. Also, the log message about threading options related to uWSGI contained a broken link. (Thanks, [andrefreitas](https://github.com/launchdarkly/python-server-sdk/pull/148)!)
