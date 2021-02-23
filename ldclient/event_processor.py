@@ -3,6 +3,7 @@ Implementation details of the analytics event delivery component.
 """
 # currently excluded from documentation - see docs/README.md
 
+from calendar import timegm
 from collections import namedtuple
 from email.utils import parsedate
 import errno
@@ -368,7 +369,7 @@ class EventDispatcher(object):
         if server_date_str is not None:
             server_date = parsedate(server_date_str)
             if server_date is not None:
-                timestamp = int(time.mktime(server_date) * 1000)
+                timestamp = int(timegm(server_date) * 1000)
                 self._last_known_past_time = timestamp
         if r.status > 299 and not is_http_error_recoverable(r.status):
             self._disabled = True
