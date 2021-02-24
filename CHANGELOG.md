@@ -26,6 +26,9 @@ This major release is for Python compatibility updates and removal of deprecated
 - Removed the individual HTTP-related parameters such as `connect_timeout` from the [`Config`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.Config) type. The correct way to set these now is with the [`HTTPConfig`](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-main.html#ldclient.config.HTTPConfig) sub-configuration object: `Config(sdk_key = "my-sdk-key", http = HTTPConfig(connect_timeout = 10))`.
 - Removed all other types, parameters, and methods that were deprecated as of the last 6.x release.
 
+## [6.13.3] - 2021-02-23
+### Fixed:
+- The SDK could fail to send debug events when event debugging was enabled on the LaunchDarkly dashboard, if the application server&#39;s time zone was not GMT.
 
 ## [6.13.2] - 2020-09-21
 ### Fixed:
