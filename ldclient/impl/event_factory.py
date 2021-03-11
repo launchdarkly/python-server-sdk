@@ -30,6 +30,8 @@ class _EventFactory:
             e['prereqOf'] = prereq_of_flag.get('key')
         if add_experiment_data or self._with_reasons:
             e['reason'] = detail.reason
+        if user is not None and user.get('anonymous'):
+            e['contextKind'] = self._user_to_context_kind(user)
         return e
 
     def new_default_event(self, flag, user, default_value, reason):
@@ -48,6 +50,8 @@ class _EventFactory:
             e['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
         if self._with_reasons:
             e['reason'] = reason
+        if user is not None and user.get('anonymous'):
+            e['contextKind'] = self._user_to_context_kind(user)
         return e
 
     def new_unknown_flag_event(self, key, user, default_value, reason):
@@ -60,6 +64,8 @@ class _EventFactory:
         }
         if self._with_reasons:
             e['reason'] = reason
+        if user is not None and user.get('anonymous'):
+            e['contextKind'] = self._user_to_context_kind(user)
         return e
 
     def new_identify_event(self, user):
@@ -79,7 +85,24 @@ class _EventFactory:
             e['data'] = data
         if metric_value is not None:
             e['metricValue'] = metric_value
+        if user.get('anonymous'):
+            e['contextKind'] = self._user_to_context_kind(user)
         return e
+
+    def new_alias_event(self, current_user, previous_user):
+        return {
+            'kind': 'alias',
+            'key': current_user.get('key'),
+            'contextKind': self._user_to_context_kind(current_user),
+            'previousKey': previous_user.get('key'),
+            'previousContextKind': self._user_to_context_kind(previous_user)
+        }
+
+    def _user_to_context_kind(self, user):
+        if user.get('anonymous'):
+            return "anonymousUser"
+        else:
+            return "user"
 
     def _is_experiment(self, flag, reason):
         if reason is not None:
