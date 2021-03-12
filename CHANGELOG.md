@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.1.0] - 2021-03-11
+### Added:
+- Added the `alias` method to `LDClient`. This can be used to associate two user objects for analytics purposes with an alias event.
+
+
 ## [7.0.2] - 2021-02-18
 ### Fixed:
 - The SDK could fail to send debug events when event debugging was enabled on the LaunchDarkly dashboard, if the application server&#39;s time zone was not GMT.
