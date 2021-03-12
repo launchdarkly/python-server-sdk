@@ -65,6 +65,8 @@ class EventOutputFormatter:
                 out['userKey'] = self._get_userkey(e)
             if e.get('reason'):
                 out['reason'] = e.get('reason')
+            if e.get('contextKind'):
+                out['contextKind'] = e.get('contextKind')
             return out
         elif kind == 'identify':
             return {
@@ -87,6 +89,8 @@ class EventOutputFormatter:
                 out['data'] = e['data']
             if e.get('metricValue') is not None:
                 out['metricValue'] = e['metricValue']
+            if e.get('contextKind'):
+                out['contextKind'] = e.get('contextKind')
             return out
         elif kind == 'index':
             return {

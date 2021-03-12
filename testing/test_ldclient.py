@@ -24,6 +24,10 @@ user = {
     }
 }
 
+anonymous_user = {
+    u'key': u'abc',
+    u'anonymous': True
+}
 
 def make_client(store = InMemoryFeatureStore()):
     return LDClient(config=Config(sdk_key = 'SDK_KEY',
@@ -172,6 +176,26 @@ def test_track_no_user_key():
         assert count_events(client) == 0
 
 
+def test_track_anonymous_user():
+    with make_client() as client:
+        client.track('my_event', anonymous_user)
+        e = get_first_event(client)
+        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == anonymous_user and e.get('data') is None and e.get('metricValue') is None and e.get('contextKind') == 'anonymousUser'
+
+
+def test_alias():
+    with make_client() as client:
+        client.alias(user, anonymous_user)
+        e = get_first_event(client)
+        assert e['kind'] == 'alias' and e['key'] == 'xyz' and e['contextKind'] == 'user' and e['previousKey'] == 'abc' and e['previousContextKind'] == 'anonymousUser'
+
+
+def test_alias_no_user():
+    with make_client() as client:
+        client.alias(None, None)
+        assert count_events(client) == 0
+
+
 def test_defaults():
     config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
     with LDClient(config=config) as client:
@@ -226,7 +250,30 @@ def test_event_for_existing_feature():
             e.get('reason') is None and
             e['default'] == 'default' and
             e['trackEvents'] == True and
-            e['debugEventsUntilDate'] == 1000)
+            e['debugEventsUntilDate'] == 1000 and
+            e.get('contextKind') is None)
+
+
+def test_event_for_existing_feature_anonymous_user():
+    feature = make_off_flag_with_value('feature.key', 'value')
+    feature['trackEvents'] = True
+    feature['debugEventsUntilDate'] = 1000
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'feature.key': feature}})
+    with make_client(store) as client:
+        assert 'value' == client.variation('feature.key', anonymous_user, default='default')
+        e = get_first_event(client)
+        assert (e['kind'] == 'feature' and
+            e['key'] == 'feature.key' and
+            e['user'] == anonymous_user and
+            e['version'] == feature['version'] and
+            e['value'] == 'value' and
+            e['variation'] == 0 and
+            e.get('reason') is None and
+            e['default'] == 'default' and
+            e['trackEvents'] == True and
+            e['debugEventsUntilDate'] == 1000 and
+            e['contextKind'] == 'anonymousUser')
 
 
 def test_event_for_existing_feature_with_reason():
