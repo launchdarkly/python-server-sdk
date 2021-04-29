@@ -305,7 +305,7 @@ def _segment_rule_matches_user(rule, user, segment_key, salt):
 
     # All of the clauses are met. See if the user buckets in
     bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']
-    bucket = _bucket_user(user, segment_key, salt, bucket_by)
+    bucket = _bucket_user(None, user, segment_key, salt, bucket_by)
     weight = rule['weight'] / 100000.0
     return bucket < weight
 
