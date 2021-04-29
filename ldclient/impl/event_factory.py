@@ -106,6 +106,9 @@ class _EventFactory:
 
     def _is_experiment(self, flag, reason):
         if reason is not None:
+            inExperiment = reason.get('inExperiment')
+            if inExperiment is not None and inExperiment:
+                return True
             kind = reason['kind']
             if kind == 'RULE_MATCH':
                 index = reason['ruleIndex']

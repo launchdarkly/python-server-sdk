@@ -391,7 +391,7 @@ def test_variation_index_is_returned_for_bucket():
 
     # First verify that with our test inputs, the bucket value will be greater than zero and less than 100000,
     # so we can construct a rollout whose second bucket just barely contains that value
-    bucket_value = math.trunc(_bucket_user(user, flag['key'], flag['salt'], 'key') * 100000)
+    bucket_value = math.trunc(_bucket_user(None, user, flag['key'], flag['salt'], 'key') * 100000)
     assert bucket_value > 0 and bucket_value < 100000
     
     bad_variation_a = 0
@@ -407,14 +407,14 @@ def test_variation_index_is_returned_for_bucket():
         }
     }
     result_variation = _variation_index_for_user(flag, rule, user)
-    assert result_variation == matched_variation
+    assert result_variation == (matched_variation, False)
 
 def test_last_bucket_is_used_if_bucket_value_equals_total_weight():
     user = { 'key': 'userkey' }
     flag = { 'key': 'flagkey', 'salt': 'salt' }
 
     # We'll construct a list of variations that stops right at the target bucket value
-    bucket_value = math.trunc(_bucket_user(user, flag['key'], flag['salt'], 'key') * 100000)
+    bucket_value = math.trunc(_bucket_user(None, user, flag['key'], flag['salt'], 'key') * 100000)
     
     rule = {
         'rollout': {
@@ -424,20 +424,34 @@ def test_last_bucket_is_used_if_bucket_value_equals_total_weight():
         }
     }
     result_variation = _variation_index_for_user(flag, rule, user)
-    assert result_variation == 0
+    assert result_variation == (0, False)
     
 def test_bucket_by_user_key():
     user = { u'key': u'userKeyA' }
-    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
+    bucket = _bucket_user(None, user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.42157587)
 
     user = { u'key': u'userKeyB' }
-    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
+    bucket = _bucket_user(None, user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.6708485)
 
     user = { u'key': u'userKeyC' }
-    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'key')
+    bucket = _bucket_user(None, user, 'hashKey', 'saltyA', 'key')
     assert bucket == pytest.approx(0.10343106)
+
+def test_bucket_by_user_key_with_seed():
+    seed = 61
+    user = { u'key': u'userKeyA' }
+    point = _bucket_user(seed, user, 'hashKey', 'saltyA', 'key')
+    assert point == pytest.approx(0.09801207)
+
+    user = { u'key': u'userKeyB' }
+    point = _bucket_user(seed, user, 'hashKey', 'saltyA', 'key')
+    assert point == pytest.approx(0.14483777)
+
+    user = { u'key': u'userKeyC' }
+    point = _bucket_user(seed, user, 'hashKey', 'saltyA', 'key')
+    assert point == pytest.approx(0.9242641)
 
 def test_bucket_by_int_attr():
     user = {
@@ -447,9 +461,9 @@ def test_bucket_by_int_attr():
             u'stringAttr': u'33333'
         }
     }
-    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'intAttr')
+    bucket = _bucket_user(None, user, 'hashKey', 'saltyA', 'intAttr')
     assert bucket == pytest.approx(0.54771423)
-    bucket2 = _bucket_user(user, 'hashKey', 'saltyA', 'stringAttr')
+    bucket2 = _bucket_user(None, user, 'hashKey', 'saltyA', 'stringAttr')
     assert bucket2 == bucket
 
 def test_bucket_by_float_attr_not_allowed():
@@ -459,5 +473,24 @@ def test_bucket_by_float_attr_not_allowed():
             u'floatAttr': 33.5
         }
     }
-    bucket = _bucket_user(user, 'hashKey', 'saltyA', 'floatAttr')
+    bucket = _bucket_user(None, user, 'hashKey', 'saltyA', 'floatAttr')
     assert bucket == 0.0
+
+def test_seed_independent_of_salt_and_hashKey():
+    seed = 61
+    user = { u'key': u'userKeyA' }
+    point1 = _bucket_user(seed, user, 'hashKey', 'saltyA', 'key')
+    point2 = _bucket_user(seed, user, 'hashKey', 'saltyB', 'key')
+    point3 = _bucket_user(seed, user, 'hashKey2', 'saltyA', 'key')
+
+    assert point1 == point2
+    assert point2 == point3
+
+def test_seed_changes_hash_evaluation():
+    seed1 = 61
+    user = { u'key': u'userKeyA' }
+    point1 = _bucket_user(seed1, user, 'hashKey', 'saltyA', 'key')
+    seed2 = 62
+    point2 = _bucket_user(seed2, user, 'hashKey', 'saltyB', 'key')
+
+    assert point1 != point2

@@ -172,9 +172,11 @@ def _get_off_value(flag, reason):
 
 
 def _get_value_for_variation_or_rollout(flag, vr, user, reason):
-    index = _variation_index_for_user(flag, vr, user)
+    index, inExperiment = _variation_index_for_user(flag, vr, user)
     if index is None:
         return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
+    if inExperiment:
+        reason['inExperiment'] = inExperiment
     return _get_variation(flag, index, reason)
 
 
@@ -191,34 +193,38 @@ def _get_user_attribute(user, attr):
 
 def _variation_index_for_user(feature, rule, user):
     if rule.get('variation') is not None:
-        return rule['variation']
+        return (rule['variation'], False)
 
     rollout = rule.get('rollout')
     if rollout is None:
-        return None
+        return (None, False)
     variations = rollout.get('variations')
+    seed = rollout.get('seed')
     if variations is not None and len(variations) > 0:
         bucket_by = 'key'
         if rollout.get('bucketBy') is not None:
             bucket_by = rollout['bucketBy']
-        bucket = _bucket_user(user, feature['key'], feature['salt'], bucket_by)
+        bucket = _bucket_user(seed, user, feature['key'], feature['salt'], bucket_by)
+        is_experiment = rollout.get('kind') is not None and rollout['kind'] == 'experiment'
         sum = 0.0
         for wv in variations:
             sum += wv.get('weight', 0.0) / 100000.0
             if bucket < sum:
-                return wv.get('variation')
+                is_experiment_partition = is_experiment and wv.get('untracked') is not None and not wv['untracked']
+                return (wv.get('variation'), is_experiment_partition)
 
         # The user's bucket value was greater than or equal to the end of the last bucket. This could happen due
         # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
         # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
         # this case (or changing the scaling, which would potentially change the results for *all* users), we
         # will simply put the user in the last bucket.
-        return variations[-1].get('variation')
+        is_experiment_partition = is_experiment and variations[-1].get('untracked') is not None and not variations[-1]['untracked']
+        return (variations[-1].get('variation'), is_experiment_partition)
 
-    return None
+    return (None, False)
 
 
-def _bucket_user(user, key, salt, bucket_by):
+def _bucket_user(seed, user, key, salt, bucket_by):
     u_value, should_pass = _get_user_attribute(user, bucket_by)
     bucket_by_value = _bucketable_string_value(u_value)
 
@@ -228,7 +234,12 @@ def _bucket_user(user, key, salt, bucket_by):
     id_hash = u_value
     if user.get('secondary') is not None:
         id_hash = id_hash + '.' + user['secondary']
-    hash_key = '%s.%s.%s' % (key, salt, id_hash)
+
+    prefix = '%s.%s' % (key, salt)
+    if (seed is not None):
+        prefix = str(seed)
+
+    hash_key = '%s.%s' % (prefix, id_hash)
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
     return result
