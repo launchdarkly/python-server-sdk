@@ -205,12 +205,12 @@ def _variation_index_for_user(feature, rule, user):
         if rollout.get('bucketBy') is not None:
             bucket_by = rollout['bucketBy']
         bucket = _bucket_user(seed, user, feature['key'], feature['salt'], bucket_by)
-        is_experiment = rollout.get('kind') is not None and rollout['kind'] == 'experiment'
+        is_experiment = rollout.get('kind') == 'experiment'
         sum = 0.0
         for wv in variations:
             sum += wv.get('weight', 0.0) / 100000.0
             if bucket < sum:
-                is_experiment_partition = is_experiment and wv.get('untracked') is not None and not wv['untracked']
+                is_experiment_partition = is_experiment and not wv.get('untracked')
                 return (wv.get('variation'), is_experiment_partition)
 
         # The user's bucket value was greater than or equal to the end of the last bucket. This could happen due
@@ -218,7 +218,7 @@ def _variation_index_for_user(feature, rule, user):
         # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
         # this case (or changing the scaling, which would potentially change the results for *all* users), we
         # will simply put the user in the last bucket.
-        is_experiment_partition = is_experiment and variations[-1].get('untracked') is not None and not variations[-1]['untracked']
+        is_experiment_partition = is_experiment and not variations[-1].get('untracked')
         return (variations[-1].get('variation'), is_experiment_partition)
 
     return (None, False)
@@ -235,9 +235,10 @@ def _bucket_user(seed, user, key, salt, bucket_by):
     if user.get('secondary') is not None:
         id_hash = id_hash + '.' + user['secondary']
 
-    prefix = '%s.%s' % (key, salt)
-    if (seed is not None):
+    if seed is not None:
         prefix = str(seed)
+    else:
+        prefix = '%s.%s' % (key, salt)
 
     hash_key = '%s.%s' % (prefix, id_hash)
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
