@@ -8,19 +8,19 @@ workflows:
     jobs:
       - test-linux:
           name: Python 3.5
-          docker-image: circleci/python:3.5-jessie
+          docker-image: cimg/python:3.5
       - test-linux:
           name: Python 3.6
-          docker-image: circleci/python:3.6-jessie
+          docker-image: cimg/python:3.6
       - test-linux:
           name: Python 3.7
-          docker-image: circleci/python:3.7-stretch
+          docker-image: cimg/python:3.7
       - test-linux:
           name: Python 3.8
-          docker-image: circleci/python:3.8-buster
+          docker-image: cimg/python:3.8
       - test-linux:
           name: Python 3.9
-          docker-image: circleci/python:3.9-rc-buster
+          docker-image: cimg/python:3.9
       - test-windows:
           name: Windows Python 3
           py3: true
@@ -49,12 +49,10 @@ jobs:
       - run:
           name: install requirements
           command: |
-            sudo pip install --upgrade pip;
-            sudo pip install 'virtualenv~=16.0';
-            sudo pip install -r test-requirements.txt;
-            sudo pip install -r test-filesource-optional-requirements.txt;
-            sudo pip install -r consul-requirements.txt;
-            sudo python setup.py install;
+            pip install -r test-requirements.txt;
+            pip install -r test-filesource-optional-requirements.txt;
+            pip install -r consul-requirements.txt;
+            python setup.py install;
             pip freeze
       - when:
           condition: <<parameters.test-with-codeclimate>>
