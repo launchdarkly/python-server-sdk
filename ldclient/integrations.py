@@ -27,7 +27,7 @@ class Consul:
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a Consul-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
-        `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
         To use this method, you must first install the ``python-consul`` package. Then, put the object
         returned by this method into the ``feature_store`` property of your client configuration
@@ -65,7 +65,7 @@ class DynamoDB:
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a DynamoDB-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
-        `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
         To use this method, you must first install the ``boto3`` package containing the AWS SDK gems.
         Then, put the object returned by this method into the ``feature_store`` property of your
@@ -110,7 +110,7 @@ class Redis:
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a Redis-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
-        `SDK reference guide <https://docs.launchdarkly.com/v2.0/docs/using-a-persistent-feature-store>`_.
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
         To use this method, you must first install the ``redis`` package. Then, put the object
         returned by this method into the ``feature_store`` property of your client configuration
@@ -161,8 +161,8 @@ class Files:
         client may still make network connections to send analytics events, unless you have disabled
         this in your configuration with ``send_events`` or ``offline``.
 
-        The format of the data files is described in the SDK Reference Guide  on
-        `Reading flags from a file <https://docs.launchdarkly.com/v2.0/docs/reading-flags-from-a-file>`_.
+        The format of the data files is described in the SDK Reference Guide on
+        `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
         Note that in order to use YAML, you will need to install the ``pyyaml`` package.
 
         If the data source encounters any error in any file-- malformed content, a missing file, or a

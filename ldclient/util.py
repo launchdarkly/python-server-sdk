@@ -43,7 +43,7 @@ def check_uwsgi():
         if uwsgi.opt.get('threads') is not None and int(uwsgi.opt.get('threads')) > 1:
             return
         log.error("The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
-                    'To learn more, see https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi')
+                    'To learn more, read https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi')
 
 
 class Event:
