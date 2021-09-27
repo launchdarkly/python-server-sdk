@@ -331,7 +331,7 @@ class LDClient:
         """Returns an object that encapsulates the state of all feature flags for a given user,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
-        `Bootstrapping <https://docs.launchdarkly.com/docs/js-sdk-reference#section-bootstrapping>`_.
+        `Bootstrapping <https://docs.launchdarkly.com/sdk/features/bootstrapping#javascript>`_.
 
         This method does not send analytics events back to LaunchDarkly.
 
