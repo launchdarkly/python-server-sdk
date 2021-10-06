@@ -21,6 +21,9 @@ workflows:
       - test-linux:
           name: Python 3.9
           docker-image: cimg/python:3.9
+      - test-linux:
+          name: Python 3.10
+          docker-image: cimg/python:3.10
       - test-windows:
           name: Windows Python 3
           py3: true
