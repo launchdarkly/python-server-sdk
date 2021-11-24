@@ -9,6 +9,11 @@ def variation_for_boolean(variation):
     else:
         return FALSE_VARIATION_INDEX
 
+class TestData():
+
+    def flag(key):
+        return _FlagBuilder(key)
+
 class _FlagBuilder():
     def __init__(self, key):
         self._key = key
@@ -65,14 +70,14 @@ class _FlagBuilder():
             return self
 
     def boolean_flag(self):
-        if self._is_boolean_flag():
+        if self.is_boolean_flag():
             return self
         else:
             return (self.variations(True, False)
                 .fallthrough_variation(TRUE_VARIATION_INDEX)
                 .off_variation(FALSE_VARIATION_INDEX))
 
-    def _is_boolean_flag(self):
+    def is_boolean_flag(self):
         return (len(self._variations) == 2
             and self._variations[TRUE_VARIATION_INDEX] == True
             and self._variations[FALSE_VARIATION_INDEX] == False)
@@ -135,11 +140,16 @@ class _FlagBuilder():
 
     def if_match(self, attribute, *values):
         flag_rule_builder = _FlagRuleBuilder(self)
-        return flag_rule_builder.and_match(attribute, values)
+        return flag_rule_builder.and_match(attribute, *values)
 
     def if_not_match(self, attribute, *values):
         flag_rule_builder = _FlagRuleBuilder(self)
         return flag_rule_builder.and_not_match(attribute, values)
+
+    def clear_rules(self):
+        del self._rules
+        return self
+
 
     def build(self, version):
         base_flag_object = {
