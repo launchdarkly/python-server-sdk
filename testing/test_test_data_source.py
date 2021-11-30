@@ -28,11 +28,44 @@ def test_makes_flag():
     builtFlag = flag.build(0)
     assert builtFlag['key'] is 'test-flag'
     assert builtFlag['on'] is True
-    assert builtFlag['variations'] == []
+    assert builtFlag['variations'] == [True, False]
+
 
 def test_initializes_flag_with_client():
     td = TestData.data_source()
-    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True))
+    td.update(td.flag('some-flag'))
+
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+
+    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
+
+    client.close()
+
+def test_update_after_close():
+    td = TestData.data_source()
+
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+
+    client.close()
+
+    td.update(td.flag('some-flag'))
+
+    assert store.get(FEATURES, 'some-flag') == None
+
+def test_update_after_client_initialization():
+    td = TestData.data_source()
+
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+
+    td.update(td.flag('some-flag'))
+
+    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
 
     client.close()
 
