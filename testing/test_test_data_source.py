@@ -103,6 +103,7 @@ def test_flagbuilder_can_build():
         'key': 'some-flag',
         'off_variation': 1,
         'on': True,
+        'targets': [],
         'variations': [True, False],
         'rules': [
             {

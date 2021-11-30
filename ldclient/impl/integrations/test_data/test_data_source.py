@@ -12,39 +12,28 @@ def variation_for_boolean(variation):
 class TestData():
 
     def flag(key):
-        return _FlagBuilder(key)
+        return FlagBuilder(key)
 
-class _FlagBuilder():
+class FlagBuilder():
     def __init__(self, key):
         self._key = key
         self._on = True
         self._variations = []
+        self._off_variation = None
+        self._fallthrough_variation = None
+        self._targets = {}
+        self._rules = []
+
 
     def copy(self):
-        to = _FlagBuilder(self._key)
+        to = FlagBuilder(self._key)
 
         to._on = self._on
         to._variations = copy.copy(self._variations)
-
-        try:
-            to._off_variation = self._off_variation
-        except:
-            pass
-
-        try:
-            to._fallthrough_variation = self._fallthrough_variation
-        except:
-            pass
-
-        try:
-            to._targets = copy.copy(self._targets)
-        except:
-            pass
-
-        try:
-            to._rules = copy.copy(self._rules)
-        except:
-            pass
+        to._off_variation = self._off_variation
+        to._fallthrough_variation = self._fallthrough_variation
+        to._targets = copy.copy(self._targets)
+        to._rules = copy.copy(self._rules)
 
         return to
 
@@ -96,14 +85,11 @@ class _FlagBuilder():
 
     def variation_for_user(self, user_key, variation):
         if isinstance(variation, bool):
+            # `variation` is True/False value
             return self.boolean_flag().variation_for_user(user_key, variation_for_boolean(variation))
         else:
             # `variation` specifies the index of the variation to set
-            targets = {}
-            try:
-                targets = self._targets
-            except:
-                self._targets = {}
+            targets = self._targets
 
             for idx, var in enumerate(self._variations):
                 if (idx == variation):
@@ -131,11 +117,6 @@ class _FlagBuilder():
             return self
 
     def add_rule(self, flag_rule_builder):
-        try:
-            len(self._rules) >= 0
-        except:
-            self._rules = []
-
         self._rules.append(flag_rule_builder)
 
     def if_match(self, attribute, *values):
@@ -159,33 +140,20 @@ class _FlagBuilder():
             'variations': self._variations
         }
 
-        try:
-            base_flag_object['off_variation'] = self._off_variation
-        except:
-            pass
+        base_flag_object['off_variation'] = self._off_variation
+        base_flag_object['fallthrough_variation'] = self._fallthrough_variation
 
-        try:
-            base_flag_object['fallthrough_variation'] = self._fallthrough_variation
-        except:
-            pass
+        targets = []
+        for var_index, user_keys in self._targets.items():
+            targets.append({
+                'variation': var_index,
+                'values': user_keys
+            })
+        base_flag_object['targets'] = targets
 
-        try:
-            targets = []
-            for var_index, user_keys in self._targets.items():
-                targets.append({
-                    'variation': var_index,
-                    'values': user_keys
-                })
-            base_flag_object['targets'] = targets
-        except:
-            pass
-
-        try:
-            base_flag_object['rules'] = []
-            for idx, rule in enumerate(self._rules):
-                base_flag_object['rules'].append(rule.build(idx))
-        except:
-            pass
+        base_flag_object['rules'] = []
+        for idx, rule in enumerate(self._rules):
+            base_flag_object['rules'].append(rule.build(idx))
 
         return base_flag_object
 
