@@ -1,4 +1,5 @@
 import copy
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 TRUE_VARIATION_INDEX = 0
 FALSE_VARIATION_INDEX = 1
@@ -10,9 +11,39 @@ def variation_for_boolean(variation):
         return FALSE_VARIATION_INDEX
 
 class TestData():
+    def __init__(self):
+        self._current_flags = {}
 
-    def flag(key):
+    def __call__(self, config, store, ready):
+        return _TestDataSource()
+
+    @staticmethod
+    def data_source():
+        return TestData()
+
+    def flag(self, key):
         return _FlagBuilder(key)
+
+    def make_init_data(self):
+        return { FEATURES: self._current_flags }
+
+
+class _TestDataSource():
+
+    def __init__(self):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def initialized(self):
+        return True
+
+
+
 
 class _FlagBuilder():
     def __init__(self, key):
