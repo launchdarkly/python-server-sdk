@@ -17,6 +17,7 @@ from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
+from ldclient.impl.big_segments import NullBigSegmentStoreStatusProvider
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureStore
@@ -418,7 +419,7 @@ class LDClient:
         whether the Big Segment store is (as far as the SDK knows) currently operational and
         tracking changes in this status.
         """
-        return None
+        return NullBigSegmentStoreStatusProvider()
 
 
 __all__ = ['LDClient', 'Config']
