@@ -411,6 +411,13 @@ class LDClient:
 
     @property
     def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
+        """
+        Returns an interface for tracking the status of a Big Segment store.
+
+        The :class:`ldclient.interfaces.BigSegmentStoreStatusProvider` has methods for checking
+        whether the Big Segment store is (as far as the SDK knows) currently operational and
+        tracking changes in this status.
+        """
         return None
 
 
