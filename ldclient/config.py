@@ -39,7 +39,6 @@ class BigSegmentsConfig:
                  status_poll_interval: float=5,
                  stale_after: float=120):
         """
-        
         :param store: the implementation of :class:`ldclient.interfaces.BigSegmentStore` that will
             be used to query the Big Segments database
         :param user_cache_size: the maximum number of users whose Big Segment state will be cached
