@@ -8,11 +8,75 @@ from typing import Optional, Callable, List, Any, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
-from ldclient.interfaces import EventProcessor, FeatureStore, UpdateProcessor, FeatureRequester
+from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, FeatureRequester
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
 
+
+class BigSegmentsConfig:
+    """Configuration options related to Big Segments.
+
+    Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+    documentation: https://docs.launchdarkly.com/home/users/big-segments
+
+    If your application uses Big Segments, you will need to create a `BigSegmentsConfig` that at a
+    minimum specifies what database integration to use, and then pass the `BigSegmentsConfig`
+    object as the `big_segments` parameter when creating a :class:`Config`.
+
+    This example shows Big Segments being configured to use Redis:
+    ::
+
+            from ldclient.config import Config, BigSegmentsConfig
+            from ldclient.integrations import Redis
+            store = Redis.new_big_segment_store("my-table-name")
+            config = Config(big_segments=BigSegmentsConfig(store = store))
+    """
+    def __init__(self,
+                 store: Optional[BigSegmentStore] = None,
+                 user_cache_size: int=1000,
+                 user_cache_time: float=5,
+                 status_poll_interval: float=5,
+                 stale_after: float=120):
+        """
+        
+        :param store: the implementation of :class:`ldclient.interfaces.BigSegmentStore` that will
+            be used to query the Big Segments database
+        :param user_cache_size: the maximum number of users whose Big Segment state will be cached
+            by the SDK at any given time
+        :param user_cache_time: the maximum length of time (in seconds) that the Big Segment state
+            for a user will be cached by the SDK
+        :param status_poll_interval: the interval (in seconds) at which the SDK will poll the Big
+            Segment store to make sure it is available and to determine how long ago it was updated
+        :param stale_after: the maximum length of time between updates of the Big Segments data
+            before the data is considered out of date
+        """
+        self.__store = store
+        self.__user_cache_size = user_cache_size
+        self.__user_cache_time = user_cache_time
+        self.__status_poll_interval = status_poll_interval
+        self.__stale_after = stale_after
+        pass
+    
+    @property
+    def store(self) -> Optional[BigSegmentStore]:
+        return self.__store
+    
+    @property
+    def user_cache_size(self) -> int:
+        return self.__user_cache_size
+    
+    @property
+    def user_cache_time(self) -> float:
+        return self.__user_cache_time
+
+    @property
+    def status_poll_interval(self) -> float:
+        return self.__status_poll_interval
+    
+    @property
+    def stale_after(self) -> float:
+        return self.__stale_after
 
 class HTTPConfig:
     """Advanced HTTP configuration options for the SDK client.
@@ -109,7 +173,8 @@ class Config:
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
                  wrapper_version: Optional[str]=None,
-                 http: HTTPConfig=HTTPConfig()):
+                 http: HTTPConfig=HTTPConfig(),
+                 big_segments: Optional[BigSegmentsConfig]=None):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -204,6 +269,7 @@ class Config:
         self.__wrapper_name = wrapper_name
         self.__wrapper_version = wrapper_version
         self.__http = http
+        self.__big_segments = BigSegmentsConfig() if not big_segments else big_segments
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
@@ -236,7 +302,8 @@ class Config:
                       diagnostic_recording_interval=self.__diagnostic_recording_interval,
                       wrapper_name=self.__wrapper_name,
                       wrapper_version=self.__wrapper_version,
-                      http=self.__http)
+                      http=self.__http,
+                      big_segments=self.__big_segments)
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -365,6 +432,10 @@ class Config:
     @property
     def http(self) -> HTTPConfig:
         return self.__http
+
+    @property
+    def big_segments(self) -> BigSegmentsConfig:
+        return self.__big_segments
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':

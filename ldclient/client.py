@@ -19,7 +19,7 @@ from ldclient.flag import EvaluationDetail, evaluate, error_reason
 from ldclient.flags_state import FeatureFlagsState
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
-from ldclient.interfaces import FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -408,6 +408,10 @@ class LDClient:
         if key is None or self._config.sdk_key is None:
             return ""
         return hmac.new(self._config.sdk_key.encode(), key.encode(), hashlib.sha256).hexdigest()
+
+    @property
+    def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
+        return None
 
 
 __all__ = ['LDClient', 'Config']
