@@ -2,7 +2,7 @@ from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.event_factory import _EventFactory
 
-from typing import Optional
+from typing import Optional, Tuple
 
 basic_user = { "key": "user-key" }
 event_factory = _EventFactory(False)
@@ -52,17 +52,17 @@ class EvaluatorBuilder:
         self.__big_segments_status = status
         return self
     
-    def _get_flag(self, key) -> Optional[dict]:
+    def _get_flag(self, key: str) -> Optional[dict]:
         if key not in self.__flags:
             raise Exception("test made unexpected request for flag '%s'" % key)
         return self.__flags[key]
     
-    def _get_segment(self, key) -> Optional[dict]:
+    def _get_segment(self, key: str) -> Optional[dict]:
         if key not in self.__segments:
             raise Exception("test made unexpected request for segment '%s'" % key)
         return self.__segments[key]
     
-    def _get_big_segments_membership(self, key) -> Optional[dict]:
+    def _get_big_segments_membership(self, key: str) -> Optional[Tuple[dict, BigSegmentsStatus]]:
         if key not in self.__big_segments:
             raise Exception("test made unexpected request for big segments for user key '%s'" % key)
         return (self.__big_segments[key], self.__big_segments_status)

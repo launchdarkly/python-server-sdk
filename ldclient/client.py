@@ -91,8 +91,8 @@ class LDClient:
         """ :type: FeatureStore """
 
         self._evaluator = Evaluator(
-            lambda key: store.get(FEATURES, key),
-            lambda key: store.get(SEGMENTS, key),
+            lambda key: store.get(FEATURES, key, lambda x: x),
+            lambda key: store.get(SEGMENTS, key, lambda x: x),
             lambda key: None  # temporary - haven't yet implemented the component that does the big segments queries
         )
 

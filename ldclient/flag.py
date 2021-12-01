@@ -19,7 +19,7 @@ def evaluate(flag, user, store, event_factory) -> EvalResult:
     evaluator = Evaluator(
         lambda key: store.get(FEATURES, key),
         lambda key: store.get(SEGMENTS, key),
-        None
+        lambda key: None
     )
     return evaluator.evaluate(flag, user, event_factory)
 

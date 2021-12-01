@@ -140,7 +140,7 @@ class Evaluator:
             state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
             return False
         if state.big_segments_status is None:
-            user_key = user.get('key')
+            user_key = str(user.get('key'))
             result = self.__get_big_segments_membership(user_key)
             if result:
                 state.big_segments_membership, state.big_segments_status = result
