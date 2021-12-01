@@ -19,15 +19,8 @@ ldclient.config module
 .. automodule:: ldclient.config
     :members:
 
-ldclient.flag module
---------------------
+ldclient.evaluation module
+--------------------------
 
-.. automodule:: ldclient.flag
-    :members: EvaluationDetail
-
-ldclient.flags_state module
----------------------------
-
-.. automodule:: ldclient.flags_state
+.. automodule:: ldclient.evaluation
     :members:
-    :exclude-members: __init__, add_flag

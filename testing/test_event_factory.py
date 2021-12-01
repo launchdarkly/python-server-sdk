@@ -1,5 +1,5 @@
 import pytest
-from ldclient.flag import EvaluationDetail
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.event_factory import _EventFactory
 
 _event_factory_default = _EventFactory(False)

@@ -1,24 +1,13 @@
 import math
 import pytest
-from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.flag import EvaluationDetail, EvalResult, _bucket_user, _variation_index_for_user, evaluate
-from ldclient.impl.event_factory import _EventFactory
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+from ldclient.evaluation import EvaluationDetail
+from ldclient.impl.evaluator import _bucket_user, _variation_index_for_user
+from testing.impl.evaluator_util import *
 
 
-empty_store = InMemoryFeatureStore()
-event_factory = _EventFactory(False)
-
-
-def make_boolean_flag_with_rules(rules):
-    return {
-        'key': 'feature',
-        'on': True,
-        'rules': rules,
-        'fallthrough': { 'variation': 0 },
-        'variations': [ False, True ],
-        'salt': ''
-    }
+def assert_eval_result(result, expected_detail, expected_events):
+    assert result.detail == expected_detail
+    assert result.events == expected_events
 
 
 def test_flag_returns_off_variation_if_flag_is_off():
@@ -30,7 +19,7 @@ def test_flag_returns_off_variation_if_flag_is_off():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail('b', 1, {'kind': 'OFF'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_none_if_flag_is_off_and_off_variation_is_unspecified():
     flag = {
@@ -40,7 +29,7 @@ def test_flag_returns_none_if_flag_is_off_and_off_variation_is_unspecified():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'OFF'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_off_variation_is_too_high():
     flag = {
@@ -51,7 +40,7 @@ def test_flag_returns_error_if_off_variation_is_too_high():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_off_variation_is_negative():
     flag = {
@@ -62,7 +51,7 @@ def test_flag_returns_error_if_off_variation_is_negative():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_off_variation_if_prerequisite_not_found():
     flag = {
@@ -73,12 +62,12 @@ def test_flag_returns_off_variation_if_prerequisite_not_found():
         'offVariation': 1,
         'variations': ['a', 'b', 'c']
     }
+    evaluator = EvaluatorBuilder().with_unknown_flag('badfeature').build()
     user = { 'key': 'x' }
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'badfeature'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
-    store = InMemoryFeatureStore()
     flag = {
         'key': 'feature0',
         'on': True,
@@ -98,15 +87,14 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
         'version': 2,
         'trackEvents': False
     }
-    store.upsert(FEATURES, flag1)
+    evaluator = EvaluatorBuilder().with_flag(flag1).build()
     user = { 'key': 'x' }
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e', 'default': None,
         'version': 2, 'user': user, 'prereqOf': 'feature0'}]
-    assert evaluate(flag, user, store, event_factory) == EvalResult(detail, events_should_be)
+    assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
-    store = InMemoryFeatureStore()
     flag = {
         'key': 'feature0',
         'on': True,
@@ -124,15 +112,14 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
         'version': 2,
         'trackEvents': False
     }
-    store.upsert(FEATURES, flag1)
+    evaluator = EvaluatorBuilder().with_flag(flag1).build()
     user = { 'key': 'x' }
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 0, 'value': 'd', 'default': None,
         'version': 2, 'user': user, 'prereqOf': 'feature0'}]
-    assert evaluate(flag, user, store, event_factory) == EvalResult(detail, events_should_be)
+    assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_rules():
-    store = InMemoryFeatureStore()
     flag = {
         'key': 'feature0',
         'on': True,
@@ -150,12 +137,12 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
         'version': 2,
         'trackEvents': False
     }
-    store.upsert(FEATURES, flag1)
+    evaluator = EvaluatorBuilder().with_flag(flag1).build()
     user = { 'key': 'x' }
     detail = EvaluationDetail('a', 0, {'kind': 'FALLTHROUGH'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e', 'default': None,
         'version': 2, 'user': user, 'prereqOf': 'feature0'}]
-    assert evaluate(flag, user, store, event_factory) == EvalResult(detail, events_should_be)
+    assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_error_if_fallthrough_variation_is_too_high():
     flag = {
@@ -166,7 +153,7 @@ def test_flag_returns_error_if_fallthrough_variation_is_too_high():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_fallthrough_variation_is_negative():
     flag = {
@@ -177,7 +164,7 @@ def test_flag_returns_error_if_fallthrough_variation_is_negative():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_fallthrough_has_no_variation_or_rollout():
     flag = {
@@ -188,7 +175,7 @@ def test_flag_returns_error_if_fallthrough_has_no_variation_or_rollout():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_fallthrough_has_rollout_with_no_variations():
     flag = {
@@ -200,7 +187,7 @@ def test_flag_returns_error_if_fallthrough_has_rollout_with_no_variations():
     }
     user = { 'key': 'x' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_matches_user_from_targets():
     flag = {
@@ -213,35 +200,35 @@ def test_flag_matches_user_from_targets():
     }
     user = { 'key': 'userkey' }
     detail = EvaluationDetail('c', 2, {'kind': 'TARGET_MATCH'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_matches_user_from_rules():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 1}
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey' }
     detail = EvaluationDetail(True, 1, {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'id'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_variation_is_too_high():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 999}
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_variation_is_negative():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': -1}
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_has_no_variation_or_rollout():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}]}
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_has_rollout_with_no_variations():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}],
@@ -249,13 +236,13 @@ def test_flag_returns_error_if_rule_has_rollout_with_no_variations():
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey' }
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
-    assert evaluate(flag, user, empty_store, event_factory) == EvalResult(detail, [])
+    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_user_key_is_coerced_to_string_for_evaluation():
     clause = { 'attribute': 'key', 'op': 'in', 'values': [ '999' ] }
-    flag = _make_bool_flag_from_clause(clause)
+    flag = make_boolean_flag_with_clause(clause)
     user = { 'key': 999 }
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
 
 def test_secondary_key_is_coerced_to_string_for_evaluation():
     # We can't really verify that the rollout calculation works correctly, but we can at least
@@ -272,16 +259,15 @@ def test_secondary_key_is_coerced_to_string_for_evaluation():
     }
     flag = make_boolean_flag_with_rules([rule])
     user = { 'key': 'userkey', 'secondary': 999 }
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
 
 def test_segment_match_clause_retrieves_segment_from_store():
-    store = InMemoryFeatureStore()
     segment = {
         "key": "segkey",
         "included": [ "foo" ],
         "version": 1
     }
-    store.upsert(SEGMENTS, segment)
+    evaluator = EvaluatorBuilder().with_segment(segment).build()
 
     user = { "key": "foo" }
     flag = {
@@ -303,7 +289,7 @@ def test_segment_match_clause_retrieves_segment_from_store():
         ]
     }
 
-    assert evaluate(flag, user, store, event_factory).detail.value == True
+    assert evaluator.evaluate(flag, user, event_factory).detail.value == True
 
 def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found():
     user = { "key": "foo" }
@@ -325,8 +311,9 @@ def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found(
             }
         ]
     }
-
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == False
+    evaluator = EvaluatorBuilder().with_unknown_segment('segkey').build()
+    
+    assert evaluator.evaluate(flag, user, event_factory).detail.value == False
 
 def test_clause_matches_builtin_attribute():
     clause = {
@@ -335,8 +322,8 @@ def test_clause_matches_builtin_attribute():
         'values': [ 'Bob' ]
     }
     user = { 'key': 'x', 'name': 'Bob' }
-    flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+    flag = make_boolean_flag_with_clause(clause)
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
 
 def test_clause_matches_custom_attribute():
     clause = {
@@ -345,8 +332,8 @@ def test_clause_matches_custom_attribute():
         'values': [ 4 ]
     }
     user = { 'key': 'x', 'name': 'Bob', 'custom': { 'legs': 4 } }
-    flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == True
+    flag = make_boolean_flag_with_clause(clause)
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
 
 def test_clause_returns_false_for_missing_attribute():
     clause = {
@@ -355,8 +342,8 @@ def test_clause_returns_false_for_missing_attribute():
         'values': [ 4 ]
     }
     user = { 'key': 'x', 'name': 'Bob' }
-    flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == False
+    flag = make_boolean_flag_with_clause(clause)
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == False
 
 def test_clause_can_be_negated():
     clause = {
@@ -366,24 +353,8 @@ def test_clause_can_be_negated():
         'negate': True
     }
     user = { 'key': 'x', 'name': 'Bob' }
-    flag = _make_bool_flag_from_clause(clause)
-    assert evaluate(flag, user, empty_store, event_factory).detail.value == False
-
-
-def _make_bool_flag_from_clause(clause):
-    return {
-        'key': 'feature',
-        'on': True,
-        'rules': [
-            {
-                'clauses': [ clause ],
-                'variation': 1
-            }
-        ],
-        'fallthrough': { 'variation': 0 },
-        'offVariation': 0,
-        'variations': [ False, True ]
-    }
+    flag = make_boolean_flag_with_clause(clause)
+    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == False
 
 def test_variation_index_is_returned_for_bucket():
     user = { 'key': 'userkey' }
