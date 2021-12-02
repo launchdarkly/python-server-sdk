@@ -11,13 +11,6 @@ user_key = 'user-key'
 user_hash = _hash_for_user_key(user_key)
 
 
-def always_up_to_date() -> BigSegmentStoreMetadata:
-    return BigSegmentStoreMetadata(time.time() * 1000)
-
-def always_stale() -> BigSegmentStoreMetadata:
-    return BigSegmentStoreMetadata(0)
-
-
 def test_membership_query_uncached_result_healthy_status():
     expected_membership = { "key1": True, "key2": False }
     store = MockBigSegmentStore()

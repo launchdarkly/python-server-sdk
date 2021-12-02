@@ -50,8 +50,15 @@ class Evaluator:
         self,
         get_flag: Callable[[str], Optional[dict]],
         get_segment: Callable[[str], Optional[dict]],
-        get_big_segments_membership: Callable[[str], Optional[Tuple[dict, BigSegmentsStatus]]]
+        get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]]
     ):
+        """
+        :param get_flag: function provided by LDClient that takes a flag key and returns either the flag or None
+        :param get_segment: same as get_flag but for segments
+        :param get_big_segments_membership: takes a user key (not a user hash) and returns a tuple of
+            (membership, status) where membership is as defined in BigSegmentStore, and status is one
+            of the BigSegmentStoreStatus constants
+        """
         self.__get_flag = get_flag
         self.__get_segment = get_segment
         self.__get_big_segments_membership = get_big_segments_membership
@@ -142,11 +149,7 @@ class Evaluator:
         if state.big_segments_status is None:
             user_key = str(user.get('key'))
             result = self.__get_big_segments_membership(user_key)
-            if result:
-                state.big_segments_membership, state.big_segments_status = result
-            else:
-                state.big_segments_membership = None
-                state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
+            state.big_segments_membership, state.big_segments_status = result
         segment_ref = _make_big_segment_ref(segment)
         membership = state.big_segments_membership
         included = None if membership is None else membership.get(segment_ref, None)

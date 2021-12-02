@@ -22,8 +22,8 @@ class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
     """
     def __init__(self, status_getter: Callable[[], BigSegmentStoreStatus]):
         self.__status_getter = status_getter
-        self.__last_status = None
         self.__status_listeners = Listeners()
+        self.__last_status: Optional[BigSegmentStoreStatus] = None
     
     @property
     def status(self) -> BigSegmentStoreStatus:
@@ -53,16 +53,13 @@ class BigSegmentStoreManager:
 
         self.__stale_after_millis = config.stale_after * 1000
         self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
-
-        self.__last_status = None
-        """ :type: Optional[BigSegmentStoreStatus] """
+        self.__last_status: Optional[BigSegmentStoreStatus] = None
+        self.__poll_task: Optional[RepeatingTask] = None
 
         if self.__store:
             self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_size)
             self.__poll_task = RepeatingTask(config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
-        else:
-            self.__poll_task = None
 
     def stop(self):
         if self.__poll_task:
@@ -74,9 +71,9 @@ class BigSegmentStoreManager:
     def status_provider(self) -> BigSegmentStoreStatusProvider:
         return self.__status_provider
     
-    def get_user_membership(self, user_key: str) -> Optional[Tuple[Optional[dict], str]]:
+    def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
         if not self.__store:
-            return None
+            return (None, BigSegmentsStatus.NOT_CONFIGURED)
         membership = self.__cache.get(user_key)
         if membership is None:
             try:
