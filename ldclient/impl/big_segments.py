@@ -23,7 +23,7 @@ class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
     def __init__(self, status_getter: Callable[[], BigSegmentStoreStatus]):
         self.__status_getter = status_getter
         self.__status_listeners = Listeners()
-        self.__last_status: Optional[BigSegmentStoreStatus] = None
+        self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
     
     @property
     def status(self) -> BigSegmentStoreStatus:
@@ -53,8 +53,8 @@ class BigSegmentStoreManager:
 
         self.__stale_after_millis = config.stale_after * 1000
         self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
-        self.__last_status: Optional[BigSegmentStoreStatus] = None
-        self.__poll_task: Optional[RepeatingTask] = None
+        self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
+        self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
             self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_size)

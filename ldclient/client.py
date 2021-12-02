@@ -21,7 +21,7 @@ from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
-from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -88,8 +88,7 @@ class LDClient:
         self._event_factory_with_reasons = _EventFactory(True)
 
         store = _FeatureStoreClientWrapper(self._config.feature_store)
-        self._store = store
-        """ :type: FeatureStore """
+        self._store = store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
@@ -151,8 +150,7 @@ class LDClient:
         if config.feature_requester_class:
             feature_requester = config.feature_requester_class(config)
         else:
-            feature_requester = FeatureRequesterImpl(config)
-        """ :type: FeatureRequester """
+            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
 
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
