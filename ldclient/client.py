@@ -15,9 +15,9 @@ from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
-from ldclient.flag import EvaluationDetail, evaluate, error_reason
-from ldclient.flags_state import FeatureFlagsState
+from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import NullBigSegmentStoreStatusProvider
+from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureStore
@@ -86,8 +86,15 @@ class LDClient:
         self._event_factory_default = _EventFactory(False)
         self._event_factory_with_reasons = _EventFactory(True)
 
-        self._store = _FeatureStoreClientWrapper(self._config.feature_store)
+        store = _FeatureStoreClientWrapper(self._config.feature_store)
+        self._store = store
         """ :type: FeatureStore """
+
+        self._evaluator = Evaluator(
+            lambda key: store.get(FEATURES, key, lambda x: x),
+            lambda key: store.get(SEGMENTS, key, lambda x: x),
+            lambda key: None  # temporary - haven't yet implemented the component that does the big segments queries
+        )
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
@@ -313,7 +320,7 @@ class LDClient:
                 return EvaluationDetail(default, None, reason)
 
             try:
-                result = evaluate(flag, user, self._store, event_factory)
+                result = self._evaluator.evaluate(flag, user, event_factory)
                 for event in result.events or []:
                     self._send_event(event)
                 detail = result.detail
@@ -384,7 +391,7 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = evaluate(flag, user, self._store, self._event_factory_default).detail
+                detail = self._evaluator.evaluate(flag, user, self._event_factory_default).detail
                 state.add_flag(flag, detail.value, detail.variation_index,
                     detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
