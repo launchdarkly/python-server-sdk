@@ -92,6 +92,9 @@ jobs:
                   mypy --config-file mypy.ini ldclient testing
       
       - run:
+          name: build SSE contract test service
+          command: cd sse-contract-tests && make build-contract-test-service
+      - run:
           name: start SSE contract test service
           command: cd sse-contract-tests && make start-contract-test-service
           background: true
