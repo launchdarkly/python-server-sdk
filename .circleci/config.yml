@@ -93,11 +93,11 @@ jobs:
       
       - run:
           name: start SSE contract test service
-          command: cd sse-contract-tests && start-contract-test-service
+          command: cd sse-contract-tests && make start-contract-test-service
           background: true
       - run:
           name: run SSE contract tests
-          command: cd sse-contract-tests && run-contract-tests
+          command: cd sse-contract-tests && make run-contract-tests
       
       - store_test_results:
           path: test-reports
