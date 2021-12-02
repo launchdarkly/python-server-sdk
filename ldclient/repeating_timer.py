@@ -3,22 +3,14 @@ Internal helper class for repeating tasks.
 """
 # currently excluded from documentation - see docs/README.md
 
-from threading import Event, Thread
+from ldclient.impl.repeating_task import RepeatingTask
 
-class RepeatingTimer:
+class RepeatingTimer(RepeatingTask):
+    """
+    Deprecated internal class, retained until the next major version in case any application code was
+    referencing it. This was used in situations where we did not want the callback to execute
+    immediately, but to always wait for the interval first, so we are setting both the interval
+    parameter and the initial_delay parameter of RepeatingTask to the same value.
+    """
     def __init__(self, interval, callable):
-        self._interval = interval
-        self._action = callable
-        self._stop = Event()
-        self._thread = Thread(target=self._run)
-        self._thread.daemon = True
-
-    def start(self):
-        self._thread.start()
-
-    def stop(self):
-        self._stop.set()
-
-    def _run(self):
-        while not self._stop.wait(self._interval):
-            self._action()
+        super().init(self, interval, interval, callable)
