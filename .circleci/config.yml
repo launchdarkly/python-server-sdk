@@ -93,10 +93,10 @@ jobs:
       
       - run:
           name: build SSE contract test service
-          command: cd sse-contract-tests && make build-contract-test-service
+          command: cd sse-contract-tests && make build-test-service
       - run:
           name: start SSE contract test service
-          command: cd sse-contract-tests && make start-contract-test-service
+          command: cd sse-contract-tests && make start-test-service
           background: true
       - run:
           name: run SSE contract tests
