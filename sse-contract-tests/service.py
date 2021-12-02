@@ -4,20 +4,12 @@ import json
 import logging
 import os
 import sys
-import threading
-import traceback
 import urllib3
 from flask import Flask, request
 from flask.logging import default_handler
 from logging.config import dictConfig
 
-# Import ldclient from parent directory
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from ldclient.config import HTTPConfig
-from ldclient.impl.http import HTTPFactory
-from ldclient.sse_client import SSEClient
-
-port = 8000
+default_port = 8000
 
 # logging configuration
 dictConfig({
@@ -92,5 +84,8 @@ def delete_stream(id):
     return ('', 204)
 
 if __name__ == "__main__":
+    port = default_port
+    if sys.argv[len(sys.argv) - 1] != 'service.py':
+        port = int(sys.argv[len(sys.argv) - 1])
     global_log.info('Listening on port %d', port)
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=port)
