@@ -60,12 +60,12 @@ class EvaluationDetail:
         * ``kind``: The general category of reason, as follows:
 
           * ``"OFF"``: the flag was off
-          * ``"FALLTHROUGH"`` -- the flag was on but the user did not match any targets or rules
-          * ``"TARGET_MATCH"`` -- the user was specifically targeted for this flag
-          * ``"RULE_MATCH"`` -- the user matched one of the flag's rules
-          * ``"PREREQUISITE_FAILED"`` -- the flag was considered off because it had at least one
+          * ``"FALLTHROUGH"``: the flag was on but the user did not match any targets or rules
+          * ``"TARGET_MATCH"``: the user was specifically targeted for this flag
+          * ``"RULE_MATCH"``: the user matched one of the flag's rules
+          * ``"PREREQUISITE_FAILED"``: the flag was considered off because it had at least one
             prerequisite flag that did not return the desired variation
-          * ``"ERROR"`` - the flag could not be evaluated due to an unexpected error.
+          * ``"ERROR"``: the flag could not be evaluated due to an unexpected error.
 
         * ``ruleIndex``, ``ruleId``: The positional index and unique identifier of the matched
           rule, if the kind was ``RULE_MATCH``
@@ -75,16 +75,20 @@ class EvaluationDetail:
 
         * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
           e.g. ``"FLAG_NOT_FOUND"``
+        
+        * ``bigSegmentsStatus``: describes the validity of Big Segment information, if and only if
+          the flag evaluation required querying at least one Big Segment; otherwise it returns None.
+          Allowable values are defined in `BigSegmentStatus`. For more information, read the
+          LaunchDarkly documentation: https://docs.launchdarkly.com/home/users/big-segments
         """
         return self.__reason
 
     def is_default_value(self) -> bool:
-
         """Returns True if the flag evaluated to the default value rather than one of its
         variations.
         """
         return self.__variation_index is None
-
+    
     def __eq__(self, other) -> bool:
         return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
 
@@ -96,6 +100,32 @@ class EvaluationDetail:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+
+class BigSegmentStatus:
+    """
+    Indicates that the Big Segment query involved in the flag evaluation was successful, and
+    the segment state is considered up to date.
+    """
+    HEALTHY = "HEALTHY"
+
+    """
+    Indicates that the Big Segment query involved in the flag evaluation was successful, but
+    segment state may not be up to date.
+    """
+    STALE = "STALE"
+
+    """
+    Indicates that Big Segments could not be queried for the flag evaluation because the SDK
+    configuration did not include a Big Segment store.
+    """
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+
+    """
+    Indicates that the Big Segment query involved in the flag evaluation failed, for
+    instance due to a database error.
+    """
+    STORE_ERROR = "STORE_ERROR"
 
 
 EvalResult = namedtuple('EvalResult', ['detail', 'events'])
