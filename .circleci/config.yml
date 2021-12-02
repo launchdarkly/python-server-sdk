@@ -90,6 +90,15 @@ jobs:
                 command: |
                   export PATH="/home/circleci/.local/bin:$PATH"
                   mypy --config-file mypy.ini ldclient testing
+      
+      - run:
+          name: start SSE contract test service
+          command: cd sse-contract-tests && start-contract-test-service
+          background: true
+      - run:
+          name: run SSE contract tests
+          command: cd sse-contract-tests && run-contract-tests
+      
       - store_test_results:
           path: test-reports
       - store_artifacts:
