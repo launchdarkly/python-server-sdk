@@ -42,9 +42,10 @@ class StreamEntity:
             self.log.info('Opening stream from %s', stream_url)
             sse = SSEClient(
                 stream_url,
-                retry =
-                    None if self.options.get("initialDelayMs") is None else
-                        self.options.get("initialDelayMs") / 1000,
+                # Currently this client implementation does not support automatic retry
+                # retry =
+                #     None if self.options.get("initialDelayMs") is None else
+                #         self.options.get("initialDelayMs") / 1000,
                 last_id = self.options.get("lastEventId"),
                 http_factory = http_factory
                 )
@@ -65,7 +66,7 @@ class StreamEntity:
             })
         except Exception as e:
             self.log.info('Received error from stream: %s', e)
-            self.log.debug(traceback.format_exc())
+            self.log.info(traceback.format_exc())
             self.send_message({
                 'kind': 'error',
                 'error': str(e)

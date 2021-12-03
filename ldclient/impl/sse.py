@@ -47,11 +47,10 @@ class Event:
     """
     An event received by SSEClient.
     """
-    def __init__(self, event='message', data='', last_event_id=None, retry=None):
+    def __init__(self, event='message', data='', last_event_id=None):
         self._event = event
         self._data = data
         self._id = last_event_id
-        self._retry = retry
 
     @property
     def event(self):
