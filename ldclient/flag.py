@@ -10,7 +10,7 @@
 # In the future, ldclient.evaluation will be the preferred entry point for the public types and
 # ldclient.flag will be removed.
 
-from ldclient.evaluation import EvaluationDetail
+from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl.evaluator import Evaluator, EvalResult, error_reason
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -19,7 +19,7 @@ def evaluate(flag, user, store, event_factory) -> EvalResult:
     evaluator = Evaluator(
         lambda key: store.get(FEATURES, key),
         lambda key: store.get(SEGMENTS, key),
-        lambda key: None
+        lambda key: (None, BigSegmentsStatus.NOT_CONFIGURED)
     )
     return evaluator.evaluate(flag, user, event_factory)
 

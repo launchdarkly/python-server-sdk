@@ -315,6 +315,12 @@ class BigSegmentStore:
         """
         pass
 
+    @abstractmethod
+    def stop(self):
+        """
+        Shuts down the store component and releases and resources it is using.
+        """
+        pass
 
 class BigSegmentStoreStatus:
     """
@@ -379,11 +385,11 @@ class BigSegmentStoreStatusProvider:
     """
 
     @abstractproperty
-    def status(self) -> Optional[BigSegmentStoreStatus]:
+    def status(self) -> BigSegmentStoreStatus:
         """
-        Gets the current status of the store, if known.
+        Gets the current status of the store.
 
-        :return: The status, or None if the SDK has not yet queried the Big Segment store status
+        :return: the status
         """
         pass
 

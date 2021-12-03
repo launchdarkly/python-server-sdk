@@ -3,6 +3,7 @@ This submodule contains the client class that provides most of the SDK functiona
 """
 
 from typing import Optional, Any, Dict, Mapping
+
 from .impl import AnyNum
 
 import hashlib
@@ -16,11 +17,11 @@ from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
-from ldclient.impl.big_segments import NullBigSegmentStoreStatusProvider
+from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
-from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -87,13 +88,15 @@ class LDClient:
         self._event_factory_with_reasons = _EventFactory(True)
 
         store = _FeatureStoreClientWrapper(self._config.feature_store)
-        self._store = store
-        """ :type: FeatureStore """
+        self._store = store  # type: FeatureStore
+
+        big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
+        self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
             lambda key: store.get(FEATURES, key, lambda x: x),
             lambda key: store.get(SEGMENTS, key, lambda x: x),
-            lambda key: None  # temporary - haven't yet implemented the component that does the big segments queries
+            lambda key: big_segment_store_manager.get_user_membership(key)
         )
 
         if self._config.offline:
@@ -147,8 +150,7 @@ class LDClient:
         if config.feature_requester_class:
             feature_requester = config.feature_requester_class(config)
         else:
-            feature_requester = FeatureRequesterImpl(config)
-        """ :type: FeatureRequester """
+            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
 
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
@@ -165,6 +167,7 @@ class LDClient:
         log.info("Closing LaunchDarkly client..")
         self._event_processor.stop()
         self._update_processor.stop()
+        self.__big_segment_store_manager.stop()
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):
@@ -426,7 +429,7 @@ class LDClient:
         whether the Big Segment store is (as far as the SDK knows) currently operational and
         tracking changes in this status.
         """
-        return NullBigSegmentStoreStatusProvider()
+        return self.__big_segment_store_manager.status_provider
 
 
 __all__ = ['LDClient', 'Config']
