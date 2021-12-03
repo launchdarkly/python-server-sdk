@@ -101,34 +101,17 @@ class SSEClient:
     This implementation does not include automatic retrying of a dropped connection; the caller will do that.
     If a connection ends, the events iterator will simply end.
     """
-    def __init__(self, url, last_id=None, connect_timeout=10, read_timeout=300, chunk_size=10000,
-                 verify_ssl=False, http=None, http_proxy=None, http_factory=None, **kwargs):
+    def __init__(self, url, last_id=None, http_factory=None, **kwargs):
         self.url = url
         self.last_id = last_id
-        self._chunk_size = chunk_size
+        self._chunk_size = 10000
+        
+        if http_factory is None:
+            http_factory = HTTPFactory({}, HTTPConfig())
+        self._timeout = http_factory.timeout
+        base_headers = http_factory.base_headers
 
-        if http_factory:
-            self._timeout = http_factory.timeout
-            base_headers = http_factory.base_headers
-        else:
-            # for backward compatibility in case anyone else is using this class
-            self._timeout = urllib3.Timeout(connect=connect_timeout, read=read_timeout)
-            base_headers = {}
-
-        # Optional support for passing in an HTTP client
-        if http:
-            self.http = http
-        else:
-            hf = http_factory
-            if hf is None: # build from individual parameters which we're only retaining for backward compatibility
-                hc = HTTPConfig(
-                    connect_timeout=connect_timeout,
-                    read_timeout=read_timeout,
-                    disable_ssl_verification=not verify_ssl,
-                    http_proxy=http_proxy
-                )
-                hf = HTTPFactory({}, hc)
-            self.http = hf.create_pool_manager(1, url)
+        self.http = http_factory.create_pool_manager(1, url)
 
         # Any extra kwargs will be fed into the request call later.
         self.requests_kwargs = kwargs
