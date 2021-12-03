@@ -69,3 +69,4 @@ p2venv
 test-packaging-venv
 
 .vscode/
+.python-version

@@ -9,6 +9,7 @@ workflows:
       - test-linux:
           name: Python 3.5
           docker-image: cimg/python:3.5
+          skip-sse-contract-tests: true  # the test service app has dependencies that aren't available in 3.5, which is EOL anyway
       - test-linux:
           name: Python 3.6
           docker-image: cimg/python:3.6
@@ -42,6 +43,9 @@ jobs:
       test-with-mypy:
         type: boolean
         default: true
+      skip-sse-contract-tests:
+        type: boolean
+        default: false
     docker:
       - image: <<parameters.docker-image>>
       - image: redis
@@ -90,6 +94,21 @@ jobs:
                 command: |
                   export PATH="/home/circleci/.local/bin:$PATH"
                   mypy --config-file mypy.ini ldclient testing
+      
+      - unless:
+          condition: <<parameters.skip-sse-contract-tests>>
+          steps:
+          - run:
+              name: build SSE contract test service
+              command: cd sse-contract-tests && make build-test-service
+          - run:
+              name: start SSE contract test service
+              command: cd sse-contract-tests && make start-test-service
+              background: true
+          - run:
+              name: run SSE contract tests
+              command: cd sse-contract-tests && make run-contract-tests
+      
       - store_test_results:
           path: test-reports
       - store_artifacts:
