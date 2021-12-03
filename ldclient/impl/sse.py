@@ -200,3 +200,9 @@ class SSEClient:
             elif name == 'retry':
                 pass  # auto-reconnect is not implemented in this simplified client
             # unknown field names are ignored in SSE
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
