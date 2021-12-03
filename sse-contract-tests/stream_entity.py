@@ -10,7 +10,7 @@ import urllib3
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient.config import HTTPConfig
 from ldclient.impl.http import HTTPFactory
-from ldclient.sse_client import SSEClient
+from ldclient.impl.sse import SSEClient
 
 port = 8000
 
@@ -42,21 +42,22 @@ class StreamEntity:
             self.log.info('Opening stream from %s', stream_url)
             sse = SSEClient(
                 stream_url,
-                retry =
-                    None if self.options.get("initialDelayMs") is None else
-                        self.options.get("initialDelayMs") / 1000,
+                # Currently this client implementation does not support automatic retry
+                # retry =
+                #     None if self.options.get("initialDelayMs") is None else
+                #         self.options.get("initialDelayMs") / 1000,
                 last_id = self.options.get("lastEventId"),
                 http_factory = http_factory
                 )
             self.sse = sse
-            for message in sse:
+            for message in sse.events:
                 self.log.info('Received event from stream (%s)', message.event)
                 self.send_message({
                     'kind': 'event',
                     'event': {
                         'type': message.event,
                         'data': message.data,
-                        'id': message.id
+                        'id': message.last_event_id
                     }
                 })
             self.send_message({
@@ -65,7 +66,7 @@ class StreamEntity:
             })
         except Exception as e:
             self.log.info('Received error from stream: %s', e)
-            self.log.debug(traceback.format_exc())
+            self.log.info(traceback.format_exc())
             self.send_message({
                 'kind': 'error',
                 'error': str(e)
