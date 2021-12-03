@@ -6,7 +6,15 @@ from ldclient.util import throw_if_unsuccessful_response
 
 
 class _BufferedLineReader:
+    """
+    Helper class that encapsulates the logic for reading UTF-8 stream data as a series of text lines,
+    each of which can be terminated by \n, \r, or \r\n.
+    """
     def lines_from(chunks):
+        """
+        Takes an iterable series of encoded chunks (each of "bytes" type) and parses it into an iterable
+        series of strings, each of which is one line of text. The line does not include the terminator.
+        """
         last_char_was_cr = False
         partial_line = None
 
