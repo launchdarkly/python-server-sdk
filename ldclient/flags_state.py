@@ -12,7 +12,7 @@ class FeatureFlagsState:
     calling the :func:`ldclient.client.LDClient.all_flags_state()` method. Serializing this
     object to JSON, using the :func:`to_json_dict` method or ``jsonpickle``, will produce the
     appropriate data structure for bootstrapping the LaunchDarkly JavaScript client. See the
-    JavaScript SDK Reference Guide on `Bootstrapping <https://docs.launchdarkly.com/docs/js-sdk-reference#section-bootstrapping>`_.
+    JavaScript SDK Reference Guide on `Bootstrapping <https://docs.launchdarkly.com/sdk/features/bootstrapping#javascript>`_.
     """
     def __init__(self, valid: bool):
         self.__flag_values = {} # type: Dict[str, Any]
