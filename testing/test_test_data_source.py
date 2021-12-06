@@ -10,11 +10,6 @@ from ldclient.impl.integrations.test_data.test_data_source import TestData
 
 
 
-def setup_function():
-    print("Setup")
-
-def teardown_function():
-    print("Teardown")
 
 def test_makes_flag():
     flag = TestData.flag('test-flag')
