@@ -288,7 +288,7 @@ class BigSegmentStore:
         pass
 
     @abstractmethod
-    def get_membership(self, user_hash: str) -> dict:
+    def get_membership(self, user_hash: str) -> Optional[dict]:
         """
         Queries the store for a snapshot of the current segment state for a specific user.
     
@@ -297,7 +297,7 @@ class BigSegmentStore:
         of how this is done, because it deals only with already-hashed keys, but the string can be
         assumed to only contain characters that are valid in base64.
     
-        The return value should be either a `dict`, or nil if the user is not referenced in any big
+        The return value should be either a `dict`, or None if the user is not referenced in any big
         segments. Each key in the dictionary is a "segment reference", which is how segments are
         identified in Big Segment data. This string is not identical to the segment key-- the SDK
         will add other information. The store implementation should not be concerned with the
