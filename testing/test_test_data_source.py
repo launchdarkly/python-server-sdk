@@ -7,12 +7,10 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 #from ldclient.integrations import TestData
-from ldclient.impl.integrations.test_data.test_data_source import TestData
+from ldclient.integrations.test_data import TestData
 
 
-# Filter warning arising from Pytest treating classes starting
-# with the word 'Test' as part of the test suite
-warnings.filterwarnings("ignore", message="cannot collect test class 'TestData'")
+TestData.__test__ = False
 
 def setup_function():
     print("Setup")

@@ -140,9 +140,9 @@ class Files:
     """
 
     @staticmethod
-    def new_data_source(paths: List[str], 
-                        auto_update: bool=False, 
-                        poll_interval: float=1, 
+    def new_data_source(paths: List[str],
+                        auto_update: bool=False,
+                        poll_interval: float=1,
                         force_polling: bool=False) -> object:
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
