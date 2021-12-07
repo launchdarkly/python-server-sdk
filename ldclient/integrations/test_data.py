@@ -58,10 +58,14 @@ class TestData():
 
     @staticmethod
     def data_source():
+        """Creates a new instance of the test data source.
+
+        :return: a new configurable test data source
+        """
         return TestData()
 
 
-    def flag(self, key: str):
+    def flag(self, key):
         """Creates or copies a ``FlagBuilder`` for building a test flag configuration.
 
         If this flag key has already been defined in this ``TestData`` instance, then the builder
@@ -74,7 +78,7 @@ class TestData():
 
         Once you have set the desired configuration, pass the builder to ``update``.
 
-        :param key: the flag key
+        :param str key: the flag key
         :return: the flag configuration builder object
         """
         try:
@@ -123,10 +127,10 @@ class TestData():
         return self
 
 
-    def make_init_data(self):
+    def _make_init_data(self):
         return { FEATURES: copy.copy(self._current_flags) }
 
-    def closed_instance(self, instance):
+    def _closed_instance(self, instance):
         try:
             self._lock.lock()
             self._instances.remove(instance)
@@ -134,7 +138,14 @@ class TestData():
             self._lock.unlock()
 
 class FlagBuilder():
+    """A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_data.TestData`.
+
+    :see: :meth:`ldclient.integrations.test_data.TestData.flag()`
+    :see: :meth:`ldclient.integrations.test_data.TestData.update()`
+    """
     def __init__(self, key):
+        """:param str key: The name of the flag
+        """
         self._key = key
         self._on = True
         self._variations = []
@@ -145,6 +156,11 @@ class FlagBuilder():
 
 
     def copy(self):
+        """Creates a deep copy of the flag builder. Subsequent updates to the
+        original ``FlagBuilder`` object will not  update the copy and vise versa.
+
+        :return: a copy of the flag builder object
+        """
         to = FlagBuilder(self._key)
 
         to._on = self._on
@@ -157,11 +173,33 @@ class FlagBuilder():
         return to
 
 
-    def on(self, aBool):
-        self._on = aBool
+    def on(self, on):
+        """Sets targeting to be on or off for this flag.
+
+        The effect of this depends on the rest of the flag configuration, just as it does on the
+        real LaunchDarkly dashboard. In the default configuration that you get from calling
+        :meth:`ldclient.integrations.test_data.TestData.flag()` with a new flag key,
+        the flag will return ``False`` whenever targeting is off, and ``True`` when
+        targeting is on.
+
+        :param bool on: ``True`` if targeting should be on
+        :return: the flag builder
+        """
+        self._on = on
         return self
 
     def fallthrough_variation(self, variation):
+        """Specifies the fallthrough variation. The fallthrough is the value
+        that is returned if targeting is on and the user was not matched by a more specific
+        target or rule.
+
+        If the flag was previously configured with other variations and the variation
+        specified is a boolean, this also changes it to a boolean flag.
+
+        :param bool/int variation: ``True`` or ``False`` or the desired fallthrough variation index:
+                         ``0`` for the first, ``1`` for the second, etc.
+        :return: the flag builder
+        """
         if isinstance(variation, bool):
             self._boolean_flag(self)._fallthrough_variation = variation
             return self
@@ -170,6 +208,16 @@ class FlagBuilder():
             return self
 
     def off_variation(self, variation) :
+        """Specifies the fallthrough variation. This is the variation that is returned
+        whenever targeting is off.
+
+        If the flag was previously configured with other variations and the variation
+        specified is a boolean, this also changes it to a boolean flag.
+
+        :param bool/int variation: ``True`` or ``False`` or the desired off variation index:
+                         ``0`` for the first, ``1`` for the second, etc.
+        :return: the flag builder
+        """
         if isinstance(variation, bool):
             self._boolean_flag(self)._off_variation = variation
             return self
@@ -178,31 +226,86 @@ class FlagBuilder():
             return self
 
     def boolean_flag(self):
-        if self.is_boolean_flag():
+        """A shortcut for setting the flag to use the standard boolean configuration.
+
+        This is the default for all new flags created with
+        :meth:`ldclient.integrations.test_data.TestData.flag()`.
+
+        The flag will have two variations, ``True`` and ``False`` (in that order);
+        it will return ``False`` whenever targeting is off, and ``True`` when targeting is on
+        if no other settings specify otherwise.
+
+        :return: the flag builder
+        """
+        if self._is_boolean_flag():
             return self
         else:
             return (self.variations(True, False)
                 .fallthrough_variation(TRUE_VARIATION_INDEX)
                 .off_variation(FALSE_VARIATION_INDEX))
 
-    def is_boolean_flag(self):
+    def _is_boolean_flag(self):
         return (len(self._variations) == 2
             and self._variations[TRUE_VARIATION_INDEX] == True
             and self._variations[FALSE_VARIATION_INDEX] == False)
 
     def variations(self, *variations):
+        """Changes the allowable variation values for the flag.
+
+        The value may be of any valid JSON type. For instance, a boolean flag
+        normally has ``True, False``; a string-valued flag might have
+        ``'red', 'green'``; etc.
+
+        **Example:** A single variation
+        ::
+             td.flag('new-flag')
+               .variations(True)
+
+        **Example:** Multiple variations
+        ::
+            td.flag('new-flag')
+              .variations('red', 'green', 'blue')
+
+        :param variations: the the desired variations
+        :return: the flag builder
+        """
         self._variations = list(variations)
 
         return self
 
 
     def variation_for_all_users(self, variation):
+        """Sets the flag to always return the specified variation for all users.
+
+        The variation is specified, Targeting is switched on, and any existing targets or rules are removed.
+        The fallthrough variation is set to the specified value. The off variation is left unchanged.
+
+        If the flag was previously configured with other variations and the variation specified is a boolean,
+        this also changes it to a boolean flag.
+
+        :param bool/int variation: ``True`` or ``False`` or the desired variation index to return:
+                         ``0`` for the first, ``1`` for the second, etc.
+        :return: the flag builder
+        """
         if isinstance(variation, bool):
             return self.boolean_flag().variation_for_all_users(_variation_for_boolean(variation))
         else:
             return self.on(True).fallthrough_variation(variation)
 
     def variation_for_user(self, user_key, variation):
+        """Sets the flag to return the specified variation for a specific user key when targeting
+        is on.
+
+        This has no effect when targeting is turned off for the flag.
+
+        If the flag was previously configured with other variations and the variation specified is a boolean,
+        this also changes it to a boolean flag.
+
+        :param str user_key: a user key
+        :param bool/int variation: ``True`` or ``False`` or the desired variation index to return:
+                         ``0`` for the first, ``1`` for the second, etc.
+        :return: the flag builder
+        """
         if isinstance(variation, bool):
             # `variation` is True/False value
             return self.boolean_flag().variation_for_user(user_key, _variation_for_boolean(variation))
@@ -239,15 +342,59 @@ class FlagBuilder():
         self._rules.append(flag_rule_builder)
 
     def if_match(self, attribute, *values):
+        """Starts defining a flag rule, using the "is one of" operator.
+
+        **Example:** create a rule that returns ``True`` if the name is "Patsy" or "Edina"
+        ::
+            td.flag("flag")
+              .if_match('name', 'Patsy', 'Edina')
+              .then_return(True);
+
+
+
+        :param str attribute: the user attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         flag_rule_builder = FlagRuleBuilder(self)
         return flag_rule_builder.and_match(attribute, *values)
 
     def if_not_match(self, attribute, *values):
+        """Starts defining a flag rule, using the "is not one of" operator.
+
+        **Example:** create a rule that returns ``True`` if the name is neither "Saffron" nor "Bubble"
+        ::
+            td.flag("flag")
+              .if_not_match('name', 'Saffron', 'Bubble')
+              .then_return(True);
+
+
+
+        :param str attribute: the user attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         flag_rule_builder = FlagRuleBuilder(self)
         return flag_rule_builder.and_not_match(attribute, values)
 
     def clear_rules(self):
-        del self._rules
+        """Removes any existing rules from the flag.
+        This undoes the effect of methods like
+        :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`
+
+        :return: the same flag builder
+        """
+        self._rules = []
+        return self
+
+    def clear_targets(self):
+        """Removes any existing targets from the flag.
+        This undoes the effect of methods like
+        :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_user()`
+
+        :return: the same flag builder
+        """
+        self._targets = {}
         return self
 
 
@@ -278,12 +425,41 @@ class FlagBuilder():
 
 
 class FlagRuleBuilder():
+    """
+    A builder for feature flag rules to be used with :class:`ldclient.integrations.test_data.FlagBuilder`.
+
+    In the LaunchDarkly model, a flag can have any number of rules, and a rule can have any number of
+    clauses. A clause is an individual test such as "name is 'X'". A rule matches a user if all of the
+    rule's clauses match the user.
+
+    To start defining a rule, use one of the flag builder's matching methods such as
+    :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`.
+    This defines the first clause for the rule.  Optionally, you may add more
+    clauses with the rule builder's methods such as
+    :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_match()` or
+    :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_not_match()`.
+    Finally, call :meth:`ldclient.integrations.test_data.FlagRuleBuilder.then_return()`
+    to finish defining the rule.
+    """
     def __init__(self, flag_builder):
         self._flag_builder = flag_builder
         self._clauses = []
         self._variation = None
 
     def and_match(self, attribute, *values):
+        """Adds another clause, using the "is one of" operator.
+
+        **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is "gb"
+        ::
+            td.flag('flag')
+                .if_match('name', 'Patsy')
+                .and_match('country', 'gb')
+                .then_return(True)
+
+        :param str attribute: the user attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         self._clauses.append({
                 'attribute': attribute,
                 'operator': 'in',
@@ -293,6 +469,19 @@ class FlagRuleBuilder():
         return self
 
     def and_not_match(self, attribute, *values):
+        """Adds another clause, using the "is not one of" operator.
+
+        **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is not "gb"
+        ::
+            td.flag('flag')
+                .if_match('name', 'Patsy')
+                .and_not_match('country', 'gb')
+                .then_return(True)
+
+        :param str attribute: the user attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         self._clauses.append({
                 'attribute': attribute,
                 'operator': 'in',
@@ -302,6 +491,16 @@ class FlagRuleBuilder():
         return self
 
     def then_return(self, variation):
+        """Finishes defining the rule, specifying the result as either a boolean
+        or a variation index.
+
+        If the flag was previously configured with other variations and the variation specified is a boolean,
+        this also changes it to a boolean flag.
+
+        :param bool/int variation: ``True`` or ``False`` or the desired  variation index:
+                         ``0`` for the first, ``1`` for the second, etc.
+        :return:  the flag builder with this rule added
+        """
         if isinstance(variation, bool):
             self._flag_builder.boolean_flag()
             return self.then_return(_variation_for_boolean(variation))

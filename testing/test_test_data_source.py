@@ -92,8 +92,6 @@ def test_flagbuilder_can_make_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('boolean-flag').boolean_flag()
 
-    assert flag.is_boolean_flag() == True
-
     builtFlag = flag.build(0)
     assert builtFlag['fallthrough_variation'] == 0
     assert builtFlag['off_variation'] == 1

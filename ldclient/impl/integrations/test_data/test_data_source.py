@@ -10,10 +10,10 @@ class _TestDataSource():
         self._test_data = test_data
 
     def start(self):
-        self._feature_store.init(self._test_data.make_init_data())
+        self._feature_store.init(self._test_data._make_init_data())
 
     def stop(self):
-        self._test_data.closed_instance(self)
+        self._test_data._closed_instance(self)
 
     def initialized(self):
         return True
