@@ -6,11 +6,8 @@ from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
-#from ldclient.integrations import TestData
 from ldclient.integrations.test_data import TestData
 
-
-TestData.__test__ = False
 
 def setup_function():
     print("Setup")
