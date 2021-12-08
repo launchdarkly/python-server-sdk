@@ -1,10 +1,14 @@
-"""
-Server-Sent Events implementation for streaming.
-
-Based on: https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
-"""
-# currently excluded from documentation - see docs/README.md
-
+#
+# This deprecated implementation was based on:
+# https://bitbucket.org/btubbs/sseclient/src/a47a380a3d7182a205c0f1d5eb470013ce796b4d/sseclient.py?at=default&fileviewer=file-view-default
+#
+# It has the following known issues:
+# - It does not properly handle line terminators other than \n.
+# - It does not properly handle multi-line data that starts with a blank line.
+# - It fails if a multi-byte character is split across chunks of the stream.
+#
+# It is replaced by the ldclient.impl.sse module.
+#
 import re
 import time
 
@@ -21,6 +25,10 @@ end_of_field = re.compile(r'\r\n\r\n|\r\r|\n\n')
 
 
 class SSEClient:
+    """
+    This class is deprecated and no longer used in the SDK. It is retained here for backward compatibility in case
+    any external code was referencing it, but it will be removed in a future major version.
+    """
     def __init__(self, url, last_id=None, retry=3000, connect_timeout=10, read_timeout=300, chunk_size=10000,
                  verify_ssl=False, http=None, http_proxy=None, http_factory=None, **kwargs):
         self.url = url
