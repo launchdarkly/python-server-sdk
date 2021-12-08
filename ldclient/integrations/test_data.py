@@ -112,7 +112,7 @@ class TestData():
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
                 if old_flag:
-                    old_version = old_flag.version
+                    old_version = old_flag['version']
 
             new_flag = flag_builder.build(old_version + 1)
 
@@ -290,7 +290,7 @@ class FlagBuilder():
         if isinstance(variation, bool):
             return self.boolean_flag().variation_for_all_users(_variation_for_boolean(variation))
         else:
-            return self.on(True).fallthrough_variation(variation)
+            return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
 
     def variation_for_user(self, user_key, variation):
         """Sets the flag to return the specified variation for a specific user key when targeting
@@ -338,7 +338,7 @@ class FlagBuilder():
 
             return self
 
-    def add_rule(self, flag_rule_builder):
+    def _add_rule(self, flag_rule_builder):
         self._rules.append(flag_rule_builder)
 
     def if_match(self, attribute, *values):
@@ -399,6 +399,11 @@ class FlagBuilder():
 
 
     def build(self, version):
+        """Creates a dictionary representation of the flag
+
+        :param int version: the version number of the rule
+        :return: the dictionary representation of the flag
+        """
         base_flag_object = {
             'key': self._key,
             'version': version,
@@ -506,10 +511,15 @@ class FlagRuleBuilder():
             return self.then_return(_variation_for_boolean(variation))
         else:
             self._variation = variation
-            self._flag_builder.add_rule(self)
+            self._flag_builder._add_rule(self)
             return self._flag_builder
 
     def build(self, id):
+        """Creates a dictionary representation of the rule
+
+        :param id: the rule id
+        :return: the dictionary representation of the rule
+        """
         return {
             'id': 'rule' + str(id),
             'variation': self._variation,
