@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.2.1] - 2021-12-03
+### Changed:
+- Added CI testing for Python 3.10.
+
+### Fixed:
+- In streaming mode, the SDK could sometimes fail to receive flag data from LaunchDarkly if the data contained characters that are not in the Basic Latin character set. The error was intermittent and would depend on unpredictable factors of speed and network behavior which could cause the first byte of a multi-byte UTF8 character to be processed before the rest of the bytes had arrived.
+- Fixed some irregularities in the SSE parsing logic used for stream data. The SDK's CI tests now include a more thorough test suite for SSE behavior that is implemented in https://github.com/launchdarkly/sse-contract-tests, to ensure that it is consistent with other LaunchDarkly SDKs.
+
 ## [7.2.0] - 2021-06-17
 ### Added:
 - The SDK now supports the ability to control the proportion of traffic allocation to an experiment. This works in conjunction with a new platform feature now available to early access customers.
