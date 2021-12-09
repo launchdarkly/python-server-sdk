@@ -43,7 +43,7 @@ def test_membership_query_can_cache_result_of_none():
     store.setup_membership(user_hash, None)
     manager = BigSegmentStoreManager(BigSegmentsConfig(store=store))
     try:
-        expected_result = (None, BigSegmentsStatus.HEALTHY)
+        expected_result = ({}, BigSegmentsStatus.HEALTHY)
         assert manager.get_user_membership(user_key) == expected_result
         assert manager.get_user_membership(user_key) == expected_result
     finally:
