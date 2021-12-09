@@ -39,6 +39,10 @@ class TestData():
 
     """
 
+
+    # Prevent pytest from treating this as a test class
+    __test__ = False
+
     def __init__(self):
         self._flag_builders = {}
         self._current_flags = {}
