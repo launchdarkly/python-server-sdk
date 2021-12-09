@@ -44,6 +44,10 @@ class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
             self.__status_listeners.notify(new_status)
 
 class BigSegmentStoreManager:
+    # use EMPTY_MEMBERSHIP as a singleton whenever a membership query returns None; it's safe to reuse it
+    # because we will never modify the membership properties after they're queried
+    EMPTY_MEMBERSHIP = {}  # type: dict
+    
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
     store to track its status.
@@ -57,7 +61,7 @@ class BigSegmentStoreManager:
         self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
-            self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_size)
+            self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_time)
             self.__poll_task = RepeatingTask(config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 
@@ -76,8 +80,12 @@ class BigSegmentStoreManager:
             return (None, BigSegmentsStatus.NOT_CONFIGURED)
         membership = self.__cache.get(user_key)
         if membership is None:
+            user_hash = _hash_for_user_key(user_key)
+            log.warn("*** querying Big Segments for user hash: %s" % user_hash)
             try:
-                membership = self.__store.get_membership(_hash_for_user_key(user_key))
+                membership = self.__store.get_membership(user_hash)
+                if membership is None:
+                    membership = self.EMPTY_MEMBERSHIP
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)

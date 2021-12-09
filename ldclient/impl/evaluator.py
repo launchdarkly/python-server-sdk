@@ -306,7 +306,7 @@ def _make_big_segment_ref(segment: dict) -> str:
     # The format of Big Segment references is independent of what store implementation is being
     # used; the store implementation receives only this string and does not know the details of
     # the data model. The Relay Proxy will use the same format when writing to the store.
-    return "%s:%d" % (segment.get('key', ''), segment.get('generation', 0))
+    return "%s.g%d" % (segment.get('key', ''), segment.get('generation', 0))
 
 def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}
