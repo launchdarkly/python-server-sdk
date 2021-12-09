@@ -411,8 +411,10 @@ class FlagBuilder():
             'variations': self._variations
         }
 
-        base_flag_object['off_variation'] = self._off_variation
-        base_flag_object['fallthrough_variation'] = self._fallthrough_variation
+        base_flag_object['offVariation'] = self._off_variation
+        base_flag_object['fallthrough'] = {
+                'variation': self._fallthrough_variation
+            }
 
         targets = []
         for var_index, user_keys in self._targets.items():

@@ -16,6 +16,8 @@ def teardown_function():
     print("Teardown")
 
 
+TestData.__test__ = False
+
 ## Test Data + Data Source
 
 def test_makes_valid_datasource():
@@ -90,9 +92,11 @@ def test_can_handle_multiple_clients():
     client2 = LDClient(config=config2)
 
     assert store.get(FEATURES, 'flag') == {
-            'fallthrough_variation': 0,
+            'fallthrough': {
+                'variation': 0,
+            },
             'key': 'flag',
-            'off_variation': 1,
+            'offVariation': 1,
             'on': True,
             'rules': [],
             'targets': [],
@@ -101,9 +105,11 @@ def test_can_handle_multiple_clients():
             }
 
     assert store2.get(FEATURES, 'flag') == {
-            'fallthrough_variation': 0,
+            'fallthrough': {
+                'variation': 0,
+            },
             'key': 'flag',
-            'off_variation': 1,
+            'offVariation': 1,
             'on': True,
             'rules': [],
             'targets': [],
@@ -114,9 +120,11 @@ def test_can_handle_multiple_clients():
     td.update(td.flag('flag').variation_for_all_users(False))
 
     assert store.get(FEATURES, 'flag') == {
-            'fallthrough_variation': 1,
+            'fallthrough': {
+                'variation': 1,
+            },
             'key': 'flag',
-            'off_variation': 1,
+            'offVariation': 1,
             'on': True,
             'rules': [],
             'targets': [],
@@ -125,9 +133,11 @@ def test_can_handle_multiple_clients():
             }
 
     assert store2.get(FEATURES, 'flag') == {
-            'fallthrough_variation': 1,
+            'fallthrough': {
+                'variation': 1,
+            },
             'key': 'flag',
-            'off_variation': 1,
+            'offVariation': 1,
             'on': True,
             'rules': [],
             'targets': [],
@@ -145,8 +155,8 @@ def test_flagbuilder_defaults_to_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('empty-flag')
     assert flag.build(0)['variations'] == [True, False]
-    assert flag.build(0)['fallthrough_variation'] == 0
-    assert flag.build(0)['off_variation'] == 1
+    assert flag.build(0)['fallthrough'] == {'variation': 0}
+    assert flag.build(0)['offVariation'] == 1
 
 def test_flagbuilder_can_turn_flag_off():
     td = TestData.data_source()
@@ -160,22 +170,22 @@ def test_flagbuilder_can_set_fallthrough_variation():
     flag = td.flag('test-flag')
     flag.fallthrough_variation(2)
 
-    assert flag.build(0)['fallthrough_variation'] == 2
+    assert flag.build(0)['fallthrough'] == {'variation': 2}
 
 def test_flagbuilder_can_set_off_variation():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.off_variation(2)
 
-    assert flag.build(0)['off_variation'] == 2
+    assert flag.build(0)['offVariation'] == 2
 
 def test_flagbuilder_can_make_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('boolean-flag').boolean_flag()
 
     builtFlag = flag.build(0)
-    assert builtFlag['fallthrough_variation'] == 0
-    assert builtFlag['off_variation'] == 1
+    assert builtFlag['fallthrough'] == {'variation': 0}
+    assert builtFlag['offVariation'] == 1
 
 def test_flagbuilder_can_set_variation_when_targeting_is_off():
     td = TestData.data_source()
@@ -189,7 +199,7 @@ def test_flagbuilder_can_set_variation_for_all_users():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variation_for_all_users(True)
-    assert flag.build(0)['fallthrough_variation'] == 0
+    assert flag.build(0)['fallthrough'] == {'variation': 0}
 
 def test_flagbuilder_clears_existing_rules_and_targets_when_setting_variation_for_all_users():
     td = TestData.data_source()
@@ -246,9 +256,11 @@ def test_flagbuilder_can_build():
     flag = td.flag('some-flag')
     flag.if_match('country', 'fr').then_return(True)
     expected_result = {
-        'fallthrough_variation': 0,
+        'fallthrough': {
+            'variation': 0,
+        },
         'key': 'some-flag',
-        'off_variation': 1,
+        'offVariation': 1,
         'on': True,
         'targets': [],
         'variations': [True, False],
