@@ -9,11 +9,9 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from ldclient.integrations.test_data import TestData
 
 
-def setup_function():
-    print("Setup")
-
-def teardown_function():
-    print("Teardown")
+# Filter warning arising from Pytest treating classes starting
+# with the word 'Test' as part of the test suite
+warnings.filterwarnings("ignore", message="cannot collect test class 'TestData'")
 
 
 TestData.__test__ = False
