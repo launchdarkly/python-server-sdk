@@ -7,7 +7,7 @@ from ldclient.util import log
 
 import base64
 from expiringdict import ExpiringDict
-from hashlib import md5
+from hashlib import sha256
 import time
 from typing import Callable, Optional, Tuple
 
@@ -108,4 +108,4 @@ class BigSegmentStoreManager:
         return (timestamp is None) or ((int(time.time() * 1000) - timestamp) >= self.__stale_after_millis)
 
 def _hash_for_user_key(user_key: str) -> str:
-    return base64.b64encode(md5(user_key.encode('utf-8')).digest()).decode('utf-8')
+    return base64.b64encode(sha256(user_key.encode('utf-8')).digest()).decode('utf-8')
