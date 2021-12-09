@@ -50,6 +50,21 @@ def test_membership_query_can_cache_result_of_none():
         manager.stop()
     assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
 
+def test_membership_query_cache_can_expire():
+    expected_membership = { "key1": True, "key2": False }
+    store = MockBigSegmentStore()
+    store.setup_metadata_always_up_to_date()
+    store.setup_membership(user_hash, expected_membership)
+    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, user_cache_time=0.005))
+    try:
+        expected_result = (expected_membership, BigSegmentsStatus.HEALTHY)
+        assert manager.get_user_membership(user_key) == expected_result
+        time.sleep(0.1)
+        assert manager.get_user_membership(user_key) == expected_result
+    finally:
+        manager.stop()
+    assert store.membership_queries == [ user_hash, user_hash ]  # cache expired after 1st query
+
 def test_membership_query_stale_status():
     expected_membership = { "key1": True, "key2": False }
     store = MockBigSegmentStore()
