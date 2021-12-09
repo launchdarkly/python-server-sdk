@@ -32,9 +32,23 @@ def test_membership_query_cached_result_healthy_status():
     try:
         expected_result = (expected_membership, BigSegmentsStatus.HEALTHY)
         assert manager.get_user_membership(user_key) == expected_result
+        assert manager.get_user_membership(user_key) == expected_result
     finally:
         manager.stop()
-    assert store.membership_queries == [ user_hash ]
+    assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
+
+def test_membership_query_can_cache_result_of_none():
+    store = MockBigSegmentStore()
+    store.setup_metadata_always_up_to_date()
+    store.setup_membership(user_hash, None)
+    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store))
+    try:
+        expected_result = (None, BigSegmentsStatus.HEALTHY)
+        assert manager.get_user_membership(user_key) == expected_result
+        assert manager.get_user_membership(user_key) == expected_result
+    finally:
+        manager.stop()
+    assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
 
 def test_membership_query_stale_status():
     expected_membership = { "key1": True, "key2": False }
