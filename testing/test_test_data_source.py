@@ -14,11 +14,6 @@ from ldclient.impl.integrations.test_data.test_data_source import TestData
 # with the word 'Test' as part of the test suite
 warnings.filterwarnings("ignore", message="cannot collect test class 'TestData'")
 
-def setup_function():
-    print("Setup")
-
-def teardown_function():
-    print("Teardown")
 
 def test_makes_flag():
     td = TestData.data_source()

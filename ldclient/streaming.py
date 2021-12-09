@@ -9,13 +9,12 @@ import json
 from threading import Thread
 
 import logging
-import math
 import time
 
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.retry_delay import RetryDelayStrategy, DefaultBackoffStrategy, DefaultJitterStrategy
+from ldclient.impl.sse import SSEClient
 from ldclient.interfaces import UpdateProcessor
-from ldclient.sse_client import SSEClient
 from ldclient.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -106,11 +105,11 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         # We don't want the stream to use the same read timeout as the rest of the SDK.
         http_factory = _http_factory(self._config)
         stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
-        return SSEClient(
+        client = SSEClient(
             self._uri,
-            retry = None,  # we're implementing our own retry
             http_factory = stream_http_factory
         )
+        return client.events
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")
