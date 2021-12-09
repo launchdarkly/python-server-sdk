@@ -46,7 +46,7 @@ class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
 class BigSegmentStoreManager:
     # use EMPTY_MEMBERSHIP as a singleton whenever a membership query returns None; it's safe to reuse it
     # because we will never modify the membership properties after they're queried
-    EMPTY_MEMBERSHIP = {}
+    EMPTY_MEMBERSHIP = {}  # type: dict
     
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
