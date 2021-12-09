@@ -1,4 +1,6 @@
 import copy
+from ldclient.versioned_data_kind import FEATURES
+from ldclient.rwlock import ReadWriteLock
 
 TRUE_VARIATION_INDEX = 0
 FALSE_VARIATION_INDEX = 1
@@ -10,9 +12,90 @@ def variation_for_boolean(variation):
         return FALSE_VARIATION_INDEX
 
 class TestData():
+    def __init__(self):
+        self._flag_builders = {}
+        self._current_flags = {}
+        self._lock = ReadWriteLock()
+        self._instances = []
 
-    def flag(key):
-        return FlagBuilder(key)
+    def __call__(self, config, store, ready):
+        data_source = _TestDataSource(store, self)
+        try:
+            self._lock.lock()
+            self._instances.append(data_source)
+        finally:
+            self._lock.unlock()
+
+        return data_source
+
+    @staticmethod
+    def data_source():
+        return TestData()
+
+    def flag(self, key):
+        try:
+            self._lock.rlock()
+            if key in self._flag_builders and self._flag_builders[key]:
+                return self._flag_builders[key].copy()
+            else:
+                return FlagBuilder(key).boolean_flag()
+        finally:
+            self._lock.runlock()
+
+    def update(self, flag_builder):
+        try:
+            self._lock.lock()
+
+            old_version = 0
+            if flag_builder._key in self._current_flags:
+                old_flag = self._current_flags[flag_builder._key]
+                if old_flag:
+                    old_version = old_flag.version
+
+            new_flag = flag_builder.build(old_version + 1)
+
+            self._current_flags[flag_builder._key] = new_flag
+            self._flag_builders[flag_builder._key] = flag_builder.copy()
+        finally:
+            self._lock.unlock()
+
+        for instance in self._instances:
+            instance.upsert(new_flag)
+
+        return self
+
+
+    def make_init_data(self):
+        return { FEATURES: copy.copy(self._current_flags) }
+
+    def closed_instance(self, instance):
+        try:
+            self._lock.lock()
+            self._instances.remove(instance)
+        finally:
+            self._lock.unlock()
+
+
+
+class _TestDataSource():
+
+    def __init__(self, feature_store, test_data):
+        self._feature_store = feature_store
+        self._test_data = test_data
+
+    def start(self):
+        self._feature_store.init(self._test_data.make_init_data())
+
+    def stop(self):
+        self._test_data.closed_instance(self)
+
+    def initialized(self):
+        return True
+
+    def upsert(self, new_flag):
+        self._feature_store.upsert(FEATURES, new_flag)
+
+
 
 class FlagBuilder():
     def __init__(self, key):
