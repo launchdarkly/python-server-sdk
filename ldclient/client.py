@@ -3,6 +3,7 @@ This submodule contains the client class that provides most of the SDK functiona
 """
 
 from typing import Optional, Any, Dict, Mapping
+
 from .impl import AnyNum
 
 import hashlib
@@ -15,11 +16,12 @@ from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
-from ldclient.flag import EvaluationDetail, evaluate, error_reason
-from ldclient.flags_state import FeatureFlagsState
+from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
+from ldclient.impl.big_segments import BigSegmentStoreManager
+from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
-from ldclient.interfaces import FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.util import check_uwsgi, log
@@ -85,8 +87,17 @@ class LDClient:
         self._event_factory_default = _EventFactory(False)
         self._event_factory_with_reasons = _EventFactory(True)
 
-        self._store = _FeatureStoreClientWrapper(self._config.feature_store)
-        """ :type: FeatureStore """
+        store = _FeatureStoreClientWrapper(self._config.feature_store)
+        self._store = store  # type: FeatureStore
+
+        big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
+        self.__big_segment_store_manager = big_segment_store_manager
+
+        self._evaluator = Evaluator(
+            lambda key: store.get(FEATURES, key, lambda x: x),
+            lambda key: store.get(SEGMENTS, key, lambda x: x),
+            lambda key: big_segment_store_manager.get_user_membership(key)
+        )
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
@@ -139,8 +150,7 @@ class LDClient:
         if config.feature_requester_class:
             feature_requester = config.feature_requester_class(config)
         else:
-            feature_requester = FeatureRequesterImpl(config)
-        """ :type: FeatureRequester """
+            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
 
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
@@ -157,6 +167,7 @@ class LDClient:
         log.info("Closing LaunchDarkly client..")
         self._event_processor.stop()
         self._update_processor.stop()
+        self.__big_segment_store_manager.stop()
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):
@@ -312,7 +323,7 @@ class LDClient:
                 return EvaluationDetail(default, None, reason)
 
             try:
-                result = evaluate(flag, user, self._store, event_factory)
+                result = self._evaluator.evaluate(flag, user, event_factory)
                 for event in result.events or []:
                     self._send_event(event)
                 detail = result.detail
@@ -383,7 +394,7 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = evaluate(flag, user, self._store, self._event_factory_default).detail
+                detail = self._evaluator.evaluate(flag, user, self._event_factory_default).detail
                 state.add_flag(flag, detail.value, detail.variation_index,
                     detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
@@ -408,6 +419,17 @@ class LDClient:
         if key is None or self._config.sdk_key is None:
             return ""
         return hmac.new(self._config.sdk_key.encode(), key.encode(), hashlib.sha256).hexdigest()
+
+    @property
+    def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
+        """
+        Returns an interface for tracking the status of a Big Segment store.
+
+        The :class:`ldclient.interfaces.BigSegmentStoreStatusProvider` has methods for checking
+        whether the Big Segment store is (as far as the SDK knows) currently operational and
+        tracking changes in this status.
+        """
+        return self.__big_segment_store_manager.status_provider
 
 
 __all__ = ['LDClient', 'Config']
