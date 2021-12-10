@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.3.0] - 2021-12-10
+### Added:
+- The SDK now supports evaluation of Big Segments. See: https://docs.launchdarkly.com/home/users/big-segments
+
 ## [7.2.1] - 2021-12-03
 ### Changed:
 - Added CI testing for Python 3.10.
