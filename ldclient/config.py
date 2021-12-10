@@ -29,7 +29,7 @@ class BigSegmentsConfig:
 
             from ldclient.config import Config, BigSegmentsConfig
             from ldclient.integrations import Redis
-            store = Redis.new_big_segment_store("my-table-name")
+            store = Redis.new_big_segment_store(url='redis://localhost:6379')
             config = Config(big_segments=BigSegmentsConfig(store = store))
     """
     def __init__(self,
