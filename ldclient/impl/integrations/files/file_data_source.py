@@ -18,8 +18,8 @@ try:
 except ImportError:
     pass
 
+from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.interfaces import UpdateProcessor
-from ldclient.repeating_timer import RepeatingTimer
 from ldclient.util import log
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -144,7 +144,7 @@ class _FileDataSource(UpdateProcessor):
             self._paths = resolved_paths
             self._reloader = reloader
             self._file_times = self._check_file_times()
-            self._timer = RepeatingTimer(interval, self._poll)
+            self._timer = RepeatingTask(interval, interval, self._poll)
             self._timer.start()
 
         def stop(self):

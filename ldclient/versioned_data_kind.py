@@ -10,17 +10,42 @@ for features or segments.
 """
 
 from collections import namedtuple
+from typing import Callable, Iterable, Optional
 
 # Note that VersionedDataKind without the extra attributes is no longer used in the SDK,
 # but it's preserved here for backward compatibility just in case someone else used it
-VersionedDataKind = namedtuple('VersionedDataKind',
-    ['namespace', 'request_api_path', 'stream_api_path'])
+class VersionedDataKind:
+    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str):
+        self._namespace = namespace
+        self._request_api_path = request_api_path
+        self._stream_api_path = stream_api_path
 
-# Note, feature store implementors really don't need to know about this class so we could just
-# not document it at all, but apparently namedtuple() creates its own docstrings so it's going
-# to show up in any case.
-VersionedDataKindWithOrdering = namedtuple('VersionedDataKindWithOrdering',
-    ['namespace', 'request_api_path', 'stream_api_path', 'priority', 'get_dependency_keys'])
+    @property
+    def namespace(self) -> str:
+        return self._namespace
+    
+    @property
+    def request_api_path(self) -> str:
+        return self._request_api_path
+    
+    @property
+    def stream_api_path(self) -> str:
+        return self._stream_api_path
+
+class VersionedDataKindWithOrdering(VersionedDataKind):
+    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,
+                 priority: int, get_dependency_keys: Optional[Callable[[dict], Iterable[str]]]):
+        super().__init__(namespace, request_api_path, stream_api_path)
+        self._priority = priority
+        self._get_dependency_keys = get_dependency_keys
+    
+    @property
+    def priority(self) -> int:
+        return self._priority
+    
+    @property
+    def get_dependency_keys(self) -> Optional[Callable[[dict], Iterable[str]]]:
+        return self._get_dependency_keys
 
 FEATURES = VersionedDataKindWithOrdering(namespace = "features",
     request_api_path = "/sdk/latest-flags",

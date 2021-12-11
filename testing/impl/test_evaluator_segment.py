@@ -1,6 +1,13 @@
 import pytest
 
-from ldclient.flag import _segment_matches_user
+from testing.impl.evaluator_util import *
+
+
+def _segment_matches_user(segment: dict, user: dict) -> bool:
+    e = EvaluatorBuilder().with_segment(segment).build()
+    flag = make_boolean_flag_matching_segment(segment)
+    result = e.evaluate(flag, user, event_factory)
+    return result.detail.value
 
 
 def test_explicit_include_user():
