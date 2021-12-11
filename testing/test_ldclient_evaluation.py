@@ -2,10 +2,16 @@ import pytest
 import json
 import time
 from ldclient.client import LDClient, Config
+from ldclient.config import BigSegmentsConfig
+from ldclient.evaluation import BigSegmentsStatus
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.flag import EvaluationDetail
+from ldclient.impl.big_segments import _hash_for_user_key
+from ldclient.impl.evaluator import _make_big_segment_ref
 from ldclient.interfaces import FeatureStore
-from ldclient.versioned_data_kind import FEATURES
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+from testing.impl.evaluator_util import make_boolean_flag_matching_segment
+from testing.mock_components import MockBigSegmentStore
 from testing.stub_util import MockEventProcessor, MockUpdateProcessor
 from testing.test_ldclient import make_off_flag_with_value
 
@@ -161,6 +167,31 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     assert actual.is_default_value() == True
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
+
+def test_flag_using_big_segment():
+    segment = {
+        'key': 'segkey',
+        'version': 1,
+        'generation': 1,
+        'unbounded': True
+    }
+    flag = make_boolean_flag_matching_segment(segment)
+    store = InMemoryFeatureStore()
+    store.init({ FEATURES: { flag['key']: flag }, SEGMENTS: { segment['key']: segment } })
+    segstore = MockBigSegmentStore()
+    segstore.setup_metadata_always_up_to_date()
+    segstore.setup_membership(_hash_for_user_key(user['key']), { _make_big_segment_ref(segment): True })
+    config=Config(
+        sdk_key='SDK_KEY',
+        feature_store=store,
+        big_segments=BigSegmentsConfig(store=segstore),
+        event_processor_class=MockEventProcessor,
+        update_processor_class=MockUpdateProcessor
+    )
+    with LDClient(config) as client:
+        detail = client.variation_detail(flag['key'], user, False)
+        assert detail.value == True
+        assert detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()

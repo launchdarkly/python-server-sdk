@@ -168,6 +168,5 @@ texinfo_documents = [
 # -- Extension configuration -------------------------------------------------
 
 autodoc_default_options = {
-    'special-members': '__init__',
     'undoc-members': False
 }

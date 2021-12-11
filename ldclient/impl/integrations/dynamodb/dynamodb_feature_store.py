@@ -50,7 +50,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         if not have_dynamodb:
             raise NotImplementedError("Cannot use DynamoDB feature store because AWS SDK (boto3 package) is not installed")
         self._table_name = table_name
-        self._prefix = None if prefix == "" else  prefix
+        self._prefix = (prefix + ":") if prefix else ""
         self._client = boto3.client('dynamodb', **dynamodb_opts)
 
     def init_internal(self, all_data):
@@ -124,7 +124,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         return 'DynamoDB'
 
     def _prefixed_namespace(self, base):
-        return base if self._prefix is None else (self._prefix + ':' + base)
+        return self._prefix + base
 
     def _namespace_for_kind(self, kind):
         return self._prefixed_namespace(kind.namespace)

@@ -6,11 +6,14 @@ other than LaunchDarkly.
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import _ConsulFeatureStoreCore
+from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import _DynamoDBBigSegmentStore
 from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
+from ldclient.impl.integrations.redis.redis_big_segment_store import _RedisBigSegmentStore
 from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
+from ldclient.interfaces import BigSegmentStore
 
-from typing import List, Callable, Mapping, Any
+from typing import Any, List, Mapping, Optional
 
 class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
@@ -60,14 +63,14 @@ class DynamoDB:
 
     @staticmethod
     def new_feature_store(table_name: str,
-                          prefix: str=None,
+                          prefix: Optional[str]=None,
                           dynamodb_opts: Mapping[str, Any]={},
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a DynamoDB-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
-        To use this method, you must first install the ``boto3`` package containing the AWS SDK gems.
+        To use this method, you must first install the ``boto3`` package for the AWS SDK.
         Then, put the object returned by this method into the ``feature_store`` property of your
         client configuration (:class:`ldclient.config.Config`).
         ::
@@ -95,6 +98,40 @@ class DynamoDB:
         core = _DynamoDBFeatureStoreCore(table_name, prefix, dynamodb_opts)
         return CachingStoreWrapper(core, caching)
 
+    @staticmethod
+    def new_big_segment_store(table_name: str, prefix: Optional[str]=None, dynamodb_opts: Mapping[str, Any]={}):
+        """
+        Creates a DynamoDB-backed Big Segment store.
+
+        Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+        documentation: https://docs.launchdarkly.com/home/users/big-segments
+
+        To use this method, you must first install the ``boto3`` package for the AWS SDK. Then,
+        put the object returned by this method into the ``store`` property of your Big Segments
+        configuration (see :class:`ldclient.config.Config`).
+        ::
+
+          from ldclient.config import Config, BigSegmentsConfig
+          from ldclient.integrations import DynamoDB
+          store = DynamoDB.new_big_segment_store("my-table-name")
+          config = Config(big_segments=BigSegmentsConfig(store=store))
+
+        Note that the DynamoDB table must already exist; the LaunchDarkly SDK does not create the table
+        automatically, because it has no way of knowing what additional properties (such as permissions
+        and throughput) you would want it to have. The table must have a partition key called
+        "namespace" and a sort key called "key", both with a string type.
+
+        By default, the DynamoDB client will try to get your AWS credentials and region name from
+        environment variables and/or local configuration files, as described in the AWS SDK documentation.
+        You may also pass configuration settings in ``dynamodb_opts``.
+
+        :param table_name: the name of an existing DynamoDB table
+        :param prefix: an optional namespace prefix to be prepended to all DynamoDB keys
+        :param dynamodb_opts: optional parameters for configuring the DynamoDB client, as defined in
+          the `boto3 API <https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client>`_
+        """
+        return _DynamoDBBigSegmentStore(table_name, prefix, dynamodb_opts)
+
 
 class Redis:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Redis.
@@ -108,7 +145,8 @@ class Redis:
                           prefix: str='launchdarkly',
                           max_connections: int=16,
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
-        """Creates a Redis-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
+        """
+        Creates a Redis-backed implementation of :class:`~ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
@@ -117,6 +155,7 @@ class Redis:
         (:class:`ldclient.config.Config`).
         ::
 
+            from ldclient.config import Config
             from ldclient.integrations import Redis
             store = Redis.new_feature_store()
             config = Config(feature_store=store)
@@ -134,6 +173,33 @@ class Redis:
         wrapper._core = core  # exposed for testing
         return wrapper
 
+    @staticmethod
+    def new_big_segment_store(url: str='redis://localhost:6379/0',
+                              prefix: str='launchdarkly',
+                              max_connections: int=16) -> BigSegmentStore:
+        """
+        Creates a Redis-backed Big Segment store.
+
+        Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+        documentation: https://docs.launchdarkly.com/home/users/big-segments
+
+        To use this method, you must first install the ``redis`` package. Then, put the object
+        returned by this method into the ``store`` property of your Big Segments configuration
+        (see :class:`ldclient.config.Config`).
+        ::
+
+          from ldclient.config import Config, BigSegmentsConfig
+          from ldclient.integrations import Redis
+          store = Redis.new_big_segment_store()
+          config = Config(big_segments=BigSegmentsConfig(store=store))
+
+        :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
+        :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
+          ``DEFAULT_PREFIX``
+        :param max_connections: the maximum number of Redis connections to keep in the
+          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
+        """
+        return _RedisBigSegmentStore(url, prefix, max_connections)
 
 class Files:
     """Provides factory methods for integrations with filesystem data.

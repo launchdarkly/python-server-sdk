@@ -17,11 +17,10 @@ import urllib3
 from ldclient.event_summarizer import EventSummarizer
 from ldclient.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
+from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.lru_cache import SimpleLRUCache
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
-from ldclient.repeating_timer import RepeatingTimer
-from ldclient.util import UnsuccessfulResponseException
 from ldclient.util import log
 from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response, _headers
 from ldclient.diagnostics import create_diagnostic_init
@@ -391,12 +390,13 @@ class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
-        self._flush_timer = RepeatingTimer(config.flush_interval, self.flush)
-        self._users_flush_timer = RepeatingTimer(config.user_keys_flush_interval, self._flush_users)
+        self._flush_timer = RepeatingTask(config.flush_interval, config.flush_interval, self.flush)
+        self._users_flush_timer = RepeatingTask(config.user_keys_flush_interval, config.user_keys_flush_interval, self._flush_users)
         self._flush_timer.start()
         self._users_flush_timer.start()
         if diagnostic_accumulator is not None:
-            self._diagnostic_event_timer = RepeatingTimer(config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer = RepeatingTask(config.diagnostic_recording_interval,
+                config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None
