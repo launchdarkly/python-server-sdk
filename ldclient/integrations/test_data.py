@@ -18,16 +18,16 @@ class TestData():
 
     Unlike ``Files``, this mechanism does not use any external resources. It provides only
     the data that the application has put into it using the ``update`` method.
-    ::
 
+    ::
         td = TestData.data_source()
         td.update(td.flag('flag-key-1').variation_for_all_users(True))
 
         client = LDClient(config=Config('SDK_KEY', update_processor_class = td))
 
         # flags can be updated at any time:
-        td.update(td.flag('flag-key-1').variation_for_user('some-user-key', True)
-                                       .fallthrough_variation(False))
+        td.update(td.flag('flag-key-1').variation_for_user('some-user-key', True) \
+            .fallthrough_variation(False))
 
     The above example uses a simple boolean flag, but more complex configurations are possible using
     the methods of the ``FlagBuilder`` that is returned by ``flag``. ``FlagBuilder``
@@ -35,8 +35,7 @@ class TestData():
     currently support 1. rule operators other than "in" and "not in", or 2. percentage rollouts.
 
     If the same `TestData` instance is used to configure multiple `LDClient` instances,
-    any changes made to the data will propagate to all of the `LDClient`s.
-
+    any changes made to the data will propagate to all of the `LDClient` instances.
     """
 
 
@@ -261,13 +260,15 @@ class FlagBuilder():
         ``'red', 'green'``; etc.
 
         **Example:** A single variation
+
         ::
-             td.flag('new-flag')
+             td.flag('new-flag') \
                .variations(True)
 
         **Example:** Multiple variations
-        ::
-            td.flag('new-flag')
+
+        ::        
+            td.flag('new-flag') \
               .variations('red', 'green', 'blue')
 
         :param variations: the the desired variations
@@ -349,12 +350,11 @@ class FlagBuilder():
         """Starts defining a flag rule, using the "is one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" or "Edina"
+
         ::
-            td.flag("flag")
-              .if_match('name', 'Patsy', 'Edina')
-              .then_return(True);
-
-
+            td.flag("flag") \
+              .if_match('name', 'Patsy', 'Edina') \
+              .then_return(True)
 
         :param str attribute: the user attribute to match against
         :param values: values to compare to
@@ -367,12 +367,11 @@ class FlagBuilder():
         """Starts defining a flag rule, using the "is not one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is neither "Saffron" nor "Bubble"
+
         ::
-            td.flag("flag")
-              .if_not_match('name', 'Saffron', 'Bubble')
-              .then_return(True);
-
-
+            td.flag("flag") \
+              .if_not_match('name', 'Saffron', 'Bubble') \
+              .then_return(True)
 
         :param str attribute: the user attribute to match against
         :param values: values to compare to
@@ -461,10 +460,11 @@ class FlagRuleBuilder():
         """Adds another clause, using the "is one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is "gb"
+
         ::
-            td.flag('flag')
-                .if_match('name', 'Patsy')
-                .and_match('country', 'gb')
+            td.flag('flag') \
+                .if_match('name', 'Patsy') \
+                .and_match('country', 'gb') \
                 .then_return(True)
 
         :param str attribute: the user attribute to match against
@@ -483,10 +483,11 @@ class FlagRuleBuilder():
         """Adds another clause, using the "is not one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is not "gb"
+
         ::
-            td.flag('flag')
-                .if_match('name', 'Patsy')
-                .and_not_match('country', 'gb')
+            td.flag('flag') \
+                .if_match('name', 'Patsy') \
+                .and_not_match('country', 'gb') \
                 .then_return(True)
 
         :param str attribute: the user attribute to match against
