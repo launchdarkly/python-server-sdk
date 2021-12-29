@@ -6,16 +6,22 @@ from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
-#from ldclient.integrations import TestData
-from ldclient.impl.integrations.test_data.test_data_source import TestData
+from ldclient.integrations.test_data import TestData
 
 
-# Filter warning arising from Pytest treating classes starting
-# with the word 'Test' as part of the test suite
-warnings.filterwarnings("ignore", message="cannot collect test class 'TestData'")
+
+## Test Data + Data Source
+
+def test_makes_valid_datasource():
+    td = TestData.data_source()
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+
+    assert store.all(FEATURES, lambda x: x) == {}
 
 
-def test_makes_flag():
+def test_makes_valid_datasource_with_flag():
     td = TestData.data_source()
     flag = td.flag(key='test-flag')
     assert flag is not None
@@ -26,7 +32,7 @@ def test_makes_flag():
     assert builtFlag['variations'] == [True, False]
 
 
-def test_initializes_flag_with_client():
+def test_can_retrieve_flag_from_store():
     td = TestData.data_source()
     td.update(td.flag('some-flag'))
 
@@ -38,7 +44,20 @@ def test_initializes_flag_with_client():
 
     client.close()
 
-def test_update_after_close():
+def test_updates_to_flags_are_reflected_in_store():
+    td = TestData.data_source()
+
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+
+    td.update(td.flag('some-flag'))
+
+    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
+
+    client.close()
+
+def test_updates_after_client_close_have_no_affect():
     td = TestData.data_source()
 
     store = InMemoryFeatureStore()
@@ -51,18 +70,85 @@ def test_update_after_close():
 
     assert store.get(FEATURES, 'some-flag') == None
 
-def test_update_after_client_initialization():
+def test_can_handle_multiple_clients():
     td = TestData.data_source()
+    td.update(td.flag('flag'))
 
     store = InMemoryFeatureStore()
+    store2 = InMemoryFeatureStore()
 
-    client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
+    config = Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store)
+    client = LDClient(config=config)
 
-    td.update(td.flag('some-flag'))
+    config2 = Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store2)
+    client2 = LDClient(config=config2)
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
+    assert store.get(FEATURES, 'flag') == {
+            'fallthrough': {
+                'variation': 0,
+            },
+            'key': 'flag',
+            'offVariation': 1,
+            'on': True,
+            'rules': [],
+            'targets': [],
+            'variations': [True, False],
+            'version': 1
+            }
+
+    assert store2.get(FEATURES, 'flag') == {
+            'fallthrough': {
+                'variation': 0,
+            },
+            'key': 'flag',
+            'offVariation': 1,
+            'on': True,
+            'rules': [],
+            'targets': [],
+            'variations': [True, False],
+            'version': 1
+            }
+
+    td.update(td.flag('flag').variation_for_all_users(False))
+
+    assert store.get(FEATURES, 'flag') == {
+            'fallthrough': {
+                'variation': 1,
+            },
+            'key': 'flag',
+            'offVariation': 1,
+            'on': True,
+            'rules': [],
+            'targets': [],
+            'variations': [True, False],
+            'version': 2
+            }
+
+    assert store2.get(FEATURES, 'flag') == {
+            'fallthrough': {
+                'variation': 1,
+            },
+            'key': 'flag',
+            'offVariation': 1,
+            'on': True,
+            'rules': [],
+            'targets': [],
+            'variations': [True, False],
+            'version': 2
+            }
 
     client.close()
+    client2.close()
+
+
+## FlagBuilder
+
+def test_flagbuilder_defaults_to_boolean_flag():
+    td = TestData.data_source()
+    flag = td.flag('empty-flag')
+    assert flag.build(0)['variations'] == [True, False]
+    assert flag.build(0)['fallthrough'] == {'variation': 0}
+    assert flag.build(0)['offVariation'] == 1
 
 def test_flagbuilder_can_turn_flag_off():
     td = TestData.data_source()
@@ -76,30 +162,44 @@ def test_flagbuilder_can_set_fallthrough_variation():
     flag = td.flag('test-flag')
     flag.fallthrough_variation(2)
 
-    assert flag.build(0)['fallthrough_variation'] == 2
+    assert flag.build(0)['fallthrough'] == {'variation': 2}
 
 def test_flagbuilder_can_set_off_variation():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.off_variation(2)
 
-    assert flag.build(0)['off_variation'] == 2
+    assert flag.build(0)['offVariation'] == 2
 
 def test_flagbuilder_can_make_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('boolean-flag').boolean_flag()
 
-    assert flag.is_boolean_flag() == True
-
     builtFlag = flag.build(0)
-    assert builtFlag['fallthrough_variation'] == 0
-    assert builtFlag['off_variation'] == 1
+    assert builtFlag['fallthrough'] == {'variation': 0}
+    assert builtFlag['offVariation'] == 1
+
+def test_flagbuilder_can_set_variation_when_targeting_is_off():
+    td = TestData.data_source()
+    flag = td.flag('test-flag').on(False)
+    assert flag.build(0)['on'] == False
+    assert flag.build(0)['variations'] == [True,False]
+    flag.variations('dog', 'cat')
+    assert flag.build(0)['variations'] == ['dog','cat']
 
 def test_flagbuilder_can_set_variation_for_all_users():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variation_for_all_users(True)
-    assert flag.build(0)['fallthrough_variation'] == 0
+    assert flag.build(0)['fallthrough'] == {'variation': 0}
+
+def test_flagbuilder_clears_existing_rules_and_targets_when_setting_variation_for_all_users():
+    td = TestData.data_source()
+
+    flag = td.flag('test-flag').if_match('name', 'christian').then_return(False).variation_for_user('christian', False).variation_for_all_users(True).build(0)
+
+    assert flag['rules'] == []
+    assert flag['targets'] == []
 
 def test_flagbuilder_can_set_variations():
     td = TestData.data_source()
@@ -107,7 +207,7 @@ def test_flagbuilder_can_set_variations():
     flag.variations(2,3,4,5)
     assert flag.build(0)['variations'] == [2,3,4,5]
 
-def test_flagbuilder_can_safely_copy():
+def test_flagbuilder_can_make_an_immutable_copy():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variations(1,2)
@@ -148,9 +248,11 @@ def test_flagbuilder_can_build():
     flag = td.flag('some-flag')
     flag.if_match('country', 'fr').then_return(True)
     expected_result = {
-        'fallthrough_variation': 0,
+        'fallthrough': {
+            'variation': 0,
+        },
         'key': 'some-flag',
-        'off_variation': 1,
+        'offVariation': 1,
         'on': True,
         'targets': [],
         'variations': [True, False],
