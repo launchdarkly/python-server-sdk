@@ -204,7 +204,7 @@ class FlagBuilder():
         :return: the flag builder
         """
         if isinstance(variation, bool):
-            self._boolean_flag(self)._fallthrough_variation = variation
+            self.boolean_flag()._fallthrough_variation = _variation_for_boolean(variation)
             return self
         else:
             self._fallthrough_variation = variation
@@ -222,7 +222,7 @@ class FlagBuilder():
         :return: the flag builder
         """
         if isinstance(variation, bool):
-            self._boolean_flag(self)._off_variation = variation
+            self.boolean_flag()._off_variation = _variation_for_boolean(variation)
             return self
         else:
             self._off_variation = variation
@@ -267,7 +267,7 @@ class FlagBuilder():
 
         **Example:** Multiple variations
 
-        ::        
+        ::
             td.flag('new-flag') \
               .variations('red', 'green', 'blue')
 

@@ -164,12 +164,20 @@ def test_flagbuilder_can_set_fallthrough_variation():
 
     assert flag.build(0)['fallthrough'] == {'variation': 2}
 
+    flag.fallthrough_variation(True)
+
+    assert flag.build(0)['fallthrough'] == {'variation': 0}
+
 def test_flagbuilder_can_set_off_variation():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.off_variation(2)
 
     assert flag.build(0)['offVariation'] == 2
+
+    flag.off_variation(True)
+
+    assert flag.build(0)['offVariation'] == 0
 
 def test_flagbuilder_can_make_boolean_flag():
     td = TestData.data_source()
