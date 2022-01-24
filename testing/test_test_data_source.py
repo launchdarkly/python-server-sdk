@@ -251,6 +251,22 @@ def test_flagbuilder_can_set_numerical_variation_for_user():
     ]
     assert flag.build(1)['targets'] == expected_targets
 
+def test_flagbuilder_can_set_value_for_all_users():
+    td = TestData.data_source()
+    flag = td.flag('user-value-flag')
+    flag.variation_for_user('john', 1)
+
+    built_flag = flag.build(0)
+    assert built_flag['targets'] == [{'values': ['john'], 'variation': 1}]
+    assert built_flag['variations'] == [True, False]
+
+    flag.value_for_all_users('yes')
+
+    built_flag2 = flag.build(0)
+    assert built_flag2['targets'] == []
+    assert built_flag2['variations'] == ['yes']
+
+
 def test_flagbuilder_can_build():
     td = TestData.data_source()
     flag = td.flag('some-flag')

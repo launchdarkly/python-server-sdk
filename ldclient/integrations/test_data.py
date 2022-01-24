@@ -297,6 +297,20 @@ class FlagBuilder():
         else:
             return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
 
+    def value_for_all_users(self, value):
+        """
+        Sets the flag to always return the specified variation value for all users.
+
+        The value may be of any JSON type. This method changes the flag to have only
+        a single variation, which is this value, and to return the same variation
+        regardless of whether targeting is on or off. Any existing targets or rules
+        are removed.
+
+        :param value the desired value to be returned for all users
+        :return the flag builder
+        """
+        return self.variations(value).variation_for_all_users(0)
+
     def variation_for_user(self, user_key, variation):
         """Sets the flag to return the specified variation for a specific user key when targeting
         is on.
