@@ -226,7 +226,7 @@ class LDClient:
 
         :param user: attributes of the user to register
         """
-        if user is None or user.get('key') is None:
+        if user is None or user.get('key') is None or len(str(user.get('key'))) == 0:
             log.warning("Missing user or user key when calling identify().")
         else:
             self._send_event(self._event_factory_default.new_identify_event(user))

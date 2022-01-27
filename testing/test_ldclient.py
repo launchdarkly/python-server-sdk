@@ -143,6 +143,12 @@ def test_identify_no_user_key():
         assert count_events(client) == 0
 
 
+def test_identify_blank_user_key():
+    with make_client() as client:
+        client.identify({ 'key': '' })
+        assert count_events(client) == 0
+
+
 def test_track():
     with make_client() as client:
         client.track('my_event', user)
