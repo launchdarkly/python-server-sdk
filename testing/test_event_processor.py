@@ -128,21 +128,22 @@ def test_individual_feature_event_is_queued_with_index_event():
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e, user)
-        check_feature_event(output[1], e, False, None)
+        check_feature_event(output[1], e, False, None, None)
         check_summary_event(output[2])
 
 def test_user_is_filtered_in_index_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
         e = {
             'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
-            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
+            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True,
+            'prereqOf': 'prereqFlagKey'
         }
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e, filtered_user)
-        check_feature_event(output[1], e, False, None)
+        check_feature_event(output[1], e, False, None, 'prereqFlagKey')
         check_summary_event(output[2])
 
 def test_user_attrs_are_stringified_in_index_event():
@@ -156,7 +157,7 @@ def test_user_attrs_are_stringified_in_index_event():
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e, stringified_numeric_user)
-        check_feature_event(output[1], e, False, None)
+        check_feature_event(output[1], e, False, None, None)
         check_summary_event(output[2])
 
 def test_feature_event_can_contain_inline_user():
@@ -169,7 +170,7 @@ def test_feature_event_can_contain_inline_user():
 
         output = flush_and_get_events(ep)
         assert len(output) == 2
-        check_feature_event(output[0], e, False, user)
+        check_feature_event(output[0], e, False, user, None)
         check_summary_event(output[1])
 
 def test_user_is_filtered_in_feature_event():
@@ -182,7 +183,7 @@ def test_user_is_filtered_in_feature_event():
 
         output = flush_and_get_events(ep)
         assert len(output) == 2
-        check_feature_event(output[0], e, False, filtered_user)
+        check_feature_event(output[0], e, False, filtered_user, None)
         check_summary_event(output[1])
 
 def test_user_attrs_are_stringified_in_feature_event():
@@ -195,7 +196,7 @@ def test_user_attrs_are_stringified_in_feature_event():
 
         output = flush_and_get_events(ep)
         assert len(output) == 2
-        check_feature_event(output[0], e, False, stringified_numeric_user)
+        check_feature_event(output[0], e, False, stringified_numeric_user, None)
         check_summary_event(output[1])
 
 def test_index_event_is_still_generated_if_inline_users_is_true_but_feature_event_is_not_tracked():
@@ -224,8 +225,8 @@ def test_two_events_for_same_user_only_produce_one_index_event():
         output = flush_and_get_events(ep)
         assert len(output) == 4
         check_index_event(output[0], e0, user)
-        check_feature_event(output[1], e0, False, None)
-        check_feature_event(output[2], e1, False, None)
+        check_feature_event(output[1], e0, False, None, None)
+        check_feature_event(output[2], e1, False, None, None)
         check_summary_event(output[3])
 
 def test_new_index_event_is_added_if_user_cache_has_been_cleared():
@@ -242,9 +243,9 @@ def test_new_index_event_is_added_if_user_cache_has_been_cleared():
         output = flush_and_get_events(ep)
         assert len(output) == 5
         check_index_event(output[0], e0, user)
-        check_feature_event(output[1], e0, False, None)
+        check_feature_event(output[1], e0, False, None, None)
         check_index_event(output[2], e1, user)
-        check_feature_event(output[3], e1, False, None)
+        check_feature_event(output[3], e1, False, None, None)
         check_summary_event(output[4])
 
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
@@ -260,7 +261,7 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e, user)
-        check_feature_event(output[1], e, True, user)
+        check_feature_event(output[1], e, True, user, None)
         check_summary_event(output[2])
 
 def test_event_can_be_both_tracked_and_debugged():
@@ -276,8 +277,8 @@ def test_event_can_be_both_tracked_and_debugged():
         output = flush_and_get_events(ep)
         assert len(output) == 4
         check_index_event(output[0], e, user)
-        check_feature_event(output[1], e, False, None)
-        check_feature_event(output[2], e, True, user)
+        check_feature_event(output[1], e, False, None, None)
+        check_feature_event(output[2], e, True, user, None)
         check_summary_event(output[3])
 
 def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_before_expiration_time():
@@ -304,7 +305,7 @@ def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_befo
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e, user)
-        check_feature_event(output[1], e, True, user)  # debug event
+        check_feature_event(output[1], e, True, user, None)  # debug event
         check_summary_event(output[2])
 
 def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_server_time():
@@ -660,7 +661,7 @@ def check_index_event(data, source, user):
     assert data['creationDate'] == source['creationDate']
     assert data['user'] == user
 
-def check_feature_event(data, source, debug, inline_user):
+def check_feature_event(data, source, debug, inline_user, prereq_of):
     assert data['kind'] == ('debug' if debug else 'feature')
     assert data['creationDate'] == source['creationDate']
     assert data['key'] == source['key']
@@ -672,6 +673,10 @@ def check_feature_event(data, source, debug, inline_user):
         assert data['userKey'] == str(source['user']['key'])
     else:
         assert data['user'] == inline_user
+    if prereq_of is None:
+        assert "prereqOf" not in data
+    else:
+        assert data['prereqOf'] == prereq_of
 
 def check_custom_event(data, source, inline_user):
     assert data['kind'] == 'custom'

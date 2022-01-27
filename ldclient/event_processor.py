@@ -55,9 +55,10 @@ class EventOutputFormatter:
                 'version': e.get('version'),
                 'variation': e.get('variation'),
                 'value': e.get('value'),
-                'default': e.get('default'),
-                'prereqOf': e.get('prereqOf')
+                'default': e.get('default')
             }
+            if 'prereqOf' in e:
+                out['prereqOf'] = e.get('prereqOf')
             if self._inline_users or is_debug:
                 out['user'] = self._process_user(e)
             else:
