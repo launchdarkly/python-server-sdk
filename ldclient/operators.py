@@ -54,7 +54,7 @@ def _parse_time(input):
             log.warning("Couldn't parse timestamp:" + str(input) + " with message: " + str(e))
             return None
 
-    log.warning("Got unexpected type: " + type(input) + " with value: " + str(input) + " when attempting to parse time")
+    log.warning("Got unexpected type: " + str(type(input)) + " with value: " + str(input) + " when attempting to parse time")
     return None
 
 def _time_operator(u, c, fn):
@@ -69,6 +69,8 @@ def _parse_semver(input):
     try:
         VersionInfo.parse(input)
         return input
+    except TypeError:
+        return None
     except ValueError as e:
         try:
             input = _add_zero_version_component(input)
