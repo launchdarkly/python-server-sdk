@@ -350,7 +350,8 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         'key3': 'value3',
         '$flagsState': {
             'key1': {
-                'variation': 0
+                'variation': 0,
+                'version': 100
             },
             'key2': {
                 'variation': 1,
