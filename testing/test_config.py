@@ -29,3 +29,14 @@ def test_can_set_valid_diagnostic_interval():
 def test_minimum_diagnostic_interval_is_enforced():
     config = Config(sdk_key = "SDK_KEY", diagnostic_recording_interval=59)
     assert config.diagnostic_recording_interval == 60
+
+def test_trims_trailing_slashes_on_uris():
+    config = Config(
+        sdk_key = "SDK_KEY",
+        base_uri = "https://launchdarkly.com/",
+        events_uri = "https://docs.launchdarkly.com/",
+        stream_uri = "https://blog.launchdarkly.com/")
+
+    assert config.base_uri == "https://launchdarkly.com"
+    assert config.events_uri == "https://docs.launchdarkly.com/bulk"
+    assert config.stream_base_uri == "https://blog.launchdarkly.com"
