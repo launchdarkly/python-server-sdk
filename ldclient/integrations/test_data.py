@@ -204,7 +204,7 @@ class FlagBuilder():
         :return: the flag builder
         """
         if isinstance(variation, bool):
-            self._boolean_flag(self)._fallthrough_variation = variation
+            self.boolean_flag()._fallthrough_variation = _variation_for_boolean(variation)
             return self
         else:
             self._fallthrough_variation = variation
@@ -222,7 +222,7 @@ class FlagBuilder():
         :return: the flag builder
         """
         if isinstance(variation, bool):
-            self._boolean_flag(self)._off_variation = variation
+            self.boolean_flag()._off_variation = _variation_for_boolean(variation)
             return self
         else:
             self._off_variation = variation
@@ -267,7 +267,7 @@ class FlagBuilder():
 
         **Example:** Multiple variations
 
-        ::        
+        ::
             td.flag('new-flag') \
               .variations('red', 'green', 'blue')
 
@@ -296,6 +296,20 @@ class FlagBuilder():
             return self.boolean_flag().variation_for_all_users(_variation_for_boolean(variation))
         else:
             return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
+
+    def value_for_all_users(self, value):
+        """
+        Sets the flag to always return the specified variation value for all users.
+
+        The value may be of any JSON type. This method changes the flag to have only
+        a single variation, which is this value, and to return the same variation
+        regardless of whether targeting is on or off. Any existing targets or rules
+        are removed.
+
+        :param value the desired value to be returned for all users
+        :return the flag builder
+        """
+        return self.variations(value).variation_for_all_users(0)
 
     def variation_for_user(self, user_key, variation):
         """Sets the flag to return the specified variation for a specific user key when targeting
