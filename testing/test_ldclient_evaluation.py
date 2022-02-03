@@ -279,28 +279,37 @@ def test_all_flags_state_can_be_filtered_for_client_side_flags():
         'on': False,
         'offVariation': 0,
         'variations': [ 'a' ],
-        'clientSide': False
+        'clientSide': False,
+        'version': 100,
+        'trackEvents': False
     }
     flag2 = {
         'key': 'server-side-2',
         'on': False,
         'offVariation': 0,
         'variations': [ 'b' ],
-        'clientSide': False
+        'clientSide': False,
+        'version': 200,
+        'trackEvents': False
     }
     flag3 = {
         'key': 'client-side-1',
         'on': False,
         'offVariation': 0,
         'variations': [ 'value1' ],
-        'clientSide': True
+        'trackEvents': False,
+        'clientSide': True,
+        'version': 300,
+        'trackEvents': False
     }
     flag4 = {
         'key': 'client-side-2',
         'on': False,
         'offVariation': 0,
         'variations': [ 'value2' ],
-        'clientSide': True
+        'clientSide': True,
+        'version': 400,
+        'trackEvents': False
     }
 
     store = InMemoryFeatureStore()
@@ -336,6 +345,7 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         'on': False,
         'offVariation': 1,
         'variations': [ 'x', 'value3' ],
+        'trackEvents': False,
         'debugEventsUntilDate': future_time
     }
     store = InMemoryFeatureStore()
@@ -351,7 +361,6 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         '$flagsState': {
             'key1': {
                 'variation': 0,
-                'version': 100
             },
             'key2': {
                 'variation': 1,
