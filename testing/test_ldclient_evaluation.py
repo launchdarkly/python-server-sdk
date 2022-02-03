@@ -38,19 +38,19 @@ flag2 = {
 class ErroringFeatureStore(FeatureStore):
     def get(self, kind, key, callback=lambda x: x):
         raise NotImplementedError()
-    
+
     def all(self, kind, callback=lambda x: x):
         raise NotImplementedError()
-    
+
     def upsert(self, kind, item):
         pass
-    
+
     def delete(self, key, version):
         pass
-    
+
     def init(self, data):
         pass
-    
+
     @property
     def initialized(self):
         return True
@@ -360,7 +360,7 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         'key3': 'value3',
         '$flagsState': {
             'key1': {
-                'variation': 0,
+                'variation': 0
             },
             'key2': {
                 'variation': 1,

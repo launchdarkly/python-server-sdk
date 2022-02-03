@@ -95,7 +95,7 @@ jobs:
                   export PATH="/home/circleci/.local/bin:$PATH"
                   mypy --install-types --non-interactive ldclient testing
                   mypy --config-file mypy.ini ldclient testing
-      
+
       - unless:
           condition: <<parameters.skip-sse-contract-tests>>
           steps:
@@ -109,11 +109,20 @@ jobs:
           - run:
               name: run SSE contract tests
               command: cd sse-contract-tests && make run-contract-tests
-      
+
+      - run: make build-contract-tests
+      - run:
+          command: make start-contract-test-service
+          background: true
+      - run:
+          name: run contract tests
+          command: TEST_HARNESS_PARAMS="-junit test-reports/contract-tests-junit.xml" make run-contract-tests
+
       - store_test_results:
           path: test-reports
       - store_artifacts:
           path: test-reports
+
 
   test-windows:
     executor:
