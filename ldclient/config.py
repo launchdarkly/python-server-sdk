@@ -240,9 +240,9 @@ class Config:
         """
         self.__sdk_key = sdk_key
 
-        self.__base_uri = base_uri.rstrip('\\')
-        self.__events_uri = events_uri.rstrip('\\')
-        self.__stream_uri = stream_uri.rstrip('\\')
+        self.__base_uri = base_uri.rstrip('/')
+        self.__events_uri = events_uri.rstrip('/')
+        self.__stream_uri = stream_uri.rstrip('/')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
         self.__initial_reconnect_delay = initial_reconnect_delay

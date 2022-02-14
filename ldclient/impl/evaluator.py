@@ -14,7 +14,7 @@ log = logging.getLogger('ldclient.flag')
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email",
+__BUILTINS__ = ["key", "secondary", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
 
 __USER_ATTRS_TO_STRINGIFY_FOR_EVALUATION__ = [ "key", "secondary" ]
@@ -182,8 +182,6 @@ def _get_value_for_variation_or_rollout(flag, vr, user, reason):
     return _get_variation(flag, index, reason)
 
 def _get_user_attribute(user, attr):
-    if attr == 'secondary':
-        return None, True
     if attr in __BUILTINS__:
         return user.get(attr), False
     else:  # custom attribute

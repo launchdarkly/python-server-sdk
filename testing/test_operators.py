@@ -59,7 +59,11 @@ from ldclient import operators
     [ "before", True, 1000,                        False ],  # wrong type
     [ "after",  "1970-01-01T00:00:02.500Z", 1000,  True ],
     [ "after",  "1970-01-01 00:00:02.500Z", 1000,  False ],  # malformed timestamp
+    [ "after", "1970-01-01T00:00:02+01:00", None, False ],
+    [ "after", None, "1970-01-01T00:00:02+01:00", False ],
     [ "before", "1970-01-01T00:00:02+01:00", 1000, True ],
+    [ "before", "1970-01-01T00:00:02+01:00", None, False ],
+    [ "before", None, "1970-01-01T00:00:02+01:00", False ],
     [ "before", -1000, 1000,                       True ],
     [ "after",  "1970-01-01T00:00:01.001Z", 1000,  True ],
     [ "after",  "1970-01-01T00:00:00-01:00", 1000, True ],
@@ -68,6 +72,8 @@ from ldclient import operators
     [ "semVerEqual",       "2.0.1", "2.0.1",    True ],
     [ "semVerEqual",       "2.0",   "2.0.0",    True ],
     [ "semVerEqual",       "2",     "2.0.0",    True ],
+    [ "semVerEqual",       2,     "2.0.0",    False ],
+    [ "semVerEqual",       "2.0.0",     2,    False ],
     [ "semVerEqual",       "2.0-rc1", "2.0.0-rc1", True ],
     [ "semVerLessThan",    "2.0.0", "2.0.1",    True ],
     [ "semVerLessThan",    "2.0",   "2.0.1",    True ],

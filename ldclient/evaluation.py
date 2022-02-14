@@ -119,25 +119,36 @@ class FeatureFlagsState:
         self.__valid = valid
 
     # Used internally to build the state map
-    def add_flag(self, flag, value, variation, reason, details_only_if_tracked):
-        key = flag['key']
-        self.__flag_values[key] = value
+    def add_flag(self, flag_state, with_reasons, details_only_if_tracked):
+        key = flag_state['key']
+        self.__flag_values[key] = flag_state['value']
         meta = {}
-        with_details = (not details_only_if_tracked) or flag.get('trackEvents')
-        if not with_details:
-            if flag.get('debugEventsUntilDate'):
-                now = int(time.time() * 1000)
-                with_details = (flag.get('debugEventsUntilDate') > now)
-        if with_details:
-            meta['version'] = flag.get('version')
-            if reason is not None:
-                meta['reason'] = reason
-        if variation is not None:
-            meta['variation'] = variation
-        if flag.get('trackEvents'):
+
+        trackEvents = flag_state.get('trackEvents', False)
+        trackReason = flag_state.get('trackReason', False)
+
+        omit_details = False
+        if details_only_if_tracked:
+            now = int(time.time() * 1000)
+            if not trackEvents and not trackReason and not (flag_state.get('debugEventsUntilDate') is not None and flag_state['debugEventsUntilDate'] > now):
+                omit_details = True
+
+        reason = None if not with_reasons and not trackReason else flag_state['reason']
+
+        if reason is not None and not omit_details:
+            meta['reason'] = reason
+
+        if not omit_details:
+            meta['version'] = flag_state['version']
+
+        if flag_state['variation'] is not None:
+            meta['variation'] = flag_state['variation']
+        if trackEvents:
             meta['trackEvents'] = True
-        if flag.get('debugEventsUntilDate') is not None:
-            meta['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
+        if trackReason:
+            meta['trackReason'] = True
+        if flag_state.get('debugEventsUntilDate') is not None:
+            meta['debugEventsUntilDate'] = flag_state.get('debugEventsUntilDate')
         self.__flag_metadata[key] = meta
 
     @property
