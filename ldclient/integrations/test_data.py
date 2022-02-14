@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 from ldclient.versioned_data_kind import FEATURES
 from ldclient.rwlock import ReadWriteLock
@@ -150,11 +150,11 @@ class FlagBuilder():
         """
         self._key = key
         self._on = True
-        self._variations = []
-        self._off_variation = None
-        self._fallthrough_variation = None
-        self._targets = {}
-        self._rules = []
+        self._variations = []  # type: List[Any]
+        self._off_variation = None  # type: Optional[int]
+        self._fallthrough_variation = None  # type: Optional[int]
+        self._targets = {}  # type: Dict[int, List[str]]
+        self._rules = []  # type: List[FlagRuleBuilder]
 
     def copy(self) -> 'FlagBuilder':
         """Creates a deep copy of the flag builder. Subsequent updates to the
@@ -172,7 +172,6 @@ class FlagBuilder():
         to._rules = copy.copy(self._rules)
 
         return to
-
 
     def on(self, on: bool) -> 'FlagBuilder':
         """Sets targeting to be on or off for this flag.
@@ -330,7 +329,7 @@ class FlagBuilder():
             for idx, var in enumerate(self._variations):
                 if (idx == variation):
                     # If there is no set at the current variation, set it to be empty
-                    target_for_variation = []
+                    target_for_variation = []  # type: List[str]
                     if idx in targets:
                         target_for_variation = targets[idx]
 
@@ -355,7 +354,7 @@ class FlagBuilder():
     def _add_rule(self, flag_rule_builder: 'FlagRuleBuilder'):
         self._rules.append(flag_rule_builder)
 
-    def if_match(self, attribute: str, *values) -> 'FlagBuilder':
+    def if_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Starts defining a flag rule, using the "is one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" or "Edina"
@@ -372,7 +371,7 @@ class FlagBuilder():
         flag_rule_builder = FlagRuleBuilder(self)
         return flag_rule_builder.and_match(attribute, *values)
 
-    def if_not_match(self, attribute: str, *values) -> 'FlagBuilder':
+    def if_not_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Starts defining a flag rule, using the "is not one of" operator.
 
         **Example:** create a rule that returns ``True`` if the name is neither "Saffron" nor "Bubble"
@@ -435,9 +434,10 @@ class FlagBuilder():
             })
         base_flag_object['targets'] = targets
 
-        base_flag_object['rules'] = []
+        rules = []
         for idx, rule in enumerate(self._rules):
-            base_flag_object['rules'].append(rule.build(idx))
+            rules.append(rule.build(str(idx)))
+        base_flag_object['rules'] = rules
 
         return base_flag_object
 
@@ -461,8 +461,8 @@ class FlagRuleBuilder():
     """
     def __init__(self, flag_builder: FlagBuilder):
         self._flag_builder = flag_builder
-        self._clauses = []
-        self._variation = None
+        self._clauses = []  # type: List[dict]
+        self._variation = None  # type: Optional[int]
 
     def and_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Adds another clause, using the "is one of" operator.
@@ -510,7 +510,7 @@ class FlagRuleBuilder():
             })
         return self
 
-    def then_return(self, variation: Union[bool, int]) -> 'FlagRuleBuilder':
+    def then_return(self, variation: Union[bool, int]) -> 'FlagBuilder':
         """Finishes defining the rule, specifying the result as either a boolean
         or a variation index.
 
@@ -536,7 +536,7 @@ class FlagRuleBuilder():
         :return: the dictionary representation of the rule
         """
         return {
-            'id': 'rule' + str(id),
+            'id': 'rule' + id,
             'variation': self._variation,
             'clauses': self._clauses
         }
