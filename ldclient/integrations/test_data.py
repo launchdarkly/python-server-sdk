@@ -1,5 +1,5 @@
 import copy
-from typing import Any
+from typing import Any, Union
 
 from ldclient.versioned_data_kind import FEATURES
 from ldclient.rwlock import ReadWriteLock
@@ -189,7 +189,7 @@ class FlagBuilder():
         self._on = on
         return self
 
-    def fallthrough_variation(self, variation: bool|int) -> 'FlagBuilder':
+    def fallthrough_variation(self, variation: Union[bool, int]) -> 'FlagBuilder':
         """Specifies the fallthrough variation. The fallthrough is the value
         that is returned if targeting is on and the user was not matched by a more specific
         target or rule.
@@ -208,7 +208,7 @@ class FlagBuilder():
             self._fallthrough_variation = variation
             return self
 
-    def off_variation(self, variation: bool|int) -> 'FlagBuilder' :
+    def off_variation(self, variation: Union[bool, int]) -> 'FlagBuilder' :
         """Specifies the fallthrough variation. This is the variation that is returned
         whenever targeting is off.
 
@@ -274,7 +274,7 @@ class FlagBuilder():
 
         return self
 
-    def variation_for_all_users(self, variation: bool|int) -> 'FlagBuilder':
+    def variation_for_all_users(self, variation: Union[bool, int]) -> 'FlagBuilder':
         """Sets the flag to always return the specified variation for all users.
 
         The variation is specified, Targeting is switched on, and any existing targets or rules are removed.
@@ -306,7 +306,7 @@ class FlagBuilder():
         """
         return self.variations(value).variation_for_all_users(0)
 
-    def variation_for_user(self, user_key: str, variation: bool|int) -> 'FlagBuilder':
+    def variation_for_user(self, user_key: str, variation: Union[bool, int]) -> 'FlagBuilder':
         """Sets the flag to return the specified variation for a specific user key when targeting
         is on.
 
@@ -510,7 +510,7 @@ class FlagRuleBuilder():
             })
         return self
 
-    def then_return(self, variation: bool|int) -> 'FlagRuleBuilder':
+    def then_return(self, variation: Union[bool, int]) -> 'FlagRuleBuilder':
         """Finishes defining the rule, specifying the result as either a boolean
         or a variation index.
 
