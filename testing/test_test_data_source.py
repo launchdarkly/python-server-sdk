@@ -189,7 +189,8 @@ def test_flagbuilder_can_make_boolean_flag():
 
 def test_flagbuilder_can_set_variation_when_targeting_is_off():
     td = TestData.data_source()
-    flag = td.flag('test-flag').on(False)
+    flag = td.flag('test-flag') \
+        .on(False)
     assert flag.build(0)['on'] == False
     assert flag.build(0)['variations'] == [True,False]
     flag.variations('dog', 'cat')
