@@ -1,4 +1,6 @@
 import copy
+from typing import Any
+
 from ldclient.versioned_data_kind import FEATURES
 from ldclient.rwlock import ReadWriteLock
 from ldclient.impl.integrations.test_data.test_data_source import _TestDataSource
@@ -143,7 +145,7 @@ class FlagBuilder():
     :see: :meth:`ldclient.integrations.test_data.TestData.flag()`
     :see: :meth:`ldclient.integrations.test_data.TestData.update()`
     """
-    def __init__(self, key):
+    def __init__(self, key: str):
         """:param str key: The name of the flag
         """
         self._key = key
@@ -290,7 +292,7 @@ class FlagBuilder():
         else:
             return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
 
-    def value_for_all_users(self, value) -> 'FlagBuilder':
+    def value_for_all_users(self, value: Any) -> 'FlagBuilder':
         """
         Sets the flag to always return the specified variation value for all users.
 
@@ -350,7 +352,7 @@ class FlagBuilder():
 
             return self
 
-    def _add_rule(self, flag_rule_builder):
+    def _add_rule(self, flag_rule_builder: 'FlagRuleBuilder'):
         self._rules.append(flag_rule_builder)
 
     def if_match(self, attribute: str, *values) -> 'FlagBuilder':
@@ -457,7 +459,7 @@ class FlagRuleBuilder():
     Finally, call :meth:`ldclient.integrations.test_data.FlagRuleBuilder.then_return()`
     to finish defining the rule.
     """
-    def __init__(self, flag_builder):
+    def __init__(self, flag_builder: FlagBuilder):
         self._flag_builder = flag_builder
         self._clauses = []
         self._variation = None
