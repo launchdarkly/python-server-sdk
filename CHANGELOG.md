@@ -2,6 +2,22 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.3.1] - 2022-02-14
+### Added:
+- CI builds now include a cross-platform test suite implemented in https://github.com/launchdarkly/sdk-test-harness. This covers many test cases that are also implemented in unit tests, but may be extended in the future to ensure consistent behavior across SDKs in other areas.
+
+### Fixed:
+- The SDK no longer uses the deprecated method `threading.Condition.notifyAll()`. (Thanks, [jdmoldenhauer](https://github.com/launchdarkly/python-server-sdk/pull/162)!)
+- A rule clause that uses a date operator should be considered a non-match, rather than an error, if either value is `None`.
+- A rule clause that uses a semver operator should be considered a non-match, rather than an error, if either value is not a string.
+- Rules targeting the `secondary` attribute will now reference the correct value.
+- The `identify` method should not emit an event if the user key is an empty string.
+- Do not include `prereqOf` field in event data if it is null. This is done to save on event transfer bandwidth.
+- Data from `all_flags_state` was always including the flag's version even when it was unnecessary.
+- Any base URIs set in `Config` will work consistently whether they have trailing slashes or not.
+- When using `all_flags_state` to produce bootstrap data for the JavaScript SDK, the Python SDK was not returning the correct metadata for evaluations that involved an experiment. As a result, the analytics events produced by the JavaScript SDK did not correctly reflect experimentation results.
+- Data from `all_flags_state` was always including the flag's version even when it was unnecessary.
+
 ## [7.3.0] - 2021-12-10
 ### Added:
 - The SDK now supports evaluation of Big Segments. See: https://docs.launchdarkly.com/home/users/big-segments
