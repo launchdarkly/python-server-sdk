@@ -87,7 +87,7 @@ class TestData():
         try:
             self._lock.rlock()
             if key in self._flag_builders and self._flag_builders[key]:
-                return self._flag_builders[key].copy()
+                return self._flag_builders[key]._copy()
             else:
                 return FlagBuilder(key).boolean_flag()
         finally:
@@ -117,10 +117,10 @@ class TestData():
                 if old_flag:
                     old_version = old_flag['version']
 
-            new_flag = flag_builder.build(old_version + 1)
+            new_flag = flag_builder._build(old_version + 1)
 
             self._current_flags[flag_builder._key] = new_flag
-            self._flag_builders[flag_builder._key] = flag_builder.copy()
+            self._flag_builders[flag_builder._key] = flag_builder._copy()
         finally:
             self._lock.unlock()
 
@@ -156,7 +156,9 @@ class FlagBuilder():
         self._targets = {}
         self._rules = []
 
-    def copy(self) -> 'FlagBuilder':
+    # Note that _copy is private by convention, because we don't want developers to
+    # consider it part of the public API, but it is still called from TestData.
+    def _copy(self) -> 'FlagBuilder':
         """Creates a deep copy of the flag builder. Subsequent updates to the
         original ``FlagBuilder`` object will not update the copy and vise versa.
 
@@ -409,7 +411,9 @@ class FlagBuilder():
         self._targets = {}
         return self
 
-    def build(self, version: int) -> dict:
+    # Note that _build is private by convention, because we don't want developers to
+    # consider it part of the public API, but it is still called from TestData.
+    def _build(self, version: int) -> dict:
         """Creates a dictionary representation of the flag
 
         :param version: the version number of the rule
@@ -437,7 +441,7 @@ class FlagBuilder():
 
         base_flag_object['rules'] = []
         for idx, rule in enumerate(self._rules):
-            base_flag_object['rules'].append(rule.build(idx))
+            base_flag_object['rules'].append(rule._build(idx))
 
         return base_flag_object
 
@@ -529,7 +533,9 @@ class FlagRuleBuilder():
             self._flag_builder._add_rule(self)
             return self._flag_builder
 
-    def build(self, id: str) -> dict:
+    # Note that _build is private by convention, because we don't want developers to
+    # consider it part of the public API, but it is still called from FlagBuilder.
+    def _build(self, id: str) -> dict:
         """Creates a dictionary representation of the rule
 
         :param id: the rule id

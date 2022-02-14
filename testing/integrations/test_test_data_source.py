@@ -9,7 +9,6 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from ldclient.integrations.test_data import TestData
 
 
-
 ## Test Data + Data Source
 
 def test_makes_valid_datasource():
@@ -26,7 +25,7 @@ def test_makes_valid_datasource_with_flag():
     flag = td.flag(key='test-flag')
     assert flag is not None
 
-    builtFlag = flag.build(0)
+    builtFlag = flag._build(0)
     assert builtFlag['key'] is 'test-flag'
     assert builtFlag['on'] is True
     assert builtFlag['variations'] == [True, False]
@@ -40,7 +39,7 @@ def test_can_retrieve_flag_from_store():
 
     client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
+    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
 
     client.close()
 
@@ -53,7 +52,7 @@ def test_updates_to_flags_are_reflected_in_store():
 
     td.update(td.flag('some-flag'))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag').build(1)
+    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
 
     client.close()
 
@@ -146,44 +145,44 @@ def test_can_handle_multiple_clients():
 def test_flagbuilder_defaults_to_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('empty-flag')
-    assert flag.build(0)['variations'] == [True, False]
-    assert flag.build(0)['fallthrough'] == {'variation': 0}
-    assert flag.build(0)['offVariation'] == 1
+    assert flag._build(0)['variations'] == [True, False]
+    assert flag._build(0)['fallthrough'] == {'variation': 0}
+    assert flag._build(0)['offVariation'] == 1
 
 def test_flagbuilder_can_turn_flag_off():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.on(False)
 
-    assert flag.build(0)['on'] is False
+    assert flag._build(0)['on'] is False
 
 def test_flagbuilder_can_set_fallthrough_variation():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.fallthrough_variation(2)
 
-    assert flag.build(0)['fallthrough'] == {'variation': 2}
+    assert flag._build(0)['fallthrough'] == {'variation': 2}
 
     flag.fallthrough_variation(True)
 
-    assert flag.build(0)['fallthrough'] == {'variation': 0}
+    assert flag._build(0)['fallthrough'] == {'variation': 0}
 
 def test_flagbuilder_can_set_off_variation():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.off_variation(2)
 
-    assert flag.build(0)['offVariation'] == 2
+    assert flag._build(0)['offVariation'] == 2
 
     flag.off_variation(True)
 
-    assert flag.build(0)['offVariation'] == 0
+    assert flag._build(0)['offVariation'] == 0
 
 def test_flagbuilder_can_make_boolean_flag():
     td = TestData.data_source()
     flag = td.flag('boolean-flag').boolean_flag()
 
-    builtFlag = flag.build(0)
+    builtFlag = flag._build(0)
     assert builtFlag['fallthrough'] == {'variation': 0}
     assert builtFlag['offVariation'] == 1
 
@@ -191,21 +190,21 @@ def test_flagbuilder_can_set_variation_when_targeting_is_off():
     td = TestData.data_source()
     flag = td.flag('test-flag') \
         .on(False)
-    assert flag.build(0)['on'] == False
-    assert flag.build(0)['variations'] == [True,False]
+    assert flag._build(0)['on'] == False
+    assert flag._build(0)['variations'] == [True,False]
     flag.variations('dog', 'cat')
-    assert flag.build(0)['variations'] == ['dog','cat']
+    assert flag._build(0)['variations'] == ['dog','cat']
 
 def test_flagbuilder_can_set_variation_for_all_users():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variation_for_all_users(True)
-    assert flag.build(0)['fallthrough'] == {'variation': 0}
+    assert flag._build(0)['fallthrough'] == {'variation': 0}
 
 def test_flagbuilder_clears_existing_rules_and_targets_when_setting_variation_for_all_users():
     td = TestData.data_source()
 
-    flag = td.flag('test-flag').if_match('name', 'christian').then_return(False).variation_for_user('christian', False).variation_for_all_users(True).build(0)
+    flag = td.flag('test-flag').if_match('name', 'christian').then_return(False).variation_for_user('christian', False).variation_for_all_users(True)._build(0)
 
     assert flag['rules'] == []
     assert flag['targets'] == []
@@ -214,18 +213,18 @@ def test_flagbuilder_can_set_variations():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variations(2,3,4,5)
-    assert flag.build(0)['variations'] == [2,3,4,5]
+    assert flag._build(0)['variations'] == [2,3,4,5]
 
 def test_flagbuilder_can_make_an_immutable_copy():
     td = TestData.data_source()
     flag = td.flag('test-flag')
     flag.variations(1,2)
-    copy_of_flag = flag.copy()
+    copy_of_flag = flag._copy()
     flag.variations(3,4)
-    assert copy_of_flag.build(0)['variations'] == [1,2]
+    assert copy_of_flag._build(0)['variations'] == [1,2]
 
     copy_of_flag.variations(5,6)
-    assert flag.build(0)['variations'] == [3,4]
+    assert flag._build(0)['variations'] == [3,4]
 
 def test_flagbuilder_can_set_boolean_variation_for_user():
     td = TestData.data_source()
@@ -237,7 +236,7 @@ def test_flagbuilder_can_set_boolean_variation_for_user():
             'values': ['christian']
         }
     ]
-    assert flag.build(0)['targets'] == expected_targets
+    assert flag._build(0)['targets'] == expected_targets
 
 def test_flagbuilder_can_set_numerical_variation_for_user():
     td = TestData.data_source()
@@ -250,20 +249,20 @@ def test_flagbuilder_can_set_numerical_variation_for_user():
             'values': ['christian']
         }
     ]
-    assert flag.build(1)['targets'] == expected_targets
+    assert flag._build(1)['targets'] == expected_targets
 
 def test_flagbuilder_can_set_value_for_all_users():
     td = TestData.data_source()
     flag = td.flag('user-value-flag')
     flag.variation_for_user('john', 1)
 
-    built_flag = flag.build(0)
+    built_flag = flag._build(0)
     assert built_flag['targets'] == [{'values': ['john'], 'variation': 1}]
     assert built_flag['variations'] == [True, False]
 
     flag.value_for_all_users('yes')
 
-    built_flag2 = flag.build(0)
+    built_flag2 = flag._build(0)
     assert built_flag2['targets'] == []
     assert built_flag2['variations'] == ['yes']
 
@@ -297,4 +296,4 @@ def test_flagbuilder_can_build():
         'version': 1,
     }
 
-    assert flag.build(1) == expected_result
+    assert flag._build(1) == expected_result
