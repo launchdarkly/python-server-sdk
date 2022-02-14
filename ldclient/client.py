@@ -226,7 +226,7 @@ class LDClient:
 
         :param user: attributes of the user to register
         """
-        if user is None or user.get('key') is None:
+        if user is None or user.get('key') is None or len(str(user.get('key'))) == 0:
             log.warning("Missing user or user key when calling identify().")
         else:
             self._send_event(self._event_factory_default.new_identify_event(user))
@@ -395,13 +395,25 @@ class LDClient:
                 continue
             try:
                 detail = self._evaluator.evaluate(flag, user, self._event_factory_default).detail
-                state.add_flag(flag, detail.value, detail.variation_index,
-                    detail.reason if with_reasons else None, details_only_if_tracked)
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
-                state.add_flag(flag, None, None, reason if with_reasons else None, details_only_if_tracked)
+                detail = EvaluationDetail(None, None, reason)
+
+            requires_experiment_data = _EventFactory.is_experiment(flag, detail.reason)
+            flag_state = {
+                'key': flag['key'],
+                'value': detail.value,
+                'variation': detail.variation_index,
+                'reason': detail.reason,
+                'version': flag['version'],
+                'trackEvents': flag['trackEvents'] or requires_experiment_data,
+                'trackReason': requires_experiment_data,
+                'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
+            }
+
+            state.add_flag(flag_state, with_reasons, details_only_if_tracked)
 
         return state
 

@@ -11,7 +11,7 @@ class _EventFactory:
         self._with_reasons = with_reasons
 
     def new_eval_event(self, flag, user, detail, default_value, prereq_of_flag = None):
-        add_experiment_data = self._is_experiment(flag, detail.reason)
+        add_experiment_data = self.is_experiment(flag, detail.reason)
         e = {
             'kind': 'feature',
             'key': flag.get('key'),
@@ -104,7 +104,8 @@ class _EventFactory:
         else:
             return "user"
 
-    def _is_experiment(self, flag, reason):
+    @staticmethod
+    def is_experiment(flag, reason):
         if reason is not None:
             if reason.get('inExperiment'):
                 return True
