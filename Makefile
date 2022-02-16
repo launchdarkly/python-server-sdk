@@ -1,3 +1,21 @@
+
+PYTEST_FLAGS=-W error::SyntaxWarning
+
+test:
+	LD_SKIP_DATABASE_TESTS=1 pytest $(PYTEST_FLAGS)
+
+test-all:
+	pytest $(PYTEST_FLAGS)
+
+lint:
+	mypy --install-types --non-interactive --config-file mypy.ini ldclient testing
+
+docs:
+	cd docs && make html
+
+.PHONY: test test-all lint docs
+
+
 TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
 # port 8000 and 9000 is already used in the CI environment because we're

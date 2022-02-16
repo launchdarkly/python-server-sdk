@@ -93,8 +93,7 @@ jobs:
                 name: verify typehints
                 command: |
                   export PATH="/home/circleci/.local/bin:$PATH"
-                  mypy --install-types --non-interactive ldclient testing
-                  mypy --config-file mypy.ini ldclient testing
+                  make lint
 
       - unless:
           condition: <<parameters.skip-sse-contract-tests>>
