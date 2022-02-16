@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.4.0] - 2022-02-16
+### Added:
+- `TestData`, in the new module `ldclient.integrations.test_data`, is a new way to inject feature flag data programmatically into the SDK for testing—either with fixed values for each flag, or with targets and/or rules that can return different values for different users. Unlike the file data source, this mechanism does not use any external resources, only the data that your test code has provided.
+
 ## [7.3.1] - 2022-02-14
 ### Added:
 - CI builds now include a cross-platform test suite implemented in https://github.com/launchdarkly/sdk-test-harness. This covers many test cases that are also implemented in unit tests, but may be extended in the future to ensure consistent behavior across SDKs in other areas.
