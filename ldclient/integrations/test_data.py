@@ -51,7 +51,7 @@ class TestData():
         self._instances = []
 
     def __call__(self, config, store, ready):
-        data_source = _TestDataSource(store, self)
+        data_source = _TestDataSource(store, self, ready)
         try:
             self._lock.lock()
             self._instances.append(data_source)
