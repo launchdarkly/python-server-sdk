@@ -485,7 +485,7 @@ class FlagRuleBuilder():
         """
         self._clauses.append({
                 'attribute': attribute,
-                'operator': 'in',
+                'op': 'in',
                 'values': list(values),
                 'negate': False
             })
@@ -508,7 +508,7 @@ class FlagRuleBuilder():
         """
         self._clauses.append({
                 'attribute': attribute,
-                'operator': 'in',
+                'op': 'in',
                 'values': list(values),
                 'negate': True
             })

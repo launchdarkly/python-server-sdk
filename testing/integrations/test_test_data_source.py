@@ -285,7 +285,7 @@ def test_flagbuilder_can_build():
                 'clauses': [
                     {'attribute': 'country',
                     'negate': False,
-                    'operator': 'in',
+                    'op': 'in',
                     'values': ['fr']
                     }
                 ],
@@ -297,3 +297,35 @@ def test_flagbuilder_can_build():
     }
 
     assert flag._build(1) == expected_result
+
+def test_flag_can_evaluate_rules():
+    td = TestData.data_source()
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY',
+                      update_processor_class = td,
+                      send_events = False,
+                      feature_store = store))
+
+    td.update(td.flag(key='test-flag')
+                .fallthrough_variation(False)
+                .if_match('firstName', 'Mike')
+                .and_not_match('country', 'gb')
+                .then_return(True))
+
+    # user1 should satisfy the rule (matching firstname, not matching country)
+    user1 = { 'key': 'user1', 'firstName': 'Mike', 'country': 'us' }
+    eval1 = client.variation_detail('test-flag', user1, default='default')
+
+    assert eval1.value == True
+    assert eval1.variation_index == 0
+    assert eval1.reason['kind'] == 'RULE_MATCH'
+
+    # user2 should NOT satisfy the rule (not matching firstname despite not matching country)
+    user2 = { 'key': 'user2', 'firstName': 'Joe', 'country': 'us' }
+    eval2 = client.variation_detail('test-flag', user2, default='default')
+
+    assert eval2.value == False
+    assert eval2.variation_index == 1
+    assert eval2.reason['kind'] == 'FALLTHROUGH'
+
