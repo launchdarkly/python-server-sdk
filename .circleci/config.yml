@@ -10,6 +10,7 @@ workflows:
           name: Python 3.5
           docker-image: cimg/python:3.5
           skip-sse-contract-tests: true  # the test service app has dependencies that aren't available in 3.5, which is EOL anyway
+          skip-contract-tests: true  # the test service app has dependencies that aren't available in 3.5, which is EOL anyway
       - test-linux:
           name: Python 3.6
           docker-image: cimg/python:3.6
@@ -44,6 +45,9 @@ jobs:
         type: boolean
         default: true
       skip-sse-contract-tests:
+        type: boolean
+        default: false
+      skip-contract-tests:
         type: boolean
         default: false
     docker:
@@ -109,13 +113,16 @@ jobs:
               name: run SSE contract tests
               command: cd sse-contract-tests && make run-contract-tests
 
-      - run: make build-contract-tests
-      - run:
-          command: make start-contract-test-service
-          background: true
-      - run:
-          name: run contract tests
-          command: TEST_HARNESS_PARAMS="-junit test-reports/contract-tests-junit.xml" make run-contract-tests
+      - unless:
+          condition: <<parameters.skip-contract-tests>>
+          steps:
+          - run: make build-contract-tests
+          - run:
+              command: make start-contract-test-service
+              background: true
+          - run:
+              name: run contract tests
+              command: TEST_HARNESS_PARAMS="-junit test-reports/contract-tests-junit.xml" make run-contract-tests
 
       - store_test_results:
           path: test-reports
