@@ -144,7 +144,8 @@ class Redis:
     def new_feature_store(url: str='redis://localhost:6379/0',
                           prefix: str='launchdarkly',
                           max_connections: int=16,
-                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
+                          caching: CacheConfig=CacheConfig.default(),
+                          **conn_options: Any) -> CachingStoreWrapper:
         """
         Creates a Redis-backed implementation of :class:`~ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
@@ -167,8 +168,10 @@ class Redis:
           connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
+        :param conn_options: extra options for initializing Redis connection from the url,
+          see `redis.connection.ConnectionPool.from_url` for more details.
         """
-        core = _RedisFeatureStoreCore(url, prefix, max_connections)
+        core = _RedisFeatureStoreCore(url, prefix, max_connections=max_connections, **conn_options)
         wrapper = CachingStoreWrapper(core, caching)
         wrapper._core = core  # exposed for testing
         return wrapper
@@ -176,7 +179,8 @@ class Redis:
     @staticmethod
     def new_big_segment_store(url: str='redis://localhost:6379/0',
                               prefix: str='launchdarkly',
-                              max_connections: int=16) -> BigSegmentStore:
+                              max_connections: int=16,
+                              **conn_options: Any) -> BigSegmentStore:
         """
         Creates a Redis-backed Big Segment store.
 
@@ -198,8 +202,10 @@ class Redis:
           ``DEFAULT_PREFIX``
         :param max_connections: the maximum number of Redis connections to keep in the
           connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
+        :param conn_options: extra options for initializing Redis connection from the url,
+          see `redis.connection.ConnectionPool.from_url` for more details.
         """
-        return _RedisBigSegmentStore(url, prefix, max_connections)
+        return _RedisBigSegmentStore(url, prefix, max_connections=max_connections, **conn_options)
 
 class Files:
     """Provides factory methods for integrations with filesystem data.
