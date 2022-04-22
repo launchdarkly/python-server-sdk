@@ -243,7 +243,12 @@ def _bucket_user(seed, user, key, salt, bucket_by):
     return result
 
 def _bucketable_string_value(u_value):
-    return str(u_value) if isinstance(u_value, (str, int)) else None
+    if isinstance(u_value, bool):
+        return None
+    elif isinstance(u_value, (str, int)):
+        return str(u_value)
+
+    return None
 
 def _clause_matches_user_no_segments(clause, user):
     u_value, should_pass = _get_user_attribute(user, clause.get('attribute'))

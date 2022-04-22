@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import sys
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask.logging import default_handler
 from logging.config import dictConfig
 from werkzeug.exceptions import HTTPException
@@ -132,7 +132,7 @@ def delete_client(id):
         return ('', 404)
 
     client.close()
-    return ('', 204)
+    return ('', 202)
 
 if __name__ == "__main__":
     port = default_port

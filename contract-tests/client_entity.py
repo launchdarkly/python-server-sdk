@@ -6,39 +6,36 @@ import sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient import *
 
-def millis_to_seconds(t):
-    return None if t is None else t / 1000
-
 
 class ClientEntity:
     def __init__(self, tag, config):
         self.log = logging.getLogger(tag)
         opts = {"sdk_key": config["credential"]}
 
-        if "streaming" in config:
+        if config.get("streaming") is not None:
             streaming = config["streaming"]
-            if "baseUri" in streaming:
+            if streaming.get("baseUri") is not None:
                 opts["stream_uri"] = streaming["baseUri"]
             if streaming.get("initialRetryDelayMs") is not None:
                 opts["initial_reconnect_delay"] = streaming["initialRetryDelayMs"] / 1000.0
 
-        if "events" in config:
+        if config.get("events") is not None:
             events = config["events"]
-            if "baseUri" in events:
+            if events.get("baseUri") is not None:
                 opts["events_uri"] = events["baseUri"]
-            if events.get("capacity", None) is not None:
+            if events.get("capacity") is not None:
                 opts["events_max_pending"] = events["capacity"]
             opts["diagnostic_opt_out"] = not events.get("enableDiagnostics", False)
             opts["all_attributes_private"] = events.get("allAttributesPrivate", False)
             opts["private_attribute_names"] = events.get("globalPrivateAttributes", {})
-            if "flushIntervalMs" in events:
+            if events.get("flushIntervalMs") is not None:
                  opts["flush_interval"] = events["flushIntervalMs"] / 1000.0
-            if "inlineUsers" in events:
+            if events.get("inlineUsers") is not None:
                 opts["inline_users_in_events"] = events["inlineUsers"]
         else:
             opts["send_events"] = False
 
-        start_wait = config.get("startWaitTimeMs", 5000)
+        start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
 
         self.client = client.LDClient(config, start_wait / 1000.0)

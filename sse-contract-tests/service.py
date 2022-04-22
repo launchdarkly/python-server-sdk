@@ -81,7 +81,7 @@ def delete_stream(id):
     if stream is None:
         return ('', 404)
     stream.close()
-    return ('', 204)
+    return ('', 202)
 
 if __name__ == "__main__":
     port = default_port

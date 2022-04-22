@@ -26,7 +26,10 @@ class _RedisBigSegmentStore(BigSegmentStore):
     def get_metadata(self) -> BigSegmentStoreMetadata:
         r = redis.Redis(connection_pool=self._pool)
         value = r.get(self._prefix + self.KEY_LAST_UP_TO_DATE)
-        return BigSegmentStoreMetadata(None if value is None else int(value))
+        if value is None:
+            return BigSegmentStoreMetadata(None)
+
+        return BigSegmentStoreMetadata(int(value))
 
     def get_membership(self, user_hash: str) -> Optional[dict]:
         r = redis.Redis(connection_pool=self._pool)
