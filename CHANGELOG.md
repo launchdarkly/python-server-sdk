@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.4.1] - 2022-04-22
+### Added:
+- Added py.typed file to indicate typing support. Thanks [@phillipuniverse](https://github.com/launchdarkly/python-server-sdk/pull/166)
+
+### Fixed:
+- Fixed invalid operator in key in TestData.
+- Fixed bucketing logic to not treat boolean values as bucketable value types.
+
 ## [7.4.0] - 2022-02-16
 ### Added:
 - `TestData`, in the new module `ldclient.integrations.test_data`, is a new way to inject feature flag data programmatically into the SDK for testing—either with fixed values for each flag, or with targets and/or rules that can return different values for different users. Unlike the file data source, this mechanism does not use any external resources, only the data that your test code has provided.
