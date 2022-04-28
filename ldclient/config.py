@@ -201,10 +201,12 @@ class Config:
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
         :param poll_interval: The number of seconds between polls for flag updates if streaming is off.
-        :param use_ldd: Whether you are using the LaunchDarkly relay proxy in daemon mode. In this
+        :param use_ldd: Whether you are using the LaunchDarkly Relay Proxy in daemon mode. In this
           configuration, the client will not use a streaming connection to listen for updates, but instead
           will get feature state from a Redis instance. The `stream` and `poll_interval` options will be
           ignored if this option is set to true. By default, this is false.
+          For more information, read the LaunchDarkly
+          documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
         :param array private_attribute_names: Marks a set of attribute names private. Any users sent to
           LaunchDarkly with this configuration active will have attributes with these names removed.
         :param all_attributes_private: If true, all user attributes (other than the key) will be
