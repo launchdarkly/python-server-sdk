@@ -11,7 +11,7 @@ publications:
     description: documentation (readthedocs.io)
 
 branches:
-  - name: master
+  - name: main
     description: 7.x
   - name: 6.x
 
