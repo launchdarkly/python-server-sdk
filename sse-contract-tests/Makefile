@@ -19,7 +19,7 @@ start-test-service-bg:
 	@make start-test-service >$(TEMP_TEST_OUTPUT) 2>&1 &
 
 run-contract-tests:
-	@curl -s https://raw.githubusercontent.com/launchdarkly/sse-contract-tests/master/downloader/run.sh \
+	@curl -s https://raw.githubusercontent.com/launchdarkly/sse-contract-tests/v2.0.0/downloader/run.sh \
       | VERSION=v1 PARAMS="-url http://localhost:$(PORT) -debug -stop-service-at-end $(EXTRA_TEST_PARAMS)" sh
 
 contract-tests: build-test-service start-test-service-bg run-contract-tests
