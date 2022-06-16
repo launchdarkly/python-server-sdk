@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.4.2] - 2022-06-16
+### Changed:
+- Removed upper version restriction on expiringdict. This was originally necessary to allow compatibility with older Python versions which are no longer supported.
+
 ## [7.4.1] - 2022-04-22
 ### Added:
 - Added py.typed file to indicate typing support. Thanks [@phillipuniverse](https://github.com/launchdarkly/python-server-sdk/pull/166)
