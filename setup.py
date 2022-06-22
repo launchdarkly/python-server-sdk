@@ -54,6 +54,7 @@ setup(
     author='LaunchDarkly',
     author_email='team@launchdarkly.com',
     packages=find_packages(),
+    include_package_data=True,
     url='https://github.com/launchdarkly/python-server-sdk',
     description='LaunchDarkly SDK for Python',
     long_description='LaunchDarkly SDK for Python',
