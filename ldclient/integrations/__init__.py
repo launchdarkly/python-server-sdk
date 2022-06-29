@@ -13,7 +13,7 @@ from ldclient.impl.integrations.redis.redis_big_segment_store import _RedisBigSe
 from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
 from ldclient.interfaces import BigSegmentStore
 
-from typing import Any, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
@@ -144,7 +144,8 @@ class Redis:
     def new_feature_store(url: str='redis://localhost:6379/0',
                           prefix: str='launchdarkly',
                           max_connections: int=16,
-                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
+                          caching: CacheConfig=CacheConfig.default(),
+                          redis_opts: Dict[str, Any] = {}) -> CachingStoreWrapper:
         """
         Creates a Redis-backed implementation of :class:`~ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
@@ -164,11 +165,24 @@ class Redis:
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
         :param max_connections: the maximum number of Redis connections to keep in the
-          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
+          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``. This
+          parameter will later be dropped in favor of setting
+          redis_opts['max_connections']
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
+        :param redis_opts: extra options for initializing Redis connection from the url,
+          see `redis.connection.ConnectionPool.from_url` for more details. Note that
+          if you set max_connections, this will take precedence over the
+          deprecated max_connections parameter.
         """
-        core = _RedisFeatureStoreCore(url, prefix, max_connections)
+
+        # WARN(deprecated): Remove the max_connection parameter from
+        # this signature and clean up this bit of code.
+        if 'max_connections' not in redis_opts:
+            redis_opts = redis_opts.copy()
+            redis_opts['max_connections'] = max_connections
+
+        core = _RedisFeatureStoreCore(url, prefix, redis_opts)
         wrapper = CachingStoreWrapper(core, caching)
         wrapper._core = core  # exposed for testing
         return wrapper
@@ -176,7 +190,8 @@ class Redis:
     @staticmethod
     def new_big_segment_store(url: str='redis://localhost:6379/0',
                               prefix: str='launchdarkly',
-                              max_connections: int=16) -> BigSegmentStore:
+                              max_connections: int=16,
+                              redis_opts: Dict[str, Any] = {}) -> BigSegmentStore:
         """
         Creates a Redis-backed Big Segment store.
 
@@ -197,9 +212,22 @@ class Redis:
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
         :param max_connections: the maximum number of Redis connections to keep in the
-          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``
+          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``. This
+          parameter will later be dropped in favor of setting
+          redis_opts['max_connections']
+        :param redis_opts: extra options for initializing Redis connection from the url,
+          see `redis.connection.ConnectionPool.from_url` for more details. Note that
+          if you set max_connections, this will take precedence over the
+          deprecated max_connections parameter.
         """
-        return _RedisBigSegmentStore(url, prefix, max_connections)
+
+        # WARN(deprecated): Remove the max_connection parameter from
+        # this signature and clean up this bit of code.
+        if 'max_connections' not in redis_opts:
+            redis_opts = redis_opts.copy()
+            redis_opts['max_connections'] = max_connections
+
+        return _RedisBigSegmentStore(url, prefix, redis_opts)
 
 class Files:
     """Provides factory methods for integrations with filesystem data.
