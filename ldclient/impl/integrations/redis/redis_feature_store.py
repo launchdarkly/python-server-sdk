@@ -11,13 +11,15 @@ from ldclient import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
 
+from typing import Any, Dict
+
 
 class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
-    def __init__(self, url, prefix, max_connections):
+    def __init__(self, url, prefix, redis_opts: Dict[str, Any]):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
-        self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
+        self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
         self.test_update_hook = None  # exposed for testing
         log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + self._prefix)
 

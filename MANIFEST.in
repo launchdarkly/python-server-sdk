@@ -4,3 +4,4 @@ include test-requirements.txt
 include consul-requirements.txt
 include dynamodb-requirements.txt
 include redis-requirements.txt
+include ldclient/py.typed

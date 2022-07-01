@@ -1,7 +1,7 @@
 from ldclient import log
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
-from typing import Optional, Set, cast
+from typing import Any, Optional, Dict, Set, cast
 
 have_redis = False
 try:
@@ -16,11 +16,11 @@ class _RedisBigSegmentStore(BigSegmentStore):
     KEY_USER_INCLUDE = ':big_segment_include:'
     KEY_USER_EXCLUDE = ':big_segment_exclude:'
 
-    def __init__(self, url: str, prefix: Optional[str], max_connections: int):
+    def __init__(self, url: str, prefix: Optional[str], redis_opts: Dict[str, Any]):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis Big Segment store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
-        self._pool = redis.ConnectionPool.from_url(url=url, max_connections=max_connections)
+        self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
         log.info("Started RedisBigSegmentStore connected to URL: " + url + " using prefix: " + self._prefix)
 
     def get_metadata(self) -> BigSegmentStoreMetadata:
