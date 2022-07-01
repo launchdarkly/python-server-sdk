@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.5.0] - 2022-07-01
+### Added:
+- A new `redis_opts` parameter is available when configuring a [Redis feature or Big Segment store](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-integrations.html#ldclient.integrations.Redis). This parameter will be passed through to the underlying redis driver, allowing for greater configurability. (Thanks, [danie1k](https://github.com/launchdarkly/python-server-sdk/pull/170)!)
+
+### Fixed:
+- Our previous attempt at adding mypy type checking support missed the inclusion of the required py.typed file. (Thanks, [anentropic](https://github.com/launchdarkly/python-server-sdk/pull/172)!)
+
 ## [7.4.2] - 2022-06-16
 ### Changed:
 - Removed upper version restriction on expiringdict. This was originally necessary to allow compatibility with older Python versions which are no longer supported.
