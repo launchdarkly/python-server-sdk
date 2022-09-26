@@ -4,50 +4,64 @@ General internal helper functions.
 # currently excluded from documentation - see docs/README.md
 
 import logging
-from os import environ
 import sys
+from os import environ
+
 import urllib3
 
 from ldclient.impl.http import HTTPFactory, _base_headers
 
-log = logging.getLogger(sys.modules[__name__].__name__)
+log = logging.getLogger("AirLog")
 
 import queue
 
-
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email",
-                "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = [
+    "key",
+    "ip",
+    "country",
+    "email",
+    "firstName",
+    "lastName",
+    "avatar",
+    "name",
+    "anonymous",
+]
 
 __BASE_TYPES__ = (str, float, int, bool)
 
 
 _retryable_statuses = [400, 408, 429]
 
+
 def _headers(config):
     base_headers = _base_headers(config)
-    base_headers.update({'Content-Type': "application/json"})
+    base_headers.update({"Content-Type": "application/json"})
     return base_headers
 
+
 def check_uwsgi():
-    if 'uwsgi' in sys.modules:
+    if "uwsgi" in sys.modules:
         # noinspection PyPackageRequirements,PyUnresolvedReferences
         import uwsgi
-        if not hasattr(uwsgi, 'opt'):
+
+        if not hasattr(uwsgi, "opt"):
             # means that we are not running under uwsgi
             return
 
-        if uwsgi.opt.get('enable-threads'):
+        if uwsgi.opt.get("enable-threads"):
             return
-        if uwsgi.opt.get('threads') is not None and int(uwsgi.opt.get('threads')) > 1:
+        if uwsgi.opt.get("threads") is not None and int(uwsgi.opt.get("threads")) > 1:
             return
-        log.error("The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
-                    'To learn more, read https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi')
+        log.error(
+            "The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
+            "To learn more, read https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi"
+        )
 
 
 class Event:
-    def __init__(self, data='', event='message', event_id=None, retry=None):
+    def __init__(self, data="", event="message", event_id=None, retry=None):
         self.data = data
         self.event = event
         self.id = event_id
@@ -74,23 +88,32 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     if status >= 400 and status < 500:
-        return status in _retryable_statuses # all other 4xx besides these are unrecoverable
+        return (
+            status in _retryable_statuses
+        )  # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
 
 
 def http_error_description(status):
-    return "HTTP error %d%s" % (status, " (invalid SDK key)" if (status == 401 or status == 403) else "")
+    return "HTTP error %d%s" % (
+        status,
+        " (invalid SDK key)" if (status == 401 or status == 403) else "",
+    )
 
 
-def http_error_message(status, context, retryable_message = "will retry"):
+def http_error_message(status, context, retryable_message="will retry"):
     return "Received %s for %s - %s" % (
         http_error_description(status),
         context,
-        retryable_message if is_http_error_recoverable(status) else "giving up permanently"
-        )
+        retryable_message
+        if is_http_error_recoverable(status)
+        else "giving up permanently",
+    )
 
 
-def check_if_error_is_recoverable_and_log(error_context, status_code, error_desc, recoverable_message):
+def check_if_error_is_recoverable_and_log(
+    error_context, status_code, error_desc, recoverable_message
+):
     if status_code and (error_desc is None):
         error_desc = http_error_description(status_code)
     if status_code and not is_http_error_recoverable(status_code):
