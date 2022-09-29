@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.5.1] - 2022-09-29
+### Added:
+- Publishing this package now includes a pre-built wheel distribution in addition to the customary source distribution.
+
 ## [7.5.0] - 2022-07-01
 ### Added:
 - A new `redis_opts` parameter is available when configuring a [Redis feature or Big Segment store](https://launchdarkly-python-sdk.readthedocs.io/en/latest/api-integrations.html#ldclient.integrations.Redis). This parameter will be passed through to the underlying redis driver, allowing for greater configurability. (Thanks, [danie1k](https://github.com/launchdarkly/python-server-sdk/pull/170)!)
