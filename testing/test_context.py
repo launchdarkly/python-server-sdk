@@ -124,6 +124,16 @@ class TestContext:
         assert Context.create('key1', 'kind1').fully_qualified_key == 'kind1:key1'
         assert Context.create('key%with:things', 'kind1').fully_qualified_key == 'kind1:key%25with%3Athings'
     
+    def test_builder_from_context(self):
+        c1 = Context.builder('a').kind('kind1').name('b').set('c', True).private('d').build()
+        b = Context.builder_from_context(c1)
+        assert b.build() == c1
+        b.set('c', False)
+        c2 = b.build()
+        assert c2 != c1
+        assert c1.get('c') is True
+        assert c2.get('c') is False
+
     def test_equality(self):
         def _assert_contexts_from_factory_equal(fn):
             c1, c2 = fn(), fn()

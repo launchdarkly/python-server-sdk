@@ -212,6 +212,19 @@ class Context:
         return ContextBuilder(key)
     
     @classmethod
+    def builder_from_context(cls, context: Context) -> ContextBuilder:
+        """
+        Creates a builder whose properties are the same as an existing single-kind Context.
+        
+        You may then change the builder's state in any way and call :func:`ldclient.ContextBuilder.build()`
+        to create a new independent Context.
+
+        :param context: the context to copy from
+        :return: a new builder
+        """
+        return ContextBuilder(context.key, context)
+    
+    @classmethod
     def multi_builder(cls) -> ContextMultiBuilder:
         """
         Creates a builder for building a multi-context.
@@ -438,6 +451,12 @@ class Context:
         return () if self.__attributes is None else self.__attributes
     
     @property
+    def _attributes(self) -> Optional[dict[str, Any]]:
+        # for internal use by ContextBuilder - we don't want to expose the original dict otherwise
+        # since that would break immutability
+        return self.__attributes
+    
+    @property
     def private_attributes(self) -> Iterable[str]:
         """
         Gets the list of all attribute references marked as private for this specific Context.
@@ -448,6 +467,12 @@ class Context:
         :return: an iterable
         """
         return () if self.__private is None else self.__private
+
+    @property
+    def _private_attributes(self) -> Optional[list[str]]:
+        # for internal use by ContextBuilder - we don't want to expose the original list otherwise
+        # since that would break immutability
+        return self.__private
 
     @property
     def fully_qualified_key(self) -> str:
@@ -634,16 +659,25 @@ class ContextBuilder:
 
     :param key: the context key
     """
-    def __init__(self, key: str):
-        self.__kind = Context.DEFAULT_KIND
+    def __init__(self, key: str, copy_from: Optional[Context] = None):
         self.__key = key
-        self.__name = None  # type: Optional[str]
-        self.__anonymous = False
-        self.__attributes = None  # type: Optional[dict[str, Any]]
-        self.__private = None  # type: Optional[list[str]]
+        if copy_from is None:
+            self.__kind = Context.DEFAULT_KIND
+            self.__name = None  # type: Optional[str]
+            self.__anonymous = False
+            self.__attributes = None  # type: Optional[dict[str, Any]]
+            self.__private = None  # type: Optional[list[str]]
+            self.__copy_on_write_attrs = False
+            self.__copy_on_write_private = False
+        else:
+            self.__kind = copy_from.kind
+            self.__name = copy_from.name
+            self.__anonymous = copy_from.anonymous
+            self.__attributes = copy_from._attributes
+            self.__private = copy_from._private_attributes
+            self.__copy_on_write_attrs = self.__attributes is not None
+            self.__copy_on_write_private = self.__private is not None
         self.__allow_empty_key = False
-        self.__copy_on_write_attrs = False
-        self.__copy_on_write_private = False
     
     def build(self) -> Context:
         """
