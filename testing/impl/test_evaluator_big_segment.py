@@ -7,7 +7,7 @@ from testing.impl.evaluator_util import *
 def test_big_segment_with_no_generation_is_not_matched():
     segment = {
         'key': 'test',
-        'included': [ basic_user['key'] ],  # included should be ignored for a big segment
+        'included': [ basic_user.key ],  # included should be ignored for a big segment
         'version': 1,
         'unbounded': True
     }

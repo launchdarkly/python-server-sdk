@@ -1,10 +1,11 @@
+from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.event_factory import _EventFactory
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
-basic_user = { "key": "user-key" }
+basic_user = Context.create('user-key')
 event_factory = _EventFactory(False)
 
 class EvaluatorBuilder:
@@ -95,5 +96,6 @@ def make_boolean_flag_matching_segment(segment: dict) -> dict:
         'values': [ segment['key'] ]
     })
 
-def make_clause_matching_user(user: dict) -> dict:
-    return { 'attribute': 'key', 'op': 'in', 'values': [ user['key'] ] }
+def make_clause_matching_user(user: Union[Context, dict]) -> dict:
+    key = user.key if isinstance(user, Context) else user['key']
+    return { 'attribute': 'key', 'op': 'in', 'values': [ key ] }

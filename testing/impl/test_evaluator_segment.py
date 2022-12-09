@@ -1,5 +1,6 @@
 import pytest
 
+from ldclient import Context
 from testing.impl.evaluator_util import *
 
 
@@ -16,7 +17,7 @@ def test_explicit_include_user():
         "included": [ "foo" ],
         "version": 1
     }
-    u = { "key": "foo" }
+    u = Context.create('foo')
     assert _segment_matches_user(s, u) is True
 
 def test_explicit_exclude_user():
@@ -25,7 +26,7 @@ def test_explicit_exclude_user():
         "excluded": [ "foo" ],
         "version": 1
     }
-    u = { "key": "foo" }
+    u = Context.create('foo')
     assert _segment_matches_user(s, u) is False
 
 def test_explicit_include_has_precedence():
@@ -35,7 +36,7 @@ def test_explicit_include_has_precedence():
         "excluded": [ "foo" ],
         "version": 1
     }
-    u = { "key": "foo" }
+    u = Context.create('foo')
     assert _segment_matches_user(s, u) is True
 
 def test_matching_rule_with_no_weight():
@@ -53,7 +54,7 @@ def test_matching_rule_with_no_weight():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com" }
+    u = Context.builder('foo').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is True
 
 def test_matching_rule_with_none_weight():
@@ -72,7 +73,7 @@ def test_matching_rule_with_none_weight():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com" }
+    u = Context.builder('foo').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is True
 
 def test_matching_rule_with_full_rollout():
@@ -91,7 +92,7 @@ def test_matching_rule_with_full_rollout():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com" }
+    u = Context.builder('foo').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is True
 
 def test_matching_rule_with_zero_rollout():
@@ -110,7 +111,7 @@ def test_matching_rule_with_zero_rollout():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com" }
+    u = Context.builder('foo').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is False
 
 def test_matching_rule_with_multiple_clauses():
@@ -134,7 +135,7 @@ def test_matching_rule_with_multiple_clauses():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com", "name": "bob" }
+    u = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is True
 
 def test_non_matching_rule_with_multiple_clauses():
@@ -158,5 +159,5 @@ def test_non_matching_rule_with_multiple_clauses():
             }
         ]
     }
-    u = { "key": "foo", "email": "test@example.com", "name": "bob" }
+    u = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
     assert _segment_matches_user(s, u) is False

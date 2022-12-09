@@ -369,6 +369,9 @@ class Context:
         attribute, the return value is None. An attribute that actually exists cannot have a
         value of None.
 
+        Context has a `__getitem__` magic method equivalent to `get`, so `context['attr']`
+        behaves the same as `context.get('attr')`.
+        
         :param attribute: the desired attribute name
         :return: the attribute value, or None if there is no such attribute
         """
@@ -578,6 +581,9 @@ class Context:
                     has_key = True
         b._allow_empty_key(has_key)
         return b.build()
+
+    def __getitem__(self, attribute) -> Any:
+        return self.get(attribute) if isinstance(attribute, str) else None
 
     def __repr__(self) -> str:
         """
