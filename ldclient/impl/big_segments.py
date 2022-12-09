@@ -81,7 +81,6 @@ class BigSegmentStoreManager:
         membership = self.__cache.get(user_key)
         if membership is None:
             user_hash = _hash_for_user_key(user_key)
-            log.warn("*** querying Big Segments for user hash: %s" % user_hash)
             try:
                 membership = self.__store.get_membership(user_hash)
                 if membership is None:
