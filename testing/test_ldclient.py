@@ -189,19 +189,6 @@ def test_track_anonymous_user():
         assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == anonymous_user and e.get('data') is None and e.get('metricValue') is None and e.get('contextKind') == 'anonymousUser'
 
 
-def test_alias():
-    with make_client() as client:
-        client.alias(user, anonymous_user)
-        e = get_first_event(client)
-        assert e['kind'] == 'alias' and e['key'] == 'xyz' and e['contextKind'] == 'user' and e['previousKey'] == 'abc' and e['previousContextKind'] == 'anonymousUser'
-
-
-def test_alias_no_user():
-    with make_client() as client:
-        client.alias(None, None)
-        assert count_events(client) == 0
-
-
 def test_defaults():
     config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
     with LDClient(config=config) as client:

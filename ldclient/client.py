@@ -198,25 +198,6 @@ class LDClient:
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name, user, data, metric_value))
 
-    def alias(self, current_user: dict, previous_user: dict):
-        """Associates two users for analytics purposes.
-
-        This can be helpful in the situation where a person is represented by multiple
-        LaunchDarkly users. This may happen, for example, when a person initially logs into
-        an application, the person might be represented by an anonymous user prior to logging
-        in and a different user after logging in, as denoted by a different user key.
-
-        :param current_user: The new version of a user.
-        :param previous_user: The old version of a user.
-        """
-        if current_user is None or current_user.get('key') is None:
-            log.warning("Missing current_user or current_user key when calling alias().")
-            return None
-        if previous_user is None or previous_user.get('key') is None:
-            log.warning("Missing previous_user or previous_user key when calling alias().")
-            return None
-        self._send_event(self._event_factory_default.new_alias_event(current_user, previous_user))
-
     def identify(self, user: dict):
         """Registers the user.
 

@@ -72,9 +72,6 @@ class ClientEntity:
     def identify(self, params):
         self.client.identify(params["user"])
 
-    def alias(self, params):
-        self.client.alias(params["user"], params["previousUser"])
-
     def flush(self):
         self.client.flush()
 

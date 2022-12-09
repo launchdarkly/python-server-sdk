@@ -114,9 +114,6 @@ def post_client_command(id):
     elif params.get("command") == "identifyEvent":
         client.identify(params.get("identifyEvent"))
         return ('', 201)
-    elif params.get("command") == "aliasEvent":
-        client.alias(params.get("aliasEvent"))
-        return ('', 201)
     elif params.get('command') == "flushEvents":
         client.flush()
         return ('', 201)

@@ -89,15 +89,6 @@ class _EventFactory:
             e['contextKind'] = self._user_to_context_kind(user)
         return e
 
-    def new_alias_event(self, current_user, previous_user):
-        return {
-            'kind': 'alias',
-            'key': current_user.get('key'),
-            'contextKind': self._user_to_context_kind(current_user),
-            'previousKey': previous_user.get('key'),
-            'previousContextKind': self._user_to_context_kind(previous_user)
-        }
-
     def _user_to_context_kind(self, user):
         if user.get('anonymous'):
             return "anonymousUser"

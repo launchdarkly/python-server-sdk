@@ -18,6 +18,12 @@ docs:
 
 TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
+# TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
+# Explanation of current skips:
+# - "events/alias": preliminary removal of alias functionality before starting U2C implementation
+TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
+	-skip 'events/alias'
+
 # port 8000 and 9000 is already used in the CI environment because we're
 # running a DynamoDB container and an SSE contract test
 PORT=10000
@@ -33,7 +39,7 @@ start-contract-test-service-bg:
 	@make start-contract-test-service >$(TEMP_TEST_OUTPUT) 2>&1 &
 
 run-contract-tests:
-	@curl -s https://raw.githubusercontent.com/launchdarkly/sdk-test-harness/v1.0.0/downloader/run.sh \
+	curl -s https://raw.githubusercontent.com/launchdarkly/sdk-test-harness/main/downloader/run.sh \
       | VERSION=v1 PARAMS="-url http://localhost:$(PORT) -debug -stop-service-at-end $(TEST_HARNESS_PARAMS)" sh
 
 contract-tests: build-contract-tests start-contract-test-service-bg run-contract-tests
