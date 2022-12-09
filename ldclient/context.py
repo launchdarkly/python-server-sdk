@@ -176,6 +176,8 @@ class Context:
         :param props: the context/user properties
         :return: a context
         """
+        if props is None:
+            return Context.__create_with_error('Cannot use None as a context')
         if 'kind' not in props:
             return Context.__from_dict_old_user(props)
         kind = props['kind']
