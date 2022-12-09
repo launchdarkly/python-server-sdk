@@ -4,10 +4,10 @@ from ldclient import Context
 from testing.impl.evaluator_util import *
 
 
-def _segment_matches_user(segment: dict, user: dict) -> bool:
+def _segment_matches_user(segment: dict, context: Context) -> bool:
     e = EvaluatorBuilder().with_segment(segment).build()
     flag = make_boolean_flag_matching_segment(segment)
-    result = e.evaluate(flag, user, event_factory)
+    result = e.evaluate(flag, context, event_factory)
     return result.detail.value
 
 

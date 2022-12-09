@@ -36,7 +36,7 @@ from threading import Lock
 def _context_to_user_dict(context: Context) -> dict:
     # temporary helper to allow us to update some parts of the SDK to use Context while others are
     # still using the user model
-    ret = {'key': context.key}
+    ret = {'key': context.key}  # type: dict[str, Any]
     if context.name is not None:
         ret['name'] = context.name
     if context.anonymous:
@@ -448,7 +448,7 @@ class LDClient:
         if not context.valid:
             log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
             return ""
-        return hmac.new(self._config.sdk_key.encode(), context.fully_qualified_key.encode(), hashlib.sha256).hexdigest()
+        return hmac.new(str(self._config.sdk_key).encode(), context.fully_qualified_key.encode(), hashlib.sha256).hexdigest()
 
     @property
     def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
