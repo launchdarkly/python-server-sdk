@@ -103,5 +103,10 @@ __all__ = [
     'Context',
     'ContextBuilder',
     'ContextMultiBuilder',
-    'LDClient'
+    'LDClient',
+    'client',
+    'context',
+    'evaluation',
+    'integrations',
+    'interfaces'
 ]
