@@ -167,7 +167,6 @@ class Config:
                  offline: bool=False,
                  user_keys_capacity: int=1000,
                  user_keys_flush_interval: float=300,
-                 inline_users_in_events: bool=False,
                  diagnostic_opt_out: bool=False,
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
@@ -216,9 +215,6 @@ class Config:
           one time, so that duplicate user details will not be sent in analytics events.
         :param user_keys_flush_interval: The interval in seconds at which the event processor will
           reset its set of known user keys.
-        :param inline_users_in_events: Whether to include full user details in every analytics event.
-          By default, events will only include the user key, except for one "index" event that provides the
-          full details for the user.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
@@ -264,7 +260,6 @@ class Config:
         self.__offline = offline
         self.__user_keys_capacity = user_keys_capacity
         self.__user_keys_flush_interval = user_keys_flush_interval
-        self.__inline_users_in_events = inline_users_in_events
         self.__diagnostic_opt_out = diagnostic_opt_out
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
@@ -298,7 +293,6 @@ class Config:
                       offline=self.__offline,
                       user_keys_capacity=self.__user_keys_capacity,
                       user_keys_flush_interval=self.__user_keys_flush_interval,
-                      inline_users_in_events=self.__inline_users_in_events,
                       diagnostic_opt_out=self.__diagnostic_opt_out,
                       diagnostic_recording_interval=self.__diagnostic_recording_interval,
                       wrapper_name=self.__wrapper_name,
@@ -409,10 +403,6 @@ class Config:
     @property
     def user_keys_flush_interval(self) -> float:
         return self.__user_keys_flush_interval
-
-    @property
-    def inline_users_in_events(self) -> bool:
-        return self.__inline_users_in_events
 
     @property
     def diagnostic_opt_out(self) -> bool:

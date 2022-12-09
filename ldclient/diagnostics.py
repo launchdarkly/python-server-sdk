@@ -78,7 +78,6 @@ def _create_diagnostic_config_object(config):
             'pollingIntervalMillis': config.poll_interval * 1000,
             'userKeysCapacity': config.user_keys_capacity,
             'userKeysFlushIntervalMillis': config.user_keys_flush_interval * 1000,
-            'inlineUsersInEvents': config.inline_users_in_events,
             'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
             'dataStoreType': _get_component_type_name(config.feature_store, config, 'memory')}
 

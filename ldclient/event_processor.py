@@ -35,7 +35,6 @@ EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 class EventOutputFormatter:
     def __init__(self, config):
-        self._inline_users = config.inline_users_in_events
         self._user_filter = UserFilter(config)
 
     def make_output_events(self, events, summary):
@@ -59,7 +58,7 @@ class EventOutputFormatter:
             }
             if 'prereqOf' in e:
                 out['prereqOf'] = e.get('prereqOf')
-            if self._inline_users or is_debug:
+            if is_debug:
                 out['user'] = self._process_user(e)
             else:
                 out['userKey'] = self._get_userkey(e)
@@ -81,10 +80,7 @@ class EventOutputFormatter:
                 'creationDate': e['creationDate'],
                 'key': e['key']
             }
-            if self._inline_users:
-                out['user'] = self._process_user(e)
-            else:
-                out['userKey'] = self._get_userkey(e)
+            out['userKey'] = self._get_userkey(e)
             if e.get('data') is not None:
                 out['data'] = e['data']
             if e.get('metricValue') is not None:
@@ -310,14 +306,13 @@ class EventDispatcher:
 
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event for that user.
-        if not (add_full_event and self._config.inline_users_in_events):
-            user = event.get('user')
-            if user and 'key' in user:
-                is_index_event = event['kind'] == 'identify'
-                already_seen = self.notice_user(user)
-                add_index_event = not is_index_event and not already_seen
-                if not is_index_event and already_seen:
-                    self._deduplicated_users += 1
+        user = event.get('user')
+        if user and 'key' in user:
+            is_identify_event = event['kind'] == 'identify'
+            already_seen = self.notice_user(user)
+            add_index_event = not is_identify_event and not already_seen
+            if not is_identify_event and already_seen:
+                self._deduplicated_users += 1
 
         if add_index_event:
             ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }

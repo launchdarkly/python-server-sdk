@@ -42,7 +42,7 @@ def test_create_diagnostic_config_defaults():
     test_config = Config("SDK_KEY")
     diag_config = _create_diagnostic_config_object(test_config)
 
-    assert len(diag_config) == 17
+    assert len(diag_config) == 16
     assert diag_config['customBaseURI'] is False
     assert diag_config['customEventsURI'] is False
     assert diag_config['customStreamURI'] is False
@@ -57,7 +57,6 @@ def test_create_diagnostic_config_defaults():
     assert diag_config['pollingIntervalMillis'] == 30000
     assert diag_config['userKeysCapacity'] == 1000
     assert diag_config['userKeysFlushIntervalMillis'] == 300000
-    assert diag_config['inlineUsersInEvents'] is False
     assert diag_config['diagnosticRecordingIntervalMillis'] == 900000
     assert diag_config['dataStoreType'] == 'memory'
 
@@ -67,10 +66,10 @@ def test_create_diagnostic_config_custom():
                          events_max_pending=10, flush_interval=1, stream_uri='https://test.com',
                          stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
                          all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
-                         inline_users_in_events=True, http=HTTPConfig(http_proxy = 'proxy', read_timeout=1, connect_timeout=1), diagnostic_recording_interval=60)
+                         http=HTTPConfig(http_proxy = 'proxy', read_timeout=1, connect_timeout=1), diagnostic_recording_interval=60)
     diag_config = _create_diagnostic_config_object(test_config)
 
-    assert len(diag_config) == 17
+    assert len(diag_config) == 16
     assert diag_config['customBaseURI'] is True
     assert diag_config['customEventsURI'] is True
     assert diag_config['customStreamURI'] is True
@@ -85,7 +84,6 @@ def test_create_diagnostic_config_custom():
     assert diag_config['pollingIntervalMillis'] == 60000
     assert diag_config['userKeysCapacity'] == 10
     assert diag_config['userKeysFlushIntervalMillis'] == 60000
-    assert diag_config['inlineUsersInEvents'] is True
     assert diag_config['diagnosticRecordingIntervalMillis'] == 60000
     assert diag_config['dataStoreType'] == 'MyFavoriteStore'
 

@@ -30,8 +30,6 @@ class ClientEntity:
             opts["private_attribute_names"] = events.get("globalPrivateAttributes", {})
             if events.get("flushIntervalMs") is not None:
                  opts["flush_interval"] = events["flushIntervalMs"] / 1000.0
-            if events.get("inlineUsers") is not None:
-                opts["inline_users_in_events"] = events["inlineUsers"]
         else:
             opts["send_events"] = False
 

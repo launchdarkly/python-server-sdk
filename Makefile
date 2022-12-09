@@ -20,9 +20,16 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
 # Explanation of current skips:
-# - "events/alias": preliminary removal of alias functionality before starting U2C implementation
+# - We're preparing to migrate the SDK to U2C behavior, but so far we're still using the non-U2C contract
+#   tests (v1).
+# - The non-U2C tests include alias events, which we have removed, so those tests are disabled.
+# - Same for inline users in events.
+# - Some custom event tests are disabled because in the v1 test suite, those require inline users.
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'events/alias'
+	-skip 'events/alias' \
+	-skip 'events/user properties/inlineUsers=true' \
+    -skip 'events/custom events/data and metricValue' \
+    -skip 'events/custom events/basic properties/inline user'
 
 # port 8000 and 9000 is already used in the CI environment because we're
 # running a DynamoDB container and an SSE contract test

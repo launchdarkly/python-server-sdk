@@ -160,58 +160,6 @@ def test_user_attrs_are_stringified_in_index_event():
         check_feature_event(output[1], e, False, None, None)
         check_summary_event(output[2])
 
-def test_feature_event_can_contain_inline_user():
-    with DefaultTestProcessor(inline_users_in_events = True) as ep:
-        e = {
-            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
-            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
-        }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 2
-        check_feature_event(output[0], e, False, user, None)
-        check_summary_event(output[1])
-
-def test_user_is_filtered_in_feature_event():
-    with DefaultTestProcessor(inline_users_in_events = True, all_attributes_private = True) as ep:
-        e = {
-            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
-            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
-        }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 2
-        check_feature_event(output[0], e, False, filtered_user, None)
-        check_summary_event(output[1])
-
-def test_user_attrs_are_stringified_in_feature_event():
-    with DefaultTestProcessor(inline_users_in_events = True) as ep:
-        e = {
-            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': numeric_user,
-            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': True
-        }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 2
-        check_feature_event(output[0], e, False, stringified_numeric_user, None)
-        check_summary_event(output[1])
-
-def test_index_event_is_still_generated_if_inline_users_is_true_but_feature_event_is_not_tracked():
-    with DefaultTestProcessor(inline_users_in_events = True) as ep:
-        e = {
-            'kind': 'feature', 'key': 'flagkey', 'version': 11, 'user': user,
-            'variation': 1, 'value': 'value', 'default': 'default', 'trackEvents': False
-        }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 2
-        check_index_event(output[0], e, user)
-        check_summary_event(output[1])
-
 def test_two_events_for_same_user_only_produce_one_index_event():
     with DefaultTestProcessor(user_keys_flush_interval = 300) as ep:
         e0 = {
@@ -418,33 +366,6 @@ def test_custom_event_is_queued_with_user():
         assert len(output) == 2
         check_index_event(output[0], e, user)
         check_custom_event(output[1], e, None)
-
-def test_custom_event_can_contain_inline_user():
-    with DefaultTestProcessor(inline_users_in_events = True) as ep:
-        e = { 'kind': 'custom', 'key': 'eventkey', 'user': user, 'data': { 'thing': 'stuff '} }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 1
-        check_custom_event(output[0], e, user)
-
-def test_user_is_filtered_in_custom_event():
-    with DefaultTestProcessor(inline_users_in_events = True, all_attributes_private = True) as ep:
-        e = { 'kind': 'custom', 'key': 'eventkey', 'user': user, 'data': { 'thing': 'stuff '} }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 1
-        check_custom_event(output[0], e, filtered_user)
-
-def test_user_attrs_are_stringified_in_custom_event():
-    with DefaultTestProcessor(inline_users_in_events = True) as ep:
-        e = { 'kind': 'custom', 'key': 'eventkey', 'user': numeric_user, 'data': { 'thing': 'stuff '} }
-        ep.send_event(e)
-
-        output = flush_and_get_events(ep)
-        assert len(output) == 1
-        check_custom_event(output[0], e, stringified_numeric_user)
 
 def test_nothing_is_sent_if_there_are_no_events():
     with DefaultTestProcessor() as ep:
