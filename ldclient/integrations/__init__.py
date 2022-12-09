@@ -41,9 +41,6 @@ class Consul:
             store = Consul.new_feature_store()
             config = Config(feature_store=store)
 
-        Note that ``python-consul`` is not available for Python 3.3 or 3.4, so this feature cannot be
-        used in those Python versions.
-
         :param host: hostname of the Consul server (uses ``localhost`` if omitted)
         :param port: port of the Consul server (uses 8500 if omitted)
         :param prefix: a namespace prefix to be prepended to all Consul keys
