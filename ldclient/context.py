@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import json
 import re
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 
 __VALID_KIND_REGEX = re.compile('^[-a-zA-Z0-9._]+$')
@@ -501,7 +501,7 @@ class Context:
         """
         if not self.valid:
             return {}
-        ret = {"kind": self.__kind}  # type: dict[str, Any]
+        ret = {"kind": self.__kind}  # type: Dict[str, Any]
         if self.__multi is not None:
             ret = {"kind": "multi"}
             for c in self.__multi:
@@ -521,7 +521,7 @@ class Context:
         return json.dumps(self.to_dict(), separators=(',', ':'))
     
     def __to_dict_single(self, with_kind: bool) -> dict[str, Any]:
-        ret = {"key": self.__key}  # type: dict[str, Any]
+        ret = {"key": self.__key}  # type: Dict[str, Any]
         if with_kind:
             ret["kind"] = self.__kind
         if self.__name is not None:
@@ -673,7 +673,7 @@ class ContextBuilder:
             self.__kind = Context.DEFAULT_KIND
             self.__name = None  # type: Optional[str]
             self.__anonymous = False
-            self.__attributes = None  # type: Optional[dict[str, Any]]
+            self.__attributes = None  # type: Optional[Dict[str, Any]]
             self.__private = None  # type: Optional[list[str]]
             self.__copy_on_write_attrs = False
             self.__copy_on_write_private = False

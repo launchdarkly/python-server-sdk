@@ -36,7 +36,7 @@ from threading import Lock
 def _context_to_user_dict(context: Context) -> dict:
     # temporary helper to allow us to update some parts of the SDK to use Context while others are
     # still using the user model
-    ret = {'key': context.key}  # type: dict[str, Any]
+    ret = {'key': context.key}  # type: Dict[str, Any]
     if context.name is not None:
         ret['name'] = context.name
     if context.anonymous:
