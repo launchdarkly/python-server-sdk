@@ -5,6 +5,7 @@ The ldclient module contains the most common top-level entry points for the SDK.
 from ldclient.rwlock import ReadWriteLock
 from ldclient.version import VERSION
 from .client import *
+from .context import *
 from .util import log
 
 __version__ = VERSION
@@ -95,3 +96,12 @@ def _reset_client():
 
 
 __BASE_TYPES__ = (str, float, int, bool)
+
+
+__all__ = [
+    'Config',
+    'Context',
+    'ContextBuilder',
+    'ContextMultiBuilder',
+    'LDClient'
+]
