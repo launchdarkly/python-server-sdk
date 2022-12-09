@@ -161,23 +161,11 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
-        :param max_connections: the maximum number of Redis connections to keep in the
-          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``. This
-          parameter will later be dropped in favor of setting
-          redis_opts['max_connections']
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         :param redis_opts: extra options for initializing Redis connection from the url,
-          see `redis.connection.ConnectionPool.from_url` for more details. Note that
-          if you set max_connections, this will take precedence over the
-          deprecated max_connections parameter.
+          see `redis.connection.ConnectionPool.from_url` for more details.
         """
-
-        # WARN(deprecated): Remove the max_connection parameter from
-        # this signature and clean up this bit of code.
-        if 'max_connections' not in redis_opts:
-            redis_opts = redis_opts.copy()
-            redis_opts['max_connections'] = max_connections
 
         core = _RedisFeatureStoreCore(url, prefix, redis_opts)
         wrapper = CachingStoreWrapper(core, caching)
@@ -208,21 +196,9 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
-        :param max_connections: the maximum number of Redis connections to keep in the
-          connection pool; defaults to ``DEFAULT_MAX_CONNECTIONS``. This
-          parameter will later be dropped in favor of setting
-          redis_opts['max_connections']
         :param redis_opts: extra options for initializing Redis connection from the url,
-          see `redis.connection.ConnectionPool.from_url` for more details. Note that
-          if you set max_connections, this will take precedence over the
-          deprecated max_connections parameter.
+          see `redis.connection.ConnectionPool.from_url` for more details.
         """
-
-        # WARN(deprecated): Remove the max_connection parameter from
-        # this signature and clean up this bit of code.
-        if 'max_connections' not in redis_opts:
-            redis_opts = redis_opts.copy()
-            redis_opts['max_connections'] = max_connections
 
         return _RedisBigSegmentStore(url, prefix, redis_opts)
 

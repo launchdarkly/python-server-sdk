@@ -253,7 +253,7 @@ class LDClient:
     def variation_detail(self, key: str, user: dict, default: Any) -> EvaluationDetail:
         """Determines the variation of a feature flag for a user, like :func:`variation()`, but also
         provides additional information about how this value was calculated, in the form of an
-        :class:`ldclient.flag.EvaluationDetail` object.
+        :class:`ldclient.evaluation.EvaluationDetail` object.
 
         Calling this method also causes the "reason" data to be included in analytics events,
         if you are capturing detailed event data for this flag.

@@ -341,7 +341,7 @@ class BigSegmentStoreStatus:
     
         If this property is False, the store is not able to make queries (for instance, it may not have
         a valid database connection). In this case, the SDK will treat any reference to a Big Segment
-        as if no users are included in that segment. Also, the :func:`ldclient.flag.EvaluationDetail.reason`
+        as if no users are included in that segment. Also, the :func:`ldclient.evaluation.EvaluationDetail.reason`
         associated with with any flag evaluation that references a Big Segment when the store is not
         available will have a `bigSegmentsStatus` of `"STORE_ERROR"`.
         """
@@ -356,7 +356,7 @@ class BigSegmentStoreStatus:
         This may indicate that the LaunchDarkly Relay Proxy, which populates the store, has stopped
         running or has become unable to receive fresh data from LaunchDarkly. Any feature flag
         evaluations that reference a Big Segment will be using the last known data, which may be out
-        of date. Also, the :func:`ldclient.flag.EvaluationDetail.reason` associated with those evaluations
+        of date. Also, the :func:`ldclient.evaluation.EvaluationDetail.reason` associated with those evaluations
         will have a `bigSegmentsStatus` of `"STALE"`.
         """
         return self.__stale

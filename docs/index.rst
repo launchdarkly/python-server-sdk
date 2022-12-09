@@ -20,4 +20,3 @@ For more information, see LaunchDarkly's `Quickstart <https://docs.launchdarkly.
    api-integrations
    api-extending
    api-testing
-   api-deprecated

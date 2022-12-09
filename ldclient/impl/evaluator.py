@@ -9,7 +9,7 @@ import logging
 from typing import Callable, Optional, Tuple
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
-# the ldclient.flag module.
+# the ldclient.evaluation module.
 log = logging.getLogger('ldclient.flag')
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)

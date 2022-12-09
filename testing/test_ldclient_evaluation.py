@@ -3,9 +3,8 @@ import json
 import time
 from ldclient.client import LDClient, Config
 from ldclient.config import BigSegmentsConfig
-from ldclient.evaluation import BigSegmentsStatus
+from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.flag import EvaluationDetail
 from ldclient.impl.big_segments import _hash_for_user_key
 from ldclient.impl.evaluator import _make_big_segment_ref
 from ldclient.interfaces import FeatureStore
