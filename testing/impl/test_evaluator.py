@@ -2,7 +2,7 @@ import math
 import pytest
 from ldclient.client import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.evaluator import _bucket_context, _variation_index_for_context
+from ldclient.impl.evaluator import _bucket_context, _context_to_user_dict, _variation_index_for_context
 from testing.impl.evaluator_util import *
 
 
@@ -92,7 +92,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
     user = Context.create('x')
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e', 'default': None,
-        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+        'version': 2, 'user': _context_to_user_dict(user), 'prereqOf': 'feature0'}]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
@@ -117,7 +117,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     user = Context.create('x')
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 0, 'value': 'd', 'default': None,
-        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+        'version': 2, 'user': _context_to_user_dict(user), 'prereqOf': 'feature0'}]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_rules():
@@ -142,7 +142,7 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
     user = Context.create('x')
     detail = EvaluationDetail('a', 0, {'kind': 'FALLTHROUGH'})
     events_should_be = [{'kind': 'feature', 'key': 'feature1', 'variation': 1, 'value': 'e', 'default': None,
-        'version': 2, 'user': user, 'prereqOf': 'feature0'}]
+        'version': 2, 'user': _context_to_user_dict(user), 'prereqOf': 'feature0'}]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
 def test_flag_returns_error_if_fallthrough_variation_is_too_high():

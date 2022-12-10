@@ -19,7 +19,7 @@ from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import BigSegmentStoreManager
-from ldclient.impl.evaluator import Evaluator, error_reason
+from ldclient.impl.evaluator import Evaluator, error_reason, _context_to_user_dict
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
@@ -32,26 +32,6 @@ import queue
 
 from threading import Lock
 
-
-def _context_to_user_dict(context: Context) -> dict:
-    # temporary helper to allow us to update some parts of the SDK to use Context while others are
-    # still using the user model
-    ret = {'key': context.key}  # type: Dict[str, Any]
-    if context.name is not None:
-        ret['name'] = context.name
-    if context.anonymous:
-        ret['anonymous'] = True
-    custom = None
-    for attr in context.custom_attributes:
-        if custom is None:
-            custom = {}
-        custom[attr] = context.get(attr)
-    if custom is not None:
-        ret['custom'] = custom
-    private = list(context.private_attributes)
-    if len(private) != 0:
-        ret['privateAttributeNames'] = private
-    return ret
 
 
 class _FeatureStoreClientWrapper(FeatureStore):
@@ -242,6 +222,10 @@ class LDClient:
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Invalid context for identify (%s)" % context.error)
+        elif context.key == '' and not context.multiple:
+            # This could be a valid context for evaluations (if it was using the old user schema)
+            # but an identify event with an empty key is no good.
+            log.warning("Empty user key for identify")
         else:
             self._send_event(self._event_factory_default.new_identify_event(_context_to_user_dict(context)))
 
