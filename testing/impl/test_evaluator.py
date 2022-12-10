@@ -6,11 +6,6 @@ from ldclient.impl.evaluator import _bucket_context, _variation_index_for_contex
 from testing.impl.evaluator_util import *
 
 
-def assert_eval_result(result, expected_detail, expected_events):
-    assert result.detail == expected_detail
-    assert result.events == expected_events
-
-
 def test_flag_returns_off_variation_if_flag_is_off():
     flag = {
         'key': 'feature',
@@ -204,29 +199,29 @@ def test_flag_matches_user_from_targets():
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_matches_user_from_rules():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 1}
-    flag = make_boolean_flag_with_rules([rule])
+    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 0}
+    flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
-    detail = EvaluationDetail(True, 1, {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'id'})
+    detail = EvaluationDetail(True, 0, {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'id'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_variation_is_too_high():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 999}
-    flag = make_boolean_flag_with_rules([rule])
+    flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_variation_is_negative():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': -1}
-    flag = make_boolean_flag_with_rules([rule])
+    flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 def test_flag_returns_error_if_rule_has_no_variation_or_rollout():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}]}
-    flag = make_boolean_flag_with_rules([rule])
+    flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
@@ -234,7 +229,7 @@ def test_flag_returns_error_if_rule_has_no_variation_or_rollout():
 def test_flag_returns_error_if_rule_has_rollout_with_no_variations():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}],
         'rollout': {'variations': []} }
-    flag = make_boolean_flag_with_rules([rule])
+    flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
@@ -292,47 +287,6 @@ def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found(
     evaluator = EvaluatorBuilder().with_unknown_segment('segkey').build()
     
     assert evaluator.evaluate(flag, user, event_factory).detail.value == False
-
-def test_clause_matches_builtin_attribute():
-    clause = {
-        'attribute': 'name',
-        'op': 'in',
-        'values': [ 'Bob' ]
-    }
-    user = Context.builder('x').name('Bob').build()
-    flag = make_boolean_flag_with_clause(clause)
-    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
-
-def test_clause_matches_custom_attribute():
-    clause = {
-        'attribute': 'legs',
-        'op': 'in',
-        'values': [ 4 ]
-    }
-    user = Context.builder('x').name('Bob').set('legs', 4).build()
-    flag = make_boolean_flag_with_clause(clause)
-    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == True
-
-def test_clause_returns_false_for_missing_attribute():
-    clause = {
-        'attribute': 'legs',
-        'op': 'in',
-        'values': [ 4 ]
-    }
-    user = Context.builder('x').name('Bob').build()
-    flag = make_boolean_flag_with_clause(clause)
-    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == False
-
-def test_clause_can_be_negated():
-    clause = {
-        'attribute': 'name',
-        'op': 'in',
-        'values': [ 'Bob' ],
-        'negate': True
-    }
-    user = Context.builder('x').name('Bob').build()
-    flag = make_boolean_flag_with_clause(clause)
-    assert basic_evaluator.evaluate(flag, user, event_factory).detail.value == False
 
 def test_variation_index_is_returned_for_bucket():
     user = Context.create('userkey')

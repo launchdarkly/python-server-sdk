@@ -2,8 +2,9 @@ from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.event_factory import _EventFactory
+from testing.builders import *
 
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 basic_user = Context.create('user-key')
 event_factory = _EventFactory(False)
@@ -71,26 +72,18 @@ class EvaluatorBuilder:
 basic_evaluator = EvaluatorBuilder().build()
 
 
-def make_boolean_flag_with_rules(rules) -> dict:
-    return {
-        'key': 'feature',
-        'on': True,
-        'rules': rules,
-        'fallthrough': { 'variation': 0 },
-        'variations': [ False, True ],
-        'salt': ''
-    }
+def assert_eval_result(result, expected_detail, expected_events):
+    assert result.detail == expected_detail
+    assert result.events == expected_events
 
-def make_boolean_flag_with_clause(clause: dict) -> dict:
-    return make_boolean_flag_with_rules([
-        {
-            'clauses': [ clause ],
-            'variation': 1
-        }
-    ])
+
+def assert_match(evaluator: Evaluator, flag: dict, context: Context, expect_value: Any):
+    result = evaluator.evaluate(flag, context, event_factory)
+    assert result.detail.value == expect_value
+
 
 def make_boolean_flag_matching_segment(segment: dict) -> dict:
-    return make_boolean_flag_with_clause({
+    return make_boolean_flag_with_clauses({
         'attribute': '',
         'op': 'segmentMatch',
         'values': [ segment['key'] ]
