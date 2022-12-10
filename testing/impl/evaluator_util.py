@@ -82,13 +82,6 @@ def assert_match(evaluator: Evaluator, flag: dict, context: Context, expect_valu
     assert result.detail.value == expect_value
 
 
-def make_boolean_flag_matching_segment(segment: dict) -> dict:
-    return make_boolean_flag_with_clauses({
-        'attribute': '',
-        'op': 'segmentMatch',
-        'values': [ segment['key'] ]
-    })
-
 def make_clause_matching_user(user: Union[Context, dict]) -> dict:
     key = user.key if isinstance(user, Context) else user['key']
     return { 'attribute': 'key', 'op': 'in', 'values': [ key ] }

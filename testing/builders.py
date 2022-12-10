@@ -1,10 +1,32 @@
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any, List ,Optional
+
+from ldclient.context import Context
 
 
-class FlagBuilder:
+class BaseBuilder:
+    def __init__(self, data):
+        self.data = data
+    
+    def _set(self, key: str, value: Any):
+        self.data[key] = value
+        return self
+    
+    def _append(self, key: str, item: dict):
+        self.data[key].append(item)
+        return self
+    
+    def _append_all(self, key: str, items: List[dict]):
+        self.data[key].extend(items)
+        return self
+
+    def build(self):
+        return self.data.copy()
+
+
+class FlagBuilder(BaseBuilder):
     def __init__(self, key):
-        self.__data = {
+        super().__init__({
             'key': key,
             'version': 1,
             'on': False,
@@ -15,14 +37,7 @@ class FlagBuilder:
             'targets': [],
             'contextTargets': [],
             'rules': []
-        }
-    
-    def build(self):
-        return self.__data.copy()
-    
-    def _set(self, k: str, v: Any) -> FlagBuilder:
-        self.__data[k] = v
-        return self
+        })
     
     def key(self, key: str) -> FlagBuilder:
         return self._set('key', key)
@@ -43,35 +58,70 @@ class FlagBuilder:
         return self._set('fallthrough', {'variation': index})
 
     def target(self, variation: int, *keys: str) -> FlagBuilder:
-        self.__data['targets'].append({'variation': variation, 'values': list(keys)})
-        return self
+        return self._append('targets', {'variation': variation, 'values': list(keys)})
     
     def context_target(self, context_kind: str, variation: int, *keys: str) -> FlagBuilder:
-        self.__data['contextTargets'].append({'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
-        return self
+        return self._append('contextTargets',
+            {'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
     
     def rules(self, *rules: dict) -> FlagBuilder:
-        for r in rules:
-            self.__data['rules'].append(r)
-        return self
+        return self._append_all('rules', list(rules))
 
 
-class FlagRuleBuilder:
+class FlagRuleBuilder(BaseBuilder):
     def __init__(self):
-        self.__data = {'clauses': []}
-    
-    def build(self) -> dict:
-        return self.__data.copy()
+        super().__init__({'clauses': []})
     
     def variation(self, variation: int) -> FlagRuleBuilder:
-        self.__data['variation'] = variation
-        return self
+        return self._set('variation', variation)
     
     def clauses(self, *clauses: dict) -> FlagRuleBuilder:
-        for c in clauses:
-            self.__data['clauses'].append(c)
-        return self
+        return self._append_all('clauses', list(clauses))
 
+
+class SegmentBuilder(BaseBuilder):
+    def __init__(self, key):
+        super().__init__({
+            'key': key,
+            'version': 1,
+            'included': [],
+            'excluded': [],
+            'rules': [],
+            'unbounded': False
+        })
+    
+    def key(self, key: str) -> SegmentBuilder:
+        return self._set('key', key)
+
+    def version(self, version: int) -> SegmentBuilder:
+        return self._set('key', version)
+
+    def salt(self, salt: str) -> SegmentBuilder:
+        return self._set('salt', salt)
+
+    def rules(self, *rules: dict) -> SegmentBuilder:
+        return self._append_all('rules', list(rules))
+
+
+class SegmentRuleBuilder(BaseBuilder):
+    def __init__(self):
+        super().__init__({'clauses': []})
+
+    def bucket_by(self, value: Optional[str]) -> SegmentRuleBuilder:
+        return self._set('bucketBy', value)
+    
+    def clauses(self, *clauses: dict) -> SegmentRuleBuilder:
+        return self._append_all('clauses', list(clauses))
+
+    def rollout_context_kind(self, value: Optional[str]) -> SegmentRuleBuilder:
+        return self._set('rolloutContextKind', value)
+
+    def weight(self, value: Optional[int]) -> SegmentRuleBuilder:
+        return self._set('weight', value)
+
+
+def make_boolean_flag_matching_segment(segment: dict) -> dict:
+    return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment['key']))
 
 def make_boolean_flag_with_clauses(*clauses: dict) -> dict:
     return make_boolean_flag_with_rules(FlagRuleBuilder().clauses(*clauses).variation(0).build())
@@ -84,6 +134,12 @@ def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -
     if context_kind is not None:
         ret['contextKind'] = context_kind
     return ret
+
+def make_clause_matching_context(context: Context) -> dict:
+    return {'contextKind': context.kind, 'attribute': 'key', 'op': 'in', 'values': [context.key]}
+
+def make_clause_matching_segment_key(*segment_keys: str) -> dict:
+    return {'attribute': '', 'op': 'segmentMatch', 'values': list(segment_keys)}
 
 def negate_clause(clause: dict) -> dict:
     c = clause.copy()

@@ -11,7 +11,6 @@ from ldclient.interfaces import FeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 from testing.builders import *
-from testing.impl.evaluator_util import make_boolean_flag_matching_segment
 from testing.mock_components import MockBigSegmentStore
 from testing.stub_util import MockEventProcessor, MockUpdateProcessor
 from testing.test_ldclient import make_off_flag_with_value
