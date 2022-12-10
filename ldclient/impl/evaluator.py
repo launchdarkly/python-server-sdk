@@ -1,5 +1,5 @@
 from ldclient import operators
-from ldclient.context import Context
+from ldclient.context import Context, _USER_STRING_ATTRS
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.util import stringify_attrs
@@ -8,7 +8,7 @@ import json
 from collections import namedtuple
 import hashlib
 import logging
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
 # the ldclient.evaluation module.
@@ -18,6 +18,30 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
 __BUILTINS__ = ["key", "secondary", "ip", "country", "email",
                 "firstName", "lastName", "avatar", "name", "anonymous"]
+
+
+def _context_to_user_dict(context: Context) -> dict:
+    # temporary helper to allow us to update some parts of the SDK to use Context while others are
+    # still using the user model
+    ret = {'key': context.key}  # type: Dict[str, Any]
+    if context.name is not None:
+        ret['name'] = context.name
+    if context.anonymous:
+        ret['anonymous'] = True
+    custom = None
+    for attr in context.custom_attributes:
+        if attr in _USER_STRING_ATTRS:
+            ret[attr] = context.get(attr)
+            continue
+        if custom is None:
+            custom = {}
+        custom[attr] = context.get(attr)
+    if custom is not None:
+        ret['custom'] = custom
+    private = list(context.private_attributes)
+    if len(private) != 0:
+        ret['privateAttributeNames'] = private
+    return ret
 
 
 # EvalResult is used internally to hold the EvaluationDetail result of an evaluation along with
@@ -106,7 +130,7 @@ class Evaluator:
                 # off variation was. But we still need to evaluate it in order to generate an event.
                 if (not prereq_flag.get('on', False)) or prereq_res.variation_index != prereq.get('variation'):
                     failed_prereq = prereq
-                event = event_factory.new_eval_event(prereq_flag, context, prereq_res, None, flag)
+                event = event_factory.new_eval_event(prereq_flag, _context_to_user_dict(context), prereq_res, None, flag)
                 state.add_event(event)
             if failed_prereq:
                 return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.get('key')}

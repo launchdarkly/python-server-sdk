@@ -261,7 +261,7 @@ class TestContextErrors:
         assert_context_invalid(Context.create(''))
         assert_context_invalid(Context.builder('').build())
     
-    @pytest.mark.parametrize('kind', ['kind', 'multi', 'b$c'])
+    @pytest.mark.parametrize('kind', ['kind', 'multi', 'b$c', ''])
     def test_kind_invalid_strings(self, kind):
         assert_context_invalid(Context.create('a', kind))
         assert_context_invalid(Context.builder('a').kind(kind).build())
