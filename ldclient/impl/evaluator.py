@@ -206,16 +206,20 @@ class Evaluator:
         return self._simple_segment_match_context(segment, context, state, True)
 
     def _simple_segment_match_context(self, segment: dict, context: Context, state: EvalResult, use_includes_and_excludes: bool) -> bool:
-        key = context.key
-        if key is not None:
-            if use_includes_and_excludes:
-                if key in segment.get('included', []):
+        if use_includes_and_excludes:
+            if _context_key_is_in_target_list(context, None, segment.get('included')):
+                return True
+            for t in segment.get('includedContexts') or []:
+                if _context_key_is_in_target_list(context, t.get('contextKind'), t.get('values')):
                     return True
-                if key in segment.get('excluded', []):
+            if _context_key_is_in_target_list(context, None, segment.get('excluded')):
+                return False
+            for t in segment.get('excludedContexts') or []:
+                if _context_key_is_in_target_list(context, t.get('contextKind'), t.get('values')):
                     return False
-            for rule in segment.get('rules', []):
-                if self._segment_rule_matches_context(rule, context, state, segment['key'], segment.get('salt', '')):
-                    return True
+        for rule in segment.get('rules', []):
+            if self._segment_rule_matches_context(rule, context, state, segment['key'], segment.get('salt', '')):
+                return True
         return False
 
     def _segment_rule_matches_context(self, rule: dict, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:
@@ -351,6 +355,12 @@ def _bucketable_string_value(u_value) -> Optional[str]:
         return str(u_value)
 
     return None
+
+def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Optional[List[str]]) -> bool:
+    if keys is None or len(keys) == 0:
+        return False
+    match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
+    return match_context is not None and match_context.key in keys
 
 def _match_single_context_value(op: str, context_value: Any, values: List[Any]) -> bool:
     op_fn = operators.ops.get(op)
