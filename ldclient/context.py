@@ -9,7 +9,8 @@ import re
 from typing import Any, Dict, Optional, Union
 
 
-__VALID_KIND_REGEX = re.compile('^[-a-zA-Z0-9._]+$')
+_INVALID_KIND_REGEX = re.compile('[^-a-zA-Z0-9._]')
+_USER_STRING_ATTRS = {'name', 'firstName', 'lastName', 'email', 'country', 'avatar', 'ip'}
 
 def _escape_key_for_fully_qualified_key(key: str) -> str:
     # When building a fully-qualified key, ':' and '%' are percent-escaped; we do not use a full
@@ -17,11 +18,13 @@ def _escape_key_for_fully_qualified_key(key: str) -> str:
     return key.replace('%', '%25').replace(':', '%3A')
     
 def _validate_kind(kind: str) -> Optional[str]:
+    if kind == '':
+        return 'context kind must not be empty'
     if kind == 'kind':
         return '"kind" is not a valid context kind'
     if kind == 'multi':
         return 'context of kind "multi" must be created with create_multi or multi_builder'
-    if not __VALID_KIND_REGEX.match(kind):
+    if _INVALID_KIND_REGEX.search(kind):
         return 'context kind contains disallowed characters'
     return None
 
@@ -107,7 +110,7 @@ class Context:
             self.__full_key = full_key
             self.__error = None  # type: Optional[str]
             return
-        if kind is None or kind == '':
+        if kind is None:
             kind = Context.DEFAULT_KIND
         kind_error = _validate_kind(kind)
         if kind_error:
@@ -542,6 +545,8 @@ class Context:
             b.kind(kind)
         for k, v in props.items():
             if k == '_meta':
+                if v is None:
+                    continue
                 if not isinstance(v, dict):
                     return Context.__create_with_schema_type_error(k)
                 p = v.get("privateAttributes")
@@ -563,18 +568,30 @@ class Context:
         has_key = False
         for k, v in props.items():
             if k == 'custom':
+                if v is None:
+                    continue
                 if not isinstance(v, dict):
                     return Context.__create_with_schema_type_error(k)
                 for k1, v1 in v.items():
                     b.set(k1, v1)
             elif k == 'privateAttributeNames':
+                if v is None:
+                    continue
                 if not isinstance(v, list):
                     return Context.__create_with_schema_type_error(k)
                 for pa in v:
                     if not isinstance(pa, str):
                         return Context.__create_with_schema_type_error(k)
                     b.private(pa)
+            elif k in _USER_STRING_ATTRS:
+                if v is None:
+                    continue
+                if not isinstance(v, str):
+                    return Context.__create_with_schema_type_error(k)
+                b.set(k, v)
             else:
+                if k == 'anonymous' and v is None:
+                    v = False  # anonymous: null was allowed in the old user model
                 if not b.try_set(k, v):
                     return Context.__create_with_schema_type_error(k)
                 if k == 'key':
@@ -860,7 +877,10 @@ class ContextBuilder:
             self.__attributes = self.__attributes and self.__attributes.copy()
         if self.__attributes is None:
             self.__attributes = {}
-        self.__attributes[attribute] = value
+        if value is None:
+            self.__attributes.pop(attribute, None)
+        else:
+            self.__attributes[attribute] = value
         return True
     
     def private(self, *attributes: str) -> ContextBuilder:
