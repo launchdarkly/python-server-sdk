@@ -499,7 +499,6 @@ class Context:
         """
         if not self.valid:
             return {}
-        ret = {"kind": self.__kind}  # type: dict[str, Any]
         if self.__multi is not None:
             ret = {"kind": "multi"}
             for c in self.__multi:
