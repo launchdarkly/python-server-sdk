@@ -74,6 +74,8 @@ class TestContext:
         assert c.key == 'a'
         assert c.get('b') is True
         assert c.get('c') == 'd'
+        assert c['b'] is True
+        assert c['c'] == 'd'
         assert sorted(list(c.custom_attributes)) == ['b', 'c']
 
     def test_set_built_in_attribute_by_name(self):

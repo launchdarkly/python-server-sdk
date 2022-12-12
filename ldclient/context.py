@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import json
 import re
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 
 _INVALID_KIND_REGEX = re.compile('[^-a-zA-Z0-9._]')
@@ -183,6 +183,8 @@ class Context:
         :param props: the context/user properties
         :return: a context
         """
+        if props is None:
+            return Context.__create_with_error('Cannot use None as a context')
         if 'kind' not in props:
             return Context.__from_dict_old_user(props)
         kind = props['kind']
@@ -374,6 +376,9 @@ class Context:
         attribute, the return value is None. An attribute that actually exists cannot have a
         value of None.
 
+        Context has a `__getitem__` magic method equivalent to `get`, so `context['attr']`
+        behaves the same as `context.get('attr')`.
+        
         :param attribute: the desired attribute name
         :return: the attribute value, or None if there is no such attribute
         """
@@ -522,7 +527,7 @@ class Context:
         return json.dumps(self.to_dict(), separators=(',', ':'))
     
     def __to_dict_single(self, with_kind: bool) -> dict[str, Any]:
-        ret = {"key": self.__key}  # type: dict[str, Any]
+        ret = {"key": self.__key}  # type: Dict[str, Any]
         if with_kind:
             ret["kind"] = self.__kind
         if self.__name is not None:
@@ -596,6 +601,9 @@ class Context:
                     has_key = True
         b._allow_empty_key(has_key)
         return b.build()
+
+    def __getitem__(self, attribute) -> Any:
+        return self.get(attribute) if isinstance(attribute, str) else None
 
     def __repr__(self) -> str:
         """
@@ -685,7 +693,7 @@ class ContextBuilder:
             self.__kind = Context.DEFAULT_KIND
             self.__name = None  # type: Optional[str]
             self.__anonymous = False
-            self.__attributes = None  # type: Optional[dict[str, Any]]
+            self.__attributes = None  # type: Optional[Dict[str, Any]]
             self.__private = None  # type: Optional[list[str]]
             self.__copy_on_write_attrs = False
             self.__copy_on_write_private = False
