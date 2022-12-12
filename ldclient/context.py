@@ -504,7 +504,7 @@ class Context:
         if not self.valid:
             return {}
         if self.__multi is not None:
-            ret = {"kind": "multi"}
+            ret = {"kind": "multi"}  # type: dict[str, Any]
             for c in self.__multi:
                 ret[c.kind] = c.__to_dict_single(False)
             return ret
