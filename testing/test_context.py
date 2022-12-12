@@ -235,6 +235,14 @@ class TestContextMulti:
         assert mc.get_individual_context(-1) is None
         assert mc.get_individual_context(2) is None
 
+    def test_create_multi_flattens_nested_multi_context(self):
+        c1 = Context.create('a', 'kind1')
+        c2 = Context.create('b', 'kind2')
+        c3 = Context.create('c', 'kind3')
+        c2plus3 = Context.create_multi(c2, c3)
+        mc = Context.create_multi(c1, c2plus3)
+        assert mc == Context.create_multi(c1, c2, c3)
+
     def test_multi_builder(self):
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('b', 'kind2')
