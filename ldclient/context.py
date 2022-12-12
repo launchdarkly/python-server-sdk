@@ -455,7 +455,7 @@ class Context:
     
     @property
     def _attributes(self) -> Optional[dict[str, Any]]:
-        # for internal use by ContextBuilder - we don't want to expose the original dict otherwise
+        # for internal use by ContextBuilder - we don't want to expose the original dict
         # since that would break immutability
         return self.__attributes
     
