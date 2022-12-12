@@ -163,7 +163,11 @@ class Context:
         :param contexts: the individual contexts
         :return: a multi-context
         """
-        return Context(None, '', None, False, None, None, list(contexts))
+        # implementing this via multi_builder gives us the flattening behavior for free
+        builder = ContextMultiBuilder()
+        for c in contexts:
+            builder.add(c)
+        return builder.build()
 
     @classmethod
     def from_dict(cls, props: dict) -> Context:
