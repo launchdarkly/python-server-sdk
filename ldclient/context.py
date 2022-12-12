@@ -202,7 +202,7 @@ class Context:
         
         You may use :class:`ldclient.ContextBuilder` methods to set additional attributes and/or
         change the context kind before calling :func:`ldclient.ContextBuilder.build()`. If you
-        do not change any values, the defaults for the LDContext are that its `kind` is :const:`DEFAULT_KIND`,
+        do not change any values, the defaults for the Context are that its `kind` is :const:`DEFAULT_KIND`,
         its `key` is set to the key parameter specified here, `anonymous` is False, and it has no values for
         any other attributes.
 
@@ -415,7 +415,7 @@ class Context:
         If the method is called on a multi-context, and `kind` is a number, it must be a
         non-negative index that is less than the number of kinds (that is, less than the return
         value of :func:`individual_context_count`), and the return value on success is one of
-        the individual LDContexts within. Or, if `kind` is a string, it must match the context
+        the individual Contexts within. Or, if `kind` is a string, it must match the context
         kind of one of the individual contexts.
         
         If there is no context corresponding to `kind`, the method returns null.
@@ -698,7 +698,7 @@ class ContextBuilder:
     
     def build(self) -> Context:
         """
-        Creates a LDContext from the current builder properties.
+        Creates a Context from the current builder properties.
 
         The Context is immutable and will not be affected by any subsequent actions on the builder.
     
@@ -706,7 +706,7 @@ class ContextBuilder:
         Instead of throwing an exception, the ContextBuilder always returns an Context and you can
         check :func:`ldclient.Context.valid()` or :func:`ldclient.Context.error()` to see if it has
         an error. See :func:`ldclient.Context.valid()` for more information about invalid conditions.
-        If you pass an invalid LDContext to an SDK method, the SDK will detect this and will log a
+        If you pass an invalid Context to an SDK method, the SDK will detect this and will log a
         description of the error.
 
         :return: a new :class:`ldclient.Context`
