@@ -87,7 +87,7 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def upsert_internal(self, kind, new_item):
         key = self._item_key(kind, new_item['key'])
-        encoded_item = json.dumps(kind.encode(new_item))
+        encoded_item = json.dumps(new_item)
 
         # We will potentially keep retrying indefinitely until someone's write succeeds
         while True:
@@ -95,10 +95,10 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             if old_value is None:
                 mod_index = 0
             else:
-                old_item = kind.decode(json.loads(old_value['Value'].decode('utf-8')))
+                old_item = json.loads(old_value['Value'].decode('utf-8'))
                 # Check whether the item is stale. If so, don't do the update (and return the existing item to
                 # CachingStoreWrapper so it can be cached)
-                if old_item.version >= new_item.version:
+                if old_item['version'] >= new_item['version']:
                     return old_item
                 mod_index = old_value['ModifyIndex']
 
