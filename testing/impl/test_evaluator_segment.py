@@ -6,7 +6,7 @@ from testing.builders import *
 from testing.impl.evaluator_util import *
 
 
-def _segment_matches_context(segment: dict, context: Context) -> bool:
+def _segment_matches_context(segment: Segment, context: Context) -> bool:
     e = EvaluatorBuilder().with_segment(segment).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = e.evaluate(flag, context, event_factory)

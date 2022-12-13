@@ -121,11 +121,7 @@ def test_variation_for_invalid_context():
     assert 'default' == client.variation('feature.key', c, default='default')
 
 def test_variation_for_flag_that_evaluates_to_none():
-    empty_flag = {
-        'key': 'feature.key',
-        'on': False,
-        'offVariation': None
-    }
+    empty_flag = FlagBuilder('feature.key').on(False).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': empty_flag}})
     client = make_client(store)
@@ -162,11 +158,7 @@ def test_variation_detail_when_user_has_no_key():
     assert expected == client.variation_detail('feature.key', { }, default='default')
 
 def test_variation_detail_for_flag_that_evaluates_to_none():
-    empty_flag = {
-        'key': 'feature.key',
-        'on': False,
-        'offVariation': None
-    }
+    empty_flag = FlagBuilder('feature.key').on(False).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': empty_flag}})
     client = make_client(store)
@@ -193,12 +185,7 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
 
 def test_flag_using_big_segment():
-    segment = {
-        'key': 'segkey',
-        'version': 1,
-        'generation': 1,
-        'unbounded': True
-    }
+    segment = SegmentBuilder('segkey').unbounded(True).generation(1).build()
     flag = make_boolean_flag_matching_segment(segment)
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { flag['key']: flag }, SEGMENTS: { segment['key']: segment } })

@@ -9,6 +9,8 @@ from ldclient.interfaces import FeatureRequester
 from ldclient.polling import PollingUpdateProcessor
 from ldclient.util import UnsuccessfulResponseException
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+
+from testing.builders import *
 from testing.stub_util import MockFeatureRequester, MockResponse
 
 pp = None
@@ -33,18 +35,14 @@ def setup_processor(config):
     pp.start()
 
 def test_successful_request_puts_feature_data_in_store():
-    flag = {
-        "key": "flagkey"
-    }
-    segment = {
-        "key": "segkey"
-    }
+    flag = FlagBuilder('flagkey').build()
+    segment = SegmentBuilder('segkey').build()
     mock_requester.all_data = {
         FEATURES: {
-            "flagkey": flag
+            "flagkey": flag.to_json_dict()
         },
         SEGMENTS: {
-            "segkey": segment
+            "segkey": segment.to_json_dict()
         }
     }
     setup_processor(Config("SDK_KEY"))

@@ -1,3 +1,6 @@
+from ldclient.impl.model import *
+
+from typing import Optional
 
 # Event constructors are centralized here to avoid mistakes and repetitive logic.
 # The LDClient owns two instances of _EventFactory: one that always embeds evaluation reasons
@@ -10,44 +13,44 @@ class _EventFactory:
     def __init__(self, with_reasons):
         self._with_reasons = with_reasons
 
-    def new_eval_event(self, flag, user, detail, default_value, prereq_of_flag = None):
+    def new_eval_event(self, flag: FeatureFlag, user, detail, default_value, prereq_of_flag: Optional[FeatureFlag] = None) -> dict:
         add_experiment_data = self.is_experiment(flag, detail.reason)
         e = {
             'kind': 'feature',
-            'key': flag.get('key'),
+            'key': flag.key,
             'user': user,
             'value': detail.value,
             'variation': detail.variation_index,
             'default': default_value,
-            'version': flag.get('version')
+            'version': flag.version
         }
         # the following properties are handled separately so we don't waste bandwidth on unused keys
-        if add_experiment_data or flag.get('trackEvents', False):
+        if add_experiment_data or flag.track_events:
             e['trackEvents'] = True
-        if flag.get('debugEventsUntilDate', None):
-            e['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
+        if flag.debug_events_until_date:
+            e['debugEventsUntilDate'] = flag.debug_events_until_date
         if prereq_of_flag is not None:
-            e['prereqOf'] = prereq_of_flag.get('key')
+            e['prereqOf'] = prereq_of_flag.key
         if add_experiment_data or self._with_reasons:
             e['reason'] = detail.reason
         if user is not None and user.get('anonymous'):
             e['contextKind'] = self._user_to_context_kind(user)
         return e
 
-    def new_default_event(self, flag, user, default_value, reason):
+    def new_default_event(self, flag: FeatureFlag, user, default_value, reason) -> dict:
         e = {
             'kind': 'feature',
-            'key': flag.get('key'),
+            'key': flag.key,
             'user': user,
             'value': default_value,
             'default': default_value,
-            'version': flag.get('version')
+            'version': flag.version
         }
         # the following properties are handled separately so we don't waste bandwidth on unused keys
-        if flag.get('trackEvents', False):
+        if flag.track_events:
             e['trackEvents'] = True
-        if flag.get('debugEventsUntilDate', None):
-            e['debugEventsUntilDate'] = flag.get('debugEventsUntilDate')
+        if flag.debug_events_until_date:
+            e['debugEventsUntilDate'] = flag.debug_events_until_date
         if self._with_reasons:
             e['reason'] = reason
         if user is not None and user.get('anonymous'):
@@ -96,15 +99,15 @@ class _EventFactory:
             return "user"
 
     @staticmethod
-    def is_experiment(flag, reason):
+    def is_experiment(flag: FeatureFlag, reason):
         if reason is not None:
             if reason.get('inExperiment'):
                 return True
             kind = reason['kind']
             if kind == 'RULE_MATCH':
                 index = reason['ruleIndex']
-                rules = flag.get('rules') or []
-                return index >= 0 and index < len(rules) and rules[index].get('trackEvents', False)
+                rules = flag.rules
+                return index >= 0 and index < len(rules) and rules[index].track_events
             elif kind == 'FALLTHROUGH':
-                return flag.get('trackEventsFallthrough', False)
+                return flag.track_events_fallthrough
         return False

@@ -53,7 +53,8 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             # note, cached items are wrapped in an array so we can cache None values
             if cached_item is not None:
                 return callback(self._item_if_not_deleted(cached_item[0]))
-        item = self._core.get_internal(kind, key)
+        item_as_dict = self._core.get_internal(kind, key)
+        item = None if item_as_dict is None else kind.decode(item_as_dict)
         if self._cache is not None:
             self._cache[cache_key] = [item]
         return callback(self._item_if_not_deleted(item))
@@ -66,7 +67,12 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
             cached_items = self._cache.get(cache_key)
             if cached_items is not None:
                 return callback(cached_items)
-        items = self._items_if_not_deleted(self._core.get_all_internal(kind))
+        items_as_dicts = self._core.get_all_internal(kind)
+        all_items = {}
+        if items_as_dicts is not None:
+            for key, item in items_as_dicts.items():
+                all_items[key] = kind.decode(item)
+        items = self._items_if_not_deleted(all_items)
         if self._cache is not None:
             self._cache[cache_key] = items
         return callback(items)
@@ -80,7 +86,8 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     def upsert(self, kind, item):
         """
         """
-        new_state = self._core.upsert_internal(kind, item)
+        item_as_dict = kind.encode(item)
+        new_state = self._core.upsert_internal(kind, item_as_dict)
         if self._cache is not None:
             self._cache[self._item_cache_key(kind, item.get('key'))] = [new_state]
             self._cache.pop(self._all_cache_key(kind), None)

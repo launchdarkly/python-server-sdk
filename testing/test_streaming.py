@@ -9,6 +9,8 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.streaming import StreamingUpdateProcessor
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+
+from testing.builders import *
 from testing.http_util import start_server, BasicResponse, CauseNetworkError, SequentialHandler
 from testing.proxy_test_util import do_proxy_tests
 from testing.stub_util import make_delete_event, make_patch_event, make_put_event, stream_content
@@ -72,8 +74,8 @@ def test_sends_wrapper_header_without_version():
 def test_receives_put_event():
     store = InMemoryFeatureStore()
     ready = Event()
-    flag = { 'key': 'flagkey', 'version': 1 }
-    segment = { 'key': 'segkey', 'version': 1 }
+    flag = FlagBuilder('flagkey').version(1).build()
+    segment = SegmentBuilder('segkey').version(1).build()
 
     with start_server() as server:
         with stream_content(make_put_event([ flag ], [ segment ])) as stream:
@@ -90,10 +92,10 @@ def test_receives_put_event():
 def test_receives_patch_events():
     store = InMemoryFeatureStore()
     ready = Event()
-    flagv1 = { 'key': 'flagkey', 'version': 1 }
-    flagv2 = { 'key': 'flagkey', 'version': 2 }
-    segmentv1 = { 'key': 'segkey', 'version': 1 }
-    segmentv2 = { 'key': 'segkey', 'version': 1 }
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
+    segmentv1 = SegmentBuilder('segkey').version(1).build()
+    segmentv2 = SegmentBuilder('segkey').version(2).build()
 
     with start_server() as server:
         with stream_content(make_put_event([ flagv1 ], [ segmentv1 ])) as stream:
@@ -116,8 +118,8 @@ def test_receives_patch_events():
 def test_receives_delete_events():
     store = InMemoryFeatureStore()
     ready = Event()
-    flagv1 = { 'key': 'flagkey', 'version': 1 }
-    segmentv1 = { 'key': 'segkey', 'version': 1 }
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    segmentv1 = SegmentBuilder('segkey').version(1).build()
 
     with start_server() as server:
         with stream_content(make_put_event([ flagv1 ], [ segmentv1 ])) as stream:
@@ -140,8 +142,8 @@ def test_receives_delete_events():
 def test_reconnects_if_stream_is_broken():
     store = InMemoryFeatureStore()
     ready = Event()
-    flagv1 = { 'key': 'flagkey', 'version': 1 }
-    flagv2 = { 'key': 'flagkey', 'version': 2 }
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
 
     with start_server() as server:
         with stream_content(make_put_event([ flagv1 ])) as stream1:

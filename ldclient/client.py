@@ -310,6 +310,8 @@ class LDClient:
 
         try:
             flag = self._store.get(FEATURES, key, lambda x: x)
+            if isinstance(flag, dict): # shouldn't happen if we're using our standard store implementation
+                flag = FEATURES.decode(flag)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
