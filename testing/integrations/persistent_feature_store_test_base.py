@@ -91,15 +91,15 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
                 store_b.upsert(FEATURES, flag_b2)
 
                 item = store_a.get(FEATURES, 'flagA1', lambda x: x)
-                assert item == flag_a1
+                assert item == FEATURES.decode(flag_a1)
                 item = store_a.get(FEATURES, 'flagB1', lambda x: x)
                 assert item is None
                 items = store_a.all(FEATURES, lambda x: x)
-                assert items == { 'flagA1': flag_a1, 'flagA2': flag_a2 }
+                assert items == { 'flagA1': FEATURES.decode(flag_a1), 'flagA2': FEATURES.decode(flag_a2) }
 
                 item = store_b.get(FEATURES, 'flagB1', lambda x: x)
-                assert item == flag_b1
+                assert item == FEATURES.decode(flag_b1)
                 item = store_b.get(FEATURES, 'flagA1', lambda x: x)
                 assert item is None
                 items = store_b.all(FEATURES, lambda x: x)
-                assert items == { 'flagB1': flag_b1, 'flagB2': flag_b2 }
+                assert items == { 'flagB1': FEATURES.decode(flag_b1), 'flagB2': FEATURES.decode(flag_b2) }

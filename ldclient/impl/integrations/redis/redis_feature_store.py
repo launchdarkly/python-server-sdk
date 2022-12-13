@@ -35,7 +35,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             base_key = self._items_key(kind)
             pipe.delete(base_key)
             for key, item in items.items():
-                item_json = json.dumps(item)
+                item_json = json.dumps(kind.encode(item))
                 pipe.hset(base_key, key, item_json)
             all_count = all_count + len(items)
         pipe.execute()

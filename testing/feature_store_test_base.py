@@ -54,8 +54,8 @@ class FeatureStoreTestBase:
         scope = StoreTestScope(tester.create_feature_store())
         scope.store.init({
             FEATURES: {
-                'foo': self.make_feature('foo', 10),
-                'bar': self.make_feature('bar', 10),
+                'foo': self.make_feature('foo', 10).to_json_dict(),
+                'bar': self.make_feature('bar', 10).to_json_dict(),
             }
         })
         return scope
