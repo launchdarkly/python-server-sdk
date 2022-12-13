@@ -1,4 +1,4 @@
-from ldclient.client import LDClient, Config
+from ldclient.client import LDClient, Config, Context
 from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
@@ -17,6 +17,7 @@ import queue
 unreachable_uri="http://fake"
 
 
+context = Context.builder('xyz').set('bizzle', 'def').build()
 user = {
     u'key': u'xyz',
     u'custom': {
@@ -126,6 +127,13 @@ def test_toggle_offline():
 
 def test_identify():
     with make_client() as client:
+        client.identify(context)
+        e = get_first_event(client)
+        assert e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
+
+
+def test_identify_with_user_dict():
+    with make_client() as client:
         client.identify(user)
         e = get_first_event(client)
         assert e['kind'] == 'identify' and e['key'] == u'xyz' and e['user'] == user
@@ -143,13 +151,20 @@ def test_identify_no_user_key():
         assert count_events(client) == 0
 
 
-def test_identify_blank_user_key():
+def test_identify_invalid_context():
     with make_client() as client:
-        client.identify({ 'key': '' })
+        client.identify(Context.create(''))
         assert count_events(client) == 0
 
 
 def test_track():
+    with make_client() as client:
+        client.track('my_event', context)
+        e = get_first_event(client)
+        assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e.get('data') is None and e.get('metricValue') is None
+
+
+def test_track_with_user_dict():
     with make_client() as client:
         client.track('my_event', user)
         e = get_first_event(client)
@@ -158,14 +173,14 @@ def test_track():
 
 def test_track_with_data():
     with make_client() as client:
-        client.track('my_event', user, 42)
+        client.track('my_event', context, 42)
         e = get_first_event(client)
         assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42 and e.get('metricValue') is None
 
 
 def test_track_with_metric_value():
     with make_client() as client:
-        client.track('my_event', user, 42, 1.5)
+        client.track('my_event', context, 42, 1.5)
         e = get_first_event(client)
         assert e['kind'] == 'custom' and e['key'] == 'my_event' and e['user'] == user and e['data'] == 42 and e.get('metricValue') == 1.5
 
@@ -179,6 +194,12 @@ def test_track_no_user():
 def test_track_no_user_key():
     with make_client() as client:
         client.track('my_event', { 'name': 'nokey' })
+        assert count_events(client) == 0
+
+
+def test_track_invalid_context():
+    with make_client() as client:
+        client.track('my_event', Context.create(''))
         assert count_events(client) == 0
 
 
@@ -430,7 +451,7 @@ def test_event_for_unknown_feature():
             e['default'] == 'default')
 
 
-def test_event_for_existing_feature_with_no_user():
+def test_no_event_for_existing_feature_with_no_user():
     feature = make_off_flag_with_value('feature.key', 'value')
     feature['trackEvents'] = True
     feature['debugEventsUntilDate'] = 1000
@@ -438,43 +459,28 @@ def test_event_for_existing_feature_with_no_user():
     store.init({FEATURES: {'feature.key': feature}})
     with make_client(store) as client:
         assert 'default' == client.variation('feature.key', None, default='default')
-        e = get_first_event(client)
-        assert (e['kind'] == 'feature' and
-            e['key'] == 'feature.key' and
-            e.get('user') is None and
-            e['version'] == feature['version'] and
-            e['value'] == 'default' and
-            e.get('variation') is None and
-            e['default'] == 'default' and
-            e['trackEvents'] == True and
-            e['debugEventsUntilDate'] == 1000)
+        assert count_events(client) == 0
 
 
-def test_event_for_existing_feature_with_no_user_key():
+def test_no_event_for_existing_feature_with_invalid_context():
     feature = make_off_flag_with_value('feature.key', 'value')
     feature['trackEvents'] = True
     feature['debugEventsUntilDate'] = 1000
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     with make_client(store) as client:
-        bad_user = { u'name': u'Bob' }
-        assert 'default' == client.variation('feature.key', bad_user, default='default')
-        e = get_first_event(client)
-        assert (e['kind'] == 'feature' and
-            e['key'] == 'feature.key' and
-            e['user'] == bad_user and
-            e['version'] == feature['version'] and
-            e['value'] == 'default' and
-            e.get('variation') is None and
-            e['default'] == 'default' and
-            e['trackEvents'] == True and
-            e['debugEventsUntilDate'] == 1000)
+        bad_context = Context.create('')
+        assert 'default' == client.variation('feature.key', bad_context, default='default')
+        assert count_events(client) == 0
 
 
 def test_secure_mode_hash():
-    user = {'key': 'Message'}
+    context_to_hash = Context.create('Message')
+    equivalent_user_to_hash = {'key': 'Message'}
+    expected_hash = "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
     with make_offline_client() as client:
-        assert client.secure_mode_hash(user) == "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
+        assert client.secure_mode_hash(context_to_hash) == expected_hash
+        assert client.secure_mode_hash(equivalent_user_to_hash) == expected_hash
 
 
 dependency_ordering_test_data = {

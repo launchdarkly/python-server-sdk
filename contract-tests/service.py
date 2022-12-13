@@ -53,6 +53,7 @@ def handle_exception(e):
     if isinstance(e, HTTPException):
         return e
 
+    app.logger.exception(e)
     return str(e), 500
 
 @app.route('/', methods=['GET'])
