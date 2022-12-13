@@ -59,6 +59,20 @@ class EvalResult:
         self.events.append(event)
 
 
+class EvaluationException(Exception):
+    def __init__(self, message: str, error_kind: str = 'MALFORMED_FLAG'):
+        self._message = message
+        self._error_kind = error_kind
+    
+    @property
+    def message(self) -> str:
+        return self._message
+
+    @property
+    def error_kind(self) -> str:
+        return self._error_kind
+
+
 class Evaluator:
     """
     Encapsulates the feature flag evaluation logic. The Evaluator has no knowledge of the rest of the SDK environment;
@@ -70,7 +84,8 @@ class Evaluator:
         self,
         get_flag: Callable[[str], Optional[FeatureFlag]],
         get_segment: Callable[[str], Optional[Segment]],
-        get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]]
+        get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]],
+        logger: Optional[logging.Logger] = None
     ):
         """
         :param get_flag: function provided by LDClient that takes a flag key and returns either the flag or None
@@ -82,10 +97,17 @@ class Evaluator:
         self.__get_flag = get_flag
         self.__get_segment = get_segment
         self.__get_big_segments_membership = get_big_segments_membership
+        self.__logger = logger
 
     def evaluate(self, flag: FeatureFlag, context: Context, event_factory: _EventFactory) -> EvalResult:
         state = EvalResult()
-        state.detail = self._evaluate(flag, context, state, event_factory)
+        try:
+            state.detail = self._evaluate(flag, context, state, event_factory)
+        except EvaluationException as e:
+            if self.__logger is not None:
+                self.__logger.error('Could not evaluate flag "%s": %s' % (flag.key, e.message))
+            state.detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': e.error_kind})
+            return state
         if state.big_segments_status is not None:
             state.detail.reason['bigSegmentsStatus'] = state.big_segments_status
         return state
@@ -183,12 +205,12 @@ class Evaluator:
         attr = clause.attribute
         if attr is None:
             return False
-        if attr == 'kind':
+        if attr.depth == 1 and attr[0] == 'kind':
             return _maybe_negate(clause, _match_clause_by_kind(clause, context))
         actual_context = context.get_individual_context(clause.context_kind or Context.DEFAULT_KIND)
         if actual_context is None:
             return False
-        context_value = actual_context.get(attr)
+        context_value = _get_context_value_by_attr_ref(actual_context, attr)
         if context_value is None:
             return False
         
@@ -325,12 +347,12 @@ def _bucket_context(
     context_kind: Optional[str],
     key: str,
     salt: str,
-    bucket_by: Optional[str]
+    bucket_by: Optional[AttributeRef]
     ) -> float:
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
     if match_context is None:
         return -1
-    clause_value = match_context.get(bucket_by or 'key')
+    clause_value = match_context.key if bucket_by is None else _get_context_value_by_attr_ref(match_context, bucket_by)
     if clause_value is None:
         return 0.0
     bucket_by_value = _bucketable_string_value(clause_value)
@@ -359,6 +381,24 @@ def _context_key_is_in_target_list(context: Context, context_kind: Optional[str]
         return False
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
     return match_context is not None and match_context.key in keys
+
+def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
+    if attr is None:
+        raise EvaluationException("rule clause did not specify an attribute")
+    if attr.error is not None:
+        raise EvaluationException("invalid attribute reference: " + attr.error)
+    name = attr[0]
+    if name is None:
+        return None
+    value = context.get(name)
+    depth = attr.depth
+    i = 1
+    while i < depth:
+        if not isinstance(value, dict):
+            return None  # can't get subproperty if we're not in a JSON object
+        value = value.get(attr[i])
+        i += 1
+    return value
 
 def _match_single_context_value(op: str, context_value: Any, values: List[Any]) -> bool:
     op_fn = operators.ops.get(op)

@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 
+from ldclient.impl.model.attribute_ref import AttributeRef, opt_attr_ref_with_opt_context_kind
 from ldclient.impl.model.entity import *
 
 
@@ -28,14 +29,14 @@ class Rollout:
     __slots__ = ['_bucket_by', '_context_kind', '_is_experiment', '_seed', '_variations']
 
     def __init__(self, data: dict):
-        self._bucket_by = opt_str(data, 'bucketBy')
         self._context_kind = opt_str(data, 'contextKind')
+        self._bucket_by = opt_attr_ref_with_opt_context_kind(opt_str(data, 'bucketBy'), self._context_kind)
         self._is_experiment = opt_str(data, 'kind') == 'experiment'
         self._seed = opt_int(data, 'seed')
         self._variations = list(WeightedVariation(item) for item in req_dict_list(data, 'variations'))
 
     @property
-    def bucket_by(self) -> Optional[str]:
+    def bucket_by(self) -> Optional[AttributeRef]:
         return self._bucket_by
 
     @property
