@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -41,38 +42,78 @@ class ClientEntity:
     def is_initializing(self) -> bool:
         return self.client.is_initialized()
 
-    def evaluate(self, params) -> dict:
+    def evaluate(self, params: dict) -> dict:
         response = {}
 
         if params.get("detail", False):
-            detail = self.client.variation_detail(params["flagKey"], params["user"], params["defaultValue"])
+            detail = self.client.variation_detail(params["flagKey"], params["context"], params["defaultValue"])
             response["value"] = detail.value
             response["variationIndex"] = detail.variation_index
             response["reason"] = detail.reason
         else:
-            response["value"] = self.client.variation(params["flagKey"], params["user"], params["defaultValue"])
+            response["value"] = self.client.variation(params["flagKey"], params["context"], params["defaultValue"])
 
         return response
 
-    def evaluate_all(self, params):
+    def evaluate_all(self, params: dict):
         opts = {}
         opts["client_side_only"] = params.get("clientSideOnly", False)
         opts["with_reasons"] = params.get("withReasons", False)
         opts["details_only_for_tracked_flags"] = params.get("detailsOnlyForTrackedFlags", False)
 
-        state = self.client.all_flags_state(params["user"], **opts)
+        state = self.client.all_flags_state(params["context"], **opts)
 
         return {"state": state.to_json_dict()}
 
-    def track(self, params):
-        self.client.track(params["eventKey"], params["user"], params["data"], params.get("metricValue", None))
+    def track(self, params: dict):
+        self.client.track(params["eventKey"], params["context"], params["data"], params.get("metricValue", None))
 
-    def identify(self, params):
-        self.client.identify(params["user"])
+    def identify(self, params: dict):
+        self.client.identify(params["context"])
 
     def flush(self):
         self.client.flush()
 
+    def secure_mode_hash(self, params: dict) -> dict:
+        return {"result": self.client.secure_mode_hash(params["context"])}
+    
+    def context_build(self, params: dict) -> dict:
+        if params.get("multi"):
+            b = Context.multi_builder()
+            for c in params.get("multi"):
+                b.add(self._context_build_single(c))
+            return self._context_response(b.build())
+        return self._context_response(self._context_build_single(params["single"]))
+    
+    def _context_build_single(self, params: dict) -> Context:
+        b = Context.builder(params["key"])
+        if "kind" in params:
+            b.kind(params["kind"])
+        if "name" in params:
+            b.name(params["name"])
+        if "anonymous" in params:
+            b.anonymous(params["anonymous"])
+        if "custom" in params:
+            for k, v in params.get("custom").items():
+                b.set(k, v)
+        if "private" in params:
+            for attr in params.get("private"):
+                b.private(attr)
+        return b.build()
+    
+    def context_convert(self, params: dict) -> dict:
+        input = params["input"]
+        try:
+            props = json.loads(input)
+            return self._context_response(Context.from_dict(props))
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def _context_response(self, c: Context) -> dict:
+        if c.valid:
+            return {"output": c.to_json_string()}
+        return {"error": c.error}
+    
     def close(self):
         self.client.close()
         self.log.info('Test ended')

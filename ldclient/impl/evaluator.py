@@ -4,10 +4,11 @@ from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.util import stringify_attrs
 
+import json
 from collections import namedtuple
 import hashlib
 import logging
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
 # the ldclient.evaluation module.
@@ -143,19 +144,67 @@ class Evaluator:
         return True
 
     def _clause_matches_context(self, clause: dict, context: Context, state: EvalResult):
-        if clause.get('op') == 'segmentMatch':
+        op = clause['op']
+        if op == 'segmentMatch':
             for seg_key in clause.get('values') or []:
                 segment = self.__get_segment(seg_key)
                 if segment is not None and self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
-        else:
-            return _clause_matches_context_no_segments(clause, context)
+        
+        attr = clause.get('attribute')
+        if attr is None:
+            return False
+        if attr == 'kind':
+            return _maybe_negate(clause, _match_clause_by_kind(clause, context))
+        actual_context = context.get_individual_context(clause.get('contextKind') or Context.DEFAULT_KIND)
+        if actual_context is None:
+            return False
+        context_value = actual_context.get(attr)
+        if context_value is None:
+            return None
+        clause_values = clause.get('values') or []
+        
+        # is the attr an array?
+        if isinstance(context_value, (list, tuple)):
+            for v in context_value:
+                if _match_single_context_value(op, v, clause_values):
+                    return _maybe_negate(clause, True)
+            return _maybe_negate(clause, False)
+        return _maybe_negate(clause, _match_single_context_value(op, context_value, clause_values))
 
     def _segment_matches_context(self, segment: dict, context: Context, state: EvalResult):
         if segment.get('unbounded', False):
             return self._big_segment_match_context(segment, context, state)
-        return _simple_segment_match_context(segment, context, True)
+        return self._simple_segment_match_context(segment, context, state, True)
+
+    def _simple_segment_match_context(self, segment: dict, context: Context, state: EvalResult, use_includes_and_excludes: bool):
+        key = context.key
+        if key is not None:
+            if use_includes_and_excludes:
+                if key in segment.get('included', []):
+                    return True
+                if key in segment.get('excluded', []):
+                    return False
+            for rule in segment.get('rules', []):
+                if self._segment_rule_matches_context(rule, context, state, segment['key'], segment.get('salt', '')):
+                    return True
+        return False
+
+    def _segment_rule_matches_context(self, rule: dict, context: Context, state: EvalResult, segment_key: str, salt: str):
+        for clause in rule.get('clauses') or []:
+            if not self._clause_matches_context(clause, context, state):
+                return False
+
+        # If the weight is absent, this rule matches
+        if 'weight' not in rule or rule['weight'] is None:
+            return True
+
+        # All of the clauses are met. See if the context buckets in
+        bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']
+        bucket = _bucket_context(None, context, segment_key, salt, bucket_by)
+        weight = rule['weight'] / 100000.0
+        return bucket < weight
 
     def _big_segment_match_context(self, segment: dict, context: Context, state: EvalResult):
         generation = segment.get('generation', None)
@@ -174,7 +223,7 @@ class Evaluator:
         included = None if membership is None else membership.get(segment_ref, None)
         if included is not None:
             return included
-        return _simple_segment_match_context(segment, context, False)
+        return self._simple_segment_match_context(segment, context, state, False)
 
 
 # The following functions are declared outside Evaluator because they do not depend on any
@@ -262,54 +311,23 @@ def _bucketable_string_value(u_value):
 
     return None
 
-def _clause_matches_context_no_segments(clause, context):
-    attr = clause.get('attribute')
-    if attr is None:
+def _match_single_context_value(op: str, context_value: Any, values: List[Any]) -> bool:
+    op_fn = operators.ops.get(op)
+    if op_fn is None:
         return False
-    context_value = context.get(attr)
-    if context_value is None:
-        return None
-    # is the attr an array?
-    op_fn = operators.ops[clause['op']]
-    if isinstance(context_value, (list, tuple)):
-        for v in context_value:
-            if _match_any(op_fn, v, clause.get('values') or []):
-                return _maybe_negate(clause, True)
-        return _maybe_negate(clause, False)
-    else:
-        return _maybe_negate(clause, _match_any(op_fn, context_value, clause.get('values') or []))
-
-def _simple_segment_match_context(segment, context, use_includes_and_excludes):
-    key = context.key
-    if key is not None:
-        if use_includes_and_excludes:
-            if key in segment.get('included', []):
-                return True
-            if key in segment.get('excluded', []):
-                return False
-        for rule in segment.get('rules', []):
-            if _segment_rule_matches_context(rule, context, segment.get('key'), segment.get('salt')):
-                return True
+    for v in values:
+        if op_fn(context_value, v):
+            return True
     return False
 
-def _segment_rule_matches_context(rule, context, segment_key, salt):
-    for clause in rule.get('clauses') or []:
-        if not _clause_matches_context_no_segments(clause, context):
-            return False
-
-    # If the weight is absent, this rule matches
-    if 'weight' not in rule or rule['weight'] is None:
-        return True
-
-    # All of the clauses are met. See if the context buckets in
-    bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']
-    bucket = _bucket_context(None, context, segment_key, salt, bucket_by)
-    weight = rule['weight'] / 100000.0
-    return bucket < weight
-
-def _match_any(op_fn, u, vals):
-    for v in vals:
-        if op_fn(u, v):
+def _match_clause_by_kind(clause: dict, context: Context) -> bool:
+    # If attribute is "kind", then we treat operator and values as a match expression against a list
+    # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
+    # and "user", it is a match if either of those strings is a match with Operator and Values.
+    op = clause['op']
+    for i in range(context.individual_context_count):
+        c = context.get_individual_context(i)
+        if c is not None and _match_single_context_value(op, c.kind, clause.get('values') or []):
             return True
     return False
 

@@ -64,6 +64,8 @@ def status():
             'all-flags-with-reasons',
             'all-flags-client-side-only',
             'all-flags-details-only-for-tracked-flags',
+            'context-type',
+            'secure-mode-hash',
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
@@ -103,23 +105,33 @@ def post_client_command(id):
     if client is None:
         return ('', 404)
 
-    if params.get('command') == "evaluate":
-        response = client.evaluate(params.get("evaluate"))
-        return (json.dumps(response), 200)
-    elif params.get("command") == "evaluateAll":
-        response = client.evaluate_all(params.get("evaluateAll"))
-        return (json.dumps(response), 200)
-    elif params.get("command") == "customEvent":
-        client.track(params.get("customEvent"))
-        return ('', 201)
-    elif params.get("command") == "identifyEvent":
-        client.identify(params.get("identifyEvent"))
-        return ('', 201)
-    elif params.get('command') == "flushEvents":
-        client.flush()
-        return ('', 201)
+    command = params.get('command')
+    sub_params = params.get(command)
 
-    return ('', 400)
+    response = None
+
+    if command == "evaluate":
+        response = client.evaluate(sub_params)
+    elif command == "evaluateAll":
+        response = client.evaluate_all(sub_params)
+    elif command == "customEvent":
+        client.track(sub_params)
+    elif command == "identifyEvent":
+        client.identify(sub_params)
+    elif command == "flushEvents":
+        client.flush()
+    elif command == "secureModeHash":
+        response = client.secure_mode_hash(sub_params)
+    elif command == "contextBuild":
+        response = client.context_build(sub_params)
+    elif command == "contextConvert":
+        response = client.context_convert(sub_params)
+    else:
+        return ('', 400)
+    
+    if response is None:
+        return ('', 201)
+    return (json.dumps(response), 200)
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
