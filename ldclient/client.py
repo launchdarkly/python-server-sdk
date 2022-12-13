@@ -106,7 +106,8 @@ class LDClient:
         self._evaluator = Evaluator(
             lambda key: _get_store_item(store, FEATURES, key),
             lambda key: _get_store_item(store, SEGMENTS, key),
-            lambda key: big_segment_store_manager.get_user_membership(key)
+            lambda key: big_segment_store_manager.get_user_membership(key),
+            log
         )
 
         if self._config.offline:
