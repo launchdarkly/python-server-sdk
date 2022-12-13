@@ -1,8 +1,4 @@
-import math
-import pytest
 from ldclient.client import Context
-from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.evaluator import _bucket_context, _variation_index_for_context
 from testing.builders import *
 from testing.impl.evaluator_util import *
 

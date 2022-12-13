@@ -20,13 +20,12 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
 # Explanation of current skips:
+# - "evaluation" subtests involving attribute references: Haven't yet implemented attribute references.
 # - "evaluation/parameterized/prerequisites": Can't pass yet because prerequisite cycle detection is not implemented.
 # - various other "evaluation" subtests: These tests require attribute reference support or targeting by kind.
 # - "events": These test suites will be unavailable until more of the U2C implementation is done.
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'evaluation/bucketing/bucket by non-key attribute' \
-	-skip 'evaluation/bucketing/secondary' \
-	-skip 'evaluation/bucketing/selection of context' \
+	-skip 'evaluation/bucketing/bucket by non-key attribute/in rollouts/string value/complex attribute reference' \
 	-skip 'evaluation/parameterized/attribute references' \
 	-skip 'evaluation/parameterized/bad attribute reference errors' \
 	-skip 'evaluation/parameterized/prerequisites' \

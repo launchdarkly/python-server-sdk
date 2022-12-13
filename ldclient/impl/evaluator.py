@@ -229,7 +229,7 @@ class Evaluator:
 
         # All of the clauses are met. See if the context buckets in
         bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']
-        bucket = _bucket_context(None, context, segment_key, salt, bucket_by)
+        bucket = _bucket_context(None, context, rule.get('rolloutContextKind'), segment_key, salt, bucket_by)
         weight = rule['weight'] / 100000.0
         return bucket < weight
 
@@ -277,54 +277,68 @@ def _get_value_for_variation_or_rollout(flag: dict, vr: dict, context: Context, 
     return _get_variation(flag, index, reason)
 
 def _variation_index_for_context(feature: dict, rule: dict, context: Context) -> Tuple[Optional[int], bool]:
-    if rule.get('variation') is not None:
-        return (rule['variation'], False)
+    var = rule.get('variation')
+    if var is not None:
+        return (var, False)
 
     rollout = rule.get('rollout')
     if rollout is None:
         return (None, False)
     variations = rollout.get('variations')
-    seed = rollout.get('seed')
-    if variations is not None and len(variations) > 0:
-        bucket_by = 'key'
-        if rollout.get('bucketBy') is not None:
-            bucket_by = rollout['bucketBy']
-        bucket = _bucket_context(seed, context, feature['key'], feature['salt'], bucket_by)
-        is_experiment = rollout.get('kind') == 'experiment'
-        sum = 0.0
-        for wv in variations:
-            sum += wv.get('weight', 0.0) / 100000.0
-            if bucket < sum:
-                is_experiment_partition = is_experiment and not wv.get('untracked')
-                return (wv.get('variation'), is_experiment_partition)
+    if variations is None or len(variations) == 0:
+        return (None, False)
+    
+    rollout_is_experiment = rollout.get('kind') == 'experiment'
+    bucket_by = None if rollout_is_experiment else rollout.get('bucketBy')
+    bucket = _bucket_context(
+        rollout.get('seed'),
+        context,
+        rollout.get('contextKind'),
+        feature['key'],
+        feature['salt'],
+        bucket_by
+        )
+    is_experiment = rollout_is_experiment and bucket >= 0
+    # _bucket_context returns a negative value if the context didn't exist, in which case we
+    # still end up returning the first bucket, but we will force the "in experiment" state to be false.
 
-        # The context's bucket value was greater than or equal to the end of the last bucket. This could happen due
-        # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
-        # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
-        # this case (or changing the scaling, which would potentially change the results for *all* contexts), we
-        # will simply put the context in the last bucket.
-        is_experiment_partition = is_experiment and not variations[-1].get('untracked')
-        return (variations[-1].get('variation'), is_experiment_partition)
+    sum = 0.0
+    for wv in variations:
+        sum += wv.get('weight', 0.0) / 100000.0
+        if bucket < sum:
+            is_experiment_partition = is_experiment and not wv.get('untracked')
+            return (wv.get('variation'), is_experiment_partition)
 
-    return (None, False)
+    # The context's bucket value was greater than or equal to the end of the last bucket. This could happen due
+    # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
+    # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
+    # this case (or changing the scaling, which would potentially change the results for *all* contexts), we
+    # will simply put the context in the last bucket.
+    is_experiment_partition = is_experiment and not variations[-1].get('untracked')
+    return (variations[-1].get('variation'), is_experiment_partition)
 
-def _bucket_context(seed, context, key, salt, bucket_by) -> float:
-    clause_value = context.get(bucket_by or 'key')
+def _bucket_context(
+    seed: Optional[int],
+    context: Context,
+    context_kind: Optional[str],
+    key: str,
+    salt: str,
+    bucket_by: Optional[str]
+    ) -> float:
+    match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
+    if match_context is None:
+        return -1
+    clause_value = match_context.get(bucket_by or 'key')
     if clause_value is None:
         return 0.0
     bucket_by_value = _bucketable_string_value(clause_value)
     if bucket_by_value is None:
         return 0.0
-
     id_hash = clause_value
-    if context.get('secondary') is not None:
-        id_hash = id_hash + '.' + context.get('secondary')
-
     if seed is not None:
         prefix = str(seed)
     else:
         prefix = '%s.%s' % (key, salt)
-
     hash_key = '%s.%s' % (prefix, id_hash)
     hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
     result = hash_val / __LONG_SCALE__
