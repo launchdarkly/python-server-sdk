@@ -22,7 +22,7 @@ class Prerequisite:
 
 
 class Target:
-    __slots__ = ['_data', '_context_kind', '_variation', '_values']
+    __slots__ = ['_context_kind', '_variation', '_values']
 
     def __init__(self, data: dict):
         self._context_kind = opt_str(data, 'contextKind')
@@ -43,7 +43,7 @@ class Target:
 
 
 class FlagRule:
-    __slots__ = ['_data', '_id', '_clauses', '_track_events', '_variation_or_rollout']
+    __slots__ = ['_id', '_clauses', '_track_events', '_variation_or_rollout']
 
     def __init__(self, data: dict):
         self._id = opt_str(data, 'id')
@@ -126,19 +126,19 @@ class FeatureFlag(ModelEntity):
         return self._fallthrough
 
     @property
-    def prerequisites(self) -> list[Prerequisite]:
+    def prerequisites(self) -> List[Prerequisite]:
         return self._prerequisites
 
     @property
-    def targets(self) -> list[Target]:
+    def targets(self) -> List[Target]:
         return self._targets
 
     @property
-    def context_targets(self) -> list[Target]:
+    def context_targets(self) -> List[Target]:
         return self._context_targets
 
     @property
-    def rules(self) -> list[FlagRule]:
+    def rules(self) -> List[FlagRule]:
         return self._rules
 
     @property

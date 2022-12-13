@@ -51,7 +51,7 @@ class Rollout:
         return self._seed
 
     @property
-    def variations(self) -> list[WeightedVariation]:
+    def variations(self) -> List[WeightedVariation]:
         return self._variations
 
 
