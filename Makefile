@@ -35,8 +35,6 @@ TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
 	-skip 'evaluation/parameterized/segment match/excluded list is specific to user kind' \
 	-skip 'evaluation/parameterized/segment match/excludedContexts' \
 	-skip 'evaluation/parameterized/segment recursion' \
-	-skip 'evaluation/parameterized/target match/context targets' \
-	-skip 'evaluation/parameterized/target match/multi-kind' \
 	-skip 'events'
 
 # port 8000 and 9000 is already used in the CI environment because we're

@@ -185,19 +185,6 @@ def test_flag_returns_error_if_fallthrough_has_rollout_with_no_variations():
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
-def test_flag_matches_user_from_targets():
-    flag = {
-        'key': 'feature0',
-        'on': True,
-        'targets': [{ 'values': ['whoever', 'userkey'], 'variation': 2 }],
-        'fallthrough': { 'variation': 0 },
-        'offVariation': 1,
-        'variations': ['a', 'b', 'c']
-    }
-    user = Context.create('userkey')
-    detail = EvaluationDetail('c', 2, {'kind': 'TARGET_MATCH'})
-    assert_eval_result(basic_evaluator.evaluate(flag, user, event_factory), detail, None)
-
 def test_flag_matches_user_from_rules():
     rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 0}
     flag = make_boolean_flag_with_rules(rule)

@@ -13,6 +13,7 @@ class FlagBuilder:
             'fallthrough': {},
             'prerequisites': [],
             'targets': [],
+            'contextTargets': [],
             'rules': []
         }
     
@@ -43,6 +44,10 @@ class FlagBuilder:
 
     def target(self, variation: int, *keys: str) -> FlagBuilder:
         self.__data['targets'].append({'variation': variation, 'values': list(keys)})
+        return self
+    
+    def context_target(self, context_kind: str, variation: int, *keys: str) -> FlagBuilder:
+        self.__data['contextTargets'].append({'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
         return self
     
     def rules(self, *rules: dict) -> FlagBuilder:
