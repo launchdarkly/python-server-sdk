@@ -16,7 +16,7 @@ class BaseBuilder:
         self.data[key].append(item)
         return self
     
-    def _append_all(self, key: str, items: List[dict]):
+    def _append_all(self, key: str, items: List[Any]):
         self.data[key].extend(items)
         return self
 
@@ -86,6 +86,8 @@ class SegmentBuilder(BaseBuilder):
             'version': 1,
             'included': [],
             'excluded': [],
+            'includedContexts': [],
+            'excludedContexts': [],
             'rules': [],
             'unbounded': False
         })
@@ -95,6 +97,18 @@ class SegmentBuilder(BaseBuilder):
 
     def version(self, version: int) -> SegmentBuilder:
         return self._set('key', version)
+
+    def excluded(self, *keys: str) -> SegmentBuilder:
+        return self._append_all('excluded', list(keys))
+
+    def excluded_contexts(self, context_kind: str, *keys: str) -> SegmentBuilder:
+        return self._append('excludedContexts', {'contextKind': context_kind, 'values': list(keys)})
+
+    def included(self, *keys: str) -> SegmentBuilder:
+        return self._append_all('included', list(keys))
+
+    def included_contexts(self, context_kind: str, *keys: str) -> SegmentBuilder:
+        return self._append('includedContexts', {'contextKind': context_kind, 'values': list(keys)})
 
     def salt(self, salt: str) -> SegmentBuilder:
         return self._set('salt', salt)
@@ -140,6 +154,9 @@ def make_clause_matching_context(context: Context) -> dict:
 
 def make_clause_matching_segment_key(*segment_keys: str) -> dict:
     return {'attribute': '', 'op': 'segmentMatch', 'values': list(segment_keys)}
+
+def make_segment_rule_matching_context(context: Context) -> dict:
+    return SegmentRuleBuilder().clauses(make_clause_matching_context(context)).build()
 
 def negate_clause(clause: dict) -> dict:
     c = clause.copy()
