@@ -23,6 +23,10 @@ from ldclient.interfaces import UpdateProcessor
 from ldclient.util import log
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
+def _sanitize_json_item(item):
+    if not ('version' in item):
+        item['version'] = 1
+
 class _FileDataSource(UpdateProcessor):
     def __init__(self, store, ready, paths, auto_update, poll_interval, force_polling):
         self._store = store
@@ -62,8 +66,12 @@ class _FileDataSource(UpdateProcessor):
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
                 return
-        self._store.init(all_data)
-        self._inited = True
+        try:
+            self._store.init(all_data)
+            self._inited = True
+        except Exception as e:
+            log.error('Unable to store data: %s' % repr(e))
+            traceback.print_exc()
 
     def _load_file(self, path, all_data):
         content = None
@@ -71,10 +79,12 @@ class _FileDataSource(UpdateProcessor):
             content = f.read()
         parsed = self._parse_content(content)
         for key, flag in parsed.get('flags', {}).items():
+            _sanitize_json_item(flag)
             self._add_item(all_data, FEATURES, flag)
         for key, value in parsed.get('flagValues', {}).items():
             self._add_item(all_data, FEATURES, self._make_flag_with_value(key, value))
         for key, segment in parsed.get('segments', {}).items():
+            _sanitize_json_item(segment)
             self._add_item(all_data, SEGMENTS, segment)
 
     def _parse_content(self, content):
@@ -93,6 +103,7 @@ class _FileDataSource(UpdateProcessor):
     def _make_flag_with_value(self, key, value):
         return {
             'key': key,
+            'version': 1,
             'on': True,
             'fallthrough': {
                 'variation': 0

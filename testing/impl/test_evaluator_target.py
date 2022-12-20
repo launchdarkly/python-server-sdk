@@ -15,13 +15,13 @@ def base_flag_builder() -> FlagBuilder:
     return FlagBuilder('feature').on(True).variations(*VARIATIONS) \
         .fallthrough_variation(FALLTHROUGH_VAR).off_variation(FALLTHROUGH_VAR)
 
-def expect_match(flag: dict, context: Context, variation: int):
+def expect_match(flag: FeatureFlag, context: Context, variation: int):
     result = basic_evaluator.evaluate(flag, context, event_factory)
     assert result.detail.variation_index == variation
     assert result.detail.value == VARIATIONS[variation]
     assert result.detail.reason == {'kind': 'TARGET_MATCH'}
 
-def expect_fallthrough(flag: dict, context: Context):
+def expect_fallthrough(flag: FeatureFlag, context: Context):
     result = basic_evaluator.evaluate(flag, context, event_factory)
     assert result.detail.variation_index == FALLTHROUGH_VAR
     assert result.detail.value == VARIATIONS[FALLTHROUGH_VAR]

@@ -108,10 +108,16 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     def init(self, all_data):
         """
         """
+        all_decoded = {}
+        for kind, items in all_data.items():
+            items_decoded = {}
+            for key, item in items.items():
+                items_decoded[key] = kind.decode(item)
+            all_decoded[kind] = items_decoded
         try:
             self._lock.rlock()
             self._items.clear()
-            self._items.update(all_data)
+            self._items.update(all_decoded)
             self._initialized = True
             for k in all_data:
                 log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
@@ -135,13 +141,14 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     def upsert(self, kind, item):
         """
         """
+        decoded_item = kind.decode(item)
         key = item['key']
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < item['version']:
-                itemsOfKind[key] = item
+                itemsOfKind[key] = decoded_item
                 log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
         finally:
             self._lock.runlock()

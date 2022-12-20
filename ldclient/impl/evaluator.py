@@ -2,6 +2,7 @@ from ldclient import operators
 from ldclient.context import Context, _USER_STRING_ATTRS
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.model import *
 
 import hashlib
 import logging
@@ -67,8 +68,8 @@ class Evaluator:
     """
     def __init__(
         self,
-        get_flag: Callable[[str], Optional[dict]],
-        get_segment: Callable[[str], Optional[dict]],
+        get_flag: Callable[[str], Optional[FeatureFlag]],
+        get_segment: Callable[[str], Optional[Segment]],
         get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]]
     ):
         """
@@ -82,15 +83,15 @@ class Evaluator:
         self.__get_segment = get_segment
         self.__get_big_segments_membership = get_big_segments_membership
 
-    def evaluate(self, flag: dict, context: Context, event_factory: _EventFactory) -> EvalResult:
+    def evaluate(self, flag: FeatureFlag, context: Context, event_factory: _EventFactory) -> EvalResult:
         state = EvalResult()
         state.detail = self._evaluate(flag, context, state, event_factory)
         if state.big_segments_status is not None:
             state.detail.reason['bigSegmentsStatus'] = state.big_segments_status
         return state
 
-    def _evaluate(self, flag: dict, context: Context, state: EvalResult, event_factory: _EventFactory) -> EvaluationDetail:
-        if not flag.get('on', False):
+    def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: _EventFactory) -> EvaluationDetail:
+        if not flag.on:
             return _get_off_value(flag, {'kind': 'OFF'})
 
         prereq_failure_reason = self._check_prerequisites(flag, context, state, event_factory)
@@ -103,37 +104,37 @@ class Evaluator:
             return target_result
 
         # Now walk through the rules to see if any match
-        for index, rule in enumerate(flag.get('rules') or []):
+        for index, rule in enumerate(flag.rules):
             if self._rule_matches_context(rule, context, state):
-                return _get_value_for_variation_or_rollout(flag, rule, context,
-                    {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.get('id')})
+                return _get_value_for_variation_or_rollout(flag, rule.variation_or_rollout, context,
+                    {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.id})
 
         # Walk through fallthrough and see if it matches
-        return _get_value_for_variation_or_rollout(flag, flag['fallthrough'] or {}, context, {'kind': 'FALLTHROUGH'})
+        return _get_value_for_variation_or_rollout(flag, flag.fallthrough, context, {'kind': 'FALLTHROUGH'})
 
-    def _check_prerequisites(self, flag: dict, context: Context, state: EvalResult, event_factory: _EventFactory) -> Optional[dict]:
+    def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: _EventFactory) -> Optional[dict]:
         failed_prereq = None
         prereq_res = None
-        for prereq in flag.get('prerequisites') or []:
-            prereq_flag = self.__get_flag(prereq.get('key'))
+        for prereq in flag.prerequisites:
+            prereq_flag = self.__get_flag(prereq.key)
             if prereq_flag is None:
-                log.warning("Missing prereq flag: " + prereq.get('key'))
+                log.warning("Missing prereq flag: " + prereq.key)
                 failed_prereq = prereq
             else:
                 prereq_res = self._evaluate(prereq_flag, context, state, event_factory)
                 # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
                 # off variation was. But we still need to evaluate it in order to generate an event.
-                if (not prereq_flag.get('on', False)) or prereq_res.variation_index != prereq.get('variation'):
+                if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
                     failed_prereq = prereq
                 event = event_factory.new_eval_event(prereq_flag, _context_to_user_dict(context), prereq_res, None, flag)
                 state.add_event(event)
             if failed_prereq:
-                return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.get('key')}
+                return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.key}
         return None
 
-    def _check_targets(self, flag: dict, context: Context) -> Optional[EvaluationDetail]:
-        user_targets = flag.get('targets') or []
-        context_targets = flag.get('contextTargets') or []
+    def _check_targets(self, flag: FeatureFlag, context: Context) -> Optional[EvaluationDetail]:
+        user_targets = flag.targets
+        context_targets = flag.context_targets
         if len(context_targets) == 0:
             # old-style data has only targets for users
             if len(user_targets) != 0:
@@ -142,55 +143,54 @@ class Evaluator:
                     return None
                 key = user_context.key
                 for t in user_targets:
-                    if key in t['values']:
-                        return _target_match_result(flag, t.get('variation'))
+                    if key in t.values:
+                        return _target_match_result(flag, t.variation)
             return None
         for t in context_targets:
-            kind = t.get('contextKind') or Context.DEFAULT_KIND
-            var = t['variation']
+            kind = t.context_kind or Context.DEFAULT_KIND
+            var = t.variation
             actual_context = context.get_individual_context(kind)
             if actual_context is None:
                 continue
             key = actual_context.key
             if kind == Context.DEFAULT_KIND:
                 for ut in user_targets:
-                    if ut['variation'] == var:
-                        if key in ut['values']:
+                    if ut.variation == var:
+                        if key in ut.values:
                             return _target_match_result(flag, var)
                         break
                 continue
-            if key in t['values']:
+            if key in t.values:
                 return _target_match_result(flag, var)
         return None
 
-    def _rule_matches_context(self, rule: dict, context: Context, state: EvalResult) -> bool:
-        for clause in rule.get('clauses') or []:
-            if clause.get('attribute') is not None:
-                if not self._clause_matches_context(clause, context, state):
-                    return False
+    def _rule_matches_context(self, rule: FlagRule, context: Context, state: EvalResult) -> bool:
+        for clause in rule.clauses:
+            if not self._clause_matches_context(clause, context, state):
+                return False
         return True
 
-    def _clause_matches_context(self, clause: dict, context: Context, state: EvalResult) -> bool:
-        op = clause['op']
+    def _clause_matches_context(self, clause: Clause, context: Context, state: EvalResult) -> bool:
+        op = clause.op
+        clause_values = clause.values
         if op == 'segmentMatch':
-            for seg_key in clause.get('values') or []:
+            for seg_key in clause_values:
                 segment = self.__get_segment(seg_key)
                 if segment is not None and self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
         
-        attr = clause.get('attribute')
+        attr = clause.attribute
         if attr is None:
             return False
         if attr == 'kind':
             return _maybe_negate(clause, _match_clause_by_kind(clause, context))
-        actual_context = context.get_individual_context(clause.get('contextKind') or Context.DEFAULT_KIND)
+        actual_context = context.get_individual_context(clause.context_kind or Context.DEFAULT_KIND)
         if actual_context is None:
             return False
         context_value = actual_context.get(attr)
         if context_value is None:
             return False
-        clause_values = clause.get('values') or []
         
         # is the attr an array?
         if isinstance(context_value, (list, tuple)):
@@ -200,45 +200,44 @@ class Evaluator:
             return _maybe_negate(clause, False)
         return _maybe_negate(clause, _match_single_context_value(op, context_value, clause_values))
 
-    def _segment_matches_context(self, segment: dict, context: Context, state: EvalResult) -> bool:
-        if segment.get('unbounded', False):
+    def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
+        if segment.unbounded:
             return self._big_segment_match_context(segment, context, state)
         return self._simple_segment_match_context(segment, context, state, True)
 
-    def _simple_segment_match_context(self, segment: dict, context: Context, state: EvalResult, use_includes_and_excludes: bool) -> bool:
+    def _simple_segment_match_context(self, segment: Segment, context: Context, state: EvalResult, use_includes_and_excludes: bool) -> bool:
         if use_includes_and_excludes:
-            if _context_key_is_in_target_list(context, None, segment.get('included')):
+            if _context_key_is_in_target_list(context, None, segment.included):
                 return True
-            for t in segment.get('includedContexts') or []:
-                if _context_key_is_in_target_list(context, t.get('contextKind'), t.get('values')):
+            for t in segment.included_contexts:
+                if _context_key_is_in_target_list(context, t.context_kind, t.values):
                     return True
-            if _context_key_is_in_target_list(context, None, segment.get('excluded')):
+            if _context_key_is_in_target_list(context, None, segment.excluded):
                 return False
-            for t in segment.get('excludedContexts') or []:
-                if _context_key_is_in_target_list(context, t.get('contextKind'), t.get('values')):
+            for t in segment.excluded_contexts:
+                if _context_key_is_in_target_list(context, t.context_kind, t.values):
                     return False
-        for rule in segment.get('rules', []):
-            if self._segment_rule_matches_context(rule, context, state, segment['key'], segment.get('salt', '')):
+        for rule in segment.rules:
+            if self._segment_rule_matches_context(rule, context, state, segment.key, segment.salt):
                 return True
         return False
 
-    def _segment_rule_matches_context(self, rule: dict, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:
-        for clause in rule.get('clauses') or []:
+    def _segment_rule_matches_context(self, rule: SegmentRule, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:
+        for clause in rule.clauses:
             if not self._clause_matches_context(clause, context, state):
                 return False
 
         # If the weight is absent, this rule matches
-        if 'weight' not in rule or rule['weight'] is None:
+        if rule.weight is None:
             return True
 
         # All of the clauses are met. See if the context buckets in
-        bucket_by = 'key' if rule.get('bucketBy') is None else rule['bucketBy']
-        bucket = _bucket_context(None, context, rule.get('rolloutContextKind'), segment_key, salt, bucket_by)
-        weight = rule['weight'] / 100000.0
+        bucket = _bucket_context(None, context, rule.rollout_context_kind, segment_key, salt, rule.bucket_by)
+        weight = rule.weight / 100000.0
         return bucket < weight
 
-    def _big_segment_match_context(self, segment: dict, context: Context, state: EvalResult) -> bool:
-        generation = segment.get('generation', None)
+    def _big_segment_match_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
+        generation = segment.generation
         if generation is None:
             # Big segment queries can only be done if the generation is known. If it's unset,
             # that probably means the data store was populated by an older SDK that doesn't know
@@ -260,19 +259,19 @@ class Evaluator:
 # The following functions are declared outside Evaluator because they do not depend on any
 # of Evaluator's state.
 
-def _get_variation(flag: dict, variation: int, reason: dict) -> EvaluationDetail:
-    vars = flag.get('variations') or []
+def _get_variation(flag: FeatureFlag, variation: int, reason: dict) -> EvaluationDetail:
+    vars = flag.variations
     if variation < 0 or variation >= len(vars):
         return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
     return EvaluationDetail(vars[variation], variation, reason)
 
-def _get_off_value(flag: dict, reason: dict) -> EvaluationDetail:
-    off_var = flag.get('offVariation')
+def _get_off_value(flag: FeatureFlag, reason: dict) -> EvaluationDetail:
+    off_var = flag.off_variation
     if off_var is None:
         return EvaluationDetail(None, None, reason)
     return _get_variation(flag, off_var, reason)
 
-def _get_value_for_variation_or_rollout(flag: dict, vr: dict, context: Context, reason: dict) -> EvaluationDetail:
+def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollout, context: Context, reason: dict) -> EvaluationDetail:
     index, inExperiment = _variation_index_for_context(flag, vr, context)
     if index is None:
         return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
@@ -280,46 +279,45 @@ def _get_value_for_variation_or_rollout(flag: dict, vr: dict, context: Context, 
         reason['inExperiment'] = inExperiment
     return _get_variation(flag, index, reason)
 
-def _variation_index_for_context(feature: dict, rule: dict, context: Context) -> Tuple[Optional[int], bool]:
-    var = rule.get('variation')
+def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, context: Context) -> Tuple[Optional[int], bool]:
+    var = vr.variation
     if var is not None:
         return (var, False)
 
-    rollout = rule.get('rollout')
+    rollout = vr.rollout
     if rollout is None:
         return (None, False)
-    variations = rollout.get('variations')
-    if variations is None or len(variations) == 0:
+    variations = rollout.variations
+    if len(variations) == 0:
         return (None, False)
     
-    rollout_is_experiment = rollout.get('kind') == 'experiment'
-    bucket_by = None if rollout_is_experiment else rollout.get('bucketBy')
+    bucket_by = None if rollout.is_experiment else rollout.bucket_by
     bucket = _bucket_context(
-        rollout.get('seed'),
+        rollout.seed,
         context,
-        rollout.get('contextKind'),
-        feature['key'],
-        feature['salt'],
+        rollout.context_kind,
+        flag.key,
+        flag.salt,
         bucket_by
         )
-    is_experiment = rollout_is_experiment and bucket >= 0
+    is_experiment = rollout.is_experiment and bucket >= 0
     # _bucket_context returns a negative value if the context didn't exist, in which case we
     # still end up returning the first bucket, but we will force the "in experiment" state to be false.
 
     sum = 0.0
     for wv in variations:
-        sum += wv.get('weight', 0.0) / 100000.0
+        sum += wv.weight / 100000.0
         if bucket < sum:
-            is_experiment_partition = is_experiment and not wv.get('untracked')
-            return (wv.get('variation'), is_experiment_partition)
+            is_experiment_partition = is_experiment and not wv.untracked
+            return (wv.variation, is_experiment_partition)
 
     # The context's bucket value was greater than or equal to the end of the last bucket. This could happen due
     # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
     # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
     # this case (or changing the scaling, which would potentially change the results for *all* contexts), we
     # will simply put the context in the last bucket.
-    is_experiment_partition = is_experiment and not variations[-1].get('untracked')
-    return (variations[-1].get('variation'), is_experiment_partition)
+    is_experiment_partition = is_experiment and not variations[-1].untracked
+    return (variations[-1].variation, is_experiment_partition)
 
 def _bucket_context(
     seed: Optional[int],
@@ -371,29 +369,27 @@ def _match_single_context_value(op: str, context_value: Any, values: List[Any]) 
             return True
     return False
 
-def _match_clause_by_kind(clause: dict, context: Context) -> bool:
+def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
     # If attribute is "kind", then we treat operator and values as a match expression against a list
     # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
     # and "user", it is a match if either of those strings is a match with Operator and Values.
-    op = clause['op']
+    op = clause.op
     for i in range(context.individual_context_count):
         c = context.get_individual_context(i)
-        if c is not None and _match_single_context_value(op, c.kind, clause.get('values') or []):
+        if c is not None and _match_single_context_value(op, c.kind, clause.values):
             return True
     return False
 
-def _maybe_negate(clause: dict, val: bool) -> bool:
-    if clause.get('negate', False) is True:
-        return not val
-    return val
+def _maybe_negate(clause: Clause, val: bool) -> bool:
+    return not val if clause.negate else val
 
-def _make_big_segment_ref(segment: dict) -> str:
+def _make_big_segment_ref(segment: Segment) -> str:
     # The format of Big Segment references is independent of what store implementation is being
     # used; the store implementation receives only this string and does not know the details of
     # the data model. The Relay Proxy will use the same format when writing to the store.
-    return "%s.g%d" % (segment.get('key', ''), segment.get('generation', 0))
+    return "%s.g%d" % (segment.key, segment.generation or 0)
 
-def _target_match_result(flag: dict, var: int) -> EvaluationDetail:
+def _target_match_result(flag: FeatureFlag, var: int) -> EvaluationDetail:
     return _get_variation(flag, var, {'kind': 'TARGET_MATCH'})
 
 def error_reason(error_kind: str) -> dict:

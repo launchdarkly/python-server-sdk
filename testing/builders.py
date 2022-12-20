@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, List ,Optional
 
 from ldclient.context import Context
+from ldclient.impl.model import *
 
 
 class BaseBuilder:
@@ -36,14 +37,18 @@ class FlagBuilder(BaseBuilder):
             'prerequisites': [],
             'targets': [],
             'contextTargets': [],
-            'rules': []
+            'rules': [],
+            'salt': ''
         })
     
+    def build(self):
+        return FeatureFlag(self.data.copy())
+
     def key(self, key: str) -> FlagBuilder:
         return self._set('key', key)
 
     def version(self, version: int) -> FlagBuilder:
-        return self._set('key', version)
+        return self._set('version', version)
     
     def on(self, on: bool) -> FlagBuilder:
         return self._set('on', on)
@@ -57,6 +62,12 @@ class FlagBuilder(BaseBuilder):
     def fallthrough_variation(self, index: int) -> FlagBuilder:
         return self._set('fallthrough', {'variation': index})
 
+    def fallthrough_rollout(self, rollout: dict) -> FlagBuilder:
+        return self._set('fallthrough', {'rollout': rollout})
+
+    def prerequisite(self, key: str, variation: int) -> FlagBuilder:
+        return self._append('prerequisites', {'key': key, 'variation': variation})
+
     def target(self, variation: int, *keys: str) -> FlagBuilder:
         return self._append('targets', {'variation': variation, 'values': list(keys)})
     
@@ -66,17 +77,38 @@ class FlagBuilder(BaseBuilder):
     
     def rules(self, *rules: dict) -> FlagBuilder:
         return self._append_all('rules', list(rules))
+    
+    def salt(self, value: str) -> FlagBuilder:
+        return self._set('salt', value)
+    
+    def track_events(self, value: bool) -> FlagBuilder:
+        return self._set('trackEvents', value)
+    
+    def track_events_fallthrough(self, value: bool) -> FlagBuilder:
+        return self._set('trackEventsFallthrough', value)
+    
+    def debug_events_until_date(self, value: Optional[int]) -> FlagBuilder:
+        return self._set('debugEventsUntilDate', value)
 
 
 class FlagRuleBuilder(BaseBuilder):
     def __init__(self):
         super().__init__({'clauses': []})
     
-    def variation(self, variation: int) -> FlagRuleBuilder:
-        return self._set('variation', variation)
-    
     def clauses(self, *clauses: dict) -> FlagRuleBuilder:
         return self._append_all('clauses', list(clauses))
+
+    def id(self, value: str) -> FlagRuleBuilder:
+        return self._set('id', value)
+    
+    def rollout(self, rollout: Optional[dict]) -> FlagRuleBuilder:
+        return self._set('rollout', rollout)
+
+    def track_events(self, value: bool) -> FlagRuleBuilder:
+        return self._set('trackEvents', value)
+        
+    def variation(self, variation: int) -> FlagRuleBuilder:
+        return self._set('variation', variation)
 
 
 class SegmentBuilder(BaseBuilder):
@@ -89,14 +121,18 @@ class SegmentBuilder(BaseBuilder):
             'includedContexts': [],
             'excludedContexts': [],
             'rules': [],
-            'unbounded': False
+            'unbounded': False,
+            'salt': ''
         })
     
+    def build(self):
+        return Segment(self.data.copy())
+
     def key(self, key: str) -> SegmentBuilder:
         return self._set('key', key)
 
     def version(self, version: int) -> SegmentBuilder:
-        return self._set('key', version)
+        return self._set('version', version)
 
     def excluded(self, *keys: str) -> SegmentBuilder:
         return self._append_all('excluded', list(keys))
@@ -115,6 +151,12 @@ class SegmentBuilder(BaseBuilder):
 
     def rules(self, *rules: dict) -> SegmentBuilder:
         return self._append_all('rules', list(rules))
+    
+    def unbounded(self, value: bool) -> SegmentBuilder:
+        return self._set('unbounded', value)
+    
+    def generation(self, value: Optional[int]) -> SegmentBuilder:
+        return self._set('generation', value)
 
 
 class SegmentRuleBuilder(BaseBuilder):
@@ -134,13 +176,13 @@ class SegmentRuleBuilder(BaseBuilder):
         return self._set('weight', value)
 
 
-def make_boolean_flag_matching_segment(segment: dict) -> dict:
-    return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment['key']))
+def make_boolean_flag_matching_segment(segment: Segment) -> FeatureFlag:
+    return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment.key))
 
-def make_boolean_flag_with_clauses(*clauses: dict) -> dict:
+def make_boolean_flag_with_clauses(*clauses: dict) -> FeatureFlag:
     return make_boolean_flag_with_rules(FlagRuleBuilder().clauses(*clauses).variation(0).build())
 
-def make_boolean_flag_with_rules(*rules: dict) -> dict:
+def make_boolean_flag_with_rules(*rules: dict) -> FeatureFlag:
     return FlagBuilder('flagkey').on(True).variations(True, False).fallthrough_variation(1).rules(*rules).build()
 
 def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -> dict:

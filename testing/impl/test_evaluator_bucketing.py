@@ -1,5 +1,6 @@
 from ldclient.client import Context
 from ldclient.impl.evaluator import _bucket_context, _variation_index_for_context
+from ldclient.impl.model import *
 
 from testing.builders import *
 from testing.impl.evaluator_util import *
@@ -15,17 +16,17 @@ def assert_match_clause(clause: dict, context: Context, should_match: bool):
 class TestEvaluatorBucketing:
     def test_variation_index_is_returned_for_bucket(self):
         user = Context.create('userkey')
-        flag = { 'key': 'flagkey', 'salt': 'salt' }
+        flag = FlagBuilder('key').salt('salt').build()
 
         # First verify that with our test inputs, the bucket value will be greater than zero and less than 100000,
         # so we can construct a rollout whose second bucket just barely contains that value
-        bucket_value = math.trunc(_bucket_context(None, user, None, flag['key'], flag['salt'], 'key') * 100000)
+        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, 'key') * 100000)
         assert bucket_value > 0 and bucket_value < 100000
         
         bad_variation_a = 0
         matched_variation = 1
         bad_variation_b = 2
-        rule = {
+        rule = VariationOrRollout({
             'rollout': {
                 'variations': [
                     { 'variation': bad_variation_a, 'weight': bucket_value }, # end of bucket range is not inclusive, so it will *not* match the target value
@@ -33,24 +34,24 @@ class TestEvaluatorBucketing:
                     { 'variation': bad_variation_b, 'weight': 100000 - (bucket_value + 1) }
                 ]
             }
-        }
+        })
         result_variation = _variation_index_for_context(flag, rule, user)
         assert result_variation == (matched_variation, False)
 
     def test_last_bucket_is_used_if_bucket_value_equals_total_weight(self):
         user = Context.create('userkey')
-        flag = { 'key': 'flagkey', 'salt': 'salt' }
+        flag = FlagBuilder('key').salt('salt').build()
 
         # We'll construct a list of variations that stops right at the target bucket value
-        bucket_value = math.trunc(_bucket_context(None, user, None, flag['key'], flag['salt'], 'key') * 100000)
+        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, 'key') * 100000)
         
-        rule = {
+        rule = VariationOrRollout({
             'rollout': {
                 'variations': [
                     { 'variation': 0, 'weight': bucket_value }
                 ]
             }
-        }
+        })
         result_variation = _variation_index_for_context(flag, rule, user)
         assert result_variation == (0, False)
         

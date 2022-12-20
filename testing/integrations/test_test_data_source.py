@@ -39,7 +39,7 @@ def test_can_retrieve_flag_from_store():
 
     client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
+    assert store.get(FEATURES, 'some-flag') == FEATURES.decode(td.flag('some-flag')._build(1))
 
     client.close()
 
@@ -52,7 +52,7 @@ def test_updates_to_flags_are_reflected_in_store():
 
     td.update(td.flag('some-flag'))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
+    assert store.get(FEATURES, 'some-flag') == FEATURES.decode(td.flag('some-flag')._build(1))
 
     client.close()
 
@@ -82,7 +82,7 @@ def test_can_handle_multiple_clients():
     config2 = Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store2)
     client2 = LDClient(config=config2)
 
-    assert store.get(FEATURES, 'flag') == {
+    assert store.get(FEATURES, 'flag') == FEATURES.decode({
             'fallthrough': {
                 'variation': 0,
             },
@@ -93,9 +93,9 @@ def test_can_handle_multiple_clients():
             'targets': [],
             'variations': [True, False],
             'version': 1
-            }
+            })
 
-    assert store2.get(FEATURES, 'flag') == {
+    assert store2.get(FEATURES, 'flag') == FEATURES.decode({
             'fallthrough': {
                 'variation': 0,
             },
@@ -106,11 +106,11 @@ def test_can_handle_multiple_clients():
             'targets': [],
             'variations': [True, False],
             'version': 1
-            }
+            })
 
     td.update(td.flag('flag').variation_for_all_users(False))
 
-    assert store.get(FEATURES, 'flag') == {
+    assert store.get(FEATURES, 'flag') == FEATURES.decode({
             'fallthrough': {
                 'variation': 1,
             },
@@ -121,9 +121,9 @@ def test_can_handle_multiple_clients():
             'targets': [],
             'variations': [True, False],
             'version': 2
-            }
+            })
 
-    assert store2.get(FEATURES, 'flag') == {
+    assert store2.get(FEATURES, 'flag') == FEATURES.decode({
             'fallthrough': {
                 'variation': 1,
             },
@@ -134,7 +134,7 @@ def test_can_handle_multiple_clients():
             'targets': [],
             'variations': [True, False],
             'version': 2
-            }
+            })
 
     client.close()
     client2.close()

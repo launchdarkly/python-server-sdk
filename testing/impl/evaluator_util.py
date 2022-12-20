@@ -2,6 +2,7 @@ from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.model import *
 from testing.builders import *
 
 from typing import Any, Optional, Tuple, Union
@@ -23,23 +24,23 @@ class EvaluatorBuilder:
             self._get_big_segments_membership
         )
     
-    def with_flag(self, flag: dict) -> 'EvaluatorBuilder':
-        self.__flags[flag['key']] = flag
+    def with_flag(self, flag: FeatureFlag) -> 'EvaluatorBuilder':
+        self.__flags[flag.key] = flag
         return self
 
     def with_unknown_flag(self, key) -> 'EvaluatorBuilder':
         self.__flags[key] = None
         return self
 
-    def with_segment(self, segment: dict) -> 'EvaluatorBuilder':
-        self.__segments[segment['key']] = segment
+    def with_segment(self, segment: Segment) -> 'EvaluatorBuilder':
+        self.__segments[segment.key] = segment
         return self
 
     def with_unknown_segment(self, key) -> 'EvaluatorBuilder':
         self.__segments[key] = None
         return self
 
-    def with_big_segment_for_user(self, user: dict, segment: dict, included: bool) -> 'EvaluatorBuilder':
+    def with_big_segment_for_user(self, user: dict, segment: Segment, included: bool) -> 'EvaluatorBuilder':
         user_key = user['key']
         if user_key not in self.__big_segments:
             self.__big_segments[user_key] = {}
@@ -54,12 +55,12 @@ class EvaluatorBuilder:
         self.__big_segments_status = status
         return self
     
-    def _get_flag(self, key: str) -> Optional[dict]:
+    def _get_flag(self, key: str) -> Optional[FeatureFlag]:
         if key not in self.__flags:
             raise Exception("test made unexpected request for flag '%s'" % key)
         return self.__flags[key]
     
-    def _get_segment(self, key: str) -> Optional[dict]:
+    def _get_segment(self, key: str) -> Optional[Segment]:
         if key not in self.__segments:
             raise Exception("test made unexpected request for segment '%s'" % key)
         return self.__segments[key]
@@ -77,7 +78,7 @@ def assert_eval_result(result, expected_detail, expected_events):
     assert result.events == expected_events
 
 
-def assert_match(evaluator: Evaluator, flag: dict, context: Context, expect_value: Any):
+def assert_match(evaluator: Evaluator, flag: FeatureFlag, context: Context, expect_value: Any):
     result = evaluator.evaluate(flag, context, event_factory)
     assert result.detail.value == expect_value
 
