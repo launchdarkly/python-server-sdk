@@ -20,7 +20,7 @@ class TestEvaluatorBucketing:
 
         # First verify that with our test inputs, the bucket value will be greater than zero and less than 100000,
         # so we can construct a rollout whose second bucket just barely contains that value
-        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, 'key') * 100000)
+        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, None) * 100000)
         assert bucket_value > 0 and bucket_value < 100000
         
         bad_variation_a = 0
@@ -43,7 +43,7 @@ class TestEvaluatorBucketing:
         flag = FlagBuilder('key').salt('salt').build()
 
         # We'll construct a list of variations that stops right at the target bucket value
-        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, 'key') * 100000)
+        bucket_value = math.trunc(_bucket_context(None, user, None, flag.key, flag.salt, None) * 100000)
         
         rule = VariationOrRollout({
             'rollout': {
@@ -57,49 +57,49 @@ class TestEvaluatorBucketing:
         
     def test_bucket_by_user_key(self):
         user = Context.create('userKeyA')
-        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'key')
+        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', None)
         assert bucket == pytest.approx(0.42157587)
 
         user = Context.create('userKeyB')
-        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'key')
+        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', None)
         assert bucket == pytest.approx(0.6708485)
 
         user = Context.create('userKeyC')
-        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'key')
+        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', None)
         assert bucket == pytest.approx(0.10343106)
 
     def test_bucket_by_user_key_with_seed(self):
         seed = 61
         user = Context.create('userKeyA')
-        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', 'key')
+        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', None)
         assert point == pytest.approx(0.09801207)
 
         user = Context.create('userKeyB')
-        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', 'key')
+        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', None)
         assert point == pytest.approx(0.14483777)
 
         user = Context.create('userKeyC')
-        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', 'key')
+        point = _bucket_context(seed, user, None, 'hashKey', 'saltyA', None)
         assert point == pytest.approx(0.9242641)
 
     def test_bucket_by_int_attr(self):
         user = Context.builder('userKey').set('intAttr', 33333).set('stringAttr', '33333').build()
-        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'intAttr')
+        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', AttributeRef.from_literal('intAttr'))
         assert bucket == pytest.approx(0.54771423)
-        bucket2 = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'stringAttr')
+        bucket2 = _bucket_context(None, user, None, 'hashKey', 'saltyA', AttributeRef.from_literal('stringAttr'))
         assert bucket2 == bucket
 
     def test_bucket_by_float_attr_not_allowed(self):
         user = Context.builder('userKey').set('floatAttr', 33.5).build()
-        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', 'floatAttr')
+        bucket = _bucket_context(None, user, None, 'hashKey', 'saltyA', AttributeRef.from_literal('floatAttr'))
         assert bucket == 0.0
 
     def test_seed_independent_of_salt_and_hashKey(self):
         seed = 61
         user = Context.create('userKeyA')
-        point1 = _bucket_context(seed, user, None, 'hashKey', 'saltyA', 'key')
-        point2 = _bucket_context(seed, user, None, 'hashKey', 'saltyB', 'key')
-        point3 = _bucket_context(seed, user, None, 'hashKey2', 'saltyA', 'key')
+        point1 = _bucket_context(seed, user, None, 'hashKey', 'saltyA', None)
+        point2 = _bucket_context(seed, user, None, 'hashKey', 'saltyB', None)
+        point3 = _bucket_context(seed, user, None, 'hashKey2', 'saltyA', None)
 
         assert point1 == point2
         assert point2 == point3
@@ -107,9 +107,9 @@ class TestEvaluatorBucketing:
     def test_seed_changes_hash_evaluation(self):
         seed1 = 61
         user = Context.create('userKeyA')
-        point1 = _bucket_context(seed1, user, None, 'hashKey', 'saltyA', 'key')
+        point1 = _bucket_context(seed1, user, None, 'hashKey', 'saltyA', None)
         seed2 = 62
-        point2 = _bucket_context(seed2, user, None, 'hashKey', 'saltyB', 'key')
+        point2 = _bucket_context(seed2, user, None, 'hashKey', 'saltyB', None)
 
         assert point1 != point2
 
@@ -119,14 +119,13 @@ class TestEvaluatorBucketing:
         context2 = Context.create('key2', 'kind2')
         multi = Context.create_multi(context1, context2)
         key = 'flag-key'
-        attr = 'key'
         salt = 'testing123'
 
-        assert _bucket_context(seed, context1, None, key, salt, attr) == \
-            _bucket_context(seed, context1, 'user', key, salt, attr)
-        assert _bucket_context(seed, context1, None, key, salt, attr) == \
-            _bucket_context(seed, multi, 'user', key, salt, attr)
-        assert _bucket_context(seed, context2, 'kind2', key, salt, attr) == \
-            _bucket_context(seed, multi, 'kind2', key, salt, attr)
-        assert _bucket_context(seed, multi, 'user', key, salt, attr) != \
-            _bucket_context(seed, multi, 'kind2', key, salt, attr)
+        assert _bucket_context(seed, context1, None, key, salt, None) == \
+            _bucket_context(seed, context1, 'user', key, salt, None)
+        assert _bucket_context(seed, context1, None, key, salt, None) == \
+            _bucket_context(seed, multi, 'user', key, salt, None)
+        assert _bucket_context(seed, context2, 'kind2', key, salt, None) == \
+            _bucket_context(seed, multi, 'kind2', key, salt, None)
+        assert _bucket_context(seed, multi, 'user', key, salt, None) != \
+            _bucket_context(seed, multi, 'kind2', key, salt, None)

@@ -81,6 +81,7 @@ def validate_list_type(items: list, name: str, desired_type) -> list:
                 (name, desired_type, item.__class__))
     return items
 
+
 class ModelEntity:
     def __init__(self, data: dict):
         self._data = data

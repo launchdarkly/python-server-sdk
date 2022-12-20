@@ -1,5 +1,6 @@
 from typing import Any, List, Optional
 
+from ldclient.impl.model.attribute_ref import AttributeRef, opt_attr_ref_with_opt_context_kind
 from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.entity import *
 
@@ -24,13 +25,13 @@ class SegmentRule:
     __slots__ = ['_bucket_by', '_clauses', '_rollout_context_kind', '_weight']
 
     def __init__(self, data: dict):
-        self._bucket_by = opt_str(data, 'bucketBy')
         self._clauses = list(Clause(item) for item in req_dict_list(data, 'clauses'))
         self._rollout_context_kind = opt_str(data, 'rolloutContextKind')
+        self._bucket_by = opt_attr_ref_with_opt_context_kind(opt_str(data, 'bucketBy'), self._rollout_context_kind)
         self._weight = opt_int(data, 'weight')
 
     @property
-    def bucket_by(self) -> Optional[str]:
+    def bucket_by(self) -> Optional[AttributeRef]:
         return self._bucket_by
 
     @property
