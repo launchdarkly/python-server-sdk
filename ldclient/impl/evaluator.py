@@ -107,6 +107,7 @@ class Evaluator:
 
     def evaluate(self, flag: FeatureFlag, context: Context, event_factory: _EventFactory) -> EvalResult:
         state = EvalResult()
+        state.original_flag_key = flag.key
         try:
             state.detail = self._evaluate(flag, context, state, event_factory)
         except EvaluationException as e:
@@ -160,7 +161,6 @@ class Evaluator:
             for prereq in flag.prerequisites:
                 prereq_key = prereq.key
                 if (prereq_key == state.original_flag_key or
-                    (flag_key != state.original_flag_key and prereq_key == flag_key) or
                     (state.prereq_stack is not None and prereq.key in state.prereq_stack)):
                     raise EvaluationException(('prerequisite relationship to "%s" caused a circular reference;' +
                         ' this is probably a temporary condition due to an incomplete update') % prereq_key)
@@ -181,7 +181,7 @@ class Evaluator:
                     return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.key}
             return None
         finally:
-            if state.prereq_stack is not None and state.prereq_stack.count != 0:
+            if state.prereq_stack is not None and len(state.prereq_stack) != 0:
                 state.prereq_stack.pop()
 
     def _check_targets(self, flag: FeatureFlag, context: Context) -> Optional[EvaluationDetail]:
