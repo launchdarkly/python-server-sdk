@@ -88,6 +88,7 @@ class BigSegmentStoreManager:
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
+                return (None, BigSegmentsStatus.STORE_ERROR)
         status = self.__last_status
         if not status:
             status = self.poll_store_and_update_status()

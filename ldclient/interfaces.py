@@ -288,30 +288,30 @@ class BigSegmentStore:
         pass
 
     @abstractmethod
-    def get_membership(self, user_hash: str) -> Optional[dict]:
+    def get_membership(self, context_hash: str) -> Optional[dict]:
         """
-        Queries the store for a snapshot of the current segment state for a specific user.
+        Queries the store for a snapshot of the current segment state for a specific context.
     
-        The user_hash is a base64-encoded string produced by hashing the user key as defined by
-        the Big Segments specification; the store implementation does not need to know the details
+        The context_hash is a base64-encoded string produced by hashing the context key as defined
+        by the Big Segments specification; the store implementation does not need to know the details
         of how this is done, because it deals only with already-hashed keys, but the string can be
         assumed to only contain characters that are valid in base64.
     
-        The return value should be either a `dict`, or None if the user is not referenced in any big
+        The return value should be either a `dict`, or None if the context is not referenced in any big
         segments. Each key in the dictionary is a "segment reference", which is how segments are
         identified in Big Segment data. This string is not identical to the segment key-- the SDK
         will add other information. The store implementation should not be concerned with the
-        format of the string. Each value in the dictionary is True if the user is explicitly included
-        in the segment, False if the user is explicitly excluded from the segment-- and is not also
+        format of the string. Each value in the dictionary is True if the context is explicitly included
+        in the segment, False if the context is explicitly excluded from the segment-- and is not also
         explicitly included (that is, if both an include and an exclude existed in the data, the
-        include would take precedence). If the user's status in a particular segment is undefined,
+        include would take precedence). If the context's status in a particular segment is undefined,
         there should be no key or value for that segment.
     
         This dictionary may be cached by the SDK, so it should not be modified after it is created.
         It is a snapshot of the segment membership state at one point in time.
 
-        :param user_hash: the hashed user key
-        :return: True/False values for Big Segments that reference this user
+        :param context_hash: the hashed context key
+        :return: True/False values for Big Segments that reference this context
         """
         pass
 

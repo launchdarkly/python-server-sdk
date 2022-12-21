@@ -155,6 +155,9 @@ class SegmentBuilder(BaseBuilder):
     def unbounded(self, value: bool) -> SegmentBuilder:
         return self._set('unbounded', value)
     
+    def unbounded_context_kind(self, value: Optional[str]) -> SegmentBuilder:
+        return self._set('unboundedContextKind', value)
+    
     def generation(self, value: Optional[int]) -> SegmentBuilder:
         return self._set('generation', value)
 
