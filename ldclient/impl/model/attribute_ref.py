@@ -43,6 +43,10 @@ class AttributeRef:
         return self._error
     
     @property
+    def path(self) -> str:
+        return self._raw
+    
+    @property
     def depth(self) -> int:
         if self._error is not None:
             return 0

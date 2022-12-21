@@ -17,10 +17,11 @@ from testing.stub_util import MockHttp
 default_config = Config("fake_sdk_key")
 context = Context.builder('userkey').name('Red').build()
 filtered_context = context.to_dict()  # TODO: implement attribute redaction
-# filtered_context = {
-#     'key': 'userkey',
-#     'privateAttrs': [ 'name' ]
-# }
+filtered_context = {
+    'kind': 'user',
+    'key': 'userkey',
+    '_meta': {'redactedAttributes': ['name']}
+}
 flag = FlagBuilder('flagkey').version(2).build()
 timestamp = 10000
 

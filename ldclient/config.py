@@ -4,7 +4,7 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
-from typing import Optional, Callable, List, Any, Set
+from typing import Optional, Callable, List, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.util import log
@@ -161,7 +161,8 @@ class Config:
                  use_ldd: bool=False,
                  feature_store: Optional[FeatureStore]=None,
                  feature_requester_class=None,
-                 event_processor_class: Callable[['Config'], EventProcessor]=None, 
+                 event_processor_class: Callable[['Config'], EventProcessor]=None,
+                 private_attributes: Set[str]=set(),
                  private_attribute_names: Set[str]=set(),
                  all_attributes_private: bool=False,
                  offline: bool=False,
@@ -206,10 +207,14 @@ class Config:
           ignored if this option is set to true. By default, this is false.
           For more information, read the LaunchDarkly
           documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
-        :param array private_attribute_names: Marks a set of attribute names private. Any users sent to
-          LaunchDarkly with this configuration active will have attributes with these names removed.
+        :param array private_attribute: Marks a set of attributes private. Any users sent to LaunchDarkly
+          with this configuration active will have these attributes removed. Each item can be either the
+          name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
+          property within a JSON object value as private.
+        :param array private_attribute_names: Deprecated alias for `private_attributes` ("names" is no longer
+          strictly accurate because these could also be attribute reference paths).
         :param all_attributes_private: If true, all user attributes (other than the key) will be
-          private, not just the attributes specified in `private_attribute_names`.
+          private, not just the attributes specified in `private_attribute`.
         :param feature_store: A FeatureStore implementation
         :param user_keys_capacity: The number of user keys that the event processor can remember at any
           one time, so that duplicate user details will not be sent in analytics events.
@@ -255,7 +260,7 @@ class Config:
         if offline is True:
             send_events = False
         self.__send_events = events_enabled if send_events is None else send_events
-        self.__private_attribute_names = private_attribute_names
+        self.__private_attributes = private_attributes or private_attribute_names
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
         self.__user_keys_capacity = user_keys_capacity
@@ -288,7 +293,7 @@ class Config:
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
                       event_processor_class=self.__event_processor_class,
-                      private_attribute_names=self.__private_attribute_names,
+                      private_attributes=self.__private_attributes,
                       all_attributes_private=self.__all_attributes_private,
                       offline=self.__offline,
                       user_keys_capacity=self.__user_keys_capacity,
@@ -385,8 +390,12 @@ class Config:
         return self.__flush_interval
 
     @property
-    def private_attribute_names(self) -> list:
-        return list(self.__private_attribute_names)
+    def private_attributes(self) -> List[str]:
+        return list(self.__private_attributes)
+
+    @property
+    def private_attribute_names(self) -> List[str]:
+        return self.private_attributes
 
     @property
     def all_attributes_private(self) -> bool:

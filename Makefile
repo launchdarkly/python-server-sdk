@@ -19,14 +19,7 @@ docs:
 TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
-# Explanation of current skips:
-# - "events/context properties/allAttributesPrivate": private attribute redaction is not yet implemented
-# - "events/context properties/specific private attributes": private attribute redaction is not yet implemented
-# - "events/context properties/private attribute nested": private attribute redaction is not yet implemented
-TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'events/context properties/allAttributesPrivate' \
-	-skip 'events/context properties/specific private attributes' \
-	-skip 'events/context properties/private attribute nested'
+# TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
 
 
 # port 8000 and 9000 is already used in the CI environment because we're
