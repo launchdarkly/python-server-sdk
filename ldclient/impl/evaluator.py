@@ -59,7 +59,7 @@ class EvalResult:
         self.prereq_stack = None  # type: Optional[List[str]]
         self.segment_stack = None  # type: Optional[List[str]]
 
-    def add_event(self, event: dict):
+    def add_event(self, event: EventInputEvaluation):
         if self.events is None:
             self.events = []
         self.events.append(event)

@@ -1,8 +1,10 @@
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.model import *
+from ldclient.impl import AnyNum
+from ldclient.impl.model import FeatureFlag
 from ldclient.impl.util import current_time_millis
 
-from typing import Callable, Optional
+import json
+from typing import Any, Callable, Optional, Union
 
 # These event types are not the event data that is sent to LaunchDarkly; they're the input
 # parameters that are passed to EventProcessor, which translates them into event data (for
@@ -11,6 +13,12 @@ from typing import Callable, Optional
 # than dictionaries.
 
 class EventInput:
+    __slots__ = ['timestamp', 'user']
+
+    def __init__(self, timestamp: int, user: dict):
+        self.timestamp = timestamp
+        self.user = user
+
     def __repr__(self) -> str:  # used only in test debugging
         return "%s(%s)" % (self.__class__.__name__, json.dumps(self.to_debugging_dict()))
 
@@ -21,14 +29,12 @@ class EventInput:
         pass
 
 class EventInputEvaluation(EventInput):
-    __slots__ = ['timestamp', 'context', 'key', 'variation', 'value', 'reason', 'default_value',
-                 'prereq_of', 'track_events']
+    __slots__ = ['key', 'flag', 'variation', 'value', 'reason', 'default_value', 'prereq_of', 'track_events']
 
     def __init__(self, timestamp: int, user: dict, key: str, flag: Optional[FeatureFlag],
                  variation: Optional[int], value: Any, reason: Optional[dict],
                  default_value: Any, prereq_of: Optional[FeatureFlag] = None, track_events: bool = False):
-        self.timestamp = timestamp
-        self.user = user
+        super().__init__(timestamp, user)
         self.key = key
         self.flag = flag
         self.variation = variation
@@ -53,12 +59,6 @@ class EventInputEvaluation(EventInput):
         }
 
 class EventInputIdentify(EventInput):
-    __slots__ = ['timestamp', 'context']
-
-    def __init__(self, timestamp: int, user: dict):
-        self.timestamp = timestamp
-        self.user = user
-
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
@@ -66,14 +66,13 @@ class EventInputIdentify(EventInput):
         }
 
 class EventInputCustom(EventInput):
-    __slots__ = ['timestamp', 'user', 'key', 'data', 'metric_value']
+    __slots__ = ['key', 'data', 'metric_value']
 
-    def __init__(self, timestamp: int, user: dict, key: str, data: Any = None, metric_value: Optional[float] = None):
-        self.timestamp = timestamp
-        self.user = user
+    def __init__(self, timestamp: int, user: dict, key: str, data: Any = None, metric_value: Optional[AnyNum] = None):
+        super().__init__(timestamp, user)
         self.key = key
         self.data = data
-        self.metric_value = metric_value
+        self.metric_value = metric_value  # type: Optional[int|float|complex]
 
     def to_debugging_dict(self) -> dict:
         return {
@@ -148,7 +147,7 @@ class EventFactory:
             user
         )
 
-    def new_custom_event(self, event_name: str, user: dict, data: Any, metric_value: Optional[float]) \
+    def new_custom_event(self, event_name: str, user: dict, data: Any, metric_value: Optional[AnyNum]) \
             -> EventInputCustom:
         return EventInputCustom(
             self._timestamp_fn(),

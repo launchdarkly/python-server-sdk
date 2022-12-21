@@ -7,7 +7,7 @@ from collections import namedtuple
 from email.utils import parsedate
 import json
 from threading import Event, Lock, Thread
-from typing import Any, List
+from typing import Any, List, Optional
 import time
 import uuid
 import queue
@@ -302,31 +302,35 @@ class EventDispatcher:
 
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
-        user = event.user  # type: dict
+        user = None  # type: Optional[dict]
         can_add_index = True
-        full_event = None
-        debug_event = None
+        full_event = None  # type: Any
+        debug_event = None  # type: Optional[DebugEvent]
 
         if isinstance(event, EventInputEvaluation):
+            user = event.user
             self._outbox.add_to_summary(event)
             if event.track_events:
                 full_event = event
             if self._should_debug_event(event):
                 debug_event = DebugEvent(event)
         elif isinstance(event, EventInputIdentify):
+            user = event.user
             full_event = event
             can_add_index = False  # an index event would be redundant if there's an identify event
         elif isinstance(event, EventInputCustom):
+            user = event.user
             full_event = event
 
         # For each user we haven't seen before, we add an index event - unless this is already
         # an identify event.
-        already_seen = self._user_keys.put(user['key'], True)
-        if can_add_index:
-            if already_seen:
-                self._deduplicated_users += 1
-            else:
-                self._outbox.add_event(IndexEvent(event.timestamp, user))
+        if user is not None:
+            already_seen = self._user_keys.put(user['key'], True)
+            if can_add_index:
+                if already_seen:
+                    self._deduplicated_users += 1
+                else:
+                    self._outbox.add_event(IndexEvent(event.timestamp, user))
 
         if full_event:
             self._outbox.add_event(full_event)

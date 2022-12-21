@@ -190,7 +190,8 @@ class LDClient:
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
-    def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None, metric_value: Optional[AnyNum]=None):
+    def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None,
+              metric_value: Optional[AnyNum]=None):
         """Tracks that an application-defined event occurred.
 
         This method creates a "custom" analytics event containing the specified event name (key)
