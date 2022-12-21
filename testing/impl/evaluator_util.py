@@ -46,15 +46,8 @@ class EvaluatorBuilder:
         self.__big_segments[key][_make_big_segment_ref(segment)] = included
         return self
     
-    def with_big_segment_for_user(self, user: dict, segment: Segment, included: bool) -> 'EvaluatorBuilder':
-        user_key = user['key']
-        if user_key not in self.__big_segments:
-            self.__big_segments[user_key] = {}
-        self.__big_segments[user_key][_make_big_segment_ref(segment)] = included
-        return self
-
-    def with_no_big_segments_for_user(self, user: dict) -> 'EvaluatorBuilder':
-        self.__big_segments[user['key']] = {}
+    def with_no_big_segments_for_key(self, key: str) -> 'EvaluatorBuilder':
+        self.__big_segments[key] = {}
         return self
     
     def with_big_segments_status(self, status: str) -> 'EvaluatorBuilder':

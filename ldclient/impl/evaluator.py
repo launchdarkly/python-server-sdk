@@ -270,7 +270,7 @@ class Evaluator:
             return False
         
         # A big segment can only apply to one context kind, so if we don't have a key for that kind,
-		# we don't need to bother querying the data.
+        # we don't need to bother querying the data.
         match_context = context.get_individual_context(segment.unbounded_context_kind or Context.DEFAULT_KIND)
         if match_context is None:
             return False
@@ -290,10 +290,10 @@ class Evaluator:
                 return False
             result = self.__get_big_segments_membership(key)
             # Note that this query is just by key; the context kind doesn't matter because any given
-			# Big Segment can only reference one context kind. So if segment A for the "user" kind
-			# includes a "user" context with key X, and segment B for the "org" kind includes an "org"
-		    # context with the same key X, it is fine to say that the membership for key X is
-			# segment A and segment B-- there is no ambiguity.
+            # Big Segment can only reference one context kind. So if segment A for the "user" kind
+            # includes a "user" context with key X, and segment B for the "org" kind includes an "org"
+            # context with the same key X, it is fine to say that the membership for key X is
+            # segment A and segment B-- there is no ambiguity.
             membership, state.big_segments_status = result
             if state.big_segments_membership is None:
                 state.big_segments_membership = {}

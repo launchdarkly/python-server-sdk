@@ -51,7 +51,7 @@ def test_big_segment_matched_with_rule():
             make_segment_rule_matching_context(basic_user)
         ) \
         .build()
-    evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_user(basic_user).build()
+    evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_key(basic_user.key).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
     assert result.detail.value == True
@@ -65,7 +65,7 @@ def test_big_segment_unmatched_by_exclude_regardless_of_rule():
             make_segment_rule_matching_context(basic_user)
         ) \
         .build()
-    evaluator = EvaluatorBuilder().with_segment(segment).with_big_segment_for_user(basic_user, segment, False).build()
+    evaluator = EvaluatorBuilder().with_segment(segment).with_big_segment_for_key(basic_user.key, segment, False).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
     assert result.detail.value == False
@@ -76,7 +76,7 @@ def test_big_segment_status_is_returned_by_provider():
         .unbounded(True) \
         .generation(1) \
         .build()
-    evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_user(basic_user). \
+    evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_key(basic_user.key). \
         with_big_segments_status(BigSegmentsStatus.NOT_CONFIGURED).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
