@@ -1,9 +1,8 @@
 from ldclient import operators
 from ldclient.context import Context, _USER_STRING_ATTRS
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
-from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.events.types import EventFactory, EventInputEvaluation
 from ldclient.impl.model import *
-from ldclient.interfaces import BigSegmentStoreStatus
 
 import hashlib
 import logging
@@ -53,17 +52,20 @@ class EvalResult:
 
     def __init__(self):
         self.detail = None
-        self.events = None  # type: Optional[List[dict]]
+        self.events = None  # type: Optional[List[EventInputEvaluation]]
         self.big_segments_status = None  # type: Optional[str]
         self.big_segments_membership = None  # type: Optional[Dict[str, Optional[dict]]]
         self.original_flag_key = None  # type: Optional[str]
         self.prereq_stack = None  # type: Optional[List[str]]
         self.segment_stack = None  # type: Optional[List[str]]
 
-    def add_event(self, event: dict):
+    def add_event(self, event: EventInputEvaluation):
         if self.events is None:
             self.events = []
         self.events.append(event)
+
+    def __repr__(self) -> str:  # used only in test debugging
+        return "EvalResult(detail=%s, events=%s)" % (self.detail, self.events)
 
 
 class EvaluationException(Exception):
@@ -106,7 +108,7 @@ class Evaluator:
         self.__get_big_segments_membership = get_big_segments_membership
         self.__logger = logger
 
-    def evaluate(self, flag: FeatureFlag, context: Context, event_factory: _EventFactory) -> EvalResult:
+    def evaluate(self, flag: FeatureFlag, context: Context, event_factory: EventFactory) -> EvalResult:
         state = EvalResult()
         state.original_flag_key = flag.key
         try:
@@ -120,7 +122,7 @@ class Evaluator:
             state.detail.reason['bigSegmentsStatus'] = state.big_segments_status
         return state
 
-    def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: _EventFactory) -> EvaluationDetail:
+    def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> EvaluationDetail:
         if not flag.on:
             return _get_off_value(flag, {'kind': 'OFF'})
 
@@ -142,7 +144,7 @@ class Evaluator:
         # Walk through fallthrough and see if it matches
         return _get_value_for_variation_or_rollout(flag, flag.fallthrough, context, {'kind': 'FALLTHROUGH'})
 
-    def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: _EventFactory) -> Optional[dict]:
+    def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> Optional[dict]:
         failed_prereq = None
         prereq_res = None
         if flag.prerequisites.count == 0:

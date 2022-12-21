@@ -14,13 +14,13 @@ import traceback
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
-from ldclient.event_processor import DefaultEventProcessor
 from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.evaluator import Evaluator, error_reason, _context_to_user_dict
-from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.events.event_processor import DefaultEventProcessor
+from ldclient.impl.events.types import EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
 from ldclient.polling import PollingUpdateProcessor
@@ -94,8 +94,8 @@ class LDClient:
 
         self._event_processor = None
         self._lock = Lock()
-        self._event_factory_default = _EventFactory(False)
-        self._event_factory_with_reasons = _EventFactory(True)
+        self._event_factory_default = EventFactory(False)
+        self._event_factory_with_reasons = EventFactory(True)
 
         store = _FeatureStoreClientWrapper(self._config.feature_store)
         self._store = store  # type: FeatureStore
@@ -190,7 +190,8 @@ class LDClient:
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
-    def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None, metric_value: Optional[AnyNum]=None):
+    def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None,
+              metric_value: Optional[AnyNum]=None):
         """Tracks that an application-defined event occurred.
 
         This method creates a "custom" analytics event containing the specified event name (key)
@@ -411,7 +412,7 @@ class LDClient:
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
 
-            requires_experiment_data = _EventFactory.is_experiment(flag, detail.reason)
+            requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             flag_state = {
                 'key': flag['key'],
                 'value': detail.value,

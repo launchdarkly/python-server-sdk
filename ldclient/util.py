@@ -4,11 +4,10 @@ General internal helper functions.
 # currently excluded from documentation - see docs/README.md
 
 import logging
-from os import environ
 import sys
-import urllib3
+import time
 
-from ldclient.impl.http import HTTPFactory, _base_headers
+from ldclient.impl.http import _base_headers
 
 log = logging.getLogger(sys.modules[__name__].__name__)
 

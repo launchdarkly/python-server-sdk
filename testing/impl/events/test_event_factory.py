@@ -1,11 +1,11 @@
-import pytest
+from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.events.types import EventFactory
 
 from testing.builders import *
 
-_event_factory_default = _EventFactory(False)
-_user = { 'key': 'x' }
+_event_factory_default = EventFactory(False)
+_user = Context.create('x')
 
 def make_basic_flag_with_rules(kind, should_track_events):
     rule_builder = FlagRuleBuilder().rollout({
@@ -28,39 +28,39 @@ def test_fallthrough_track_event_false():
     detail = EvaluationDetail('b', 1, {'kind': 'FALLTHROUGH'})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval.get('trackEvents') is None
+    assert eval.track_events is False
 
 def test_fallthrough_track_event_true():
     flag = make_basic_flag_with_rules('fallthrough', True)
     detail = EvaluationDetail('b', 1, {'kind': 'FALLTHROUGH'})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval['trackEvents'] == True
+    assert eval.track_events is True
 
 def test_fallthrough_track_event_false_with_experiment():
     flag = make_basic_flag_with_rules('fallthrough', False)
     detail = EvaluationDetail('b', 1, {'kind': 'FALLTHROUGH', 'inExperiment': True})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval['trackEvents'] == True
+    assert eval.track_events is True
 
 def test_rulematch_track_event_false():
     flag = make_basic_flag_with_rules('rulematch', False)
     detail = EvaluationDetail('b', 1, {'kind': 'RULE_MATCH', 'ruleIndex': 0})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval.get('trackEvents') is None
+    assert eval.track_events is False
 
 def test_rulematch_track_event_true():
     flag = make_basic_flag_with_rules('rulematch', True)
     detail = EvaluationDetail('b', 1, {'kind': 'RULE_MATCH', 'ruleIndex': 0})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval['trackEvents'] == True
+    assert eval.track_events is True
 
 def test_rulematch_track_event_false_with_experiment():
     flag = make_basic_flag_with_rules('rulematch', False)
     detail = EvaluationDetail('b', 1, {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'inExperiment': True})
 
     eval = _event_factory_default.new_eval_event(flag, _user, detail, 'b', None)
-    assert eval['trackEvents'] == True
+    assert eval.track_events is True

@@ -5,6 +5,8 @@ Implementation details of the analytics event delivery component.
 
 from collections import namedtuple
 
+from ldclient.impl.events.types import EventInputEvaluation
+
 
 EventSummary = namedtuple('EventSummary', ['start_date', 'end_date', 'counters'])
 
@@ -18,20 +20,19 @@ class EventSummarizer:
     """
     Add this event to our counters, if it is a type of event we need to count.
     """
-    def summarize_event(self, event):
-        if event['kind'] == 'feature':
-            counter_key = (event['key'], event.get('variation'), event.get('version'))
-            counter_val = self.counters.get(counter_key)
-            if counter_val is None:
-                counter_val = { 'count': 1, 'value': event['value'], 'default': event.get('default') }
-                self.counters[counter_key] = counter_val
-            else:
-                counter_val['count'] = counter_val['count'] + 1
-            date = event['creationDate']
-            if self.start_date == 0 or date < self.start_date:
-                self.start_date = date
-            if date > self.end_date:
-                self.end_date = date
+    def summarize_event(self, event: EventInputEvaluation):
+        counter_key = (event.key, event.variation, None if event.flag is None else event.flag.version)
+        counter_val = self.counters.get(counter_key)
+        if counter_val is None:
+            counter_val = { 'count': 1, 'value': event.value, 'default': event.default_value }
+            self.counters[counter_key] = counter_val
+        else:
+            counter_val['count'] = counter_val['count'] + 1
+        date = event.timestamp
+        if self.start_date == 0 or date < self.start_date:
+            self.start_date = date
+        if date > self.end_date:
+            self.end_date = date
 
     """
     Return the current summarized event data.
