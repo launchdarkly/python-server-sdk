@@ -1,11 +1,9 @@
 import pytest
-from ldclient.impl.evaluator import _context_to_user_dict
-from ldclient.impl.events.types import EventInputEvaluation
-
-from testing.builders import *
 
 from ldclient.client import Context
 from ldclient.evaluation import EvaluationDetail
+from ldclient.impl.events.types import EventInputEvaluation
+
 from testing.builders import *
 from testing.impl.evaluator_util import *
 
@@ -28,7 +26,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
     user = Context.create('x')
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [
-        EventInputEvaluation(0, _context_to_user_dict(user), flag1.key, flag1, 1, 'e', None, None, flag, False)
+        EventInputEvaluation(0, user, flag1.key, flag1, 1, 'e', None, None, flag, False)
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
@@ -41,7 +39,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     user = Context.create('x')
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'feature1'})
     events_should_be = [
-        EventInputEvaluation(0, _context_to_user_dict(user), flag1.key, flag1, 0, 'd', None, None, flag, False)
+        EventInputEvaluation(0, user, flag1.key, flag1, 0, 'd', None, None, flag, False)
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
@@ -54,7 +52,7 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
     user = Context.create('x')
     detail = EvaluationDetail('a', 0, {'kind': 'FALLTHROUGH'})
     events_should_be = [
-        EventInputEvaluation(0, _context_to_user_dict(user), flag1.key, flag1, 1, 'e', None, None, flag, False)
+        EventInputEvaluation(0, user, flag1.key, flag1, 1, 'e', None, None, flag, False)
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 

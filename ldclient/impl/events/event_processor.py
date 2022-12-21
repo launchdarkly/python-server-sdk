@@ -13,6 +13,7 @@ import uuid
 import queue
 import urllib3
 
+from ldclient.context import Context
 from ldclient.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.fixed_thread_pool import FixedThreadPool
@@ -26,8 +27,7 @@ from ldclient.interfaces import EventProcessor
 from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, log, _headers
 
 __MAX_FLUSH_THREADS__ = 5
-__CURRENT_EVENT_SCHEMA__ = 3
-__USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__ = [ "key", "secondary", "ip", "country", "email", "firstName", "lastName", "avatar", "name" ]
+__CURRENT_EVENT_SCHEMA__ = 4
 
 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
@@ -40,11 +40,11 @@ class DebugEvent:
         self.original_input = original_input
 
 class IndexEvent:
-    __slots__ = ['timestamp', 'user']
+    __slots__ = ['timestamp', 'context']
 
-    def __init__(self, timestamp: int, user: dict):
+    def __init__(self, timestamp: int, context: Context):
         self.timestamp = timestamp
-        self.user = user
+        self.context = context
 
 
 class EventOutputFormatter:
@@ -53,38 +53,37 @@ class EventOutputFormatter:
 
     def make_output_events(self, events: List[Any], summary: EventSummary):
         events_out = [ self.make_output_event(e) for e in events ]
-        if len(summary.counters) > 0:
+        if not summary.is_empty():
             events_out.append(self.make_summary_event(summary))
         return events_out
 
     def make_output_event(self, e: Any):
         if isinstance(e, EventInputEvaluation):
             out = self._base_eval_props(e, 'feature')
-            out['userKey'] = e.user['key']
+            out['contextKeys'] = self._context_keys(e.context)
             return out
         elif isinstance(e, DebugEvent):
             out = self._base_eval_props(e.original_input, 'debug')
-            out['user'] = self._process_user(e.original_input.user)
+            out['context'] = self._process_context(e.original_input.context)
             return out
         elif isinstance(e, EventInputIdentify):
             return {
                 'kind': 'identify',
                 'creationDate': e.timestamp,
-                'key': e.user['key'],
-                'user': self._process_user(e.user)
+                'context': self._process_context(e.context)
             }
         elif isinstance(e, IndexEvent):
             return {
                 'kind': 'index',
                 'creationDate': e.timestamp,
-                'user': self._process_user(e.user)
+                'context': self._process_context(e.context)
             }
         elif isinstance(e, EventInputCustom):
             out = {
                 'kind': 'custom',
                 'creationDate': e.timestamp,
                 'key': e.key,
-                'userKey': e.user['key']
+                'contextKeys': self._context_keys(e.context)
             }
             if e.data is not None:
                 out['data'] = e.data
@@ -98,23 +97,24 @@ class EventOutputFormatter:
     """
     def make_summary_event(self, summary: EventSummary):
         flags_out = dict()  # type: dict[str, Any]
-        for ckey, cval in summary.counters.items():
-            flag_key, variation, version = ckey
-            flag_data = flags_out.get(flag_key)
-            if flag_data is None:
-                flag_data = { 'default': cval['default'], 'counters': [] }
-                flags_out[flag_key] = flag_data
-            counter = {
-                'count': cval['count'],
-                'value': cval['value']
-            }
-            if variation is not None:
-                counter['variation'] = variation
-            if version is None:
-                counter['unknown'] = True
-            else:
-                counter['version'] = version
-            flag_data['counters'].append(counter)
+        for key, flag_data in summary.flags.items():
+            flag_data_out = {'default': flag_data.default, 'contextKinds': list(flag_data.context_kinds)}
+            counters = []  # type: list[dict[str, Any]]
+            for ckey, cval in flag_data.counters.items():
+                variation, version = ckey
+                counter = {
+                    'count': cval.count,
+                    'value': cval.value
+                }
+                if variation is not None:
+                    counter['variation'] = variation
+                if version is None:
+                    counter['unknown'] = True
+                else:
+                    counter['version'] = version
+                counters.append(counter)
+            flag_data_out['counters'] = counters
+            flags_out[key] = flag_data_out
         return {
             'kind': 'summary',
             'startDate': summary.start_date,
@@ -122,8 +122,17 @@ class EventOutputFormatter:
             'features': flags_out
         }
 
-    def _process_user(self, user: dict):
-        return self._user_filter.filter_user_props(user)
+    def _process_context(self, context: Context):
+        # TODO: implement context redaction
+        return context.to_dict()
+
+    def _context_keys(self, context: Context):
+        out = {}
+        for i in range(context.individual_context_count):
+            c = context.get_individual_context(i)
+            if c is not None:
+                out[c.kind] = c.key
+        return out
 
     def _base_eval_props(self, e: EventInputEvaluation, kind: str) -> dict:
         out = {
@@ -140,7 +149,7 @@ class EventOutputFormatter:
         if e.reason is not None:
             out['reason'] = e.reason
         if e.prereq_of is not None:
-            out['prereqOf'] = e.prereq_of
+            out['prereqOf'] = e.prereq_of.key
         return out
 
 
@@ -156,7 +165,7 @@ class EventPayloadSendTask:
         try:
             output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
             resp = self._do_send(output_events)
-        except Exception:
+        except Exception as e:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
                 exc_info=True)
@@ -164,7 +173,7 @@ class EventPayloadSendTask:
     def _do_send(self, output_events):
         # noinspection PyBroadException
         try:
-            json_body = json.dumps(output_events)
+            json_body = json.dumps(output_events, separators=(',',':'))
             log.debug('Sending events payload: ' + json_body)
             payload_id = str(uuid.uuid4())
             r = _post_events_with_retry(
@@ -252,10 +261,10 @@ class EventDispatcher:
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
-        self._user_keys = SimpleLRUCache(config.user_keys_capacity)
+        self._context_keys = SimpleLRUCache(config.user_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
-        self._deduplicated_users = 0
+        self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
@@ -280,8 +289,8 @@ class EventDispatcher:
                     self._process_event(message.param)
                 elif message.type == 'flush':
                     self._trigger_flush()
-                elif message.type == 'flush_users':
-                    self._user_keys.clear()
+                elif message.type == 'flush_contexts':
+                    self._context_keys.clear()
                 elif message.type == 'diagnostic':
                     self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
@@ -302,35 +311,35 @@ class EventDispatcher:
 
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
-        user = None  # type: Optional[dict]
+        context = None  # type: Optional[Context]
         can_add_index = True
         full_event = None  # type: Any
         debug_event = None  # type: Optional[DebugEvent]
 
         if isinstance(event, EventInputEvaluation):
-            user = event.user
+            context = event.context
             self._outbox.add_to_summary(event)
             if event.track_events:
                 full_event = event
             if self._should_debug_event(event):
                 debug_event = DebugEvent(event)
         elif isinstance(event, EventInputIdentify):
-            user = event.user
+            context = event.context
             full_event = event
             can_add_index = False  # an index event would be redundant if there's an identify event
         elif isinstance(event, EventInputCustom):
-            user = event.user
+            context = event.context
             full_event = event
 
-        # For each user we haven't seen before, we add an index event - unless this is already
+        # For each context we haven't seen before, we add an index event - unless this is already
         # an identify event.
-        if user is not None:
-            already_seen = self._user_keys.put(user['key'], True)
+        if context is not None:
+            already_seen = self._context_keys.put(context.fully_qualified_key, True)
             if can_add_index:
                 if already_seen:
-                    self._deduplicated_users += 1
+                    self._deduplicated_contexts += 1
                 else:
-                    self._outbox.add_event(IndexEvent(event.timestamp, user))
+                    self._outbox.add_event(IndexEvent(event.timestamp, context))
 
         if full_event:
             self._outbox.add_event(full_event)
@@ -354,7 +363,7 @@ class EventDispatcher:
         payload = self._outbox.get_payload()
         if self._diagnostic_accumulator:
             self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
-        if len(payload.events) > 0 or len(payload.summary.counters) > 0:
+        if len(payload.events) > 0 or not payload.summary.is_empty():
             task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
                 self._handle_response)
             if self._flush_workers.execute(task.run):
@@ -378,8 +387,8 @@ class EventDispatcher:
     def _send_and_reset_diagnostics(self):
         if self._diagnostic_accumulator is not None:
             dropped_event_count = self._outbox.get_and_clear_dropped_count()
-            stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_users)
-            self._deduplicated_users = 0
+            stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_contexts)
+            self._deduplicated_contexts = 0
             task = DiagnosticEventSendTask(self._http, self._config, stats_event)
             self._diagnostic_flush_workers.execute(task.run)
 
@@ -395,9 +404,9 @@ class DefaultEventProcessor(EventProcessor):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
         self._flush_timer = RepeatingTask(config.flush_interval, config.flush_interval, self.flush)
-        self._users_flush_timer = RepeatingTask(config.user_keys_flush_interval, config.user_keys_flush_interval, self._flush_users)
+        self._contexts_flush_timer = RepeatingTask(config.user_keys_flush_interval, config.user_keys_flush_interval, self._flush_contexts)
         self._flush_timer.start()
-        self._users_flush_timer.start()
+        self._contexts_flush_timer.start()
         if diagnostic_accumulator is not None:
             self._diagnostic_event_timer = RepeatingTask(config.diagnostic_recording_interval,
                 config.diagnostic_recording_interval, self._send_diagnostic)
@@ -422,7 +431,7 @@ class DefaultEventProcessor(EventProcessor):
                 return
             self._closed = True
         self._flush_timer.stop()
-        self._users_flush_timer.stop()
+        self._contexts_flush_timer.stop()
         if self._diagnostic_event_timer:
             self._diagnostic_event_timer.stop()
         self.flush()
@@ -439,8 +448,8 @@ class DefaultEventProcessor(EventProcessor):
                 self._inbox_full = True
                 log.warning("Events are being produced faster than they can be processed; some events will be dropped")
 
-    def _flush_users(self):
-        self._inbox.put(EventProcessorMessage('flush_users', None))
+    def _flush_contexts(self):
+        self._inbox.put(EventProcessorMessage('flush_contexts', None))
 
     def _send_diagnostic(self):
         self._inbox.put(EventProcessorMessage('diagnostic', None))

@@ -44,7 +44,7 @@ def test_identify():
         client.identify(context)
         e = get_first_event(client)
         assert isinstance(e, EventInputIdentify)
-        assert e.user == user
+        assert e.context == context
 
 
 def test_identify_with_user_dict():
@@ -52,7 +52,7 @@ def test_identify_with_user_dict():
         client.identify(user)
         e = get_first_event(client)
         assert isinstance(e, EventInputIdentify)
-        assert e.user == user
+        assert e.context == context
 
 
 def test_identify_no_user():
@@ -79,7 +79,7 @@ def test_track():
         e = get_first_event(client)
         assert isinstance(e, EventInputCustom)
         assert e.key == 'my_event'
-        assert e.user == user
+        assert e.context == context
         assert e.data is None
         assert e.metric_value is None
 
@@ -90,7 +90,7 @@ def test_track_with_user_dict():
         e = get_first_event(client)
         assert isinstance(e, EventInputCustom)
         assert e.key == 'my_event'
-        assert e.user == user
+        assert e.context == context
         assert e.data is None
         assert e.metric_value is None
 
@@ -101,7 +101,7 @@ def test_track_with_data():
         e = get_first_event(client)
         assert isinstance(e, EventInputCustom)
         assert e.key == 'my_event'
-        assert e.user == user
+        assert e.context == context
         assert e.data == 42
         assert e.metric_value is None
 
@@ -112,20 +112,14 @@ def test_track_with_metric_value():
         e = get_first_event(client)
         assert isinstance(e, EventInputCustom)
         assert e.key == 'my_event'
-        assert e.user == user
+        assert e.context == context
         assert e.data == 42
         assert e.metric_value == 1.5
 
 
-def test_track_no_user():
+def test_track_no_context():
     with make_client() as client:
         client.track('my_event', None)
-        assert count_events(client) == 0
-
-
-def test_track_no_user_key():
-    with make_client() as client:
-        client.track('my_event', { 'name': 'nokey' })
         assert count_events(client) == 0
 
 
@@ -140,12 +134,12 @@ def test_event_for_existing_feature():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     with make_client(store) as client:
-        assert 'value' == client.variation(feature.key, user, default='default')
+        assert 'value' == client.variation(feature.key, context, default='default')
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
         assert (e.key == feature.key and
             e.flag == feature and
-            e.user == user and
+            e.context == context and
             e.value == 'value' and
             e.variation == 0 and
             e.reason is None and
@@ -158,12 +152,12 @@ def test_event_for_existing_feature_with_reason():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     with make_client(store) as client:
-        assert 'value' == client.variation_detail(feature.key, user, default='default').value
+        assert 'value' == client.variation_detail(feature.key, context, default='default').value
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
         assert (e.key == feature.key and
             e.flag == feature and
-            e.user == user and
+            e.context == context and
             e.value == 'value' and
             e.variation == 0 and
             e.reason == {'kind': 'OFF'} and
@@ -182,12 +176,12 @@ def test_event_for_existing_feature_with_tracked_rule():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
-    assert 'value' == client.variation(feature.key, user, default='default')
+    assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
     assert (e.key == feature.key and
         e.flag == feature and
-        e.user == user and
+        e.context == context and
         e.value == 'value' and
         e.variation == 0 and
         e.reason == { 'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'rule_id' } and
@@ -206,12 +200,12 @@ def test_event_for_existing_feature_with_untracked_rule():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
-    assert 'value' == client.variation(feature.key, user, default='default')
+    assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
     assert (e.key == feature.key and
         e.flag == feature and
-        e.user == user and
+        e.context == context and
         e.value == 'value' and
         e.variation == 0 and
         e.reason is None and
@@ -226,12 +220,12 @@ def test_event_for_existing_feature_with_tracked_fallthrough():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
-    assert 'value' == client.variation(feature.key, user, default='default')
+    assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
     assert (e.key == feature.key and
         e.flag == feature and
-        e.user == user and
+        e.context == context and
         e.value == 'value' and
         e.variation == 0 and
         e.reason == { 'kind': 'FALLTHROUGH' } and
@@ -246,13 +240,13 @@ def test_event_for_existing_feature_with_untracked_fallthrough():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
-    detail = client.variation_detail(feature.key, user, default='default')
+    detail = client.variation_detail(feature.key, context, default='default')
     assert 'value' == detail.value
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
     assert (e.key == feature.key and
         e.flag == feature and
-        e.user == user and
+        e.context == context and
         e.value == 'value' and
         e.variation == 0 and
         e.reason == { 'kind': 'FALLTHROUGH' } and
@@ -264,12 +258,12 @@ def test_event_for_unknown_feature():
     store = InMemoryFeatureStore()
     store.init({FEATURES: {}})
     with make_client(store) as client:
-        assert 'default' == client.variation('feature.key', user, default='default')
+        assert 'default' == client.variation('feature.key', context, default='default')
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
         assert (e.key == 'feature.key' and
             e.flag is None and
-            e.user == user and
+            e.context == context and
             e.value == 'default' and
             e.variation is None and
             e.reason is None and
@@ -277,7 +271,7 @@ def test_event_for_unknown_feature():
             e.track_events is False)
 
 
-def test_no_event_for_existing_feature_with_no_user():
+def test_no_event_for_existing_feature_with_no_context():
     feature = build_off_flag_with_value('feature.key', 'value').track_events(True).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})

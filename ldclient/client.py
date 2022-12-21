@@ -18,7 +18,7 @@ from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import BigSegmentStoreManager
-from ldclient.impl.evaluator import Evaluator, error_reason, _context_to_user_dict
+from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
@@ -213,7 +213,7 @@ class LDClient:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name,
-                _context_to_user_dict(context), data, metric_value))
+                context, data, metric_value))
 
     def identify(self, context: Union[Context, dict]):
         """Reports details about an evaluation context.
@@ -237,7 +237,7 @@ class LDClient:
             # but an identify event with an empty key is no good.
             log.warning("Empty user key for identify")
         else:
-            self._send_event(self._event_factory_default.new_identify_event(_context_to_user_dict(context)))
+            self._send_event(self._event_factory_default.new_identify_event(context))
 
     def is_offline(self) -> bool:
         """Returns true if the client is in offline mode.
@@ -299,9 +299,6 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
 
-        user = context if isinstance(context, dict) or context is None \
-            else _context_to_user_dict(context)  # temporary until the event processor is updated to use contexts
-
         if not self.is_initialized():
             if self._store.initialized:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
@@ -309,7 +306,7 @@ class LDClient:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
                          + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
-                self._send_event(event_factory.new_unknown_flag_event(key, user, default, reason))
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
                 return EvaluationDetail(default, None, reason)
 
         if not isinstance(context, Context):
@@ -324,11 +321,11 @@ class LDClient:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
             reason = error_reason('EXCEPTION')
-            self._send_event(event_factory.new_unknown_flag_event(key, user, default, reason))
+            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason)
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
-            self._send_event(event_factory.new_unknown_flag_event(key, user, default, reason))
+            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason)
         else:
             try:
@@ -338,13 +335,13 @@ class LDClient:
                 detail = result.detail
                 if detail.is_default_value():
                     detail = EvaluationDetail(default, None, detail.reason)
-                self._send_event(event_factory.new_eval_event(flag, user, detail, default))
+                self._send_event(event_factory.new_eval_event(flag, context, detail, default))
                 return detail
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
-                self._send_event(event_factory.new_default_event(flag, user, default, reason))
+                self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason)
 
     def all_flags_state(self, context: Union[Context, dict], **kwargs) -> FeatureFlagsState:

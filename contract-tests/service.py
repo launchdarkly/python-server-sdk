@@ -12,6 +12,7 @@ from werkzeug.exceptions import HTTPException
 
 default_port = 8000
 
+
 # logging configuration
 dictConfig({
     'version': 1,
@@ -30,11 +31,10 @@ dictConfig({
         'level': 'INFO',
         'handlers': ['console']
     },
-    'ldclient.util': {
-        'level': 'INFO',
-        'handlers': ['console']
-    },
     'loggers': {
+        'ldclient': {
+            'level': 'INFO', # change to 'DEBUG' to enable SDK debug logging
+        },
         'werkzeug': { 'level': 'ERROR' } # disable irrelevant Flask app logging
     }
 })

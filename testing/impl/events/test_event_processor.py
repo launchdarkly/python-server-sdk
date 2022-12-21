@@ -4,6 +4,7 @@ import time
 import uuid
 
 from ldclient.config import Config
+from ldclient.context import Context
 from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
@@ -14,12 +15,12 @@ from testing.stub_util import MockHttp
 
 
 default_config = Config("fake_sdk_key")
-user = {'key': 'userkey', 'name': 'Red'}
-user_key = user['key']
-filtered_user = {
-    'key': 'userkey',
-    'privateAttrs': [ 'name' ]
-}
+context = Context.builder('userkey').name('Red').build()
+filtered_context = context.to_dict()  # TODO: implement attribute redaction
+# filtered_context = {
+#     'key': 'userkey',
+#     'privateAttrs': [ 'name' ]
+# }
 flag = FlagBuilder('flagkey').version(2).build()
 timestamp = 10000
 
@@ -35,6 +36,15 @@ def teardown_function():
     if ep is not None:
         ep.stop()
 
+def make_context_keys(context: Context) -> dict:
+    ret = {}  # type: dict[str, str]
+    for i in range(context.individual_context_count):
+        c = context.get_individual_context(i)
+        if c is not None:
+            ret[c.kind] = c.key
+    return ret
+
+
 class DefaultTestProcessor(DefaultEventProcessor):
     def __init__(self, **kwargs):
         if not 'diagnostic_opt_out' in kwargs:
@@ -47,33 +57,25 @@ class DefaultTestProcessor(DefaultEventProcessor):
 
 def test_identify_event_is_queued():
     with DefaultTestProcessor() as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        e = EventInputIdentify(timestamp, context)
+        ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 1
-        assert output == [{
-            'kind': 'identify',
-            'creationDate': timestamp,
-            'key': user_key,
-            'user': user
-        }]
+        check_identify_event(output[0], e)
 
 def test_context_is_filtered_in_identify_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        e = EventInputIdentify(timestamp, context)
+        ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 1
-        assert output == [{
-            'kind': 'identify',
-            'creationDate': timestamp,
-            'key': user_key,
-            'user': filtered_user
-        }]
+        check_identify_event(output[0], e, filtered_context)
 
 def test_individual_feature_event_is_queued_with_index_event():
     with DefaultTestProcessor() as ep:
-        e = EventInputEvaluation(timestamp, user, flag.key, flag, 1, 'value', None, 'default', None, True)
+        e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -84,19 +86,19 @@ def test_individual_feature_event_is_queued_with_index_event():
 
 def test_context_is_filtered_in_index_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
-        e = EventInputEvaluation(timestamp, user, flag.key, flag, 1, 'value', None, 'default', None, True)
+        e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 3
-        check_index_event(output[0], e, filtered_user)
+        check_index_event(output[0], e, filtered_context)
         check_feature_event(output[1], e)
         check_summary_event(output[2])
 
 def test_two_events_for_same_context_only_produce_one_index_event():
     with DefaultTestProcessor(user_keys_flush_interval = 300) as ep:
-        e0 = EventInputEvaluation(timestamp, user, flag.key, flag, 1, 'value1', None, 'default', None, True)
-        e1 = EventInputEvaluation(timestamp, user, flag.key, flag, 2, 'value2', None, 'default', None, True)
+        e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
+        e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
         ep.send_event(e1)
 
@@ -109,8 +111,8 @@ def test_two_events_for_same_context_only_produce_one_index_event():
 
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
     with DefaultTestProcessor(user_keys_flush_interval = 0.1) as ep:
-        e0 = EventInputEvaluation(timestamp, user, flag.key, flag, 1, 'value1', None, 'default', None, True)
-        e1 = EventInputEvaluation(timestamp, user, flag.key, flag, 2, 'value2', None, 'default', None, True)
+        e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
+        e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
         time.sleep(0.2)
         ep.send_event(e1)
@@ -127,7 +129,7 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     with DefaultTestProcessor() as ep:
         future_time = now() + 100000
         debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(future_time).build()
-        e = EventInputEvaluation(timestamp, user, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -140,7 +142,7 @@ def test_event_can_be_both_tracked_and_debugged():
     with DefaultTestProcessor() as ep:
         future_time = now() + 100000
         debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(future_time).build()
-        e = EventInputEvaluation(timestamp, user, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, True)
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -157,14 +159,14 @@ def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_befo
 
         # Send and flush an event we don't care about, just to set the last server time
         mock_http.set_server_time(server_time)
-        ep.send_event(EventInputIdentify(timestamp, {'key': 'otherUser'}))
+        ep.send_event(EventInputIdentify(timestamp, Context.create('otherUser')))
         flush_and_get_events(ep)
 
         # Now send an event with debug mode on, with a "debug until" time that is further in
         # the future than both the client time and the server time
         debug_until = server_time + 10000
         debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(debug_until).build()
-        e = EventInputEvaluation(timestamp, user, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
         ep.send_event(e)
 
         # Should get a summary event only, not a full feature event
@@ -181,14 +183,14 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
 
         # Send and flush an event we don't care about, just to set the last server time
         mock_http.set_server_time(server_time)
-        ep.send_event(EventInputIdentify(timestamp, {'key': 'otherUser'}))
+        ep.send_event(EventInputIdentify(timestamp, Context.create('otherUser')))
         flush_and_get_events(ep)
 
         # Now send an event with debug mode on, with a "debug until" time that is further in
         # the future than the server time, but in the past compared to the client.
         debug_until = server_time + 1000
         debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(debug_until).build()
-        e = EventInputEvaluation(timestamp, user, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
         ep.send_event(e)
 
         # Should get a summary event only, not a full feature event
@@ -204,14 +206,14 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
 
         # Send and flush an event we don't care about, just to set the last server time
         mock_http.set_server_time(server_time)
-        ep.send_event(EventInputIdentify(timestamp, {'key': 'otherUser'}))
+        ep.send_event(EventInputIdentify(timestamp, Context.create('otherUser')))
         flush_and_get_events(ep)
 
         # Now send an event with debug mode on, with a "debug until" time that is further in
         # the future than the client time, but in the past compared to the server.
         debug_until = server_time - 1000
         debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(debug_until).build()
-        e = EventInputEvaluation(timestamp, user, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, False)
         ep.send_event(e)
 
         # Should get a summary event only, not a full feature event
@@ -225,8 +227,8 @@ def test_nontracked_events_are_summarized():
         flag1 = FlagBuilder('flagkey1').version(11).build()
         flag2 = FlagBuilder('flagkey2').version(22).build()
         earlier_time, later_time = 1111111, 2222222
-        e1 = EventInputEvaluation(later_time, user, flag1.key, flag1, 1, 'value1', None, 'default1', None, False)
-        e2 = EventInputEvaluation(earlier_time, user, flag2.key, flag2, 2, 'value2', None, 'default2', None, False)
+        e1 = EventInputEvaluation(later_time, context, flag1.key, flag1, 1, 'value1', None, 'default1', None, False)
+        e2 = EventInputEvaluation(earlier_time, context, flag2.key, flag2, 2, 'value2', None, 'default2', None, False)
         ep.send_event(e1)
         ep.send_event(e2)
 
@@ -239,10 +241,12 @@ def test_nontracked_events_are_summarized():
         assert se['endDate'] == later_time
         assert se['features'] == {
             'flagkey1': {
+                'contextKinds': ['user'],
                 'default': 'default1',
                 'counters': [ { 'version': 11, 'variation': 1, 'value': 'value1', 'count': 1 } ]
             },
             'flagkey2': {
+                'contextKinds': ['user'],
                 'default': 'default2',
                 'counters': [ { 'version': 22, 'variation': 2, 'value': 'value2', 'count': 1 } ]
             }
@@ -250,7 +254,7 @@ def test_nontracked_events_are_summarized():
 
 def test_custom_event_is_queued_with_user():
     with DefaultTestProcessor() as ep:
-        e = EventInputCustom(timestamp, user, 'eventkey', { 'thing': 'stuff '}, 1.5)
+        e = EventInputCustom(timestamp, context, 'eventkey', { 'thing': 'stuff '}, 1.5)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -266,7 +270,7 @@ def test_nothing_is_sent_if_there_are_no_events():
 
 def test_sdk_key_is_sent():
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -274,7 +278,7 @@ def test_sdk_key_is_sent():
 
 def test_wrapper_header_not_sent_when_not_set():
     with DefaultTestProcessor() as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -282,7 +286,7 @@ def test_wrapper_header_not_sent_when_not_set():
 
 def test_wrapper_header_sent_when_set():
     with DefaultTestProcessor(wrapper_name = "Flask", wrapper_version = "0.0.1") as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -290,7 +294,7 @@ def test_wrapper_header_sent_when_set():
 
 def test_wrapper_header_sent_without_version():
     with DefaultTestProcessor(wrapper_name = "Flask") as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -298,11 +302,11 @@ def test_wrapper_header_sent_without_version():
 
 def test_event_schema_set_on_event_send():
     with DefaultTestProcessor() as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
-        assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') == "3"
+        assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') == "4"
 
 def test_sdk_key_is_sent_on_diagnostic_request():
     with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
@@ -326,7 +330,7 @@ def test_periodic_diagnostic_includes_events_in_batch():
         # Ignore init event
         flush_and_get_events(ep)
         # Send a payload with a single event
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         flush_and_get_events(ep)
 
         ep._send_diagnostic()
@@ -341,8 +345,8 @@ def test_periodic_diagnostic_includes_deduplicated_users():
         # Ignore init event
         flush_and_get_events(ep)
         # Send two custom events with the same user to cause a user deduplication
-        e0 = EventInputCustom(timestamp, user, 'event1', None, None)
-        e1 = EventInputCustom(timestamp, user, 'event2', None, None)
+        e0 = EventInputCustom(timestamp, context, 'event1', None, None)
+        e1 = EventInputCustom(timestamp, context, 'event2', None, None)
         ep.send_event(e0)
         ep.send_event(e1)
         flush_and_get_events(ep)
@@ -388,8 +392,8 @@ def test_does_not_block_on_full_inbox():
 
     with DefaultEventProcessor(config, mock_http, dispatcher_factory) as ep:
         ep_inbox = ep_inbox_holder[0]
-        event1 = EventInputCustom(timestamp, user, 'event1')
-        event2 = EventInputCustom(timestamp, user, 'event2')
+        event1 = EventInputCustom(timestamp, context, 'event1')
+        event2 = EventInputCustom(timestamp, context, 'event2')
         ep.send_event(event1)
         ep.send_event(event2)  # this event should be dropped - inbox is full
         message1 = ep_inbox.get(block=False)
@@ -401,7 +405,7 @@ def test_does_not_block_on_full_inbox():
 def test_http_proxy(monkeypatch):
     def _event_processor_proxy_test(server, config, secure):
         with DefaultEventProcessor(config) as ep:
-            ep.send_event(EventInputIdentify(timestamp, user))
+            ep.send_event(EventInputIdentify(timestamp, context))
             ep.flush()
             ep._wait_until_inactive()
     do_proxy_tests(_event_processor_proxy_test, 'POST', monkeypatch)
@@ -409,12 +413,12 @@ def test_http_proxy(monkeypatch):
 def verify_unrecoverable_http_error(status):
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
         mock_http.set_response_status(status)
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
         mock_http.reset()
 
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is None
@@ -422,19 +426,19 @@ def verify_unrecoverable_http_error(status):
 def verify_recoverable_http_error(status):
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
         mock_http.set_response_status(status)
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
         mock_http.reset()
 
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is not None
 
 def test_event_payload_id_is_sent():
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -445,11 +449,11 @@ def test_event_payload_id_is_sent():
 
 def test_event_payload_id_changes_between_requests():
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
-        ep.send_event(EventInputIdentify(timestamp, user))
+        ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
@@ -465,10 +469,15 @@ def flush_and_get_events(ep):
     else:
         return json.loads(mock_http.request_data)
 
-def check_index_event(data, source: EventInput, user: Optional[dict] = None):
+def check_identify_event(data, source: EventInput, context_json: Optional[dict] = None):
+    assert data['kind'] == 'identify'
+    assert data['creationDate'] == source.timestamp
+    assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
+
+def check_index_event(data, source: EventInput, context_json: Optional[dict] = None):
     assert data['kind'] == 'index'
     assert data['creationDate'] == source.timestamp
-    assert data['user'] == source.user if user is None else user
+    assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
 
 def check_feature_event(data, source: EventInputEvaluation):
     assert data['kind'] == 'feature'
@@ -478,10 +487,10 @@ def check_feature_event(data, source: EventInputEvaluation):
     assert data.get('variation') == source.variation
     assert data.get('value') == source.value
     assert data.get('default') == source.default_value
-    assert data['userKey'] == source.user['key']
+    assert data['contextKeys'] == make_context_keys(source.context)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
 
-def check_debug_event(data, source: EventInputEvaluation, user: Optional[dict] = None):
+def check_debug_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'debug'
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
@@ -489,7 +498,7 @@ def check_debug_event(data, source: EventInputEvaluation, user: Optional[dict] =
     assert data.get('variation') == source.variation
     assert data.get('value') == source.value
     assert data.get('default') == source.default_value
-    assert data['user'] == source.user
+    assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
 
 def check_custom_event(data, source: EventInputCustom):
@@ -497,7 +506,7 @@ def check_custom_event(data, source: EventInputCustom):
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
     assert data['data'] == source.data
-    assert data['userKey'] == source.user['key']
+    assert data['contextKeys'] == make_context_keys(source.context)
     assert data.get('metricValue') == source.metric_value
 
 def check_summary_event(data):

@@ -1,12 +1,11 @@
-import pytest
-
-from ldclient.impl.events.event_summarizer import EventSummarizer
+from ldclient.context import Context
+from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummaryCounter, EventSummaryFlag
 from ldclient.impl.events.types import *
 
 from testing.builders import *
 
 
-user = { 'key': 'user1' }
+user = Context.create('user1')
 flag1 = FlagBuilder('flag1').version(11).build()
 flag2 = FlagBuilder('flag2').version(22).build()
 
@@ -39,9 +38,15 @@ def test_summarize_event_increments_counters():
 	data = es.snapshot()
 
 	expected = {
-		('flag1', 1, 11): { 'count': 2, 'value': 'value1', 'default': 'default1' },
-		('flag1', 2, 11): { 'count': 1, 'value': 'value2', 'default': 'default1' },
-		('flag2', 1, 22): { 'count': 1, 'value': 'value99', 'default': 'default2' },
-		('badkey', None, None): { 'count': 1, 'value': 'default3', 'default': 'default3' }
+		'flag1': EventSummaryFlag({'user'}, 'default1', {
+			(1, flag1.version): EventSummaryCounter(2, 'value1'),
+			(2, flag1.version): EventSummaryCounter(1, 'value2')
+		}),
+		'flag2': EventSummaryFlag({'user'}, 'default2', {
+			(1, flag2.version): EventSummaryCounter(1, 'value99')
+		}),
+		'badkey': EventSummaryFlag({'user'}, 'default3', {
+			(None, None): EventSummaryCounter(1, 'default3')
+		})
 	}
-	assert data.counters == expected
+	assert data.flags == expected

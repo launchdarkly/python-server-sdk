@@ -1,10 +1,11 @@
+from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
 from ldclient.impl import AnyNum
 from ldclient.impl.model import FeatureFlag
 from ldclient.impl.util import current_time_millis
 
 import json
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional
 
 # These event types are not the event data that is sent to LaunchDarkly; they're the input
 # parameters that are passed to EventProcessor, which translates them into event data (for
@@ -13,11 +14,11 @@ from typing import Any, Callable, Optional, Union
 # than dictionaries.
 
 class EventInput:
-    __slots__ = ['timestamp', 'user']
+    __slots__ = ['timestamp', 'context']
 
-    def __init__(self, timestamp: int, user: dict):
+    def __init__(self, timestamp: int, context: Context):
         self.timestamp = timestamp
-        self.user = user
+        self.context = context
 
     def __repr__(self) -> str:  # used only in test debugging
         return "%s(%s)" % (self.__class__.__name__, json.dumps(self.to_debugging_dict()))
@@ -31,10 +32,10 @@ class EventInput:
 class EventInputEvaluation(EventInput):
     __slots__ = ['key', 'flag', 'variation', 'value', 'reason', 'default_value', 'prereq_of', 'track_events']
 
-    def __init__(self, timestamp: int, user: dict, key: str, flag: Optional[FeatureFlag],
+    def __init__(self, timestamp: int, context: Context, key: str, flag: Optional[FeatureFlag],
                  variation: Optional[int], value: Any, reason: Optional[dict],
                  default_value: Any, prereq_of: Optional[FeatureFlag] = None, track_events: bool = False):
-        super().__init__(timestamp, user)
+        super().__init__(timestamp, context)
         self.key = key
         self.flag = flag
         self.variation = variation
@@ -47,7 +48,7 @@ class EventInputEvaluation(EventInput):
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
-            "user": self.user,
+            "context": self.context.to_dict(),
             "key": self.key,
             "flag": {"key": self.flag.key} if self.flag else None,
             "variation": self.variation,
@@ -62,14 +63,14 @@ class EventInputIdentify(EventInput):
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
-            "user": self.user
+            "context": self.context.to_dict()
         }
 
 class EventInputCustom(EventInput):
     __slots__ = ['key', 'data', 'metric_value']
 
-    def __init__(self, timestamp: int, user: dict, key: str, data: Any = None, metric_value: Optional[AnyNum] = None):
-        super().__init__(timestamp, user)
+    def __init__(self, timestamp: int, context: Context, key: str, data: Any = None, metric_value: Optional[AnyNum] = None):
+        super().__init__(timestamp, context)
         self.key = key
         self.data = data
         self.metric_value = metric_value  # type: Optional[int|float|complex]
@@ -77,7 +78,7 @@ class EventInputCustom(EventInput):
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
-            "user": self.user,
+            "context": self.context.to_dict(),
             "key": self.key,
             "data": self.data,
             "metric_value": self.metric_value
@@ -95,12 +96,12 @@ class EventFactory:
         self._with_reasons = with_reasons
         self._timestamp_fn = timestamp_fn
 
-    def new_eval_event(self, flag: FeatureFlag, user: dict, detail: EvaluationDetail,
+    def new_eval_event(self, flag: FeatureFlag, context: Context, detail: EvaluationDetail,
                        default_value: Any, prereq_of_flag: Optional[FeatureFlag] = None) -> EventInputEvaluation:
         add_experiment_data = self.is_experiment(flag, detail.reason)
         return EventInputEvaluation(
             self._timestamp_fn(),
-            user,
+            context,
             flag.key,
             flag,
             detail.variation_index,
@@ -111,11 +112,11 @@ class EventFactory:
             flag.track_events or add_experiment_data
         )
 
-    def new_default_event(self, flag: FeatureFlag, user: dict, default_value: Any,
+    def new_default_event(self, flag: FeatureFlag, context: Context, default_value: Any,
                           reason: Optional[dict]) -> EventInputEvaluation:
         return EventInputEvaluation(
             self._timestamp_fn(),
-            user,
+            context,
             flag.key,
             flag,
             None,
@@ -126,11 +127,11 @@ class EventFactory:
             flag.track_events
         )
 
-    def new_unknown_flag_event(self, key: str, user: dict, default_value: Any,
+    def new_unknown_flag_event(self, key: str, context: Context, default_value: Any,
                                reason: Optional[dict]) -> EventInputEvaluation:
         return EventInputEvaluation(
             self._timestamp_fn(),
-            user,
+            context,
             key,
             None,
             None,
@@ -141,17 +142,17 @@ class EventFactory:
             False
         )
 
-    def new_identify_event(self, user: dict) -> EventInputIdentify:
+    def new_identify_event(self, context: Context) -> EventInputIdentify:
         return EventInputIdentify(
             self._timestamp_fn(),
-            user
+            context
         )
 
-    def new_custom_event(self, event_name: str, user: dict, data: Any, metric_value: Optional[AnyNum]) \
+    def new_custom_event(self, event_name: str, context: Context, data: Any, metric_value: Optional[AnyNum]) \
             -> EventInputCustom:
         return EventInputCustom(
             self._timestamp_fn(),
-            user,
+            context,
             event_name,
             data,
             metric_value
