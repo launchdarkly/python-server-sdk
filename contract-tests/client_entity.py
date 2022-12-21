@@ -2,6 +2,11 @@ import json
 import logging
 import os
 import sys
+from typing import Optional
+
+from big_segment_store_fixture import BigSegmentStoreFixture
+
+from ldclient.config import BigSegmentsConfig
 
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -17,8 +22,7 @@ class ClientEntity:
             streaming = config["streaming"]
             if streaming.get("baseUri") is not None:
                 opts["stream_uri"] = streaming["baseUri"]
-            if streaming.get("initialRetryDelayMs") is not None:
-                opts["initial_reconnect_delay"] = streaming["initialRetryDelayMs"] / 1000.0
+            _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
 
         if config.get("events") is not None:
             events = config["events"]
@@ -29,11 +33,22 @@ class ClientEntity:
             opts["diagnostic_opt_out"] = not events.get("enableDiagnostics", False)
             opts["all_attributes_private"] = events.get("allAttributesPrivate", False)
             opts["private_attribute_names"] = events.get("globalPrivateAttributes", {})
-            if events.get("flushIntervalMs") is not None:
-                 opts["flush_interval"] = events["flushIntervalMs"] / 1000.0
+            _set_optional_time_prop(events, "flushIntervalMs", opts, "flush_interval")
         else:
             opts["send_events"] = False
 
+        if config.get("bigSegments") is not None:
+            big_params = config["bigSegments"]
+            big_config = {
+                "store": BigSegmentStoreFixture(big_params["callbackUri"])
+            }
+            if big_params.get("userCacheSize") is not None:
+                big_config["user_cache_size"] = big_params["userCacheSize"]
+            _set_optional_time_prop(big_params, "userCacheTimeMs", big_config, "user_cache_time")
+            _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
+            _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
+            opts["big_segments"] = BigSegmentsConfig(**big_config)
+        
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
 
@@ -114,6 +129,18 @@ class ClientEntity:
             return {"output": c.to_json_string()}
         return {"error": c.error}
     
+    def get_big_segment_store_status(self) -> dict:
+        status = self.client.big_segment_store_status_provider.status
+        return {
+            "available": status.available,
+            "stale": status.stale
+        }
+
     def close(self):
         self.client.close()
         self.log.info('Test ended')
+
+def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
+    if params_in.get(name_in) is not None:
+        params_out[name_out] = params_in[name_in] / 1000.0
+    return None

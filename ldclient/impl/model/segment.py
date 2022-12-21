@@ -49,7 +49,8 @@ class SegmentRule:
 
 class Segment(ModelEntity):
     __slots__ = ['_data', '_key', '_version', '_deleted', '_included', '_excluded',
-        '_included_contexts', '_excluded_contexts', '_rules', '_salt', '_unbounded', '_generation']
+        '_included_contexts', '_excluded_contexts', '_rules', '_salt', '_unbounded',
+        '_unbounded_context_kind', '_generation']
 
     def __init__(self, data: dict):
         super().__init__(data)
@@ -69,6 +70,7 @@ class Segment(ModelEntity):
         self._rules = list(SegmentRule(item) for item in opt_dict_list(data, 'rules'))
         self._salt = opt_str(data, 'salt') or ''
         self._unbounded = opt_bool(data, 'unbounded')
+        self._unbounded_context_kind = opt_str(data, 'unboundedContextKind')
         self._generation = opt_int(data, 'generation')
     
     @property
@@ -110,6 +112,10 @@ class Segment(ModelEntity):
     @property
     def unbounded(self) -> bool:
         return self._unbounded
+    
+    @property
+    def unbounded_context_kind(self) -> Optional[str]:
+        return self._unbounded_context_kind
 
     @property
     def generation(self) -> Optional[int]:

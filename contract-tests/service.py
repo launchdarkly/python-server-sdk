@@ -64,6 +64,7 @@ def status():
             'all-flags-with-reasons',
             'all-flags-client-side-only',
             'all-flags-details-only-for-tracked-flags',
+            'big-segments',
             'context-type',
             'secure-mode-hash',
         ]
@@ -126,6 +127,8 @@ def post_client_command(id):
         response = client.context_build(sub_params)
     elif command == "contextConvert":
         response = client.context_convert(sub_params)
+    elif command == "getBigSegmentStoreStatus":
+        response = client.get_big_segment_store_status()
     else:
         return ('', 400)
     

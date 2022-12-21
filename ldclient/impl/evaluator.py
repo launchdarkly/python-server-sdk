@@ -3,6 +3,7 @@ from ldclient.context import Context, _USER_STRING_ATTRS
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl.event_factory import _EventFactory
 from ldclient.impl.model import *
+from ldclient.interfaces import BigSegmentStoreStatus
 
 import hashlib
 import logging
@@ -50,8 +51,8 @@ class EvalResult:
     def __init__(self):
         self.detail = None
         self.events = None
-        self.big_segments_status = None
-        self.big_segments_membership = None
+        self.big_segments_status = None  # type: Optional[str]
+        self.big_segments_membership = None  # type: Optional[Dict[str, Optional[dict]]]
 
     def add_event(self, event):
         if self.events is None:
@@ -267,12 +268,37 @@ class Evaluator:
             # that as a "not configured" condition.
             state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
             return False
-        if state.big_segments_status is None:
-            result = self.__get_big_segments_membership(context.key)
-            state.big_segments_membership, state.big_segments_status = result
-        segment_ref = _make_big_segment_ref(segment)
-        membership = state.big_segments_membership
-        included = None if membership is None else membership.get(segment_ref, None)
+        
+        # A big segment can only apply to one context kind, so if we don't have a key for that kind,
+		# we don't need to bother querying the data.
+        match_context = context.get_individual_context(segment.unbounded_context_kind or Context.DEFAULT_KIND)
+        if match_context is None:
+            return False
+        key = match_context.key
+
+        membership = None
+        has_cached_membership = False
+        if state.big_segments_membership is not None:
+            if key in state.big_segments_membership:
+                has_cached_membership = True
+                membership = state.big_segments_membership[key]
+                # Note that we could have cached a None result from a query, in which case membership
+                # will be None but has_cached_membership will be True.
+        if not has_cached_membership:
+            if self.__get_big_segments_membership is None:
+                state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
+                return False
+            result = self.__get_big_segments_membership(key)
+            # Note that this query is just by key; the context kind doesn't matter because any given
+			# Big Segment can only reference one context kind. So if segment A for the "user" kind
+			# includes a "user" context with key X, and segment B for the "org" kind includes an "org"
+		    # context with the same key X, it is fine to say that the membership for key X is
+			# segment A and segment B-- there is no ambiguity.
+            membership, state.big_segments_status = result
+            if state.big_segments_membership is None:
+                state.big_segments_membership = {}
+            state.big_segments_membership[key] = membership
+        included = None if membership is None else membership.get(_make_big_segment_ref(segment), None)
         if included is not None:
             return included
         return self._simple_segment_match_context(segment, context, state, False)
