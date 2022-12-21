@@ -49,7 +49,7 @@ def _context_to_user_dict(context: Context) -> dict:
 # ended up having to do for the context.
 class EvalResult:
     __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership',
-        'original_flag_key', 'prereq_stack']
+        'original_flag_key', 'prereq_stack', 'segment_stack']
 
     def __init__(self):
         self.detail = None
@@ -58,6 +58,7 @@ class EvalResult:
         self.big_segments_membership = None  # type: Optional[Dict[str, Optional[dict]]]
         self.original_flag_key = None  # type: Optional[str]
         self.prereq_stack = None  # type: Optional[List[str]]
+        self.segment_stack = None  # type: Optional[List[str]]
 
     def add_event(self, event: dict):
         if self.events is None:
@@ -253,6 +254,9 @@ class Evaluator:
         return _maybe_negate(clause, _match_single_context_value(op, context_value, clause_values))
 
     def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
+        if state.segment_stack is not None and segment.key in state.segment_stack:
+            raise EvaluationException(('segment rule referencing segment "%s" caused a circular reference;' +
+                ' this is probably a temporary condition due to an incomplete update') % segment.key)
         if segment.unbounded:
             return self._big_segment_match_context(segment, context, state)
         return self._simple_segment_match_context(segment, context, state, True)
@@ -269,9 +273,19 @@ class Evaluator:
             for t in segment.excluded_contexts:
                 if _context_key_is_in_target_list(context, t.context_kind, t.values):
                     return False
-        for rule in segment.rules:
-            if self._segment_rule_matches_context(rule, context, state, segment.key, segment.salt):
-                return True
+        if segment.rules.count != 0:
+            # Evaluating rules means we might be doing recursive segment matches, so we'll push the current
+            # segment key onto the stack for cycle detection.
+            if state.segment_stack is None:
+                state.segment_stack = []
+            state.segment_stack.append(segment.key)
+            try:
+                for rule in segment.rules:
+                    if self._segment_rule_matches_context(rule, context, state, segment.key, segment.salt):
+                        return True
+                return False
+            finally:
+                state.segment_stack.pop()
         return False
 
     def _segment_rule_matches_context(self, rule: SegmentRule, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:

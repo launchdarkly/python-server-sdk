@@ -20,11 +20,8 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 
 # TEST_HARNESS_PARAMS can be set to add -skip parameters for any contract tests that cannot yet pass
 # Explanation of current skips:
-# - "evaluation/parameterized/prerequisites": Can't pass yet because prerequisite cycle detection is not implemented.
-# - "evaluation/parameterized/segment recursion": Segment recursion is not yet implemented.
 # - "events": These test suites will be unavailable until more of the U2C implementation is done.
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'evaluation/parameterized/segment recursion' \
 	-skip 'events'
 
 # port 8000 and 9000 is already used in the CI environment because we're

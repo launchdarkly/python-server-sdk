@@ -158,3 +158,27 @@ def test_non_matching_rule_with_multiple_clauses():
         ) \
         .build()
     assert _segment_matches_context(segment, context) is False
+
+@pytest.mark.parametrize("depth", [1, 2, 3, 4])
+def test_segment_cycle_detection(depth: int):
+    segment_keys = list("segmentkey%d" % i for i in range(depth))
+    segments = []
+    for i in range(depth):
+        segments.append(
+            SegmentBuilder(segment_keys[i]) \
+                .rules(
+                    SegmentRuleBuilder().clauses(
+                        make_clause_matching_segment_key(segment_keys[(i + 1) % depth])
+                    )
+                    .build()
+                )
+                .build())
+    evaluator_builder = EvaluatorBuilder()
+    for s in segments:
+        evaluator_builder.with_segment(s)
+    evaluator = evaluator_builder.build()
+    flag = make_boolean_flag_matching_segment(segments[0])
+    context = Context.create('x')
+    result = evaluator.evaluate(flag, context, event_factory)
+    assert result.detail.value is None
+    assert result.detail.reason == {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'}
