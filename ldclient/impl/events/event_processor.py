@@ -1,29 +1,29 @@
 """
 Implementation details of the analytics event delivery component.
 """
-# currently excluded from documentation - see docs/README.md
 
 from calendar import timegm
 from collections import namedtuple
 from email.utils import parsedate
-import errno
 import json
 from threading import Event, Lock, Thread
+from typing import Any, List
 import time
 import uuid
 import queue
 import urllib3
 
-from ldclient.event_summarizer import EventSummarizer
+from ldclient.diagnostics import create_diagnostic_init
+from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.fixed_thread_pool import FixedThreadPool
+from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.util import current_time_millis
 from ldclient.lru_cache import SimpleLRUCache
 from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
-from ldclient.util import log
-from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, stringify_attrs, throw_if_unsuccessful_response, _headers
-from ldclient.diagnostics import create_diagnostic_init
+from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, log, _headers
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 3
@@ -33,75 +33,71 @@ __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__ = [ "key", "secondary", "ip", "country", 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
+class DebugEvent:
+    __slots__ = ['original_input']
+
+    def __init__(self, original_input: EventInputEvaluation):
+        self.original_input = original_input
+
+class IndexEvent:
+    __slots__ = ['timestamp', 'user']
+
+    def __init__(self, timestamp: int, user: dict):
+        self.timestamp = timestamp
+        self.user = user
+
+
 class EventOutputFormatter:
     def __init__(self, config):
         self._user_filter = UserFilter(config)
 
-    def make_output_events(self, events, summary):
+    def make_output_events(self, events: List[Any], summary: EventSummary):
         events_out = [ self.make_output_event(e) for e in events ]
         if len(summary.counters) > 0:
             events_out.append(self.make_summary_event(summary))
         return events_out
 
-    def make_output_event(self, e):
-        kind = e['kind']
-        if kind == 'feature':
-            is_debug = e.get('debug')
-            out = {
-                'kind': 'debug' if is_debug else 'feature',
-                'creationDate': e['creationDate'],
-                'key': e['key'],
-                'version': e.get('version'),
-                'variation': e.get('variation'),
-                'value': e.get('value'),
-                'default': e.get('default')
-            }
-            if 'prereqOf' in e:
-                out['prereqOf'] = e.get('prereqOf')
-            if is_debug:
-                out['user'] = self._process_user(e)
-            else:
-                out['userKey'] = self._get_userkey(e)
-            if e.get('reason'):
-                out['reason'] = e.get('reason')
-            if e.get('contextKind'):
-                out['contextKind'] = e.get('contextKind')
+    def make_output_event(self, e: Any):
+        if isinstance(e, EventInputEvaluation):
+            out = self._base_eval_props(e, 'feature')
+            out['userKey'] = e.user['key']
             return out
-        elif kind == 'identify':
+        elif isinstance(e, DebugEvent):
+            out = self._base_eval_props(e.original_input, 'debug')
+            out['user'] = self._process_user(e.original_input.user)
+            return out
+        elif isinstance(e, EventInputIdentify):
             return {
                 'kind': 'identify',
-                'creationDate': e['creationDate'],
-                'key': self._get_userkey(e),
-                'user': self._process_user(e)
+                'creationDate': e.timestamp,
+                'key': e.user['key'],
+                'user': self._process_user(e.user)
             }
-        elif kind == 'custom':
-            out = {
-                'kind': 'custom',
-                'creationDate': e['creationDate'],
-                'key': e['key']
-            }
-            out['userKey'] = self._get_userkey(e)
-            if e.get('data') is not None:
-                out['data'] = e['data']
-            if e.get('metricValue') is not None:
-                out['metricValue'] = e['metricValue']
-            if e.get('contextKind'):
-                out['contextKind'] = e.get('contextKind')
-            return out
-        elif kind == 'index':
+        elif isinstance(e, IndexEvent):
             return {
                 'kind': 'index',
-                'creationDate': e['creationDate'],
-                'user': self._process_user(e)
+                'creationDate': e.timestamp,
+                'user': self._process_user(e.user)
             }
-        else:
-            return e
+        elif isinstance(e, EventInputCustom):
+            out = {
+                'kind': 'custom',
+                'creationDate': e.timestamp,
+                'key': e.key,
+                'userKey': e.user['key']
+            }
+            if e.data is not None:
+                out['data'] = e.data
+            if e.metric_value is not None:
+                out['metricValue'] = e.metric_value
+            return out
+        return None
 
     """
     Transform summarizer data into the format used for the event payload.
     """
-    def make_summary_event(self, summary):
-        flags_out = dict()
+    def make_summary_event(self, summary: EventSummary):
+        flags_out = dict()  # type: dict[str, Any]
         for ckey, cval in summary.counters.items():
             flag_key, variation, version = ckey
             flag_data = flags_out.get(flag_key)
@@ -126,12 +122,26 @@ class EventOutputFormatter:
             'features': flags_out
         }
 
-    def _process_user(self, event):
-        filtered = self._user_filter.filter_user_props(event['user'])
-        return stringify_attrs(filtered, __USER_ATTRS_TO_STRINGIFY_FOR_EVENTS__)
+    def _process_user(self, user: dict):
+        return self._user_filter.filter_user_props(user)
 
-    def _get_userkey(self, event):
-        return str(event['user'].get('key'))
+    def _base_eval_props(self, e: EventInputEvaluation, kind: str) -> dict:
+        out = {
+            'kind': kind,
+            'creationDate': e.timestamp,
+            'key': e.key,
+            'value': e.value,
+            'default': e.default_value
+        }
+        if e.flag is not None:
+            out['version'] = e.flag.version
+        if e.variation is not None:
+            out['variation'] = e.variation
+        if e.reason is not None:
+            out['reason'] = e.reason
+        if e.prereq_of is not None:
+            out['prereqOf'] = e.prereq_of
+        return out
 
 
 class EventPayloadSendTask:
@@ -208,7 +218,7 @@ class EventBuffer:
         self._exceeded_capacity = False
         self._dropped_events = 0
 
-    def add_event(self, event):
+    def add_event(self, event: Any):
         if len(self._events) >= self._capacity:
             self._dropped_events += 1
             if not self._exceeded_capacity:
@@ -218,7 +228,7 @@ class EventBuffer:
             self._events.append(event)
             self._exceeded_capacity = False
 
-    def add_to_summary(self, event):
+    def add_to_summary(self, event: EventInputEvaluation):
         self._summarizer.summarize_event(event)
 
     def get_and_clear_dropped_count(self):
@@ -283,60 +293,54 @@ class EventDispatcher:
                     self._do_shutdown()
                     message.param.set()
                     return
-            except Exception:
+            except Exception as e:
                 log.error('Unhandled exception in event processor', exc_info=True)
 
-    def _process_event(self, event):
+    def _process_event(self, event: EventInput):
         if self._disabled:
             return
 
-        # Always record the event in the summarizer.
-        self._outbox.add_to_summary(event)
-
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
-        add_full_event = False
-        add_debug_event = False
-        add_index_event = False
-        if event['kind'] == "feature":
-            add_full_event = event.get('trackEvents')
-            add_debug_event = self._should_debug_event(event)
-        else:
-            add_full_event = True
+        user = event.user  # type: dict
+        can_add_index = True
+        full_event = None
+        debug_event = None
+
+        if isinstance(event, EventInputEvaluation):
+            self._outbox.add_to_summary(event)
+            if event.track_events:
+                full_event = event
+            if self._should_debug_event(event):
+                debug_event = DebugEvent(event)
+        elif isinstance(event, EventInputIdentify):
+            full_event = event
+            can_add_index = False  # an index event would be redundant if there's an identify event
+        elif isinstance(event, EventInputCustom):
+            full_event = event
 
         # For each user we haven't seen before, we add an index event - unless this is already
-        # an identify event for that user.
-        user = event.get('user')
-        if user and 'key' in user:
-            is_identify_event = event['kind'] == 'identify'
-            already_seen = self.notice_user(user)
-            add_index_event = not is_identify_event and not already_seen
-            if not is_identify_event and already_seen:
+        # an identify event.
+        already_seen = self._user_keys.put(user['key'], True)
+        if can_add_index:
+            if already_seen:
                 self._deduplicated_users += 1
+            else:
+                self._outbox.add_event(IndexEvent(event.timestamp, user))
 
-        if add_index_event:
-            ie = { 'kind': 'index', 'creationDate': event['creationDate'], 'user': user }
-            self._outbox.add_event(ie)
-        if add_full_event:
-            self._outbox.add_event(event)
-        if add_debug_event:
-            debug_event = event.copy()
-            debug_event['debug'] = True
+        if full_event:
+            self._outbox.add_event(full_event)
+        
+        if debug_event:
             self._outbox.add_event(debug_event)
 
-    # Add to the set of users we've noticed, and return true if the user was already known to us.
-    def notice_user(self, user):
-        if user is None or 'key' not in user:
+    def _should_debug_event(self, event: EventInputEvaluation):
+        if event.flag is None:
             return False
-        key = user['key']
-        return self._user_keys.put(key, True)
-
-    def _should_debug_event(self, event):
-        debug_until = event.get('debugEventsUntilDate')
+        debug_until = event.flag.debug_events_until_date
         if debug_until is not None:
             last_past = self._last_known_past_time
-            now = int(time.time() * 1000)
-            if debug_until > last_past and debug_until > now:
+            if debug_until > last_past and debug_until > current_time_millis():
                 return True
         return False
 
@@ -402,8 +406,7 @@ class DefaultEventProcessor(EventProcessor):
 
         (dispatcher_class or EventDispatcher)(self._inbox, config, http, diagnostic_accumulator)
 
-    def send_event(self, event):
-        event['creationDate'] = int(time.time() * 1000)
+    def send_event(self, event: EventInput):
         self._post_to_inbox(EventProcessorMessage('event', event))
 
     def flush(self):

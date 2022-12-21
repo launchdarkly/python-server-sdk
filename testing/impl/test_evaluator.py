@@ -1,6 +1,5 @@
 from ldclient.client import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.evaluator import _context_to_user_dict
 from testing.builders import *
 from testing.impl.evaluator_util import *
 

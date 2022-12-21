@@ -1,5 +1,3 @@
-import pytest
-import json
 import time
 from ldclient.client import LDClient, Config, Context
 from ldclient.config import BigSegmentsConfig
@@ -13,10 +11,9 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from testing.builders import *
 from testing.mock_components import MockBigSegmentStore
 from testing.stub_util import MockEventProcessor, MockUpdateProcessor
-from testing.test_ldclient import make_off_flag_with_value
+from testing.test_ldclient import make_client, user
 
 
-user = { 'key': 'userkey' }
 flag1 = {
     'key': 'key1',
     'version': 100,
@@ -55,13 +52,6 @@ class ErroringFeatureStore(FeatureStore):
     def initialized(self):
         return True
 
-def make_client(store):
-    return LDClient(config=Config(sdk_key='SDK_KEY',
-                                  base_uri='http://test',
-                                  event_processor_class=MockEventProcessor,
-                                  update_processor_class=MockUpdateProcessor,
-                                  feature_store=store))
-
 def get_log_lines(caplog, level):
     loglines = caplog.records
     if callable(loglines):
@@ -71,7 +61,7 @@ def get_log_lines(caplog, level):
 
 
 def test_variation_for_existing_feature():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
@@ -99,14 +89,14 @@ def test_variation_for_unknown_feature():
     assert 'default' == client.variation('feature.key', user, default='default')
 
 def test_variation_when_user_is_none():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
     assert 'default' == client.variation('feature.key', None, default='default')
 
 def test_variation_when_user_has_no_key():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
@@ -114,7 +104,7 @@ def test_variation_when_user_has_no_key():
 
 def test_variation_for_invalid_context():
     c = Context.create('')
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
@@ -128,7 +118,7 @@ def test_variation_for_flag_that_evaluates_to_none():
     assert 'default' == client.variation('feature.key', user, default='default')
 
 def test_variation_detail_for_existing_feature():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
@@ -142,7 +132,7 @@ def test_variation_detail_for_unknown_feature():
     assert expected == client.variation_detail('feature.key', user, default='default')
 
 def test_variation_detail_when_user_is_none():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
@@ -150,7 +140,7 @@ def test_variation_detail_when_user_is_none():
     assert expected == client.variation_detail('feature.key', None, default='default')
 
 def test_variation_detail_when_user_has_no_key():
-    feature = make_off_flag_with_value('feature.key', 'value')
+    feature = build_off_flag_with_value('feature.key', 'value').build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)

@@ -1,14 +1,16 @@
 from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
-from ldclient.impl.event_factory import _EventFactory
+from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
 from testing.builders import *
 
 from typing import Any, Optional, Tuple, Union
 
 basic_user = Context.create('user-key')
-event_factory = _EventFactory(False)
+fake_timestamp = 0
+event_factory = EventFactory(False, lambda: fake_timestamp)
+
 
 class EvaluatorBuilder:
     def __init__(self):

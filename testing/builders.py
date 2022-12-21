@@ -179,6 +179,9 @@ class SegmentRuleBuilder(BaseBuilder):
         return self._set('weight', value)
 
 
+def build_off_flag_with_value(key: str, value: Any) -> FlagBuilder:
+    return FlagBuilder(key).version(100).on(False).variations(value).off_variation(0)
+
 def make_boolean_flag_matching_segment(segment: Segment) -> FeatureFlag:
     return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment.key))
 
