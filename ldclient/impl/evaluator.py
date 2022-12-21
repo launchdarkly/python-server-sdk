@@ -48,13 +48,18 @@ def _context_to_user_dict(context: Context) -> dict:
 # prerequisite evaluations, and the cached state of any Big Segments query that we may have
 # ended up having to do for the context.
 class EvalResult:
+    __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership',
+        'original_flag_key', 'prereq_stack']
+
     def __init__(self):
         self.detail = None
-        self.events = None
+        self.events = None  # type: Optional[List[dict]]
         self.big_segments_status = None  # type: Optional[str]
         self.big_segments_membership = None  # type: Optional[Dict[str, Optional[dict]]]
+        self.original_flag_key = None  # type: Optional[str]
+        self.prereq_stack = None  # type: Optional[List[str]]
 
-    def add_event(self, event):
+    def add_event(self, event: dict):
         if self.events is None:
             self.events = []
         self.events.append(event)
@@ -138,22 +143,46 @@ class Evaluator:
     def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: _EventFactory) -> Optional[dict]:
         failed_prereq = None
         prereq_res = None
-        for prereq in flag.prerequisites:
-            prereq_flag = self.__get_flag(prereq.key)
-            if prereq_flag is None:
-                log.warning("Missing prereq flag: " + prereq.key)
-                failed_prereq = prereq
-            else:
-                prereq_res = self._evaluate(prereq_flag, context, state, event_factory)
-                # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
-                # off variation was. But we still need to evaluate it in order to generate an event.
-                if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
+        if flag.prerequisites.count == 0:
+            return None
+        
+        try:
+            # We use the state object to guard against circular references in prerequisites. To avoid
+            # the overhead of creating the state.prereq_stack list in the most common case where
+            # there's only a single level prerequisites, we treat state.original_flag_key as the first
+            # element in the stack.
+            flag_key = flag.key
+            if flag_key != state.original_flag_key:
+                if state.prereq_stack is None:
+                    state.prereq_stack = []
+                state.prereq_stack.append(flag_key)
+            
+            for prereq in flag.prerequisites:
+                prereq_key = prereq.key
+                if (prereq_key == state.original_flag_key or
+                    (flag_key != state.original_flag_key and prereq_key == flag_key) or
+                    (state.prereq_stack is not None and prereq.key in state.prereq_stack)):
+                    raise EvaluationException(('prerequisite relationship to "%s" caused a circular reference;' +
+                        ' this is probably a temporary condition due to an incomplete update') % prereq_key)
+
+                prereq_flag = self.__get_flag(prereq_key)
+                if prereq_flag is None:
+                    log.warning("Missing prereq flag: " + prereq_key)
                     failed_prereq = prereq
-                event = event_factory.new_eval_event(prereq_flag, _context_to_user_dict(context), prereq_res, None, flag)
-                state.add_event(event)
-            if failed_prereq:
-                return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.key}
-        return None
+                else:
+                    prereq_res = self._evaluate(prereq_flag, context, state, event_factory)
+                    # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
+                    # off variation was. But we still need to evaluate it in order to generate an event.
+                    if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
+                        failed_prereq = prereq
+                    event = event_factory.new_eval_event(prereq_flag, _context_to_user_dict(context), prereq_res, None, flag)
+                    state.add_event(event)
+                if failed_prereq:
+                    return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.key}
+            return None
+        finally:
+            if state.prereq_stack is not None and state.prereq_stack.count != 0:
+                state.prereq_stack.pop()
 
     def _check_targets(self, flag: FeatureFlag, context: Context) -> Optional[EvaluationDetail]:
         user_targets = flag.targets

@@ -24,7 +24,6 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 # - "evaluation/parameterized/segment recursion": Segment recursion is not yet implemented.
 # - "events": These test suites will be unavailable until more of the U2C implementation is done.
 TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
-	-skip 'evaluation/parameterized/prerequisites' \
 	-skip 'evaluation/parameterized/segment recursion' \
 	-skip 'events'
 
