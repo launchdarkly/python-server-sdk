@@ -12,17 +12,18 @@ import time
 import uuid
 import queue
 import urllib3
+from ldclient.config import Config
 
 from ldclient.context import Context
 from ldclient.diagnostics import create_diagnostic_init
-from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.fixed_thread_pool import FixedThreadPool
+from ldclient.impl.events.event_context_formatter import EventContextFormatter
+from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import current_time_millis
 from ldclient.lru_cache import SimpleLRUCache
-from ldclient.user_filter import UserFilter
 from ldclient.interfaces import EventProcessor
 from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, log, _headers
 
@@ -48,8 +49,8 @@ class IndexEvent:
 
 
 class EventOutputFormatter:
-    def __init__(self, config):
-        self._user_filter = UserFilter(config)
+    def __init__(self, config: Config):
+        self._context_formatter = EventContextFormatter(config.all_attributes_private, config.private_attributes)
 
     def make_output_events(self, events: List[Any], summary: EventSummary):
         events_out = [ self.make_output_event(e) for e in events ]
@@ -123,8 +124,7 @@ class EventOutputFormatter:
         }
 
     def _process_context(self, context: Context):
-        # TODO: implement context redaction
-        return context.to_dict()
+        return self._context_formatter.format_context(context)
 
     def _context_keys(self, context: Context):
         out = {}
