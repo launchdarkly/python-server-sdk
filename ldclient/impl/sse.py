@@ -1,8 +1,6 @@
-import urllib3
-
 from ldclient.config import HTTPConfig
 from ldclient.impl.http import HTTPFactory
-from ldclient.util import throw_if_unsuccessful_response
+from ldclient.impl.util import throw_if_unsuccessful_response
 
 
 class _BufferedLineReader:

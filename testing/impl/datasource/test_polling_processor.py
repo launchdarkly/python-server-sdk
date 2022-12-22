@@ -1,13 +1,11 @@
-import pytest
 import threading
 import time
 import mock
 
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.interfaces import FeatureRequester
-from ldclient.polling import PollingUpdateProcessor
-from ldclient.util import UnsuccessfulResponseException
+from ldclient.impl.datasource.polling import PollingUpdateProcessor
+from ldclient.impl.util import UnsuccessfulResponseException
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 from testing.builders import *

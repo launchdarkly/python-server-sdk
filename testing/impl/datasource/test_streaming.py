@@ -4,9 +4,9 @@ from threading import Event
 import time
 
 from ldclient.config import Config
-from ldclient.diagnostics import _DiagnosticAccumulator
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.streaming import StreamingUpdateProcessor
+from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
+from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 

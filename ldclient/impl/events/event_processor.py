@@ -15,17 +15,16 @@ import urllib3
 from ldclient.config import Config
 
 from ldclient.context import Context
-from ldclient.diagnostics import create_diagnostic_init
-from ldclient.fixed_thread_pool import FixedThreadPool
+from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
+from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import current_time_millis
-from ldclient.lru_cache import SimpleLRUCache
+from ldclient.impl.util import check_if_error_is_recoverable_and_log, current_time_millis, is_http_error_recoverable, log, _headers
 from ldclient.interfaces import EventProcessor
-from ldclient.util import check_if_error_is_recoverable_and_log, is_http_error_recoverable, log, _headers
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 4

@@ -1,6 +1,4 @@
-import pytest
-
-from ldclient.lru_cache import SimpleLRUCache
+from ldclient.impl.lru_cache import SimpleLRUCache
 
 def test_retains_values_up_to_capacity():
     lru = SimpleLRUCache(3)

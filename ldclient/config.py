@@ -7,8 +7,8 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 from typing import Optional, Callable, List, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.util import log
-from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, FeatureRequester
+from ldclient.impl.util import log
+from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -440,3 +440,6 @@ class Config:
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
+
+
+__all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']

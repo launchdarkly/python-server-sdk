@@ -1,18 +1,14 @@
 """
 Default implementation of feature flag polling requests.
 """
-# currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
 import json
 import urllib3
 
 from ldclient.impl.http import _http_factory
+from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import FeatureRequester
-from ldclient.util import UnsuccessfulResponseException
-from ldclient.util import _headers
-from ldclient.util import log
-from ldclient.util import throw_if_unsuccessful_response
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 

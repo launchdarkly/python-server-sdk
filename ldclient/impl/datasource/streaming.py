@@ -14,8 +14,8 @@ import time
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.retry_delay import RetryDelayStrategy, DefaultBackoffStrategy, DefaultJitterStrategy
 from ldclient.impl.sse import SSEClient
+from ldclient.impl.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
 from ldclient.interfaces import UpdateProcessor
-from ldclient.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the

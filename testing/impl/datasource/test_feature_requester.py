@@ -1,8 +1,5 @@
-import pytest
-
 from ldclient.config import Config
-from ldclient.feature_requester import FeatureRequesterImpl
-from ldclient.util import UnsuccessfulResponseException
+from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from testing.http_util import start_server, BasicResponse, JsonResponse

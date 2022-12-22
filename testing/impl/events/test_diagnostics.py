@@ -2,9 +2,9 @@ import json
 import uuid
 
 from ldclient.config import Config, HTTPConfig
-from ldclient.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
+from ldclient.impl.events.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
 
 def test_create_diagnostic_id():
     test_config = Config(sdk_key = "SDK_KEY", http=HTTPConfig())

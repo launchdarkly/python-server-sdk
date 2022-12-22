@@ -2,11 +2,11 @@
 The ldclient module contains the most common top-level entry points for the SDK.
 """
 
-from ldclient.rwlock import ReadWriteLock
+from ldclient.impl.rwlock import ReadWriteLock as _ReadWriteLock
+from ldclient.impl.util import log
 from ldclient.version import VERSION
 from .client import *
 from .context import *
-from .util import log
 
 __version__ = VERSION
 
@@ -20,7 +20,7 @@ start_wait = 5
 
 __client = None
 __config = None
-__lock = ReadWriteLock()
+__lock = _ReadWriteLock()
 
 
 def set_config(config: Config):

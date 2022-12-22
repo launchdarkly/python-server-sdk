@@ -1,6 +1,6 @@
 import pytest
 
-from ldclient import operators
+from ldclient.impl import operators
 
 
 @pytest.mark.parametrize("op,value1,value2,expected", [

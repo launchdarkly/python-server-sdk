@@ -1,6 +1,4 @@
-import copy
 from ldclient.versioned_data_kind import FEATURES
-from ldclient.rwlock import ReadWriteLock
 
 
 class _TestDataSource():

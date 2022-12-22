@@ -2,8 +2,8 @@ import copy
 from typing import Any, Dict, List, Optional, Union
 
 from ldclient.versioned_data_kind import FEATURES
-from ldclient.rwlock import ReadWriteLock
 from ldclient.impl.integrations.test_data.test_data_source import _TestDataSource
+from ldclient.impl.rwlock import ReadWriteLock
 
 TRUE_VARIATION_INDEX = 0
 FALSE_VARIATION_INDEX = 1

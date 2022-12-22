@@ -1,4 +1,4 @@
-from ldclient.util import log
+from ldclient.impl.util import log
 
 from threading import Event, Thread
 import time

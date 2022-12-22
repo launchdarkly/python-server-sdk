@@ -13,22 +13,21 @@ import traceback
 
 from ldclient.config import Config
 from ldclient.context import Context
-from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
-from ldclient.feature_requester import FeatureRequesterImpl
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import BigSegmentStoreManager
+from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
+from ldclient.impl.datasource.polling import PollingUpdateProcessor
+from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.evaluator import Evaluator, error_reason
+from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
+from ldclient.impl.util import check_uwsgi, log
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
-from ldclient.polling import PollingUpdateProcessor
-from ldclient.streaming import StreamingUpdateProcessor
-from ldclient.util import check_uwsgi, log
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.feature_store import FeatureStore
-import queue
 
 from threading import Lock
 

@@ -1,12 +1,7 @@
-"""
-Internal helper class for thread management.
-"""
-# currently excluded from documentation - see docs/README.md
-
 from threading import Event, Lock, Thread
 import queue
 
-from ldclient.util import log
+from ldclient.impl.util import log
 
 """
 A simple fixed-size thread pool that rejects jobs when its limit is reached.
