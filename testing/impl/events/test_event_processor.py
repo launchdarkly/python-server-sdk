@@ -5,7 +5,7 @@ import uuid
 
 from ldclient.config import Config
 from ldclient.context import Context
-from ldclient.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
+from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 

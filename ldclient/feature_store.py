@@ -9,9 +9,9 @@ storage systems; those are in :class:`ldclient.integrations`.
 from typing import Callable, Any
 
 from collections import OrderedDict, defaultdict
-from ldclient.util import log
+from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.impl.util import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStore
-from ldclient.rwlock import ReadWriteLock
 from ldclient.versioned_data_kind import VersionedDataKind
 
 

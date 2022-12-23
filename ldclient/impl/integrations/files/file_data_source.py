@@ -19,8 +19,8 @@ except ImportError:
     pass
 
 from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.util import log
 from ldclient.interfaces import UpdateProcessor
-from ldclient.util import log
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 def _sanitize_json_item(item):

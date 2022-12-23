@@ -1,8 +1,3 @@
-"""
-Implementation details of the diagnostic event generation.
-"""
-# currently excluded from documentation - see docs/README.md
-
 import threading
 import time
 import uuid

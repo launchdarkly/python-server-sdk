@@ -2,8 +2,8 @@ from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.util import log
 from ldclient.interfaces import BigSegmentStoreStatus, BigSegmentStoreStatusProvider
-from ldclient.util import log
 
 import base64
 from expiringdict import ExpiringDict

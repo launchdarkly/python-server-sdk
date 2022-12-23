@@ -1,6 +1,6 @@
-from ldclient import operators
 from ldclient.context import Context
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
+from ldclient.impl import operators
 from ldclient.impl.events.types import EventFactory, EventInputEvaluation
 from ldclient.impl.model import *
 
