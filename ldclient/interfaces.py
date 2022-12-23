@@ -139,7 +139,7 @@ class FeatureStoreCore:
         the old one. It should return the final state of the item, i.e. if the update succeeded then
         it returns the item that was passed in, and if the update failed due to the version check
         then it returns the item that is currently in the data store (this ensures that
-        `CachingStoreWrapper` will update the cache correctly).
+        ``CachingStoreWrapper`` will update the cache correctly).
 
         :param kind: The kind of object to update
         :param item: The object to update or insert
@@ -152,7 +152,7 @@ class FeatureStoreCore:
         Returns true if this store has been initialized. In a shared data store, it should be able to
         detect this even if initInternal was called in a different process, i.e. the test should be
         based on looking at what is in the data store. The method does not need to worry about caching
-        this value; `CachingStoreWrapper` will only call it when necessary.
+        this value; ``CachingStoreWrapper`` will only call it when necessary.
         """
 
 
@@ -263,7 +263,7 @@ class BigSegmentStoreMetadata:
     @property
     def last_up_to_date(self) -> Optional[int]:
         """
-        The Unix epoch millisecond timestamp of the last update to the `BigSegmentStore`. It is
+        The Unix epoch millisecond timestamp of the last update to the ``BigSegmentStore``. It is
         None if the store has never been updated.
         """
         return self.__last_up_to_date
@@ -297,7 +297,7 @@ class BigSegmentStore:
         of how this is done, because it deals only with already-hashed keys, but the string can be
         assumed to only contain characters that are valid in base64.
     
-        The return value should be either a `dict`, or None if the context is not referenced in any big
+        The return value should be either a ``dict``, or None if the context is not referenced in any big
         segments. Each key in the dictionary is a "segment reference", which is how segments are
         identified in Big Segment data. This string is not identical to the segment key-- the SDK
         will add other information. The store implementation should not be concerned with the
@@ -343,7 +343,7 @@ class BigSegmentStoreStatus:
         a valid database connection). In this case, the SDK will treat any reference to a Big Segment
         as if no users are included in that segment. Also, the :func:`ldclient.evaluation.EvaluationDetail.reason`
         associated with with any flag evaluation that references a Big Segment when the store is not
-        available will have a `bigSegmentsStatus` of `"STORE_ERROR"`.
+        available will have a ``bigSegmentsStatus`` of ``"STORE_ERROR"``.
         """
         return self.__available
     
@@ -357,7 +357,7 @@ class BigSegmentStoreStatus:
         running or has become unable to receive fresh data from LaunchDarkly. Any feature flag
         evaluations that reference a Big Segment will be using the last known data, which may be out
         of date. Also, the :func:`ldclient.evaluation.EvaluationDetail.reason` associated with those evaluations
-        will have a `bigSegmentsStatus` of `"STALE"`.
+        will have a ``bigSegmentsStatus`` of ``"STALE"``.
         """
         return self.__stale
 
@@ -375,13 +375,13 @@ class BigSegmentStoreStatusProvider:
     Application code never needs to implement this interface.
     
     There are two ways to interact with the status. One is to simply get the current status; if its
-    `available` property is true, then the SDK is able to evaluate user membership in Big Segments,
-    and the `stale`` property indicates whether the data might be out of date.
+    ``available`` property is true, then the SDK is able to evaluate user membership in Big Segments,
+    and the ``stale`` property indicates whether the data might be out of date.
     
     The other way is to subscribe to status change notifications. Applications may wish to know if
     there is an outage in the Big Segment store, or if it has become stale (the Relay Proxy has
     stopped updating it with new data), since then flag evaluations that reference a Big Segment
-    might return incorrect values. Use `add_listener` to register a callback for notifications.
+    might return incorrect values. Use :func:`add_listener()` to register a callback for notifications.
     """
 
     @abstractproperty
@@ -399,7 +399,7 @@ class BigSegmentStoreStatusProvider:
         Subscribes for notifications of status changes.
 
         The listener is a function or method that will be called with a single parameter: the
-        new `BigSegmentStoreStatus`.
+        new ``BigSegmentStoreStatus``.
 
         :param listener: the listener to add
         """
@@ -410,7 +410,7 @@ class BigSegmentStoreStatusProvider:
         """
         Unsubscribes from notifications of status changes.
 
-        :param listener: a listener that was previously added with `add_listener`; if it was not,
+        :param listener: a listener that was previously added with :func:`add_listener()`; if it was not,
             this method does nothing
         """
         pass
