@@ -1,6 +1,7 @@
 import copy
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
+from ldclient.context import Context
 from ldclient.versioned_data_kind import FEATURES
 from ldclient.impl.integrations.test_data.test_data_source import _TestDataSource
 from ldclient.impl.rwlock import ReadWriteLock
@@ -153,7 +154,7 @@ class FlagBuilder():
         self._variations = []  # type: List[Any]
         self._off_variation = None  # type: Optional[int]
         self._fallthrough_variation = None  # type: Optional[int]
-        self._targets = {}  # type: Dict[int, List[str]]
+        self._targets = {}  # type: Dict[str, Dict[int, Set[str]]]
         self._rules = []  # type: List[FlagRuleBuilder]
 
     # Note that _copy is private by convention, because we don't want developers to
@@ -170,7 +171,9 @@ class FlagBuilder():
         to._variations = copy.copy(self._variations)
         to._off_variation = self._off_variation
         to._fallthrough_variation = self._fallthrough_variation
-        to._targets = copy.copy(self._targets)
+        to._targets = dict()
+        for k, v in self._targets.items():
+            to._targets[k] = copy.copy(v)
         to._rules = copy.copy(self._rules)
 
         return to
@@ -276,9 +279,17 @@ class FlagBuilder():
         return self
 
     def variation_for_all_users(self, variation: Union[bool, int]) -> 'FlagBuilder':
-        """Sets the flag to always return the specified variation for all users.
+        """Deprecated name for variation_for_all().
 
-        The variation is specified, Targeting is switched on, and any existing targets or rules are removed.
+        .. deprecated:: 8.0.0
+           Use :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_all()`.
+        """
+        return self.variation_for_all(variation)
+
+    def variation_for_all(self, variation: Union[bool, int]) -> 'FlagBuilder':
+        """Sets the flag to always return the specified variation for all contexts.
+
+        The variation is specified, targeting is switched on, and any existing targets or rules are removed.
         The fallthrough variation is set to the specified value. The off variation is left unchanged.
 
         If the flag was previously configured with other variations and the variation specified is a boolean,
@@ -294,6 +305,14 @@ class FlagBuilder():
             return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
 
     def value_for_all_users(self, value: Any) -> 'FlagBuilder':
+        """Deprecated name for value_for_all().
+
+        .. deprecated:: 8.0.0
+           Use :meth:`ldclient.integrations.test_data.FlagBuilder.value_for_all()`.
+        """
+        return self.value_for_all(value)
+
+    def value_for_all(self, value: Any) -> 'FlagBuilder':
         """
         Sets the flag to always return the specified variation value for all users.
 
@@ -321,43 +340,59 @@ class FlagBuilder():
             ``0`` for the first, ``1`` for the second, etc.
         :return: the flag builder
         """
+        return self.variation_for_key(Context.DEFAULT_KIND, user_key, variation)
+
+    def variation_for_key(self, context_kind: str, context_key: str, variation: Union[bool, int]) -> 'FlagBuilder':
+        """Sets the flag to return the specified variation for a specific context, identified
+        by context kind and key, when targeting is on.
+
+        This has no effect when targeting is turned off for the flag.
+
+        If the flag was previously configured with other variations and the variation specified is a boolean,
+        this also changes it to a boolean flag.
+
+        :param context_kind: the context kind
+        :param context_key: the context key
+        :param bool|int variation: ``True`` or ``False`` or the desired variation index to return:
+            ``0`` for the first, ``1`` for the second, etc.
+        :return: the flag builder
+        """
         if isinstance(variation, bool):
             # `variation` is True/False value
-            return self.boolean_flag().variation_for_user(user_key, _variation_for_boolean(variation))
-        else:
-            # `variation` specifies the index of the variation to set
-            targets = self._targets
+            return self.boolean_flag().variation_for_key(context_kind, context_key, _variation_for_boolean(variation))
+        
+        # `variation` specifies the index of the variation to set
+        targets = self._targets.get(context_kind)
+        if targets is None:
+            targets = {}
+            self._targets[context_kind] = targets
 
-            for idx, var in enumerate(self._variations):
-                if (idx == variation):
-                    # If there is no set at the current variation, set it to be empty
-                    target_for_variation = []  # type: List[str]
-                    if idx in targets:
-                        target_for_variation = targets[idx]
+        for idx, var in enumerate(self._variations):
+            if (idx == variation):
+                # If there is no set at the current variation, set it to be empty
+                target_for_variation = targets.get(idx)
+                if target_for_variation is None:
+                    target_for_variation = set()
+                    targets[idx] = target_for_variation
 
-                    # If user is not in the current variation set, add them
-                    if user_key not in target_for_variation:
-                        target_for_variation.append(user_key)
+                # If key is not in the current variation set, add it
+                target_for_variation.add(context_key)
 
-                    self._targets[idx] = target_for_variation
+            else:
+                # Remove key from the other variation set if necessary
+                if idx in targets:
+                    targets[idx].discard(context_key)
 
-                else:
-                    # Remove user from the other variation set if necessary
-                    if idx in targets:
-                        target_for_variation = targets[idx]
-                        if user_key in target_for_variation:
-                            user_key_idx = target_for_variation.index(user_key)
-                            del target_for_variation[user_key_idx]
-
-                        self._targets[idx] = target_for_variation
-
-            return self
+        return self
 
     def _add_rule(self, flag_rule_builder: 'FlagRuleBuilder'):
         self._rules.append(flag_rule_builder)
 
     def if_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Starts defining a flag rule, using the "is one of" operator.
+
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagBuilder.if_match_context()`
+        with "user" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" or "Edina"
         ::
@@ -370,11 +405,33 @@ class FlagBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
+        return self.if_match_context(Context.DEFAULT_KIND, attribute, *values)
+
+    def if_match_context(self, context_kind: str, attribute: str, *values) -> 'FlagRuleBuilder':
+        """Starts defining a flag rule, using the "is one of" operator. This matching expression only
+        applies to contexts of a specific kind.
+
+        **Example:** create a rule that returns ``True`` if the name attribute for the
+        company" context is "Ella" or "Monsoon":
+        ::
+
+            td.flag("flag") \\
+                .if_match_context('company', 'name', 'Ella', 'Monsoon') \\
+                .then_return(True)
+
+        :param context_kind: the context kind
+        :param attribute: the context attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         flag_rule_builder = FlagRuleBuilder(self)
-        return flag_rule_builder.and_match(attribute, *values)
+        return flag_rule_builder.and_match_context(context_kind, attribute, *values)
 
     def if_not_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Starts defining a flag rule, using the "is not one of" operator.
+
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagBuilder.if_not_match_context()`
+        with "user" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is neither "Saffron" nor "Bubble"
         ::
@@ -387,13 +444,32 @@ class FlagBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
+        return self.if_not_match_context(Context.DEFAULT_KIND, attribute, *values)
+
+    def if_not_match_context(self, context_kind: str, attribute: str, *values) -> 'FlagRuleBuilder':
+        """Starts defining a flag rule, using the "is not one of" operator. This matching expression only
+        applies to contexts of a specific kind.
+
+        **Example:** create a rule that returns ``True`` if the name attribute for the
+        "company" context is neither "Pendant" nor "Sterling Cooper":
+        ::
+
+            td.flag("flag") \\
+                .if_not_match('company', 'name', 'Pendant', 'Sterling Cooper') \\
+                .then_return(True)
+
+        :param context_kind: the context kind
+        :param attribute: the context attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         flag_rule_builder = FlagRuleBuilder(self)
-        return flag_rule_builder.and_not_match(attribute, values)
+        return flag_rule_builder.and_not_match_context(context_kind, attribute, *values)
 
     def clear_rules(self) -> 'FlagBuilder':
         """Removes any existing rules from the flag.
         This undoes the effect of methods like
-        :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`
+        :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`.
 
         :return: the same flag builder
         """
@@ -403,7 +479,7 @@ class FlagBuilder():
     def clear_targets(self) -> 'FlagBuilder':
         """Removes any existing targets from the flag.
         This undoes the effect of methods like
-        :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_user()`
+        :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_user()`.
 
         :return: the same flag builder
         """
@@ -422,7 +498,9 @@ class FlagBuilder():
             'key': self._key,
             'version': version,
             'on': self._on,
-            'variations': self._variations
+            'variations': self._variations,
+            'prerequisites': [],
+            'salt': ''
         }
 
         base_flag_object['offVariation'] = self._off_variation
@@ -431,12 +509,27 @@ class FlagBuilder():
             }
 
         targets = []
-        for var_index, user_keys in self._targets.items():
-            targets.append({
-                'variation': var_index,
-                'values': user_keys
-            })
+        context_targets = []
+        for target_context_kind, target_variations in self._targets.items():
+            for var_index, target_keys in target_variations.items():
+                if target_context_kind == Context.DEFAULT_KIND:
+                    targets.append({
+                        'variation': var_index,
+                        'values': sorted(list(target_keys))  # sorting just for test determinacy
+                    })
+                    context_targets.append({
+                        'contextKind': target_context_kind,
+                        'variation': var_index,
+                        'values': []
+                    })
+                else:
+                    context_targets.append({
+                        'contextKind': target_context_kind,
+                        'variation': var_index,
+                        'values': sorted(list(target_keys))  # sorting just for test determinacy
+                    })
         base_flag_object['targets'] = targets
+        base_flag_object['contextTargets'] = context_targets
 
         rules = []
         for idx, rule in enumerate(self._rules):
@@ -471,6 +564,9 @@ class FlagRuleBuilder():
     def and_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Adds another clause, using the "is one of" operator.
 
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_match_context()`
+        with "user" as the context kind.
+
         **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is "gb"
         ::
 
@@ -483,7 +579,28 @@ class FlagRuleBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
+        return self.and_match_context(Context.DEFAULT_KIND, attribute, *values)
+
+    def and_match_context(self, context_kind: str, attribute: str, *values) -> 'FlagRuleBuilder':
+        """Adds another clause, using the "is one of" operator. This matching expression only
+        applies to contexts of a specific kind.
+
+        **Example:** create a rule that returns ``True`` if the name attribute for the
+        "company" context is "Ella", and the country attribute for the "company" context is "gb":
+        ::
+
+            td.flag('flag') \\
+                .if_match_context('company', 'name', 'Ella') \\
+                .and_match_context('company', 'country', 'gb') \\
+                .then_return(True)
+
+        :param context_kind: the context kind
+        :param attribute: the context attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         self._clauses.append({
+                'contextKind': context_kind,
                 'attribute': attribute,
                 'op': 'in',
                 'values': list(values),
@@ -493,6 +610,9 @@ class FlagRuleBuilder():
 
     def and_not_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
         """Adds another clause, using the "is not one of" operator.
+
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_not_match_context()`
+        with "user" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is "Patsy" and the country is not "gb"
         ::
@@ -506,7 +626,28 @@ class FlagRuleBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
+        return self.and_not_match_context(Context.DEFAULT_KIND, attribute, *values)
+
+    def and_not_match_context(self, context_kind: str, attribute: str, *values) -> 'FlagRuleBuilder':
+        """Adds another clause, using the "is not one of" operator. This matching expression only
+        applies to contexts of a specific kind.
+
+        **Example:** create a rule that returns ``True`` if the name attribute for the
+        "company" context is "Ella", and the country attribute for the "company" context is not "gb":
+        ::
+
+            td.flag('flag') \\
+                .if_match_context('company', 'name', 'Ella') \\
+                .and_not_match_context('company', 'country', 'gb') \\
+                .then_return(True)
+
+        :param context_kind: the context kind
+        :param attribute: the context attribute to match against
+        :param values: values to compare to
+        :return: the flag rule builder
+        """
         self._clauses.append({
+                'contextKind': context_kind,
                 'attribute': attribute,
                 'op': 'in',
                 'values': list(values),
