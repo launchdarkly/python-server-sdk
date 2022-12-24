@@ -61,7 +61,7 @@ class BigSegmentStoreManager:
         self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
-            self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_time)
+            self.__cache = ExpiringDict(max_len = config.context_cache_size, max_age_seconds=config.context_cache_time)
             self.__poll_task = RepeatingTask(config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 

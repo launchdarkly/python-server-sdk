@@ -17,7 +17,7 @@ STREAM_FLAGS_PATH = '/flags'
 class BigSegmentsConfig:
     """Configuration options related to Big Segments.
 
-    Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+    Big Segments are a specific type of segments. For more information, read the LaunchDarkly
     documentation: https://docs.launchdarkly.com/home/users/big-segments
 
     If your application uses Big Segments, you will need to create a ``BigSegmentsConfig`` that at a
@@ -34,25 +34,29 @@ class BigSegmentsConfig:
     """
     def __init__(self,
                  store: Optional[BigSegmentStore] = None,
-                 user_cache_size: int=1000,
-                 user_cache_time: float=5,
+                 context_cache_size: int=1000,
+                 context_cache_time: float=5,
+                 user_cache_size: Optional[int]=None,
+                 user_cache_time: Optional[float]=None,
                  status_poll_interval: float=5,
                  stale_after: float=120):
         """
         :param store: the implementation of :class:`ldclient.interfaces.BigSegmentStore` that will
             be used to query the Big Segments database
-        :param user_cache_size: the maximum number of users whose Big Segment state will be cached
+        :param context_cache_size: the maximum number of contexts whose Big Segment state will be cached
             by the SDK at any given time
-        :param user_cache_time: the maximum length of time (in seconds) that the Big Segment state
-            for a user will be cached by the SDK
+        :param context_cache_time: the maximum length of time (in seconds) that the Big Segment state
+            for a context will be cached by the SDK
+        :param user_cache_size: deprecated alias for `context_cache_size`
+        :param user_cache_time: deprecated alias for `context_cache_time`
         :param status_poll_interval: the interval (in seconds) at which the SDK will poll the Big
             Segment store to make sure it is available and to determine how long ago it was updated
         :param stale_after: the maximum length of time between updates of the Big Segments data
             before the data is considered out of date
         """
         self.__store = store
-        self.__user_cache_size = user_cache_size
-        self.__user_cache_time = user_cache_time
+        self.__context_cache_size = context_cache_size if user_cache_size is None else user_cache_size
+        self.__context_cache_time = context_cache_time if user_cache_time is None else user_cache_time
         self.__status_poll_interval = status_poll_interval
         self.__stale_after = stale_after
         pass
@@ -62,12 +66,22 @@ class BigSegmentsConfig:
         return self.__store
     
     @property
+    def context_cache_size(self) -> int:
+        return self.__context_cache_size
+    
+    @property
+    def context_cache_time(self) -> float:
+        return self.__context_cache_time
+
+    @property
     def user_cache_size(self) -> int:
-        return self.__user_cache_size
+        """Deprecated alias for :attr:`context_cache_size`."""
+        return self.context_cache_size
     
     @property
     def user_cache_time(self) -> float:
-        return self.__user_cache_time
+        """Deprecated alias for :attr:`context_cache_time`."""
+        return self.context_cache_time
 
     @property
     def status_poll_interval(self) -> float:
@@ -155,7 +169,6 @@ class Config:
                  initial_reconnect_delay: float=1,
                  defaults: dict={},
                  send_events: Optional[bool]=None,
-                 events_enabled: bool=True,
                  update_processor_class: Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]=None, 
                  poll_interval: float=30,
                  use_ldd: bool=False,
@@ -166,8 +179,10 @@ class Config:
                  private_attribute_names: Set[str]=set(),
                  all_attributes_private: bool=False,
                  offline: bool=False,
-                 user_keys_capacity: int=1000,
-                 user_keys_flush_interval: float=300,
+                 context_keys_capacity: int=1000,
+                 context_keys_flush_interval: float=300,
+                 user_keys_capacity: Optional[int] = None,
+                 user_keys_flush_interval: Optional[float] = None,
                  diagnostic_opt_out: bool=False,
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
@@ -196,7 +211,6 @@ class Config:
         :param send_events: Whether or not to send events back to LaunchDarkly. This differs from
           ``offline`` in that it affects only the sending of client-side events, not streaming or polling for
           events from the server. By default, events will be sent.
-        :param events_enabled: Obsolete name for ``send_events``.
         :param offline: Whether the client should be initialized in offline mode. In offline mode,
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
@@ -216,10 +230,12 @@ class Config:
         :param all_attributes_private: If true, all user attributes (other than the key) will be
           private, not just the attributes specified in ``private_attributes``.
         :param feature_store: A FeatureStore implementation
-        :param user_keys_capacity: The number of user keys that the event processor can remember at any
-          one time, so that duplicate user details will not be sent in analytics events.
-        :param user_keys_flush_interval: The interval in seconds at which the event processor will
-          reset its set of known user keys.
+        :param context_keys_capacity: The number of context keys that the event processor can remember at any
+          one time, so that duplicate context details will not be sent in analytics events.
+        :param context_keys_flush_interval: The interval in seconds at which the event processor will
+          reset its set of known context keys.
+        :param user_keys_capacity: Deprecated alias for ``context_keys_capacity``.
+        :param user_keys_flush_interval: Deprecated alias for ``context_keys_flush_interval``.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
@@ -259,12 +275,12 @@ class Config:
         self.__defaults = defaults
         if offline is True:
             send_events = False
-        self.__send_events = events_enabled if send_events is None else send_events
+        self.__send_events = True if send_events is None else send_events
         self.__private_attributes = private_attributes or private_attribute_names
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
-        self.__user_keys_capacity = user_keys_capacity
-        self.__user_keys_flush_interval = user_keys_flush_interval
+        self.__context_keys_capacity = context_keys_capacity if user_keys_capacity is None else user_keys_capacity
+        self.__context_keys_flush_interval = context_keys_flush_interval if user_keys_flush_interval is None else user_keys_flush_interval
         self.__diagnostic_opt_out = diagnostic_opt_out
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
@@ -296,8 +312,8 @@ class Config:
                       private_attributes=self.__private_attributes,
                       all_attributes_private=self.__all_attributes_private,
                       offline=self.__offline,
-                      user_keys_capacity=self.__user_keys_capacity,
-                      user_keys_flush_interval=self.__user_keys_flush_interval,
+                      context_keys_capacity=self.__context_keys_capacity,
+                      context_keys_flush_interval=self.__context_keys_flush_interval,
                       diagnostic_opt_out=self.__diagnostic_opt_out,
                       diagnostic_recording_interval=self.__diagnostic_recording_interval,
                       wrapper_name=self.__wrapper_name,
@@ -374,10 +390,6 @@ class Config:
         return self.__feature_requester_class
 
     @property
-    def events_enabled(self) -> bool:
-        return self.__send_events
-
-    @property
     def send_events(self) -> bool:
         return self.__send_events
 
@@ -406,12 +418,22 @@ class Config:
         return self.__offline
 
     @property
+    def context_keys_capacity(self) -> int:
+        return self.__context_keys_capacity
+
+    @property
+    def context_keys_flush_interval(self) -> float:
+        return self.__context_keys_flush_interval
+
+    @property
     def user_keys_capacity(self) -> int:
-        return self.__user_keys_capacity
+        """Deprecated name for :attr:`context_keys_capacity`."""
+        return self.context_keys_capacity
 
     @property
     def user_keys_flush_interval(self) -> float:
-        return self.__user_keys_flush_interval
+        """Deprecated name for :attr:`context_keys_flush_interval`."""
+        return self.context_keys_flush_interval
 
     @property
     def diagnostic_opt_out(self) -> bool:

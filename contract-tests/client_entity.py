@@ -43,8 +43,8 @@ class ClientEntity:
                 "store": BigSegmentStoreFixture(big_params["callbackUri"])
             }
             if big_params.get("userCacheSize") is not None:
-                big_config["user_cache_size"] = big_params["userCacheSize"]
-            _set_optional_time_prop(big_params, "userCacheTimeMs", big_config, "user_cache_time")
+                big_config["context_cache_size"] = big_params["userCacheSize"]
+            _set_optional_time_prop(big_params, "userCacheTimeMs", big_config, "context_cache_time")
             _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = BigSegmentsConfig(**big_config)

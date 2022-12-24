@@ -55,7 +55,7 @@ def test_membership_query_cache_can_expire():
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
     store.setup_membership(user_hash, expected_membership)
-    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, user_cache_time=0.005))
+    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, context_cache_time=0.005))
     try:
         expected_result = (expected_membership, BigSegmentsStatus.HEALTHY)
         assert manager.get_user_membership(user_key) == expected_result
@@ -89,7 +89,7 @@ def test_membership_query_stale_status_no_store_metadata():
     finally:
         manager.stop()
 
-def test_membership_query_least_recent_user_evicted_from_cache():
+def test_membership_query_least_recent_context_evicted_from_cache():
     user_key_1, user_key_2, user_key_3 = 'userkey1', 'userkey2', 'userkey3'
     user_hash_1, user_hash_2, user_hash_3 = _hash_for_user_key(user_key_1), \
         _hash_for_user_key(user_key_2), _hash_for_user_key(user_key_3)
@@ -100,7 +100,7 @@ def test_membership_query_least_recent_user_evicted_from_cache():
     store.setup_membership(user_hash_2, membership_2)
     store.setup_membership(user_hash_3, membership_3)
 
-    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, user_cache_size=2))
+    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, context_cache_size=2))
 
     try:
         result1 = manager.get_user_membership(user_key_1)

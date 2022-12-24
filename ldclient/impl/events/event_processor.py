@@ -260,7 +260,7 @@ class EventDispatcher:
         self._close_http = (http_client is None)  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
-        self._context_keys = SimpleLRUCache(config.user_keys_capacity)
+        self._context_keys = SimpleLRUCache(config.context_keys_capacity)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
@@ -403,7 +403,7 @@ class DefaultEventProcessor(EventProcessor):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
         self._flush_timer = RepeatingTask(config.flush_interval, config.flush_interval, self.flush)
-        self._contexts_flush_timer = RepeatingTask(config.user_keys_flush_interval, config.user_keys_flush_interval, self._flush_contexts)
+        self._contexts_flush_timer = RepeatingTask(config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
         self._flush_timer.start()
         self._contexts_flush_timer.start()
         if diagnostic_accumulator is not None:

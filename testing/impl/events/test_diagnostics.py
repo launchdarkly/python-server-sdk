@@ -65,7 +65,7 @@ def test_create_diagnostic_config_custom():
     test_config = Config("SDK_KEY", base_uri='https://test.com', events_uri='https://test.com',
                          events_max_pending=10, flush_interval=1, stream_uri='https://test.com',
                          stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
-                         all_attributes_private=True, user_keys_capacity=10, user_keys_flush_interval=60,
+                         all_attributes_private=True, context_keys_capacity=10, context_keys_flush_interval=60,
                          http=HTTPConfig(http_proxy = 'proxy', read_timeout=1, connect_timeout=1), diagnostic_recording_interval=60)
     diag_config = _create_diagnostic_config_object(test_config)
 

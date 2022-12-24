@@ -97,7 +97,7 @@ def test_context_is_filtered_in_index_event():
         check_summary_event(output[2])
 
 def test_two_events_for_same_context_only_produce_one_index_event():
-    with DefaultTestProcessor(user_keys_flush_interval = 300) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval = 300) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
@@ -111,7 +111,7 @@ def test_two_events_for_same_context_only_produce_one_index_event():
         check_summary_event(output[3])
 
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
-    with DefaultTestProcessor(user_keys_flush_interval = 0.1) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval = 0.1) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
