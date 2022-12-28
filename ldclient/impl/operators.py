@@ -1,179 +1,96 @@
-"""
-Implementation details of feature flag evaluation.
-"""
-# currently excluded from documentation - see docs/README.md
+from ldclient.impl.model.clause import ClausePreprocessedValue
+from ldclient.impl.model.value_parsing import is_number, parse_semver, parse_time
 
-import logging
-import re
-from semver import VersionInfo
-import sys
-from datetime import tzinfo, timedelta, datetime
 from collections import defaultdict
 from numbers import Number
-
-import pyrfc3339
-
-log = logging.getLogger(sys.modules[__name__].__name__)
+from semver import VersionInfo
+from typing import Any, Callable, Optional
 
 
-def _string_operator(u, c, fn):
-    return fn(u, c) if isinstance(u, str) and isinstance(c, str) else False
-
-def _numeric_operator(u, c, fn):
-    # bool is a subtype of int, and we don't want to try and compare it as a number.
-    if isinstance(input, bool):
-        log.warning("Got unexpected bool type when attempting to parse time")
-        return None
-
-    if isinstance(u, Number):
-        if isinstance(c, Number):
-            return fn(u, c)
-    return False
+def _string_operator(context_value: Any, clause_value: Any, fn: Callable[[str, str], bool]) -> bool:
+    return isinstance(context_value, str) and isinstance(clause_value, str) and fn(context_value, clause_value)
 
 
-def _parse_time(input):
-    """
-    :param input: Either a number as milliseconds since Unix Epoch, or a string as a valid RFC3339 timestamp
-    :return: milliseconds since Unix epoch, or None if input was invalid.
-    """
-
-    # bool is a subtype of int, and we don't want to try and compare it as a time.
-    if isinstance(input, bool):
-        log.warning("Got unexpected bool type when attempting to parse time")
-        return None
-
-    if isinstance(input, Number):
-        return float(input)
-
-    if isinstance(input, str):
-        try:
-            parsed_time = pyrfc3339.parse(input)
-            timestamp = (parsed_time - epoch).total_seconds()
-            return timestamp * 1000.0
-        except Exception as e:
-            log.warning("Couldn't parse timestamp:" + str(input) + " with message: " + str(e))
-            return None
-
-    log.warning("Got unexpected type: " + str(type(input)) + " with value: " + str(input) + " when attempting to parse time")
-    return None
-
-def _time_operator(u, c, fn):
-    u_time = _parse_time(u)
-    if u_time is not None:
-        c_time = _parse_time(c)
-        if c_time is not None:
-            return fn(u_time, c_time)
-    return False
-
-def _parse_semver(input):
-    try:
-        VersionInfo.parse(input)
-        return input
-    except TypeError:
-        return None
-    except ValueError as e:
-        try:
-            input = _add_zero_version_component(input)
-            VersionInfo.parse(input)
-            return input
-        except ValueError as e:
-            try:
-                input = _add_zero_version_component(input)
-                VersionInfo.parse(input)
-                return input
-            except ValueError as e:
-                return None
-
-def _add_zero_version_component(input):
-    m = re.search("^([0-9.]*)(.*)", input)
-    if m is None:
-        return input + ".0"
-    return m.group(1) + ".0" + m.group(2)
-
-def _semver_operator(u, c, fn):
-    u_ver = _parse_semver(u)
-    c_ver = _parse_semver(c)
-    if u_ver is not None and c_ver is not None:
-        return fn(u_ver, c_ver)
-    return False
+def _numeric_operator(context_value: Any, clause_value: Any, fn: Callable[[float, float], bool]) -> bool:
+    return is_number(context_value) and is_number(clause_value) and fn(float(context_value), float(clause_value))
 
 
-def _in(u, c):
-    if u == c:
-        return True
-    return False
+def _time_operator(clause_preprocessed: Optional[ClausePreprocessedValue],
+        context_value: Any, fn: Callable[[float, float], bool]) -> bool:
+    clause_time = None if clause_preprocessed is None else clause_preprocessed.as_time
+    if clause_time is None:
+        return False
+    context_time = parse_time(context_value)
+    return context_time is not None and fn(context_time, clause_time)
 
 
-def _starts_with(u, c):
-    return _string_operator(u, c, lambda u, c: u.startswith(c))
+def _semver_operator(clause_preprocessed: Optional[ClausePreprocessedValue],
+        context_value: Any, fn: Callable[[VersionInfo, VersionInfo], bool]) -> bool:
+    clause_ver = None if clause_preprocessed is None else clause_preprocessed.as_semver
+    if clause_ver is None:
+        return False
+    context_ver = parse_semver(context_value)
+    return context_ver is not None and fn(context_ver, clause_ver)
 
 
-def _ends_with(u, c):
-    return _string_operator(u, c, lambda u, c: u.endswith(c))
+def _in(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]) -> bool:
+    return context_value == clause_value
 
 
-def _contains(u, c):
-    return _string_operator(u, c, lambda u, c: c in u)
+def _starts_with(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]) -> bool:
+    return _string_operator(context_value, clause_value, lambda a, b: a.startswith(b))
 
 
-def _matches(u, c):
-    return _string_operator(u, c, lambda u, c: re.search(c, u) is not None)
+def _ends_with(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _string_operator(context_value, clause_value, lambda a, b: a.endswith(b))
 
 
-def _less_than(u, c):
-    return _numeric_operator(u, c, lambda u, c: u < c)
+def _contains(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _string_operator(context_value, clause_value, lambda a, b: b in a)
 
 
-def _less_than_or_equal(u, c):
-    return _numeric_operator(u, c, lambda u, c: u <= c)
+def _matches(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    clause_regex = None if clause_preprocessed is None else clause_preprocessed.as_regex
+    if clause_regex is None:
+        return False
+    return isinstance(clause_value, str) and clause_regex.search(context_value) is not None
 
 
-def _greater_than(u, c):
-    return _numeric_operator(u, c, lambda u, c: u > c)
+def _less_than(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _numeric_operator(context_value, clause_value, lambda a, b: a < b)
 
 
-def _greater_than_or_equal(u, c):
-    return _numeric_operator(u, c, lambda u, c: u >= c)
+def _less_than_or_equal(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _numeric_operator(context_value, clause_value, lambda a, b: a <= b)
 
 
-def _before(u, c):
-    return _time_operator(u, c, lambda u, c: u < c)
+def _greater_than(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _numeric_operator(context_value, clause_value, lambda a, b: a > b)
 
 
-def _after(u, c):
-    return _time_operator(u, c, lambda u, c: u > c)
+def _greater_than_or_equal(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _numeric_operator(context_value, clause_value, lambda a, b: a >= b)
 
 
-def _semver_equal(u, c):
-    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) == 0)
+def _before(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _time_operator(clause_preprocessed, context_value, lambda a, b: a < b)
 
 
-def _semver_less_than(u, c):
-    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) < 0)
+def _after(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _time_operator(clause_preprocessed, context_value, lambda a, b: a > b)
 
 
-def _semver_greater_than(u, c):
-    return _semver_operator(u, c, lambda u, c: VersionInfo.parse(u).compare(c) > 0)
+def _semver_equal(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _semver_operator(clause_preprocessed, context_value, lambda a, b: a.compare(b) == 0)
 
 
-_ZERO = timedelta(0)
-_HOUR = timedelta(hours=1)
+def _semver_less_than(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _semver_operator(clause_preprocessed, context_value, lambda a, b: a.compare(b) < 0)
 
-# A UTC class.
 
-class _UTC(tzinfo):
-    """UTC"""
+def _semver_greater_than(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
+    return _semver_operator(clause_preprocessed, context_value, lambda a, b: a.compare(b) > 0)
 
-    def utcoffset(self, dt):
-        return _ZERO
-
-    def tzname(self, dt):
-        return "UTC"
-
-    def dst(self, dt):
-        return _ZERO
-
-epoch = datetime.utcfromtimestamp(0).replace(tzinfo=_UTC())
 
 ops = {
     "in": _in,
@@ -192,4 +109,4 @@ ops = {
     "semVerGreaterThan": _semver_greater_than
 }
 
-ops = defaultdict(lambda: lambda l, r: False, ops)
+ops = defaultdict(lambda: lambda l, r, p: False, ops)

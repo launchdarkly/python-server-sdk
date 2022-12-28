@@ -2,8 +2,10 @@ import pytest
 
 from ldclient.impl import operators
 
+from testing.builders import *
 
-@pytest.mark.parametrize("op,value1,value2,expected", [
+
+@pytest.mark.parametrize("op,context_value,clause_value,expected", [
     # numeric comparisons
     [ "in",                 99,      99,      True ],
     [ "in",                 99.0001, 99.0001, True ],
@@ -86,5 +88,9 @@ from ldclient.impl import operators
     [ "semVerLessThan",    "2.0.1", "xbad%ver", False ],
     [ "semVerGreaterThan", "2.0.1", "xbad%ver", False ]
 ])
-def test_operator(op, value1, value2, expected):
-    assert operators.ops.get(op)(value1, value2) == expected
+
+def test_operator(op, context_value, clause_value, expected):
+    flag = make_boolean_flag_with_clauses(make_clause(None, 'attr', op, clause_value))
+    preprocessed = flag.rules[0].clauses[0].values_preprocessed
+    result = operators.ops.get(op)(context_value, clause_value, None if preprocessed is None else preprocessed[0])
+    assert result == expected

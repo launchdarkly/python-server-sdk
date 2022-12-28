@@ -202,10 +202,8 @@ class Evaluator:
         return True
 
     def _clause_matches_context(self, clause: Clause, context: Context, state: EvalResult) -> bool:
-        op = clause.op
-        clause_values = clause.values
-        if op == 'segmentMatch':
-            for seg_key in clause_values:
+        if clause.op == 'segmentMatch':
+            for seg_key in clause.values:
                 segment = self.__get_segment(seg_key)
                 if segment is not None and self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
@@ -226,10 +224,10 @@ class Evaluator:
         # is the attr an array?
         if isinstance(context_value, (list, tuple)):
             for v in context_value:
-                if _match_single_context_value(op, v, clause_values):
+                if _match_single_context_value(clause, v):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
-        return _maybe_negate(clause, _match_single_context_value(op, context_value, clause_values))
+        return _maybe_negate(clause, _match_single_context_value(clause, context_value))
 
     def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
         if state.segment_stack is not None and segment.key in state.segment_stack:
@@ -447,12 +445,14 @@ def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
         i += 1
     return value
 
-def _match_single_context_value(op: str, context_value: Any, values: List[Any]) -> bool:
-    op_fn = operators.ops.get(op)
+def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
+    op_fn = operators.ops.get(clause.op)
     if op_fn is None:
         return False
-    for v in values:
-        if op_fn(context_value, v):
+    values_preprocessed = clause.values_preprocessed
+    for i, v in enumerate(clause.values):
+        preprocessed = None if values_preprocessed is None else values_preprocessed[i]
+        if op_fn(context_value, v, preprocessed):
             return True
     return False
 
@@ -460,10 +460,9 @@ def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
     # If attribute is "kind", then we treat operator and values as a match expression against a list
     # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
     # and "user", it is a match if either of those strings is a match with Operator and Values.
-    op = clause.op
     for i in range(context.individual_context_count):
         c = context.get_individual_context(i)
-        if c is not None and _match_single_context_value(op, c.kind, clause.values):
+        if c is not None and _match_single_context_value(clause, c.kind):
             return True
     return False
 
