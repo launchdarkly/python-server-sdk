@@ -71,8 +71,8 @@ def _create_diagnostic_config_object(config):
             'usingRelayDaemon': config.use_ldd,
             'allAttributesPrivate': config.all_attributes_private,
             'pollingIntervalMillis': config.poll_interval * 1000,
-            'userKeysCapacity': config.user_keys_capacity,
-            'userKeysFlushIntervalMillis': config.user_keys_flush_interval * 1000,
+            'userKeysCapacity': config.context_keys_capacity,
+            'userKeysFlushIntervalMillis': config.context_keys_flush_interval * 1000,
             'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
             'dataStoreType': _get_component_type_name(config.feature_store, config, 'memory')}
 
