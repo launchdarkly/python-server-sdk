@@ -20,9 +20,9 @@ class BigSegmentsConfig:
     Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
     documentation: https://docs.launchdarkly.com/home/users/big-segments
 
-    If your application uses Big Segments, you will need to create a `BigSegmentsConfig` that at a
-    minimum specifies what database integration to use, and then pass the `BigSegmentsConfig`
-    object as the `big_segments` parameter when creating a :class:`Config`.
+    If your application uses Big Segments, you will need to create a ``BigSegmentsConfig`` that at a
+    minimum specifies what database integration to use, and then pass the ``BigSegmentsConfig``
+    object as the ``big_segments`` parameter when creating a :class:`Config`.
 
     This example shows Big Segments being configured to use Redis:
     ::
@@ -81,7 +81,7 @@ class HTTPConfig:
     """Advanced HTTP configuration options for the SDK client.
 
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
-    If you need to set these, construct an `HTTPConfig` instance and pass it as the `http` parameter when
+    If you need to set these, construct an ``HTTPConfig`` instance and pass it as the ``http`` parameter when
     you construct the main :class:`Config` for the SDK client.
     """
     def __init__(self,
@@ -95,7 +95,7 @@ class HTTPConfig:
         :param connect_timeout: The connect timeout for network connections in seconds.
         :param read_timeout: The read timeout for network connections in seconds.
         :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
-          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
+          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard ``http_proxy`` environment
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
@@ -105,7 +105,7 @@ class HTTPConfig:
           certificate.
         :param disable_ssl_verification: If true, completely disables SSL verification and certificate
           verification for secure requests. This is unsafe and should not be used in a production environment;
-          instead, use a self-signed certificate and set `ca_certs`.
+          instead, use a self-signed certificate and set ``ca_certs``.
         """
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
@@ -194,16 +194,16 @@ class Config:
           to be reestablished. The delay for the first reconnection will start near this value, and then
           increase exponentially for any subsequent connection failures.
         :param send_events: Whether or not to send events back to LaunchDarkly. This differs from
-          `offline` in that it affects only the sending of client-side events, not streaming or polling for
+          ``offline`` in that it affects only the sending of client-side events, not streaming or polling for
           events from the server. By default, events will be sent.
-        :param events_enabled: Obsolete name for `send_events`.
+        :param events_enabled: Obsolete name for ``send_events``.
         :param offline: Whether the client should be initialized in offline mode. In offline mode,
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
         :param poll_interval: The number of seconds between polls for flag updates if streaming is off.
         :param use_ldd: Whether you are using the LaunchDarkly Relay Proxy in daemon mode. In this
           configuration, the client will not use a streaming connection to listen for updates, but instead
-          will get feature state from a Redis instance. The `stream` and `poll_interval` options will be
+          will get feature state from a Redis instance. The ``stream`` and ``poll_interval`` options will be
           ignored if this option is set to true. By default, this is false.
           For more information, read the LaunchDarkly
           documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
@@ -211,10 +211,10 @@ class Config:
           with this configuration active will have these attributes removed. Each item can be either the
           name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
           property within a JSON object value as private.
-        :param array private_attribute_names: Deprecated alias for `private_attributes` ("names" is no longer
+        :param array private_attribute_names: Deprecated alias for ``private_attributes`` ("names" is no longer
           strictly accurate because these could also be attribute reference paths).
         :param all_attributes_private: If true, all user attributes (other than the key) will be
-          private, not just the attributes specified in `private_attribute`.
+          private, not just the attributes specified in ``private_attributes``.
         :param feature_store: A FeatureStore implementation
         :param user_keys_capacity: The number of user keys that the event processor can remember at any
           one time, so that duplicate user details will not be sent in analytics events.
@@ -235,8 +235,8 @@ class Config:
           being used. This will be sent in HTTP headers during requests to the LaunchDarkly servers to allow
           recording metrics on the usage of these wrapper libraries.
         :param wrapper_version: For use by wrapper libraries to report the version of the library in
-          use. If `wrapper_name` is not set, this field will be ignored. Otherwise the version string will
-          be included in the HTTP headers along with the `wrapper_name` during requests to the LaunchDarkly
+          use. If ``wrapper_name`` is not set, this field will be ignored. Otherwise the version string will
+          be included in the HTTP headers along with the ``wrapper_name`` during requests to the LaunchDarkly
           servers.
         :param http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
           :class:`HTTPConfig`.

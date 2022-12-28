@@ -195,13 +195,17 @@ class LDClient:
 
         This method creates a "custom" analytics event containing the specified event name (key)
         and context properties. You may attach arbitrary data or a metric value to the event with the
-        optional `data` and `metric_value` parameters.
+        optional ``data`` and ``metric_value`` parameters.
 
         Note that event delivery is asynchronous, so the event may not actually be sent until later;
         see :func:`flush()`.
 
+        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
+        the SDK will convert the user to a Context. There is some overhead to this conversion,
+        so it is more efficient to pass a Context.
+
         :param event_name: the name of the event
-        :param context: the evaluation context associated with the event
+        :param context: the evaluation context or user associated with the event
         :param data: optional additional data associated with the event
         :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
           numeric custom metrics; can be omitted if this event is used by only non-numeric metrics
@@ -224,6 +228,10 @@ class LDClient:
         sends the context information to LaunchDarkly (if events are enabled), so you only
         need to use :func:`identify()` if you want to identify the context without evaluating a
         flag.
+
+        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
+        the SDK will convert the user to a Context. There is some overhead to this conversion,
+        so it is more efficient to pass a Context.
 
         :param context: the context to register
         """
@@ -268,11 +276,15 @@ class LDClient:
     def variation(self, key: str, context: Union[Context, dict], default: Any) -> Any:
         """Calculates the value of a feature flag for a given context.
 
+        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
+        the SDK will convert the user to a Context. There is some overhead to this conversion,
+        so it is more efficient to pass a Context.
+
         :param key: the unique key for the feature flag
         :param context: the evaluation context or user
         :param default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
-        :return: the variation for the given context, or the `default` value if the flag cannot be evaluated
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
         return self._evaluate_internal(key, context, default, self._event_factory_default).value
 
@@ -280,9 +292,13 @@ class LDClient:
         """Calculates the value of a feature flag for a given context, and returns an object that
         describes the way the value was determined.
 
-        The `reason` property in the result will also be included in analytics events, if you are
+        The ``reason`` property in the result will also be included in analytics events, if you are
         capturing detailed event data for this flag.
-        
+
+        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
+        the SDK will convert the user to a Context. There is some overhead to this conversion,
+        so it is more efficient to pass a Context.
+
         :param key: the unique key for the feature flag
         :param context: the evaluation context or user
         :param default: the default value of the flag, to be used if the value is not

@@ -38,8 +38,8 @@ class TestData():
     supports many of the ways a flag can be configured on the LaunchDarkly dashboard, but does not
     currently support 1. rule operators other than "in" and "not in", or 2. percentage rollouts.
 
-    If the same `TestData` instance is used to configure multiple `LDClient` instances,
-    any changes made to the data will propagate to all of the `LDClient` instances.
+    If the same ``TestData`` instance is used to configure multiple ``LDClient`` instances,
+    any changes made to the data will propagate to all of the ``LDClient`` instances.
     """
 
     # Prevent pytest from treating this as a test class

@@ -40,8 +40,8 @@ class Context:
     To create a Context with multiple kinds (a multi-context), use :func:`create_multi()` or
     :func:`multi_builder()`.
 
-    A Context can be in an error state if it was built with invalid attributes. See :func:`valid()`
-    and :func:`error()`.
+    A Context can be in an error state if it was built with invalid attributes. See :attr:`valid`
+    and :attr:`error`.
 
     A Context is immutable once created.
     """
@@ -117,7 +117,7 @@ class Context:
             self.__make_invalid(kind_error)
             return
         if key == '' and not allow_empty_key:
-            self.__make_invalid('context key must not be null or empty')
+            self.__make_invalid('context key must not be None or empty')
             return
         self.__key = key
         self.__kind = kind
@@ -135,11 +135,14 @@ class Context:
         """
         Creates a single-kind Context with only the key and the kind specified.
 
-        If you omit the kind, it defaults to "user" (:const:`DEFAULT_KIND1).
+        If you omit the kind, it defaults to "user" (:const:`DEFAULT_KIND`).
 
         :param key: the context key
         :param kind: the context kind; if omitted, it is :const:`DEFAULT_KIND` ("user")
         :return: a context
+
+        :see: :func:`builder()`
+        :see: :func:`create_multi()`
         """
         return Context(kind, key, None, False, None, None, None, False)
 
@@ -151,6 +154,9 @@ class Context:
         To create a Context for a single context kind, use :func:`create()` or
         :func:`builder()`.
 
+        You may use :func:`multi_builder()` instead if you want to add contexts one at a time
+        using a builder pattern.
+
         For the returned Context to be valid, the contexts list must not be empty, and all of its
         elements must be valid Contexts. Otherwise, the returned Context will be invalid as
         reported by :func:`error()`.
@@ -158,10 +164,13 @@ class Context:
         If only one context parameter is given, the method returns that same context.
 
         If a nested context is a multi-context, this is exactly equivalent to adding each of the
-        individual kinds from it separately. See :func:ldclient.context.ContextMultiBuilder.add()`.
+        individual kinds from it separately. See :func:`ldclient.ContextMultiBuilder.add()`.
 
         :param contexts: the individual contexts
         :return: a multi-context
+
+        :see: :func:`create()`
+        :see: :func:`multi_builder()`
         """
         # implementing this via multi_builder gives us the flattening behavior for free
         builder = ContextMultiBuilder()
@@ -208,8 +217,8 @@ class Context:
         
         You may use :class:`ldclient.ContextBuilder` methods to set additional attributes and/or
         change the context kind before calling :func:`ldclient.ContextBuilder.build()`. If you
-        do not change any values, the defaults for the Context are that its `kind` is :const:`DEFAULT_KIND`,
-        its `key` is set to the key parameter specified here, `anonymous` is False, and it has no values for
+        do not change any values, the defaults for the Context are that its ``kind`` is :const:`DEFAULT_KIND`,
+        its :attr:`key` is set to the key parameter specified here, :attr:`anonymous` is False, and it has no values for
         any other attributes.
 
         This method is for building a Context that has only a single kind. To define a multi-context,
@@ -217,6 +226,10 @@ class Context:
 
         :param key: the context key
         :return: a new builder
+
+        :see: :func:`create()`
+        :see: :func:`create_multi()`
+
         """
         return ContextBuilder(key)
     
@@ -245,6 +258,9 @@ class Context:
         allows you to add contexts one at a time, if that is more convenient for your logic.
 
         :return: a new builder
+
+        :see: :func:`builder()`
+        :see: :func:`create_multi()`
         """
         return ContextMultiBuilder()
     
@@ -257,13 +273,13 @@ class Context:
         is missing necessary attributes or has invalid attributes, indicating an incorrect usage
         of the SDK API. The only ways for a context to be invalid are:
 
-        * The `kind` property had a disallowed value. See :func:`kind()`.
-        * For a single context, the `key` property was null or empty.
+        * The :attr:`kind` property had a disallowed value. See :func:`ldclient.ContextBuilder.kind()`.
+        * For a single context, the :attr:`key` property was None or empty.
         * You tried to create a multi-context without specifying any contexts.
         * You tried to create a multi-context using the same context kind more than once.
         * You tried to create a multi-context where at least one of the individual Contexts was invalid.
 
-        In any of these cases, `valid` will return false, and :func:`error()` will return a
+        In any of these cases, :attr:`valid` will be False, and :attr:`error` will return a
         description of the error.
 
         Since in normal usage it is easy for applications to be sure they are using context kinds
@@ -273,7 +289,7 @@ class Context:
         the context is invalid, the operation will fail in some well-defined way as described in
         the documentation for that method, and the SDK will generally log a warning as well. But
         in any situation where you are not sure if you have a valid Context, you can check
-        :func:`valid()` or :func:`error()`.
+        :attr:`valid` or :attr:`error`.
         """
         return self.__error is None
     
@@ -282,7 +298,7 @@ class Context:
         """
         Returns None for a valid Context, or an error message for an invalid one.
         
-        If this is None, then :func:`valid()` is True. If it is not None, then :func:`valid()` is
+        If this is None, then :attr:`valid` is True. If it is not None, then :attr:`valid` is
         False.
         """
         return self.__error
@@ -292,49 +308,59 @@ class Context:
         """
         True if this is a multi-context.
         
-        If this value is True, then :func:`kind()` is guaranteed to be :const:`MULTI_KIND`, and
+        If this value is True, then :attr:`kind` is guaranteed to be :const:`MULTI_KIND`, and
         you can inspect the individual context for each kind with :func:`get_individual_context()`.
 
-        If this value is False, then :func:`kind()` is guaranteed to return a value that is not
+        If this value is False, then :attr:`kind` is guaranteed to return a value that is not
         :const:`MULTI_KIND`.
+
+        :see: :func:`create_multi()`
         """
         return self.__multi is not None
     
     @property
     def kind(self) -> str:
         """
-        Returns the context's `kind` attribute.
+        Returns the context's ``kind`` attribute.
         
         Every valid context has a non-empty kind. For multi-contexts, this value is
         :const:`MULTI_KIND` and the kinds within the context can be inspected with
         :func:`get_individual_context()`.
+
+        :see: :func:`ldclient.ContextBuilder.kind()`
+        :see: :func:`create()`
         """
         return self.__kind
 
     @property
     def key(self) -> str:
         """
-        Returns the context's `key` attribute.
+        Returns the context's ``key`` attribute.
         
         For a single context, this value is set by :func:`create`, or :func:`ldclient.ContextBuilder.key()`.
 
-        For a multi-context, there is no single value and :func:`key()` returns an empty string. Use
-        :func:`get_individual_context()` to get the context for a particular kind, then call :func:`key()`
-        on it.
+        For a multi-context, there is no single value and :attr:`key` returns an empty string. Use
+        :func:`get_individual_context()` to get the Context for a particular kind, then get the
+        :attr:`key` of that Context.
+
+        :see: :func:`ldclient.ContextBuilder.key()`
+        :see: :func:`create()`
         """
         return self.__key
     
     @property
     def name(self) -> Optional[str]:
         """
-        Returns the context's `name` attribute.
+        Returns the context's ``name`` attribute.
         
         For a single context, this value is set by :func:`ldclient.ContextBuilder.name()`. It is
         None if no value was set.
 
-        For a multi-context, there is no single value and :func:`name()` returns null. Use
-        :func:`get_individual_context()` to get the context for a particular kind, then call :func:`name()`
-        on it.
+        For a multi-context, there is no single value and :attr:`name` returns None. Use
+        :func:`get_individual_context()` to get the Context for a particular kind, then get the
+        :attr:`name` of that Context.
+
+        :see: :func:`ldclient.ContextBuilder.name()`
         """
         return self.__name
     
@@ -347,15 +373,17 @@ class Context:
         The default value is False. False means that this Context represents an entity such as a
         user that you want to be able to see on the LaunchDarkly dashboard.
 
-        Setting `anonymous` to true excludes this context from the database that is
+        Setting ``anonymous`` to True excludes this context from the database that is
         used by the dashboard. It does not exclude it from analytics event data, so it is
         not the same as making attributes private; all non-private attributes will still be
         included in events and data export. There is no limitation on what other attributes
-        may be included (so, for instance, `anonymous` does not mean there is no `name`),
-        and the context will still have whatever `key` you have given it.
+        may be included (so, for instance, ``anonymous`` does not mean there is no :attr:`name`),
+        and the context will still have whatever :attr:`key` you have given it.
 
         This value is also addressable in evaluations as the attribute name "anonymous". It
         is always treated as a boolean true or false in evaluations.
+
+        :see: :func:`ldclient.ContextBuilder.anonymous()`
         """
         return self.__anonymous
 
@@ -364,9 +392,9 @@ class Context:
         Looks up the value of any attribute of the context by name.
 
         For a single-kind context, the attribute name can be any custom attribute that was set
-        by :func:`ldclient.context.ContextBuilder.set()`. It can also be one of the built-in ones
-        like "kind", "key", or "name"; in such cases, it is equivalent to :func:`kind`,
-        :func:`key`, or :fund:`name`.
+        by :func:`ldclient.ContextBuilder.set()`. It can also be one of the built-in ones
+        like "kind", "key", or "name"; in such cases, it is equivalent to :attr:`kind`,
+        :attr:`key`, or :attr:`name`.
         
         For a multi-context, the only supported attribute name is "kind". Use
         :func:`get_individual_context()` to get the context for a particular kind and then get
@@ -376,11 +404,13 @@ class Context:
         attribute, the return value is None. An attribute that actually exists cannot have a
         value of None.
 
-        Context has a `__getitem__` magic method equivalent to `get`, so `context['attr']`
-        behaves the same as `context.get('attr')`.
+        Context has a ``__getitem__`` magic method equivalent to ``get``, so ``context['attr']``
+        behaves the same as ``context.get('attr')``.
         
         :param attribute: the desired attribute name
         :return: the attribute value, or None if there is no such attribute
+
+        :see: :func:`ldclient.ContextBuilder.set()`
         """
         if attribute == 'key':
             return self.__key
@@ -403,6 +433,8 @@ class Context:
         of context kinds. For an invalid context, it returns zero.
 
         :return: the number of context kinds
+
+        :see: :func:`get_individual_context()`
         """
         if self.__error is not None:
             return 0
@@ -414,23 +446,25 @@ class Context:
         """
         Returns the single-kind Context corresponding to one of the kinds in this context.
 
-        The `kind` parameter can be either a number representing a zero-based index, or a string
+        The ``kind`` parameter can be either a number representing a zero-based index, or a string
         representing a context kind.
 
         If this method is called on a single-kind Context, then the only allowable value for
-        `kind` is either zero or the same value as the Context's :func:`kind`, and the return
+        ``kind`` is either zero or the same value as the Context's :attr:`kind`, and the return
         value on success is the same Context.
 
-        If the method is called on a multi-context, and `kind` is a number, it must be a
-        non-negative index that is less than the number of kinds (that is, less than the return
-        value of :func:`individual_context_count`), and the return value on success is one of
-        the individual Contexts within. Or, if `kind` is a string, it must match the context
+        If the method is called on a multi-context, and ``kind`` is a number, it must be a
+        non-negative index that is less than the number of kinds (that is, less than the value
+        of :attr:`individual_context_count`), and the return value on success is one of the
+        individual Contexts within. Or, if ``kind`` is a string, it must match the context
         kind of one of the individual contexts.
         
-        If there is no context corresponding to `kind`, the method returns null.
+        If there is no context corresponding to ``kind``, the method returns None.
 
         :param kind: the index or string value of a context kind
-        :return: the context corresponding to that index or kind, or null if none
+        :return: the context corresponding to that index or kind, or None
+
+        :see: :attr:`individual_context_count`
         """
         if self.__error is not None:
             return None
@@ -489,10 +523,10 @@ class Context:
     @property
     def fully_qualified_key(self) -> str:
         """
-        A string that describes the Context uniquely based on `kind` and `key` values.
+        A string that describes the Context uniquely based on ``kind`` and ``key`` values.
 
         This value is used whenever LaunchDarkly needs a string identifier based on all of the
-        `kind` and `key` values in the context. Applications typically do not need to use it.
+        :attr:`kind` and :attr:`key` values in the context. Applications typically do not need to use it.
         """
         return self.__full_key
 
@@ -520,7 +554,7 @@ class Context:
         Returns the JSON representation of the context as a string, in the standard format
         used by LaunchDarkly SDKs.
         
-        This is equivalent to calling :func:`to_dict()` and then `json.dumps()`.
+        This is equivalent to calling :func:`to_dict()` and then ``json.dumps()``.
 
         :return: the JSON representation as a string
         """
@@ -611,8 +645,8 @@ class Context:
 
         For a valid Context, this is currently defined as being the same as the JSON representation,
         since that is the simplest way to represent all of the Context properties. However, application
-        code should not rely on `__repr__` always being the same as the JSON representation. If you
-        specifically want the latter, use :func:`to_json_string()`. For an invalid Context, `__repr__`
+        code should not rely on ``__repr__`` always being the same as the JSON representation. If you
+        specifically want the latter, use :func:`to_json_string()`. For an invalid Context, ``__repr__``
         returns a description of why it is invalid.
 
         :return: a string representation
@@ -715,8 +749,8 @@ class ContextBuilder:
     
         It is possible to specify invalid attributes for a ContextBuilder, such as an empty key.
         Instead of throwing an exception, the ContextBuilder always returns an Context and you can
-        check :func:`ldclient.Context.valid()` or :func:`ldclient.Context.error()` to see if it has
-        an error. See :func:`ldclient.Context.valid()` for more information about invalid conditions.
+        check :attr:`ldclient.Context.valid` or :attr:`ldclient.Context.error` to see if it has
+        an error. See :attr:`ldclient.Context.valid` for more information about invalid conditions.
         If you pass an invalid Context to an SDK method, the SDK will detect this and will log a
         description of the error.
 
@@ -746,13 +780,13 @@ class ContextBuilder:
         """
         Sets the context's kind attribute.
 
-        Every context has a kind. Setting it to an empty string or null is equivalent to
-        :const:`ldclient.context.DEFAULT_KIND` ("user"). This value is case-sensitive.
+        Every context has a kind. Setting it to an empty string or None is equivalent to
+        :const:`ldclient.Context.DEFAULT_KIND` ("user"). This value is case-sensitive.
 
         The meaning of the context kind is completely up to the application. Validation rules are
         as follows:
     
-        * It may only contain letters, numbers, and the characters `.`, `_`, and `-`.
+        * It may only contain letters, numbers, and the characters ``.``, ``_``, and ``-``.
         * It cannot equal the literal string "kind".
         * For a single context, it cannot equal "multi".
         
@@ -770,7 +804,7 @@ class ContextBuilder:
 
         * Unlike most other attributes, it is always a string if it is specified.
         * The LaunchDarkly dashboard treats this attribute as the preferred display name for
-        contexts.
+          contexts.
         
         :param name: the context name (None to unset the attribute)
         :return: the builder
@@ -786,18 +820,20 @@ class ContextBuilder:
         The default value is False. False means that this Context represents an entity
         such as a user that you want to be able to see on the LaunchDarkly dashboard.
 
-        Setting `anonymous` to true excludes this context from the database that is
+        Setting ``anonymous`` to True excludes this context from the database that is
         used by the dashboard. It does not exclude it from analytics event data, so it is
         not the same as making attributes private; all non-private attributes will still be
         included in events and data export. There is no limitation on what other attributes
-        may be included (so, for instance, `anonymous` does not mean there is no `name`),
-        and the context will still have whatever `key` you have given it.
+        may be included (so, for instance, ``anonymous`` does not mean there is no ``name``),
+        and the context will still have whatever ``key`` you have given it.
 
         This value is also addressable in evaluations as the attribute name "anonymous". It
         is always treated as a boolean true or false in evaluations.
 
         :param anonymous: true if the context should be excluded from the LaunchDarkly database
         :return: the builder
+
+        :see: :attr:`ldclient.Context.anonymous`
         """
         self.__anonymous = anonymous
         return self
@@ -807,7 +843,7 @@ class ContextBuilder:
         Sets the value of any attribute for the context.
 
         This includes only attributes that are addressable in evaluations-- not metadata such
-        as :func:`private()`. If `attributeName` is `"private"`, you will be setting an attribute
+        as :func:`private()`. If ``attributeName`` is ``"private"``, you will be setting an attribute
         with that name which you can use in evaluations or to record data for your own purposes,
         but it will be unrelated to :func:`private()`.
         
@@ -820,11 +856,11 @@ class ContextBuilder:
         The following attribute names have special restrictions on their value types, and
         any value of an unsupported type will be ignored (leaving the attribute unchanged):
 
-        * `kind`, `key`: Must be a string. See :func:`kind()` and :func:`key()`.
-        * `name`: Must be a string or None. See :func:`name()`.
-        * `anonymous`: Must be a boolean. See :func:`anonymous()`.
+        * ``"kind"``, ``"key"``: Must be a string. See :func:`kind()` and :func:`key()`.
+        * ``"name"``: Must be a string or None. See :func:`name()`.
+        * ``"anonymous"``: Must be a boolean. See :func:`anonymous()`.
         
-        The attribute name "_meta" is not allowed, because it has special meaning in the
+        The attribute name ``"_meta"`` is not allowed, because it has special meaning in the
         JSON schema for contexts; any attempt to set an attribute with this name has no
         effect.
 
@@ -942,8 +978,8 @@ class ContextMultiBuilder:
         
         It is possible for a ContextMultiBuilder to represent an invalid state. Instead of throwing
         an exception, the ContextMultiBuilder always returns a Context, and you can check
-        :func:`ldclient.Context.valid()` or :func:`ldclient.Context.error()` to see if it has an
-        error. See :func:`ldclient.Context.valid()` for more information about invalid context
+        :attr:`ldclient.Context.valid` or :attr:`ldclient.Context.error` to see if it has an
+        error. See :attr:`ldclient.Context.valid` for more information about invalid context
         conditions. If you pass an invalid context to an SDK method, the SDK will detect this and
         will log a description of the error.
 
@@ -966,8 +1002,8 @@ class ContextMultiBuilder:
         that is itself invalid. This error is detected when you call :func:`build()`.
 
         If the nested context is a multi-context, this is exactly equivalent to adding each of the
-        individual contexts from it separately. For instance, in the following example, `multi1` and
-        `multi2` end up being exactly the same:
+        individual contexts from it separately. For instance, in the following example, ``multi1`` and
+        ``multi2`` end up being exactly the same:
         ::
 
             c1 = Context.new("key1", "kind1")
