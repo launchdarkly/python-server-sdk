@@ -2,8 +2,8 @@ from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.util import log
 from ldclient.interfaces import BigSegmentStoreStatus, BigSegmentStoreStatusProvider
-from ldclient.util import log
 
 import base64
 from expiringdict import ExpiringDict
@@ -61,7 +61,7 @@ class BigSegmentStoreManager:
         self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
-            self.__cache = ExpiringDict(max_len = config.user_cache_size, max_age_seconds=config.user_cache_time)
+            self.__cache = ExpiringDict(max_len = config.context_cache_size, max_age_seconds=config.context_cache_time)
             self.__poll_task = RepeatingTask(config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 
@@ -88,6 +88,7 @@ class BigSegmentStoreManager:
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
+                return (None, BigSegmentsStatus.STORE_ERROR)
         status = self.__last_status
         if not status:
             status = self.poll_store_and_update_status()

@@ -9,16 +9,20 @@ storable objects as completely generic JSON dictionaries, rather than having any
 for features or segments.
 """
 
+from ldclient.impl.model import FeatureFlag, ModelEntity, Segment
+
 from collections import namedtuple
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 # Note that VersionedDataKind without the extra attributes is no longer used in the SDK,
 # but it's preserved here for backward compatibility just in case someone else used it
 class VersionedDataKind:
-    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str):
+    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,
+        decoder: Optional[Callable[[dict], Any]] = None):
         self._namespace = namespace
         self._request_api_path = request_api_path
         self._stream_api_path = stream_api_path
+        self._decoder = decoder
 
     @property
     def namespace(self) -> str:
@@ -31,11 +35,20 @@ class VersionedDataKind:
     @property
     def stream_api_path(self) -> str:
         return self._stream_api_path
+    
+    def decode(self, data: Any) -> Any:
+        if self._decoder is None or isinstance(data, ModelEntity):
+            return data
+        return self._decoder(data)
+    
+    def encode(self, item: Any) -> dict:
+        return item.to_json_dict() if isinstance(item, ModelEntity) else item
 
 class VersionedDataKindWithOrdering(VersionedDataKind):
     def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,
+                 decoder: Optional[Callable[[dict], Any]],
                  priority: int, get_dependency_keys: Optional[Callable[[dict], Iterable[str]]]):
-        super().__init__(namespace, request_api_path, stream_api_path)
+        super().__init__(namespace, request_api_path, stream_api_path, decoder)
         self._priority = priority
         self._get_dependency_keys = get_dependency_keys
     
@@ -50,11 +63,13 @@ class VersionedDataKindWithOrdering(VersionedDataKind):
 FEATURES = VersionedDataKindWithOrdering(namespace = "features",
     request_api_path = "/sdk/latest-flags",
     stream_api_path = "/flags/",
+    decoder = FeatureFlag,
     priority = 1,
     get_dependency_keys = lambda flag: (p.get('key') for p in flag.get('prerequisites', [])))
 
 SEGMENTS = VersionedDataKindWithOrdering(namespace = "segments",
     request_api_path = "/sdk/latest-segments",
     stream_api_path = "/segments/",
+    decoder = Segment,
     priority = 0,
     get_dependency_keys = None)

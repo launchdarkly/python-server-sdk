@@ -1,6 +1,8 @@
 from ldclient.interfaces import FeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
+from testing.builders import *
+
 from abc import abstractmethod
 import pytest
 
@@ -52,32 +54,15 @@ class FeatureStoreTestBase:
         scope = StoreTestScope(tester.create_feature_store())
         scope.store.init({
             FEATURES: {
-                'foo': self.make_feature('foo', 10),
-                'bar': self.make_feature('bar', 10),
+                'foo': self.make_feature('foo', 10).to_json_dict(),
+                'bar': self.make_feature('bar', 10).to_json_dict(),
             }
         })
         return scope
     
     @staticmethod
     def make_feature(key, ver):
-        return {
-            u'key': key,
-            u'version': ver,
-            u'salt': u'abc',
-            u'on': True,
-            u'variations': [
-                {
-                    u'value': True,
-                    u'weight': 100,
-                    u'targets': []
-                },
-                {
-                    u'value': False,
-                    u'weight': 0,
-                    u'targets': []
-                }
-            ]
-        }
+        return FlagBuilder(key).version(ver).on(True).variations(True, False).salt('abc').build()
 
     def test_not_initialized_before_init(self, tester):
         with self.store(tester) as store:
@@ -90,7 +75,8 @@ class FeatureStoreTestBase:
     def test_get_existing_feature(self, tester):
         with self.inited_store(tester) as store:
             expected = self.make_feature('foo', 10)
-            assert store.get(FEATURES, 'foo', lambda x: x) == expected
+            flag = store.get(FEATURES, 'foo', lambda x: x)
+            assert flag == expected
 
     def test_get_nonexisting_feature(self, tester):
         with self.inited_store(tester) as store:
