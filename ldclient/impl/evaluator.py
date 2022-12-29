@@ -423,7 +423,7 @@ def _bucketable_string_value(u_value) -> Optional[str]:
 
     return None
 
-def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Optional[List[str]]) -> bool:
+def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Set[str]) -> bool:
     if keys is None or len(keys) == 0:
         return False
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)

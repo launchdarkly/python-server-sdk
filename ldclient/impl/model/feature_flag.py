@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Set
 
 from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.entity import *
@@ -27,7 +27,7 @@ class Target:
     def __init__(self, data: dict):
         self._context_kind = opt_str(data, 'contextKind')
         self._variation = req_int(data, 'variation')
-        self._values = req_str_list(data, 'values')
+        self._values = set(req_str_list(data, 'values'))
     
     @property
     def context_kind(self) -> Optional[str]:
@@ -38,7 +38,7 @@ class Target:
         return self._variation
 
     @property
-    def values(self) -> List[str]:
+    def values(self) -> Set[str]:
         return self._values
 
 

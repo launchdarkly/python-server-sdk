@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Set
 
 from ldclient.impl.model.attribute_ref import AttributeRef, opt_attr_ref_with_opt_context_kind
 from ldclient.impl.model.clause import Clause
@@ -10,14 +10,14 @@ class SegmentTarget:
 
     def __init__(self, data: dict, logger = None):
         self._context_kind = opt_str(data, 'contextKind')
-        self._values = req_str_list(data, 'values')
+        self._values = set(req_str_list(data, 'values'))
     
     @property
     def context_kind(self) -> Optional[str]:
         return self._context_kind
     
     @property
-    def values(self) -> List[str]:
+    def values(self) -> Set[str]:
         return self._values
 
 
@@ -63,8 +63,8 @@ class Segment(ModelEntity):
         self._deleted = opt_bool(data, 'deleted')
         if self._deleted:
             return
-        self._included = opt_str_list(data, 'included')
-        self._excluded = opt_str_list(data, 'excluded')
+        self._included = set(opt_str_list(data, 'included'))
+        self._excluded = set(opt_str_list(data, 'excluded'))
         self._included_contexts = list(SegmentTarget(item) for item in opt_dict_list(data, 'includedContexts'))
         self._excluded_contexts = list(SegmentTarget(item) for item in opt_dict_list(data, 'excludedContexts'))
         self._rules = list(SegmentRule(item) for item in opt_dict_list(data, 'rules'))
@@ -86,11 +86,11 @@ class Segment(ModelEntity):
         return self._deleted
     
     @property
-    def included(self) -> List[str]:
+    def included(self) -> Set[str]:
         return self._included
     
     @property
-    def excluded(self) -> List[str]:
+    def excluded(self) -> Set[str]:
         return self._excluded
 
     @property
