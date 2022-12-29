@@ -53,7 +53,7 @@ def _matches(context_value: Any, clause_value: Any, clause_preprocessed: Optiona
     clause_regex = None if clause_preprocessed is None else clause_preprocessed.as_regex
     if clause_regex is None:
         return False
-    return isinstance(clause_value, str) and clause_regex.search(context_value) is not None
+    return isinstance(context_value, str) and clause_regex.search(context_value) is not None
 
 
 def _less_than(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]):
