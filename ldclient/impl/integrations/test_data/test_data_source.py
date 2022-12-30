@@ -1,7 +1,9 @@
-import copy
 from ldclient.versioned_data_kind import FEATURES
-from ldclient.rwlock import ReadWriteLock
 
+# This is the internal component that's created when you initialize an SDK instance that is using
+# TestData. The TestData object manages the setup of the fake data, and it broadcasts the data
+# through _TestDataSource to inject it into the SDK. If there are multiple SDK instances connected
+# to a TestData, each has its own _TestDataSource.
 
 class _TestDataSource():
 

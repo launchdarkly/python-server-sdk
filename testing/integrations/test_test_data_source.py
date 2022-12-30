@@ -1,12 +1,12 @@
 import pytest
-import warnings
+from typing import Callable
 
 from ldclient.client import LDClient
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+from ldclient.versioned_data_kind import FEATURES
 
-from ldclient.integrations.test_data import TestData
+from ldclient.integrations.test_data import TestData, FlagBuilder
 
 
 ## Test Data + Data Source
@@ -20,15 +20,264 @@ def test_makes_valid_datasource():
     assert store.all(FEATURES, lambda x: x) == {}
 
 
-def test_makes_valid_datasource_with_flag():
-    td = TestData.data_source()
-    flag = td.flag(key='test-flag')
-    assert flag is not None
+def verify_flag_builder(desc: str, expected_props: dict, builder_actions: Callable[[FlagBuilder], FlagBuilder]):
+    all_expected_props = {
+        'key': 'test-flag',
+        'version': 1,
+        'on': True,
+        'prerequisites': [],
+        'targets': [],
+        'contextTargets': [],
+        'rules': [],
+        'salt': '',
+        'variations': [True, False],
+        'offVariation': 1,
+        'fallthrough': {'variation': 0}
+    }    
+    all_expected_props.update(expected_props)
 
-    builtFlag = flag._build(0)
-    assert builtFlag['key'] is 'test-flag'
-    assert builtFlag['on'] is True
-    assert builtFlag['variations'] == [True, False]
+    td = TestData.data_source()
+    flag_builder = builder_actions(td.flag(key='test-flag'))
+    built_flag = flag_builder._build(1)
+    assert built_flag == all_expected_props, "did not get expected flag properties for '%s' test" % desc
+
+
+@pytest.mark.parametrize('expected_props,builder_actions', [
+    pytest.param(
+        {},
+        lambda f: f,
+        id='defaults'
+    ),
+    pytest.param(
+        {},
+        lambda f: f.boolean_flag(),
+        id='changing default flag to boolean flag has no effect'
+    ),
+    pytest.param(
+        {},
+        lambda f: f.variations('a', 'b').boolean_flag(),
+        id='non-boolean flag can be changed to boolean flag',
+    ),
+    pytest.param(
+        {'on': False},
+        lambda f: f.on(False),
+        id='flag can be turned off'
+    ),
+    pytest.param(
+        {},
+        lambda f: f.on(False).on(True),
+        id='flag can be turned on',
+    ),
+    pytest.param(
+        {'fallthrough': {'variation': 1}},
+        lambda f: f.variation_for_all(False),
+        id='set false variation for all'
+    ),
+    pytest.param(
+        {'fallthrough': {'variation': 0}},
+        lambda f: f.variation_for_all(True),
+        id='set true variation for all'
+    ),
+    pytest.param(
+        {'variations': ['a', 'b', 'c'], 'fallthrough': {'variation': 2}},
+        lambda f: f.variations('a', 'b', 'c').variation_for_all(2),
+        id='set variation index for all'
+    ),
+    pytest.param(
+        {'offVariation': 0},
+        lambda f: f.off_variation(True),
+        id='set off variation boolean'
+    ),
+    pytest.param(
+        {'variations': ['a', 'b', 'c'], 'offVariation': 2},
+        lambda f: f.variations('a', 'b', 'c').off_variation(2),
+        id='set off variation index'
+    ),
+    pytest.param(
+        {
+            'targets': [
+                {'variation': 0, 'values': ['key1', 'key2']},
+            ],
+            'contextTargets': [
+                {'contextKind': 'user', 'variation': 0, 'values': []},
+                {'contextKind': 'kind1', 'variation': 0, 'values': ['key3', 'key4']},
+                {'contextKind': 'kind1', 'variation': 1, 'values': ['key5', 'key6']},
+            ]
+        },
+        lambda f: f.variation_for_key('user', 'key1', True) \
+            .variation_for_key('user', 'key2', True) \
+            .variation_for_key('kind1', 'key3', True) \
+            .variation_for_key('kind1', 'key5', False) \
+            .variation_for_key('kind1', 'key4', True) \
+            .variation_for_key('kind1', 'key6', False),
+        id='set context targets as boolean'
+    ),
+    pytest.param(
+        {
+            'variations': ['a', 'b'],
+            'targets': [
+                {'variation': 0, 'values': ['key1', 'key2']},
+            ],
+            'contextTargets': [
+                {'contextKind': 'user', 'variation': 0, 'values': []},
+                {'contextKind': 'kind1', 'variation': 0, 'values': ['key3', 'key4']},
+                {'contextKind': 'kind1', 'variation': 1, 'values': ['key5', 'key6']},
+            ]
+        },
+        lambda f: f.variations('a', 'b') \
+            .variation_for_key('user', 'key1', 0) \
+            .variation_for_key('user', 'key2', 0) \
+            .variation_for_key('kind1', 'key3', 0) \
+            .variation_for_key('kind1', 'key5', 1) \
+            .variation_for_key('kind1', 'key4', 0) \
+            .variation_for_key('kind1', 'key6', 1),
+        id='set context targets as variation index'
+    ),
+    pytest.param(
+        {
+            'contextTargets': [
+                {'contextKind': 'kind1', 'variation': 0, 'values': ['key1', 'key2']},
+                {'contextKind': 'kind1', 'variation': 1, 'values': ['key3']}
+            ]
+        },
+        lambda f: f.variation_for_key('kind1', 'key1', 0) \
+            .variation_for_key('kind1', 'key2', 1) \
+            .variation_for_key('kind1', 'key3', 1) \
+            .variation_for_key('kind1', 'key2', 0),
+        id='replace existing context target key'
+    ),
+    pytest.param(
+        {
+            'variations': ['a', 'b'],
+            'contextTargets': [
+                {'contextKind': 'kind1', 'variation': 1, 'values': ['key1']},
+            ]
+        },
+        lambda f: f.variations('a', 'b') \
+            .variation_for_key('kind1', 'key1', 1) \
+            .variation_for_key('kind1', 'key2', 3),
+        id='ignore target for nonexistent variation'
+    ),
+    pytest.param(
+        {
+            'targets': [
+                {'variation': 0, 'values': ['key1']}
+            ],
+            'contextTargets': [
+                {'contextKind': 'user', 'variation': 0, 'values': []}
+            ]
+        },
+        lambda f: f.variation_for_user('key1', True),
+        id='variation_for_user is shortcut for variation_for_key'
+    ),
+    pytest.param(
+        {},
+        lambda f: f.variation_for_key('kind1', 'key1', 0) \
+            .clear_targets(),
+        id='clear targets'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'kind1', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': False}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_match_context('kind1', 'attr1', 'a', 'b').then_return(1),
+        id='if_match_context'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'kind1', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': True}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_not_match_context('kind1', 'attr1', 'a', 'b').then_return(1),
+        id='if_not_match_context'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'user', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': False}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_match('attr1', 'a', 'b').then_return(1),
+        id='if_match is shortcut for if_match_context'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'user', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': True}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_not_match('attr1', 'a', 'b').then_return(1),
+        id='if_not_match is shortcut for if_not_match_context'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'kind1', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': False},
+                        {'contextKind': 'kind1', 'attribute': 'attr2', 'op': 'in', 'values': ['c', 'd'], 'negate': False}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_match_context('kind1', 'attr1', 'a', 'b') \
+            .and_match_context('kind1', 'attr2', 'c', 'd').then_return(1),
+        id='and_match_context'
+    ),
+    pytest.param(
+        {
+            'rules': [
+                {
+                    'variation': 1,
+                    'id': 'rule0',
+                    'clauses': [
+                        {'contextKind': 'kind1', 'attribute': 'attr1', 'op': 'in', 'values': ['a', 'b'], 'negate': False},
+                        {'contextKind': 'kind1', 'attribute': 'attr2', 'op': 'in', 'values': ['c', 'd'], 'negate': True}
+                    ]
+                }
+            ]
+        },
+        lambda f: f.if_match_context('kind1', 'attr1', 'a', 'b') \
+            .and_not_match_context('kind1', 'attr2', 'c', 'd').then_return(1),
+        id='and_not_match_context'
+    ),
+    pytest.param(
+        {},
+        lambda f: f.if_match_context('kind1', 'attr1', 'a').then_return(1).clear_rules(),
+        id='clear rules'
+    )
+])
+def test_flag_configs_parameterized(expected_props: dict, builder_actions: Callable[[FlagBuilder], FlagBuilder]):
+    verify_flag_builder('x', expected_props, builder_actions)
 
 
 def test_can_retrieve_flag_from_store():
@@ -39,7 +288,7 @@ def test_can_retrieve_flag_from_store():
 
     client = LDClient(config=Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
+    assert store.get(FEATURES, 'some-flag') == FEATURES.decode(td.flag('some-flag')._build(1))
 
     client.close()
 
@@ -52,7 +301,7 @@ def test_updates_to_flags_are_reflected_in_store():
 
     td.update(td.flag('some-flag'))
 
-    assert store.get(FEATURES, 'some-flag') == td.flag('some-flag')._build(1)
+    assert store.get(FEATURES, 'some-flag') == FEATURES.decode(td.flag('some-flag')._build(1))
 
     client.close()
 
@@ -71,7 +320,9 @@ def test_updates_after_client_close_have_no_affect():
 
 def test_can_handle_multiple_clients():
     td = TestData.data_source()
-    td.update(td.flag('flag'))
+    flag_builder = td.flag('flag')
+    built_flag = flag_builder._build(1)
+    td.update(flag_builder)
 
     store = InMemoryFeatureStore()
     store2 = InMemoryFeatureStore()
@@ -82,223 +333,23 @@ def test_can_handle_multiple_clients():
     config2 = Config('SDK_KEY', update_processor_class = td, send_events = False, offline = True, feature_store = store2)
     client2 = LDClient(config=config2)
 
-    assert store.get(FEATURES, 'flag') == {
-            'fallthrough': {
-                'variation': 0,
-            },
-            'key': 'flag',
-            'offVariation': 1,
-            'on': True,
-            'rules': [],
-            'targets': [],
-            'variations': [True, False],
-            'version': 1
-            }
+    assert store.get(FEATURES, 'flag') == FEATURES.decode(built_flag)
 
-    assert store2.get(FEATURES, 'flag') == {
-            'fallthrough': {
-                'variation': 0,
-            },
-            'key': 'flag',
-            'offVariation': 1,
-            'on': True,
-            'rules': [],
-            'targets': [],
-            'variations': [True, False],
-            'version': 1
-            }
+    assert store2.get(FEATURES, 'flag') == FEATURES.decode(built_flag)
 
-    td.update(td.flag('flag').variation_for_all_users(False))
+    flag_builder_v2 = td.flag('flag').variation_for_all_users(False)
+    td.update(flag_builder_v2)
+    built_flag_v2 = flag_builder_v2._build(2)
 
-    assert store.get(FEATURES, 'flag') == {
-            'fallthrough': {
-                'variation': 1,
-            },
-            'key': 'flag',
-            'offVariation': 1,
-            'on': True,
-            'rules': [],
-            'targets': [],
-            'variations': [True, False],
-            'version': 2
-            }
+    assert store.get(FEATURES, 'flag') == FEATURES.decode(built_flag_v2)
 
-    assert store2.get(FEATURES, 'flag') == {
-            'fallthrough': {
-                'variation': 1,
-            },
-            'key': 'flag',
-            'offVariation': 1,
-            'on': True,
-            'rules': [],
-            'targets': [],
-            'variations': [True, False],
-            'version': 2
-            }
+    assert store2.get(FEATURES, 'flag') == FEATURES.decode(built_flag_v2)
 
     client.close()
     client2.close()
 
 
-## FlagBuilder
-
-def test_flagbuilder_defaults_to_boolean_flag():
-    td = TestData.data_source()
-    flag = td.flag('empty-flag')
-    assert flag._build(0)['variations'] == [True, False]
-    assert flag._build(0)['fallthrough'] == {'variation': 0}
-    assert flag._build(0)['offVariation'] == 1
-
-def test_flagbuilder_can_turn_flag_off():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.on(False)
-
-    assert flag._build(0)['on'] is False
-
-def test_flagbuilder_can_set_fallthrough_variation():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.fallthrough_variation(2)
-
-    assert flag._build(0)['fallthrough'] == {'variation': 2}
-
-    flag.fallthrough_variation(True)
-
-    assert flag._build(0)['fallthrough'] == {'variation': 0}
-
-def test_flagbuilder_can_set_off_variation():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.off_variation(2)
-
-    assert flag._build(0)['offVariation'] == 2
-
-    flag.off_variation(True)
-
-    assert flag._build(0)['offVariation'] == 0
-
-def test_flagbuilder_can_make_boolean_flag():
-    td = TestData.data_source()
-    flag = td.flag('boolean-flag').boolean_flag()
-
-    builtFlag = flag._build(0)
-    assert builtFlag['fallthrough'] == {'variation': 0}
-    assert builtFlag['offVariation'] == 1
-
-def test_flagbuilder_can_set_variation_when_targeting_is_off():
-    td = TestData.data_source()
-    flag = td.flag('test-flag') \
-        .on(False)
-    assert flag._build(0)['on'] == False
-    assert flag._build(0)['variations'] == [True,False]
-    flag.variations('dog', 'cat')
-    assert flag._build(0)['variations'] == ['dog','cat']
-
-def test_flagbuilder_can_set_variation_for_all_users():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.variation_for_all_users(True)
-    assert flag._build(0)['fallthrough'] == {'variation': 0}
-
-def test_flagbuilder_clears_existing_rules_and_targets_when_setting_variation_for_all_users():
-    td = TestData.data_source()
-
-    flag = td.flag('test-flag').if_match('name', 'christian').then_return(False).variation_for_user('christian', False).variation_for_all_users(True)._build(0)
-
-    assert flag['rules'] == []
-    assert flag['targets'] == []
-
-def test_flagbuilder_can_set_variations():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.variations(2,3,4,5)
-    assert flag._build(0)['variations'] == [2,3,4,5]
-
-def test_flagbuilder_can_make_an_immutable_copy():
-    td = TestData.data_source()
-    flag = td.flag('test-flag')
-    flag.variations(1,2)
-    copy_of_flag = flag._copy()
-    flag.variations(3,4)
-    assert copy_of_flag._build(0)['variations'] == [1,2]
-
-    copy_of_flag.variations(5,6)
-    assert flag._build(0)['variations'] == [3,4]
-
-def test_flagbuilder_can_set_boolean_variation_for_user():
-    td = TestData.data_source()
-    flag = td.flag('user-variation-flag')
-    flag.variation_for_user('christian', False)
-    expected_targets = [
-        {
-            'variation': 1,
-            'values': ['christian']
-        }
-    ]
-    assert flag._build(0)['targets'] == expected_targets
-
-def test_flagbuilder_can_set_numerical_variation_for_user():
-    td = TestData.data_source()
-    flag = td.flag('user-variation-flag')
-    flag.variations('a','b','c')
-    flag.variation_for_user('christian', 2)
-    expected_targets = [
-        {
-            'variation': 2,
-            'values': ['christian']
-        }
-    ]
-    assert flag._build(1)['targets'] == expected_targets
-
-def test_flagbuilder_can_set_value_for_all_users():
-    td = TestData.data_source()
-    flag = td.flag('user-value-flag')
-    flag.variation_for_user('john', 1)
-
-    built_flag = flag._build(0)
-    assert built_flag['targets'] == [{'values': ['john'], 'variation': 1}]
-    assert built_flag['variations'] == [True, False]
-
-    flag.value_for_all_users('yes')
-
-    built_flag2 = flag._build(0)
-    assert built_flag2['targets'] == []
-    assert built_flag2['variations'] == ['yes']
-
-
-def test_flagbuilder_can_build():
-    td = TestData.data_source()
-    flag = td.flag('some-flag')
-    flag.if_match('country', 'fr').then_return(True)
-    expected_result = {
-        'fallthrough': {
-            'variation': 0,
-        },
-        'key': 'some-flag',
-        'offVariation': 1,
-        'on': True,
-        'targets': [],
-        'variations': [True, False],
-        'rules': [
-            {
-                'clauses': [
-                    {'attribute': 'country',
-                    'negate': False,
-                    'op': 'in',
-                    'values': ['fr']
-                    }
-                ],
-                'id': 'rule0',
-                'variation': 0
-            }
-        ],
-        'version': 1,
-    }
-
-    assert flag._build(1) == expected_result
-
-def test_flag_can_evaluate_rules():
+def test_flag_evaluation_with_client():
     td = TestData.data_source()
     store = InMemoryFeatureStore()
 

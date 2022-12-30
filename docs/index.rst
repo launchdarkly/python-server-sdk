@@ -12,6 +12,8 @@ The latest version of the SDK can be found on `PyPI <https://pypi.org/project/la
 
 For more information, see LaunchDarkly's `Quickstart <https://docs.launchdarkly.com/home>`_ and `SDK Reference Guide <https://docs.launchdarkly.com/sdk/server-side/python>`_.
 
+Any types, functions, or constants that are not specifically described in this API reference should be considered implementation details that are not supported for external use; LaunchDarkly reserves the right to change them at any time and application code should not rely on them.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -20,4 +22,3 @@ For more information, see LaunchDarkly's `Quickstart <https://docs.launchdarkly.
    api-integrations
    api-extending
    api-testing
-   api-deprecated

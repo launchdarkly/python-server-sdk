@@ -1,4 +1,4 @@
-from ldclient.util import log
+from ldclient.impl.util import log
 
 from threading import RLock
 from typing import Any, Callable

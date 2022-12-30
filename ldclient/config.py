@@ -4,11 +4,11 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
-from typing import Optional, Callable, List, Any, Set
+from typing import Optional, Callable, List, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.util import log
-from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, FeatureRequester
+from ldclient.impl.util import log
+from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -17,12 +17,12 @@ STREAM_FLAGS_PATH = '/flags'
 class BigSegmentsConfig:
     """Configuration options related to Big Segments.
 
-    Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+    Big Segments are a specific type of segments. For more information, read the LaunchDarkly
     documentation: https://docs.launchdarkly.com/home/users/big-segments
 
-    If your application uses Big Segments, you will need to create a `BigSegmentsConfig` that at a
-    minimum specifies what database integration to use, and then pass the `BigSegmentsConfig`
-    object as the `big_segments` parameter when creating a :class:`Config`.
+    If your application uses Big Segments, you will need to create a ``BigSegmentsConfig`` that at a
+    minimum specifies what database integration to use, and then pass the ``BigSegmentsConfig``
+    object as the ``big_segments`` parameter when creating a :class:`Config`.
 
     This example shows Big Segments being configured to use Redis:
     ::
@@ -34,25 +34,29 @@ class BigSegmentsConfig:
     """
     def __init__(self,
                  store: Optional[BigSegmentStore] = None,
-                 user_cache_size: int=1000,
-                 user_cache_time: float=5,
+                 context_cache_size: int=1000,
+                 context_cache_time: float=5,
+                 user_cache_size: Optional[int]=None,
+                 user_cache_time: Optional[float]=None,
                  status_poll_interval: float=5,
                  stale_after: float=120):
         """
         :param store: the implementation of :class:`ldclient.interfaces.BigSegmentStore` that will
             be used to query the Big Segments database
-        :param user_cache_size: the maximum number of users whose Big Segment state will be cached
+        :param context_cache_size: the maximum number of contexts whose Big Segment state will be cached
             by the SDK at any given time
-        :param user_cache_time: the maximum length of time (in seconds) that the Big Segment state
-            for a user will be cached by the SDK
+        :param context_cache_time: the maximum length of time (in seconds) that the Big Segment state
+            for a context will be cached by the SDK
+        :param user_cache_size: deprecated alias for `context_cache_size`
+        :param user_cache_time: deprecated alias for `context_cache_time`
         :param status_poll_interval: the interval (in seconds) at which the SDK will poll the Big
             Segment store to make sure it is available and to determine how long ago it was updated
         :param stale_after: the maximum length of time between updates of the Big Segments data
             before the data is considered out of date
         """
         self.__store = store
-        self.__user_cache_size = user_cache_size
-        self.__user_cache_time = user_cache_time
+        self.__context_cache_size = context_cache_size if user_cache_size is None else user_cache_size
+        self.__context_cache_time = context_cache_time if user_cache_time is None else user_cache_time
         self.__status_poll_interval = status_poll_interval
         self.__stale_after = stale_after
         pass
@@ -62,12 +66,22 @@ class BigSegmentsConfig:
         return self.__store
     
     @property
+    def context_cache_size(self) -> int:
+        return self.__context_cache_size
+    
+    @property
+    def context_cache_time(self) -> float:
+        return self.__context_cache_time
+
+    @property
     def user_cache_size(self) -> int:
-        return self.__user_cache_size
+        """Deprecated alias for :attr:`context_cache_size`."""
+        return self.context_cache_size
     
     @property
     def user_cache_time(self) -> float:
-        return self.__user_cache_time
+        """Deprecated alias for :attr:`context_cache_time`."""
+        return self.context_cache_time
 
     @property
     def status_poll_interval(self) -> float:
@@ -81,7 +95,7 @@ class HTTPConfig:
     """Advanced HTTP configuration options for the SDK client.
 
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
-    If you need to set these, construct an `HTTPConfig` instance and pass it as the `http` parameter when
+    If you need to set these, construct an ``HTTPConfig`` instance and pass it as the ``http`` parameter when
     you construct the main :class:`Config` for the SDK client.
     """
     def __init__(self,
@@ -95,7 +109,7 @@ class HTTPConfig:
         :param connect_timeout: The connect timeout for network connections in seconds.
         :param read_timeout: The read timeout for network connections in seconds.
         :param http_proxy: Use a proxy when connecting to LaunchDarkly. This is the full URI of the
-          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard `http_proxy` environment
+          proxy; for example: http://my-proxy.com:1234. Note that unlike the standard ``http_proxy`` environment
           variable, this is used regardless of whether the target URI is HTTP or HTTPS (the actual LaunchDarkly
           service uses HTTPS, but a Relay Proxy instance could use HTTP). Setting this Config parameter will
           override any proxy specified by an environment variable, but only for LaunchDarkly SDK connections.
@@ -105,7 +119,7 @@ class HTTPConfig:
           certificate.
         :param disable_ssl_verification: If true, completely disables SSL verification and certificate
           verification for secure requests. This is unsafe and should not be used in a production environment;
-          instead, use a self-signed certificate and set `ca_certs`.
+          instead, use a self-signed certificate and set ``ca_certs``.
         """
         self.__connect_timeout = connect_timeout
         self.__read_timeout = read_timeout
@@ -155,19 +169,20 @@ class Config:
                  initial_reconnect_delay: float=1,
                  defaults: dict={},
                  send_events: Optional[bool]=None,
-                 events_enabled: bool=True,
                  update_processor_class: Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]=None, 
                  poll_interval: float=30,
                  use_ldd: bool=False,
                  feature_store: Optional[FeatureStore]=None,
                  feature_requester_class=None,
-                 event_processor_class: Callable[['Config'], EventProcessor]=None, 
+                 event_processor_class: Callable[['Config'], EventProcessor]=None,
+                 private_attributes: Set[str]=set(),
                  private_attribute_names: Set[str]=set(),
                  all_attributes_private: bool=False,
                  offline: bool=False,
-                 user_keys_capacity: int=1000,
-                 user_keys_flush_interval: float=300,
-                 inline_users_in_events: bool=False,
+                 context_keys_capacity: int=1000,
+                 context_keys_flush_interval: float=300,
+                 user_keys_capacity: Optional[int] = None,
+                 user_keys_flush_interval: Optional[float] = None,
                  diagnostic_opt_out: bool=False,
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
@@ -194,31 +209,33 @@ class Config:
           to be reestablished. The delay for the first reconnection will start near this value, and then
           increase exponentially for any subsequent connection failures.
         :param send_events: Whether or not to send events back to LaunchDarkly. This differs from
-          `offline` in that it affects only the sending of client-side events, not streaming or polling for
+          ``offline`` in that it affects only the sending of client-side events, not streaming or polling for
           events from the server. By default, events will be sent.
-        :param events_enabled: Obsolete name for `send_events`.
         :param offline: Whether the client should be initialized in offline mode. In offline mode,
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
         :param poll_interval: The number of seconds between polls for flag updates if streaming is off.
         :param use_ldd: Whether you are using the LaunchDarkly Relay Proxy in daemon mode. In this
           configuration, the client will not use a streaming connection to listen for updates, but instead
-          will get feature state from a Redis instance. The `stream` and `poll_interval` options will be
+          will get feature state from a Redis instance. The ``stream`` and ``poll_interval`` options will be
           ignored if this option is set to true. By default, this is false.
           For more information, read the LaunchDarkly
           documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
-        :param array private_attribute_names: Marks a set of attribute names private. Any users sent to
-          LaunchDarkly with this configuration active will have attributes with these names removed.
+        :param array private_attribute: Marks a set of attributes private. Any users sent to LaunchDarkly
+          with this configuration active will have these attributes removed. Each item can be either the
+          name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
+          property within a JSON object value as private.
+        :param array private_attribute_names: Deprecated alias for ``private_attributes`` ("names" is no longer
+          strictly accurate because these could also be attribute reference paths).
         :param all_attributes_private: If true, all user attributes (other than the key) will be
-          private, not just the attributes specified in `private_attribute_names`.
+          private, not just the attributes specified in ``private_attributes``.
         :param feature_store: A FeatureStore implementation
-        :param user_keys_capacity: The number of user keys that the event processor can remember at any
-          one time, so that duplicate user details will not be sent in analytics events.
-        :param user_keys_flush_interval: The interval in seconds at which the event processor will
-          reset its set of known user keys.
-        :param inline_users_in_events: Whether to include full user details in every analytics event.
-          By default, events will only include the user key, except for one "index" event that provides the
-          full details for the user.
+        :param context_keys_capacity: The number of context keys that the event processor can remember at any
+          one time, so that duplicate context details will not be sent in analytics events.
+        :param context_keys_flush_interval: The interval in seconds at which the event processor will
+          reset its set of known context keys.
+        :param user_keys_capacity: Deprecated alias for ``context_keys_capacity``.
+        :param user_keys_flush_interval: Deprecated alias for ``context_keys_flush_interval``.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
@@ -234,8 +251,8 @@ class Config:
           being used. This will be sent in HTTP headers during requests to the LaunchDarkly servers to allow
           recording metrics on the usage of these wrapper libraries.
         :param wrapper_version: For use by wrapper libraries to report the version of the library in
-          use. If `wrapper_name` is not set, this field will be ignored. Otherwise the version string will
-          be included in the HTTP headers along with the `wrapper_name` during requests to the LaunchDarkly
+          use. If ``wrapper_name`` is not set, this field will be ignored. Otherwise the version string will
+          be included in the HTTP headers along with the ``wrapper_name`` during requests to the LaunchDarkly
           servers.
         :param http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
           :class:`HTTPConfig`.
@@ -258,13 +275,12 @@ class Config:
         self.__defaults = defaults
         if offline is True:
             send_events = False
-        self.__send_events = events_enabled if send_events is None else send_events
-        self.__private_attribute_names = private_attribute_names
+        self.__send_events = True if send_events is None else send_events
+        self.__private_attributes = private_attributes or private_attribute_names
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
-        self.__user_keys_capacity = user_keys_capacity
-        self.__user_keys_flush_interval = user_keys_flush_interval
-        self.__inline_users_in_events = inline_users_in_events
+        self.__context_keys_capacity = context_keys_capacity if user_keys_capacity is None else user_keys_capacity
+        self.__context_keys_flush_interval = context_keys_flush_interval if user_keys_flush_interval is None else user_keys_flush_interval
         self.__diagnostic_opt_out = diagnostic_opt_out
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
@@ -293,12 +309,11 @@ class Config:
                       feature_store=self.__feature_store,
                       feature_requester_class=self.__feature_requester_class,
                       event_processor_class=self.__event_processor_class,
-                      private_attribute_names=self.__private_attribute_names,
+                      private_attributes=self.__private_attributes,
                       all_attributes_private=self.__all_attributes_private,
                       offline=self.__offline,
-                      user_keys_capacity=self.__user_keys_capacity,
-                      user_keys_flush_interval=self.__user_keys_flush_interval,
-                      inline_users_in_events=self.__inline_users_in_events,
+                      context_keys_capacity=self.__context_keys_capacity,
+                      context_keys_flush_interval=self.__context_keys_flush_interval,
                       diagnostic_opt_out=self.__diagnostic_opt_out,
                       diagnostic_recording_interval=self.__diagnostic_recording_interval,
                       wrapper_name=self.__wrapper_name,
@@ -375,10 +390,6 @@ class Config:
         return self.__feature_requester_class
 
     @property
-    def events_enabled(self) -> bool:
-        return self.__send_events
-
-    @property
     def send_events(self) -> bool:
         return self.__send_events
 
@@ -391,8 +402,12 @@ class Config:
         return self.__flush_interval
 
     @property
-    def private_attribute_names(self) -> list:
-        return list(self.__private_attribute_names)
+    def private_attributes(self) -> List[str]:
+        return list(self.__private_attributes)
+
+    @property
+    def private_attribute_names(self) -> List[str]:
+        return self.private_attributes
 
     @property
     def all_attributes_private(self) -> bool:
@@ -403,16 +418,22 @@ class Config:
         return self.__offline
 
     @property
+    def context_keys_capacity(self) -> int:
+        return self.__context_keys_capacity
+
+    @property
+    def context_keys_flush_interval(self) -> float:
+        return self.__context_keys_flush_interval
+
+    @property
     def user_keys_capacity(self) -> int:
-        return self.__user_keys_capacity
+        """Deprecated name for :attr:`context_keys_capacity`."""
+        return self.context_keys_capacity
 
     @property
     def user_keys_flush_interval(self) -> float:
-        return self.__user_keys_flush_interval
-
-    @property
-    def inline_users_in_events(self) -> bool:
-        return self.__inline_users_in_events
+        """Deprecated name for :attr:`context_keys_flush_interval`."""
+        return self.context_keys_flush_interval
 
     @property
     def diagnostic_opt_out(self) -> bool:
@@ -441,3 +462,6 @@ class Config:
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
+
+
+__all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']
