@@ -12,6 +12,13 @@ class ClientEntity:
         self.log = logging.getLogger(tag)
         opts = {"sdk_key": config["credential"]}
 
+        tags = config.get('tags', {})
+        if tags:
+            opts['application'] = {
+                'id': tags.get('applicationId', ''),
+                'version': tags.get('applicationVersion', ''),
+            }
+
         if config.get("streaming") is not None:
             streaming = config["streaming"]
             if streaming.get("baseUri") is not None:

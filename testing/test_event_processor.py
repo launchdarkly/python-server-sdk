@@ -484,6 +484,22 @@ def test_wrapper_header_sent_without_version():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
 
+def test_application_header_not_sent_when_not_set():
+    with DefaultTestProcessor() as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Tags') is None
+
+def test_application_header_sent_when_set():
+    with DefaultTestProcessor(wrapper_name = "Flask", application = {"id": "my-id", "version": "my-version"}) as ep:
+        ep.send_event({ 'kind': 'identify', 'user': user })
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Tags') == "application-id/my-id application-version/my-version"
+
 def test_event_schema_set_on_event_send():
     with DefaultTestProcessor() as ep:
         ep.send_event({ 'kind': 'identify', 'user': user })

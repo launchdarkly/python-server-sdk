@@ -7,7 +7,7 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 from typing import Optional, Callable, List, Any, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.util import log
+from ldclient.util import log, validate_application_info
 from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, FeatureRequester
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
@@ -173,7 +173,8 @@ class Config:
                  wrapper_name: Optional[str]=None,
                  wrapper_version: Optional[str]=None,
                  http: HTTPConfig=HTTPConfig(),
-                 big_segments: Optional[BigSegmentsConfig]=None):
+                 big_segments: Optional[BigSegmentsConfig]=None,
+                 application: Optional[dict]=None):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -239,6 +240,7 @@ class Config:
           servers.
         :param http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
           :class:`HTTPConfig`.
+        :param application: Optional properties for setting application metadata. See :py:attr:`~application`
         """
         self.__sdk_key = sdk_key
 
@@ -271,6 +273,7 @@ class Config:
         self.__wrapper_version = wrapper_version
         self.__http = http
         self.__big_segments = BigSegmentsConfig() if not big_segments else big_segments
+        self.__application = validate_application_info(application or {}, log)
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
@@ -441,3 +444,16 @@ class Config:
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
+
+    @property
+    def application(self) -> dict:
+        """
+        An object that allows configuration of application metadata.
+
+        Application metadata may be used in LaunchDarkly analytics or other
+        product features, but does not affect feature flag evaluations.
+
+        If you want to set non-default values for any of these fields, provide
+        the appropriately configured dict to the {Config} object.
+        """
+        return self.__application

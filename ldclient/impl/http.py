@@ -3,14 +3,34 @@ import certifi
 from os import environ
 import urllib3
 
+def _application_header_value(application: dict) -> str:
+    parts = []
+    id = application.get('id', '')
+    version = application.get('version', '')
+
+    if id:
+        parts.append("application-id/%s" % id)
+
+    if version:
+        parts.append("application-version/%s" % version)
+
+    return " ".join(parts)
+
+
 def _base_headers(config):
     headers = {'Authorization': config.sdk_key or '',
                'User-Agent': 'PythonClient/' + VERSION}
+
+    app_value = _application_header_value(config.application)
+    if app_value:
+        headers['X-LaunchDarkly-Tags'] = app_value
+
     if isinstance(config.wrapper_name, str) and config.wrapper_name != "":
         wrapper_version = ""
         if isinstance(config.wrapper_version, str) and config.wrapper_version != "":
             wrapper_version = "/" + config.wrapper_version
         headers.update({'X-LaunchDarkly-Wrapper': config.wrapper_name + wrapper_version})
+
     return headers
 
 def _http_factory(config):
