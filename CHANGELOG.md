@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [7.6.0] - 2023-01-31
+### Added:
+- Introduced support for an `application` config property which sets application metadata that may be used in LaunchDarkly analytics or other product features. . This does not affect feature flag evaluations.
+
 ## [7.5.1] - 2022-09-29
 ### Added:
 - Publishing this package now includes a pre-built wheel distribution in addition to the customary source distribution.
