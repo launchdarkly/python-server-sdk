@@ -67,6 +67,7 @@ def status():
             'big-segments',
             'context-type',
             'secure-mode-hash',
+            'tags',
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
@@ -131,7 +132,7 @@ def post_client_command(id):
         response = client.get_big_segment_store_status()
     else:
         return ('', 400)
-    
+
     if response is None:
         return ('', 201)
     return (json.dumps(response), 200)

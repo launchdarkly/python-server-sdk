@@ -1,4 +1,5 @@
 from ldclient.config import Config
+import pytest
 
 
 def test_copy_config():
@@ -40,3 +41,29 @@ def test_trims_trailing_slashes_on_uris():
     assert config.base_uri == "https://launchdarkly.com"
     assert config.events_uri == "https://docs.launchdarkly.com/bulk"
     assert config.stream_base_uri == "https://blog.launchdarkly.com"
+
+def application_can_be_set_and_read():
+    application = {"id": "my-id", "version": "abcdef"}
+    config = Config(sdk_key = "SDK_KEY", application = application)
+    assert config.application == {"id": "my-id", "version": "abcdef"}
+
+def application_can_handle_non_string_values():
+    application = {"id": 1, "version": 2}
+    config = Config(sdk_key = "SDK_KEY", application = application)
+    assert config.application == {"id": "1", "version": "2"}
+
+def application_will_ignore_invalid_keys():
+    application = {"invalid": 1, "key": 2}
+    config = Config(sdk_key = "SDK_KEY", application = application)
+    assert config.application == {"id": "", "version": ""}
+
+@pytest.fixture(params = [
+    " ",
+    "@",
+    ":",
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-a"
+])
+def application_will_drop_invalid_values(value):
+    application = {"id": value, "version": value}
+    config = Config(sdk_key = "SDK_KEY", application = application)
+    assert config.application == {"id": "", "version": ""}

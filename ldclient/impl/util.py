@@ -1,7 +1,9 @@
 import logging
+import re
 import sys
 import time
 
+from typing import Any
 from ldclient.impl.http import _base_headers
 
 
@@ -23,6 +25,26 @@ __BASE_TYPES__ = (str, float, int, bool)
 
 
 _retryable_statuses = [400, 408, 429]
+
+def validate_application_info(application: dict, logger: logging.Logger) -> dict:
+    return {
+        "id": validate_application_value(application.get("id", ""), "id", logger),
+        "version": validate_application_value(application.get("version", ""), "version", logger),
+    }
+
+def validate_application_value(value: Any, name: str, logger: logging.Logger) -> str:
+    if not isinstance(value, str):
+        return ""
+
+    if len(value) > 64:
+        logger.warning('Value of application[%s] was longer than 64 characters and was discarded' % name)
+        return ""
+
+    if re.search(r"[^a-zA-Z0-9._-]", value):
+        logger.warning('Value of application[%s] contained invalid characters and was discarded' % name)
+        return ""
+
+    return value
 
 def _headers(config):
     base_headers = _base_headers(config)
