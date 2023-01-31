@@ -12,7 +12,8 @@ publications:
 
 branches:
   - name: main
-    description: 7.x
+    description: 8.x
+  - name: 7.x
   - name: 6.x
 
 jobs:

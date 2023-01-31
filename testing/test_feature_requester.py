@@ -35,6 +35,7 @@ def test_get_all_data_sends_headers():
         assert req.headers['Authorization'] == 'sdk-key'
         assert req.headers['User-Agent'] == 'PythonClient/' + VERSION
         assert req.headers.get('X-LaunchDarkly-Wrapper') is None
+        assert req.headers.get('X-LaunchDarkly-Tags') is None
 
 def test_get_all_data_sends_wrapper_header():
     with start_server() as server:
@@ -61,6 +62,19 @@ def test_get_all_data_sends_wrapper_header_without_version():
         fr.get_all_data()
         req = server.require_request()
         assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
+
+def test_get_all_data_sends_tags_header():
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', base_uri = server.uri,
+                application = {"id": "my-id", "version": "my-version"})
+        fr = FeatureRequesterImpl(config)
+
+        resp_data = { 'flags': {}, 'segments': {} }
+        server.for_path('/sdk/latest-all', JsonResponse(resp_data))
+
+        fr.get_all_data()
+        req = server.require_request()
+        assert req.headers.get('X-LaunchDarkly-Tags') == 'application-id/my-id application-version/my-version'
 
 def test_get_all_data_can_use_cached_data():
     with start_server() as server:

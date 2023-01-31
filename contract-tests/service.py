@@ -63,6 +63,7 @@ def status():
             'all-flags-with-reasons',
             'all-flags-client-side-only',
             'all-flags-details-only-for-tracked-flags',
+            'tags',
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
