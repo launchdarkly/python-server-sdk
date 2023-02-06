@@ -329,3 +329,28 @@ def test_flag_can_evaluate_rules():
     assert eval2.variation_index == 1
     assert eval2.reason['kind'] == 'FALLTHROUGH'
 
+def test_flag_can_evaluate_all_flags():
+    td = TestData.data_source()
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY',
+                      update_processor_class = td,
+                      send_events = False,
+                      feature_store = store))
+
+    td.update(td.flag(key='test-flag')
+                .fallthrough_variation(False)
+                .if_match('firstName', 'Mike')
+                .and_not_match('country', 'gb')
+                .then_return(True))
+
+    user1 = { 'key': 'user1', 'firstName': 'Mike', 'country': 'us' }
+    flags_state = client.all_flags_state(user1, with_reasons=True)
+
+    assert flags_state.valid
+
+    value = flags_state.get_flag_value('test-flag')
+    reason = flags_state.get_flag_reason('test-flag') or {}
+
+    assert value == True
+    assert reason.get('kind', None) == 'RULE_MATCH'
