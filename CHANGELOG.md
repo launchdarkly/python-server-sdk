@@ -4,7 +4,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ## [7.6.0] - 2023-01-31
 ### Added:
-- Introduced support for an `application` config property which sets application metadata that may be used in LaunchDarkly analytics or other product features. . This does not affect feature flag evaluations.
+- Introduced support for an `application` config property which sets application metadata that may be used in LaunchDarkly analytics or other product features. This does not affect feature flag evaluations.
 
 ## [7.5.1] - 2022-09-29
 ### Added:
