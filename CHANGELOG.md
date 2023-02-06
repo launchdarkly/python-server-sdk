@@ -8,7 +8,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ## [7.6.0] - 2023-01-31
 ### Added:
-- Introduced support for an `application` config property which sets application metadata that may be used in LaunchDarkly analytics or other product features. . This does not affect feature flag evaluations.
+- Introduced support for an `application` config property which sets application metadata that may be used in LaunchDarkly analytics or other product features. This does not affect feature flag evaluations.
 
 ## [8.0.0] - 2022-12-30
 The latest version of this SDK supports LaunchDarkly's new custom contexts feature. Contexts are an evolution of a previously-existing concept, "users." Contexts let you create targeting rules for feature flags based on a variety of different information, including attributes pertaining to users, organizations, devices, and more. You can even combine contexts to create "multi-contexts." 
