@@ -431,7 +431,7 @@ class LDClient:
                 'variation': detail.variation_index,
                 'reason': detail.reason,
                 'version': flag['version'],
-                'trackEvents': flag['trackEvents'] or requires_experiment_data,
+                'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
                 'trackReason': requires_experiment_data,
                 'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
             }
