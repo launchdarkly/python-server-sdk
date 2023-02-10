@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.1] - 2023-02-10
+### Fixed:
+- Fixed indexing error raised by calling `all_flags_state` while using the `TestData` data source.
+
 ## [7.6.1] - 2023-02-07
 ### Fixed:
 - Fixed indexing error raised by calling `all_flags_state` while using the `TestData` data source.
