@@ -9,6 +9,7 @@ workflows:
       - test-linux:
           name: Python 3.7
           docker-image: cimg/python:3.7
+          test-build-docs: true
       - test-linux:
           name: Python 3.8
           docker-image: cimg/python:3.8
@@ -33,6 +34,9 @@ jobs:
       test-packaging:
         type: boolean
         default: true
+      test-build-docs:
+        type: boolean
+        default: false
       test-with-codeclimate:
         type: boolean
         default: false
@@ -95,6 +99,13 @@ jobs:
                 command: |
                   export PATH="/home/circleci/.local/bin:$PATH"
                   make lint
+      - when:
+          condition: <<parameters.test-build-docs>>
+          steps:
+            - run:
+                name: verify docs can be built successfully
+                command: |
+                  make docs
 
       - unless:
           condition: <<parameters.skip-sse-contract-tests>>

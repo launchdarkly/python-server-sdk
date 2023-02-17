@@ -6,14 +6,12 @@ ldclient module
 
 .. automodule:: ldclient
     :members: Context,ContextBuilder,ContextMultiBuilder,get,set_config
-    :special-members: __init__
 
 ldclient.client module
 ----------------------
 
 .. automodule:: ldclient.client
     :members: LDClient
-    :special-members: __init__
 
 ldclient.config module
 ----------------------
