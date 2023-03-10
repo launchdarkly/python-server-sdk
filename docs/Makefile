@@ -3,7 +3,7 @@
 
 .PHONY: help install html
 
-SPHINXOPTS    =
+SPHINXOPTS    = -W --keep-going
 SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = launchdarkly-server-sdk
 SOURCEDIR     = .
