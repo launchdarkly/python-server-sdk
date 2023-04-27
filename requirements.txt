@@ -2,4 +2,4 @@ certifi>=2018.4.16
 expiringdict>=1.1.4
 pyRFC3339>=1.0
 semver>=2.10.2,<3.0.0
-urllib3>=1.22.0
+urllib3>=1.22.0,<1.27
