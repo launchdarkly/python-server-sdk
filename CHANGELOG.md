@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.2] - 2023-05-01
+### Fixed:
+- Pinned urllib3 dependency to <2. (Thanks, [prpnmac](https://github.com/launchdarkly/python-server-sdk/pull/202)!)
+
 ## [8.1.1] - 2023-02-10
 ### Fixed:
 - Fixed indexing error raised by calling `all_flags_state` while using the `TestData` data source.
