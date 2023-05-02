@@ -37,9 +37,6 @@ jobs:
       test-build-docs:
         type: boolean
         default: false
-      test-with-codeclimate:
-        type: boolean
-        default: false
       test-with-mypy:
         type: boolean
         default: true
@@ -66,23 +63,11 @@ jobs:
             pip install -r consul-requirements.txt;
             python setup.py install;
             pip freeze
-      - when:
-          condition: <<parameters.test-with-codeclimate>>
-          steps:
-            - run:
-                name: run tests (with CodeClimate)
-                command: |
-                  mkdir test-reports
-                  pytest -s --cov=ldclient --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning
-                  sh -c '[ -n "${CODECLIMATE_REPO_TOKEN+1}" ] && codeclimate-test-reporter || echo "No CODECLIMATE_REPO_TOKEN value is set; not publishing coverage report"'
-      - unless:
-          condition: <<parameters.test-with-codeclimate>>
-          steps:
-            - run:
-                name: run tests
-                command: |
-                  mkdir test-reports
-                  pytest -s --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning
+      - run:
+          name: run tests
+          command: |
+            mkdir test-reports
+            pytest -s --cov=ldclient --cov-report=html:build/html --junitxml=test-reports/junit.xml testing -W error::SyntaxWarning
       - when:
           condition: <<parameters.test-packaging>>
           steps:
@@ -135,7 +120,7 @@ jobs:
       - store_test_results:
           path: test-reports
       - store_artifacts:
-          path: test-reports
+          path: build/html
 
 
   test-windows:
