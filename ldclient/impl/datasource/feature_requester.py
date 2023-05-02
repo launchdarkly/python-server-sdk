@@ -42,7 +42,7 @@ class FeatureRequesterImpl(FeatureRequester):
             from_cache = True
         else:
             data = json.loads(r.data.decode('UTF-8'))
-            etag = r.getheader('ETag')
+            etag = r.headers.get('ETag')
             from_cache = False
             if etag is not None:
                 self._cache[uri] = CacheEntry(data=data, etag=etag)
