@@ -72,17 +72,28 @@ class MockFeatureRequester(FeatureRequester):
             raise self.exception
         return self.all_data
 
+
+class _MockHTTPHeaderDict(dict):
+    def __init__(self, d):
+        super().__init__({k.lower(): v for k, v in d.items()})
+
+    def get(self, key, default=None):
+        return super().get(key.lower(), default)
+
+
 class MockResponse:
     def __init__(self, status, headers):
         self._status = status
-        self._headers = headers
+        self._headers = _MockHTTPHeaderDict(headers)
 
     @property
     def status(self):
         return self._status
 
-    def getheader(self, name):
-        return self._headers.get(name.lower())
+    @property
+    def headers(self):
+        return self._headers
+
 
 class MockHttp:
     def __init__(self):
