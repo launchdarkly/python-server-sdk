@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.3] - 2023-05-03
+### Fixed:
+- Updated usage of `HTTPResponse.getheader` to remove deprecation warning from upstream `urllib3` package. (Thanks, [mnito](https://github.com/launchdarkly/python-server-sdk/pull/206)!)
+
 ## [8.1.2] - 2023-05-01
 ### Fixed:
 - Pinned urllib3 dependency to <2. (Thanks, [prpnmac](https://github.com/launchdarkly/python-server-sdk/pull/202)!)
