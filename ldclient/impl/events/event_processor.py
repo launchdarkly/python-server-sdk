@@ -373,7 +373,7 @@ class EventDispatcher:
                 pass
 
     def _handle_response(self, r):
-        server_date_str = r.getheader('Date')
+        server_date_str = r.headers.get('Date')
         if server_date_str is not None:
             server_date = parsedate(server_date_str)
             if server_date is not None:
