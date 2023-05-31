@@ -10,6 +10,7 @@ except ImportError:
 from ldclient import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
+from ldclient.impl.util import redact_password
 
 from typing import Any, Dict
 
@@ -21,7 +22,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         self._prefix = prefix or 'launchdarkly'
         self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
         self.test_update_hook = None  # exposed for testing
-        log.info("Started RedisFeatureStore connected to URL: " + url + " using prefix: " + self._prefix)
+        log.info("Started RedisFeatureStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
 
     def _items_key(self, kind):
         return "{0}:{1}".format(self._prefix, kind.namespace)

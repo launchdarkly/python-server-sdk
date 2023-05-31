@@ -5,6 +5,7 @@ import time
 
 from typing import Any
 from ldclient.impl.http import _base_headers
+from urllib.parse import urlparse, urlunparse
 
 
 def current_time_millis() -> int:
@@ -132,3 +133,17 @@ def stringify_attrs(attrdict, attrs):
                 newdict = attrdict.copy()
             newdict[attr] = str(val)
     return attrdict if newdict is None else newdict
+
+def redact_password(url: str) -> str:
+    """
+    Replace any embedded password in the provided URL with 'xxxx'. This is
+    useful for ensuring sensitive information included in a URL isn't logged.
+    """
+    parts = urlparse(url)
+    if parts.password is None:
+        return url
+
+    updated = parts.netloc.replace(parts.password, "xxxx")
+    parts = parts._replace(netloc=updated)
+
+    return urlunparse(parts)

@@ -1,5 +1,6 @@
 from ldclient import log
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
+from ldclient.impl.util import redact_password
 
 from typing import Any, Optional, Dict, Set, cast
 
@@ -21,7 +22,7 @@ class _RedisBigSegmentStore(BigSegmentStore):
             raise NotImplementedError("Cannot use Redis Big Segment store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
         self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
-        log.info("Started RedisBigSegmentStore connected to URL: " + url + " using prefix: " + self._prefix)
+        log.info("Started RedisBigSegmentStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
 
     def get_metadata(self) -> BigSegmentStoreMetadata:
         r = redis.Redis(connection_pool=self._pool)

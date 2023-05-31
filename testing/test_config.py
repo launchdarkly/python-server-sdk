@@ -63,7 +63,10 @@ def application_will_ignore_invalid_keys():
     ":",
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-a"
 ])
-def application_will_drop_invalid_values(value):
-    application = {"id": value, "version": value}
+def invalid_application_tags(request):
+    return request.param
+
+def test_application_will_drop_invalid_values(invalid_application_tags):
+    application = {"id": invalid_application_tags, "version": invalid_application_tags}
     config = Config(sdk_key = "SDK_KEY", application = application)
     assert config.application == {"id": "", "version": ""}
