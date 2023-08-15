@@ -52,7 +52,7 @@ jobs:
       - image: <<parameters.docker-image>>
       - image: redis
       - image: amazon/dynamodb-local
-      - image: consul
+      - image: hashicorp/consul
     steps:
       - checkout
       - run: python --version
