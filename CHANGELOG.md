@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.5] - 2023-08-15
+### Changed:
+- Loosened the requirements on the semver package. (Thanks, [hauntsaninja](https://github.com/launchdarkly/python-server-sdk/pull/216)!)
+
 ## [8.1.4] - 2023-06-01
 ### Fixed:
 - Password will be redacted from redis URL prior to logging.
