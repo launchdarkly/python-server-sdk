@@ -38,8 +38,11 @@ class PollingUpdateProcessor(UpdateProcessor):
                 log.info("PollingUpdateProcessor initialized ok")
                 self._ready.set()
         except UnsuccessfulResponseException as e:
-            log.error(http_error_message(e.status, "polling request"))
-            if not is_http_error_recoverable(e.status):
+            http_error_message_result = http_error_message(e.status, "polling request")
+            if is_http_error_recoverable(e.status):
+                log.warning(http_error_message_result)
+            else:
+                log.error(http_error_message_result)
                 self._ready.set() # if client is initializing, make it stop waiting; has no effect if already inited
                 self.stop()
         except Exception as e:
