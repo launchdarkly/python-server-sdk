@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.6] - 2023-09-06
+### Changed:
+- Recoverable errors are logged as a warning not an error. (Thanks, [fritzdj](https://github.com/launchdarkly/python-server-sdk/pull/219)!)
+
 ## [8.1.5] - 2023-08-15
 ### Changed:
 - Loosened the requirements on the semver package. (Thanks, [hauntsaninja](https://github.com/launchdarkly/python-server-sdk/pull/216)!)
