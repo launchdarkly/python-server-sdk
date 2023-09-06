@@ -83,10 +83,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             except UnsuccessfulResponseException as e:
-                log.error(http_error_message(e.status, "stream connection"))
                 self._record_stream_init(True)
                 self._es_started = None
-                if not is_http_error_recoverable(e.status):
+
+                http_error_message_result = http_error_message(e.status, "stream connection")
+                if is_http_error_recoverable(e.status):
+                    log.warning(http_error_message_result)
+                else:
+                    log.error(http_error_message_result)
                     self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
                     self.stop()
                     break
