@@ -84,6 +84,39 @@ class EventInputCustom(EventInput):
             "metric_value": self.metric_value
         }
 
+
+class EventInputMigrationOp(EventInput):
+    """
+    A migration op event represents the results of a migration-assisted read or
+    write operation.
+
+    The event includes optional measurements reporting on consistency checks,
+    error reporting, and operation latency values.
+
+    This event should not be constructed directly; rather, it should be built
+    through :class:`ldclient.migrations.OpTracker()`.
+    """
+    __slots__ = ['flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
+
+    def __init__(self, timestamp: int, context: Context, flag, operation, default_stage, detail, invoked, consistent, consistent_ratio, errors, latencies):
+        super().__init__(timestamp, context)
+        self.flag = flag
+        self.operation = operation
+        self.default_stage = default_stage
+        self.detail = detail
+        self.invoked = invoked
+        self.consistent = consistent
+        self.consistent_ratio = consistent_ratio
+        self.errors = errors
+        self.latencies = latencies
+
+    def to_debugging_dict(self) -> dict:
+        # TODO(mmk): Fill this out.
+        return {
+            "timestamp": self.timestamp,
+            "context": self.context.to_dict(),
+        }
+
 # Event constructors are centralized here to avoid mistakes and repetitive logic.
 # The LDClient owns two instances of EventFactory: one that always embeds evaluation reasons
 # in the events (for when variation_detail is called) and one that doesn't.
