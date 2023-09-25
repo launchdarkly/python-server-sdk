@@ -1,12 +1,60 @@
-from typing import Callable, Optional, Union, Set, Dict
+from abc import ABCMeta, abstractmethod
+from typing import Callable, Optional, Union, Set, Dict, Any
 import time
 from datetime import timedelta
 from enum import Enum
+from ldclient import Result, LDClient
 from ldclient.evaluation import EvaluationDetail
 from ldclient.context import Context
 from ldclient.impl.model import FeatureFlag
 from threading import Lock
 from ldclient.impl.events.types import EventInputMigrationOp
+
+
+MigratorFn = Callable[[Optional[Any]], Result]
+"""
+When a migration wishes to execute a read or write operation, it must delegate
+that call to a consumer defined function. This function must accept an optional
+payload value, and return a :class:`ldclient.Result`.
+"""
+
+MigratorCompareFn = Callable[[Any, Any], bool]
+"""
+If a migration read operation is executing which results in both origins being
+read from, a customer defined comparison function may be used to determine if
+the two results are equal.
+
+This function should accept two parameters which represent the successful
+result values of both the old and new origin reads. If the two values are
+equal, this function should return true and false otherwise.
+"""
+
+
+class ExecutionOrder(Enum):
+    """
+    Depending on the migration stage, reads may operate against both old and
+    new origins. In this situation, the execution order can be defined to
+    specify how these individual reads are coordinated.
+    """
+
+    SERIAL = "serial"
+    """
+    SERIAL execution order ensures that the authoritative read completes before
+    the non-authoritative read is executed.
+    """
+
+    RANDOM = "random"
+    """
+    Like SERIAL, RANDOM ensures that one read is completed before the
+    subsequent read is executed. However, the order in which they are executed
+    is randomly decided.
+    """
+
+    PARALLEL = "parallel"
+    """
+    PARALLEL executes both reads in separate threads. This helps reduce total
+    run time at the cost of the thread overhead.
+    """
 
 
 class Operation(Enum):
@@ -134,36 +182,34 @@ class OpTracker:
         self.__errors: Set[Origin] = set()
         self.__latencies: Dict[Origin, timedelta] = {}
 
-    def operation(self, op: Operation):
+    def operation(self, op: Operation) -> 'OpTracker':
         """
         Sets the migration related operation associated with these tracking
         measurements.
 
         :param op: The read or write operation symbol.
-        :return: :class:`OpTracker`
         """
         if not isinstance(op, Operation):
-            return
+            return self
 
         with self.__mutex:
             self.__operation = op
         return self
 
-    def invoked(self, origin: Origin):
+    def invoked(self, origin: Origin) -> 'OpTracker':
         """
         Allows recording which origins were called during a migration.
 
         :param origin: Designation for the old or new origin.
-        :return: :class:`OpTracker`
         """
         if not isinstance(origin, Origin):
-            return
+            return self
 
         with self.__mutex:
             self.__invoked.add(origin)
         return self
 
-    def consistent(self, is_consistent: Callable[[], bool]):
+    def consistent(self, is_consistent: Callable[[], bool]) -> 'OpTracker':
         """
         Allows recording the results of a consistency check.
 
@@ -176,19 +222,17 @@ class OpTracker:
         a function by not using the callable.
 
         :param is_consistent: closure to return result of comparison check
-        :return: :class:`OpTracker`
         """
         # TODO(sampling-ratio): Add sampling checking here
         with self.__mutex:
             self.__consistent = is_consistent()
         return self
 
-    def error(self, origin: Origin):
+    def error(self, origin: Origin) -> 'OpTracker':
         """
         Allows recording whether an error occurred during the operation.
 
         :param origin: Designation for the old or new origin.
-        :return: :class:`OpTracker`
         """
         if not isinstance(origin, Origin):
             return
@@ -197,13 +241,12 @@ class OpTracker:
             self.__errors.add(origin)
         return self
 
-    def latency(self, origin: Origin, duration: timedelta):
+    def latency(self, origin: Origin, duration: timedelta) -> 'OpTracker':
         """
         Allows tracking the recorded latency for an individual operation.
 
         :param origin: Designation for the old or new origin.
         :param duration: Duration measurement.
-        :return: :class:`OpTracker`
         """
         if not isinstance(origin, Origin):
             return
@@ -266,3 +309,220 @@ class OpTracker:
                 return "provided consistency without recording both invocations"
 
         return None
+
+
+class OperationResult:
+    """
+    The OperationResult wraps a :class:`ldclient.Result` pair an origin with a result.
+    """
+
+    def __init__(self, origin: Origin, result: Result):
+        self.__origin = origin
+        self.__result = result
+
+    @property
+    def origin(self) -> Origin:
+        return self.__origin
+
+    def __getattr__(self, attr):
+        return getattr(self.wrappee, attr)
+
+
+class Migrator:
+    """
+    A migrator is the interface through which migration support is executed. A
+    migrator is configured through the :class:`MigratorBuilder`.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+        """
+        Uses the provided flag key and context to execute a migration-backed read operation.
+
+        :param key: The migration flag key to use when determining the current stage
+        :param context: The context to use when evaluating the flag
+        :param default_stage: A default stage to fallback to if one cannot be determined
+        :param payload: An optional payload to be passed through to the appropriate read method
+        """
+
+    @abstractmethod
+    def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+        """
+        Uses the provided flag key and context to execute a migration-backed write operation.
+
+        :param key: The migration flag key to use when determining the current stage
+        :param context: The context to use when evaluating the flag
+        :param default_stage: A default stage to fallback to if one cannot be determined
+        :param payload: An optional payload to be passed through to the appropriate write method
+        """
+
+
+class MigrationConfig:
+    """
+    A migration config stores references to callable methods which execution
+    customer defined read or write operations on old or new origins of
+    information. For read operations, an optional comparison function also be
+    defined.
+    """
+
+    def __init__(self, old: MigratorFn, new: MigratorFn, comparison: Optional[MigratorCompareFn] = None):
+        self.__old = old
+        self.__new = new
+        self.__comparison = comparison
+
+    @property
+    def old(self) -> MigratorFn:
+        """
+        Callable which receives a nullable payload parameter and returns an
+        :class:`ldclient.Result`.
+
+        This function call should affect the old migration origin when called.
+
+        @return [#call]
+        """
+        return self.__old
+
+    @property
+    def new(self) -> MigratorFn:
+        """
+        # Callable which receives a nullable payload parameter and returns an
+        # :class:`ldclient.Result`.
+        #
+        # This function call should affect the new migration origin when
+        # called.
+        """
+        return self.__new
+
+    @property
+    def comparison(self) -> Optional[MigratorCompareFn]:
+        """
+        Optional callable which receives two objects of any kind and returns a
+        boolean representing equality.
+
+        The result of this comparison can be sent upstream to LaunchDarkly to
+        enhance migration observability.
+        """
+        return self.__comparison
+
+
+class MigratorBuilder:
+    """
+    The migration builder is used to configure and construct an instance of a
+    :class:`Migrator`. This migrator can be used to perform LaunchDarkly
+    assisted technology migrations through the use of migration-based feature
+    flags.
+    """
+
+    def __init__(self, client: LDClient):
+        self.__client = client
+
+        # Default settings as required by the spec
+        self.__read_execution_order = ExecutionOrder.PARALLEL
+        self.__measure_latency = True
+        self.__measure_errors = True
+
+        self.__read_config: Optional[MigrationConfig] = None
+        self.__write_config: Optional[MigrationConfig] = None
+
+    def read_execution_order(self, order: ExecutionOrder) -> 'MigratorBuilder':
+        """
+        The read execution order influences the parallelism and execution order
+        for read operations involving multiple origins.
+        """
+        if order not in ExecutionOrder:
+            return self
+
+        self.__read_execution_order = order
+        return self
+
+    def track_latency(self, enabled: bool) -> 'MigratorBuilder':
+        """
+        Enable or disable latency tracking for migration operations. This
+        latency information can be sent upstream to LaunchDarkly to enhance
+        migration visibility.
+        """
+        self.__measure_latency = enabled
+        return self
+
+    def track_errors(self, enabled: bool) -> 'MigratorBuilder':
+        """
+        Enable or disable error tracking for migration operations. This error
+        information can be sent upstream to LaunchDarkly to enhance migration
+        visibility.
+        """
+        self.__measure_errors = enabled
+        return self
+
+    def read(self, old: MigratorFn, new: MigratorFn, comparison: Optional[MigratorCompareFn] = None) -> 'MigratorBuilder':
+        """
+        Read can be used to configure the migration-read behavior of the
+        resulting :class:`Migrator` instance.
+
+        Users are required to provide two different read methods -- one to read
+        from the old migration origin, and one to read from the new origin.
+        Additionally, customers can opt-in to consistency tracking by providing
+        a comparison function.
+
+        Depending on the migration stage, one or both of these read methods may
+        be called.
+
+        The read methods should accept a single nullable parameter. This
+        parameter is a payload passed through the :func:`Migrator.read` method.
+        This method should return a :class:`ldclient.Result` instance.
+
+        The consistency method should accept 2 parameters of any type. These
+        parameters are the results of executing the read operation against the
+        old and new origins. If both operations were successful, the
+        consistency method will be invoked. This method should return true if
+        the two parameters are equal, or false otherwise.
+
+        :param old: The function to execute when reading from the old origin
+        :param new: The function to execute when reading from the new origin
+        :param comparison: An optional function to use for comparing the results from two origins
+        """
+        self.__read_config = MigrationConfig(old, new, comparison)
+        return self
+
+    def write(self, old: MigratorFn, new: MigratorFn) -> 'MigratorBuilder':
+        """
+        Write can be used to configure the migration-write behavior of the
+        resulting :class:`Migrator` instance.
+
+        Users are required to provide two different write methods -- one to
+        write to the old migration origin, and one to write to the new origin.
+
+        Depending on the migration stage, one or both of these write methods
+        may be called.
+
+        The write methods should accept a single nullable parameter. This
+        parameter is a payload passed through the :func:`Migrator.write`
+        method. This method should return a :class:`ldclient.Result` instance.
+
+        :param old: The function to execute when writing to the old origin
+        :param new: The function to execute when writing to the new origin
+        """
+        self.__write_config = MigrationConfig(old, new)
+        return self
+
+    def build(self) -> Union[Migrator, str]:
+        """
+        Build constructs a :class:`Migrator` instance to support
+        migration-based reads and writes. A string describing any failure
+        conditions will be returned if the build fails.
+        """
+        if self.__read_config is None:
+            return "read configuration not provided"
+
+        if self.__write_config is None:
+            return "write configuration not provided"
+
+        from ldclient.impl.migrations import Migrator as MigratorImpl
+        return MigratorImpl(
+            self.__client,
+            self.__read_execution_order,
+            self.__read_config,
+            self.__write_config,
+            self.__measure_latency,
+            self.__measure_errors,
+        )

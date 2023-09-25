@@ -3,7 +3,7 @@ import re
 import sys
 import time
 
-from typing import Any
+from typing import Any, Optional
 from ldclient.impl.http import _base_headers
 from urllib.parse import urlparse, urlunparse
 
@@ -147,3 +147,79 @@ def redact_password(url: str) -> str:
     parts = parts._replace(netloc=updated)
 
     return urlunparse(parts)
+
+
+class Result:
+    """
+    A Result is used to reflect the outcome of any operation.
+
+    Results can either be considered a success or a failure.
+
+    In the event of success, the Result will contain an option, nullable value
+    to hold any success value back to the calling function.
+
+    If the operation fails, the Result will contain an error describing the
+    value.
+    """
+
+    def __init__(self, value: Optional[Any], error: Optional[str], exception: Optional[Exception]):
+        """
+        This constructor should be considered private. Consumers of this class
+        should use one of the two factory methods provided. Direct
+        instantiation should follow the below expectations:
+
+        - Successful operations have contain a value, but *MUST NOT* contain an
+          error or an exception value.
+        - Failed operations *MUST* contain an error string, and may optionally
+          include an exception.
+
+        :param value: A result value when the operation was a success
+        :param error: An error describing the cause of the failure
+        :param exception: An optional exception if the failure resulted from an
+            exception being raised
+        """
+        self.__value = value
+        self.__error = error
+        self.__exception = exception
+
+    @staticmethod
+    def success(value: Any) -> 'Result':
+        """
+        Construct a successful result containing the provided value.
+
+        :param value: A result value when the operation was a success
+        :return: The successful result instance
+        """
+        return Result(value, None, None)
+
+    @staticmethod
+    def fail(error: str, exception: Optional[Exception] = None) -> 'Result':
+        """
+        Construct a failed result containing an error description and optional
+        exception.
+
+        :param error: An error describing the cause of the failure
+        :param exception: An optional exception if the failure resulted from an
+            exception being raised
+        :return: The successful result instance
+        """
+        return Result(None, error, exception)
+
+    def is_success(self) -> bool:
+        """
+        Determine whether this result represents success or failure by checking
+        for the presence of an error.
+        """
+        return self.__error is None
+
+    @property
+    def value(self) -> Optional[Any]:
+        return self.__value
+
+    @property
+    def error(self) -> Optional[str]:
+        return self.__error
+
+    @property
+    def exception(self) -> Optional[Exception]:
+        return self.__exception
