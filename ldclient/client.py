@@ -2,7 +2,7 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-from typing import Optional, Any, Dict, Mapping, Union
+from typing import Optional, Any, Dict, Mapping, Union, Tuple
 
 from .impl import AnyNum
 
@@ -23,11 +23,13 @@ from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
+from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
 from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.feature_store import FeatureStore
+from ldclient.migrations import Stage, OpTracker
 
 from threading import Lock
 
@@ -286,7 +288,8 @@ class LDClient:
           available from LaunchDarkly
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
-        return self._evaluate_internal(key, context, default, self._event_factory_default).value
+        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
+        return detail.value
 
     def variation_detail(self, key: str, context: Union[Context, dict], default: Any) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
@@ -306,13 +309,39 @@ class LDClient:
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
           flag value and evaluation reason
         """
-        return self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+        return detail
 
-    def _evaluate_internal(self, key: str, context: Union[Context, dict], default: Any, event_factory):
+    def migration_variation(self, key: str, context: Union[Context, dict], default_stage: Stage) -> Tuple[Stage, OpTracker]:
+        """
+        This method returns the migration stage of the migration feature flag
+        for the given evaluation context.
+
+        This method returns the default stage if there is an error or the flag
+        does not exist. If the default stage is not a valid stage, then a
+        default stage of :class:`ldclient.migrations.Stage.OFF` will be used
+        instead.
+        """
+        if not isinstance(default_stage, Stage) or default_stage not in Stage:
+            log.error(f"default stage {default_stage} is not a valid stage; using 'off' instead")
+            default_stage = Stage.OFF
+
+        detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
+        tracker = OpTracker(flag, context, detail, default_stage)
+
+        stage = Stage.from_str(str(detail.value))
+
+        if stage is None:
+            log.error("value is not a valid stage; using default stage")
+            return default_stage, tracker
+
+        return stage, tracker
+
+    def _evaluate_internal(self, key: str, context: Union[Context, dict], default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
-            return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY'))
+            return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
         if not self.is_initialized():
             if self._store.initialized:
@@ -322,13 +351,13 @@ class LDClient:
                          + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
                 self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-                return EvaluationDetail(default, None, reason)
+                return EvaluationDetail(default, None, reason), None
 
         if not isinstance(context, Context):
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
-            return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED'))
+            return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
             flag = _get_store_item(self._store, FEATURES, key)
@@ -337,11 +366,11 @@ class LDClient:
             log.debug(traceback.format_exc())
             reason = error_reason('EXCEPTION')
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-            return EvaluationDetail(default, None, reason)
+            return EvaluationDetail(default, None, reason), None
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-            return EvaluationDetail(default, None, reason)
+            return EvaluationDetail(default, None, reason), None
         else:
             try:
                 result = self._evaluator.evaluate(flag, context, event_factory)
@@ -351,13 +380,13 @@ class LDClient:
                 if detail.is_default_value():
                     detail = EvaluationDetail(default, None, detail.reason)
                 self._send_event(event_factory.new_eval_event(flag, context, detail, default))
-                return detail
+                return detail, flag
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
-                return EvaluationDetail(default, None, reason)
+                return EvaluationDetail(default, None, reason), flag
 
     def all_flags_state(self, context: Union[Context, dict], **kwargs) -> FeatureFlagsState:
         """Returns an object that encapsulates the state of all feature flags for a given user,
@@ -445,7 +474,7 @@ class LDClient:
 
         For more information, see the documentation on
         `Secure mode <https://docs.launchdarkly.com/sdk/features/secure-mode#configuring-secure-mode-in-the-javascript-client-side-sdk>`_.
-        
+
         :param context: the evaluation context or user
         :return: the hash string
         """

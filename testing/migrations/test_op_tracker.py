@@ -36,6 +36,15 @@ class TestBuilding:
         assert isinstance(event, str)
         assert event == "operation not provided"
 
+    def test_fails_without_flag(self):
+        detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+        tracker = OpTracker(None, user, detail, Stage.LIVE)
+        tracker.operation(Operation.WRITE)
+        event = tracker.build()
+
+        assert isinstance(event, str)
+        assert event == "flag not provided"
+
     def test_fails_with_invalid_operation(self, bare_tracker: OpTracker):
         bare_tracker.operation("invalid operation")  # type: ignore[arg-type]
         event = bare_tracker.build()

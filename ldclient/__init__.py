@@ -7,6 +7,7 @@ from ldclient.impl.util import log, Result
 from ldclient.version import VERSION
 from .client import *
 from .context import *
+from .migrations import *
 
 __version__ = VERSION
 
@@ -109,5 +110,6 @@ __all__ = [
     'context',
     'evaluation',
     'integrations',
-    'interfaces'
+    'interfaces',
+    'migrations'
 ]
