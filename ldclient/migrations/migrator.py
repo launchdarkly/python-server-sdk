@@ -1,7 +1,11 @@
 from __future__ import annotations
+import concurrent.futures
+from datetime import datetime
 from abc import ABCMeta, abstractmethod
-from typing import Optional, Union, Any, TYPE_CHECKING
-from ldclient.migrations.types import ExecutionOrder, OperationResult, Stage, MigrationConfig, MigratorFn, MigratorCompareFn
+from typing import Optional, Union, Any, Tuple, TYPE_CHECKING
+from ldclient.migrations.types import ExecutionOrder, OperationResult, WriteResult, Stage, MigrationConfig, MigratorFn, MigratorCompareFn, Operation, Origin
+from ldclient.migrations.tracker import OpTracker
+from ldclient.impl.util import Result, log
 
 if TYPE_CHECKING:
     from ldclient import LDClient, Context
@@ -15,7 +19,7 @@ class Migrator:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+    def read(self, key: str, context: Union[Context, dict], default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
         """
         Uses the provided flag key and context to execute a migration-backed read operation.
 
@@ -26,7 +30,7 @@ class Migrator:
         """
 
     @abstractmethod
-    def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+    def write(self, key: str, context: Union[Context, dict], default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
         """
         Uses the provided flag key and context to execute a migration-backed write operation.
 
@@ -59,13 +63,106 @@ class MigratorImpl(Migrator):
         self.__measure_latency = measure_latency
         self.__measure_errors = measure_errors
 
-    def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
-        # TODO: Implement this in a subsequent ticket
-        pass
+    def read(self, key: str, context: Union[Context, dict], default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+        stage, tracker = self.__client.migration_variation(key, context, default_stage)
+        tracker.operation(Operation.READ)
 
-    def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
-        # TODO: Implement this in a subsequent ticket
-        pass
+        old = Executor(Origin.OLD, self.__read_config.old, tracker, self.__measure_latency, self.__measure_errors, payload)
+        new = Executor(Origin.NEW, self.__read_config.new, tracker, self.__measure_latency, self.__measure_errors, payload)
+
+        if stage == Stage.OFF:
+            result = old.run()
+        elif stage == Stage.DUALWRITE:
+            result = old.run()
+        elif stage == Stage.SHADOW:
+            result = self.__read_both(old, new, tracker)
+        elif stage == Stage.LIVE:
+            result = self.__read_both(new, old, tracker)
+        elif stage == Stage.RAMPDOWN:
+            result = new.run()
+        else:
+            result = new.run()
+
+        event = tracker.build()
+        if isinstance(event, str):
+            log.error("error occurred generating migration op event %s", event)
+
+        return result
+
+    def write(self, key: str, context: Union[Context, dict], default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
+        stage, tracker = self.__client.migration_variation(key, context, default_stage)
+        tracker.operation(Operation.WRITE)
+
+        old = Executor(Origin.OLD, self.__write_config.old, tracker, self.__measure_latency, self.__measure_errors, payload)
+        new = Executor(Origin.NEW, self.__write_config.new, tracker, self.__measure_latency, self.__measure_errors, payload)
+
+        if stage == Stage.OFF:
+            result = old.run()
+            write_result = WriteResult(result)
+        elif stage == Stage.DUALWRITE:
+            authoritative_result, nonauthoritative_result = self.__write_both(old, new, tracker)
+            write_result = WriteResult(authoritative_result, nonauthoritative_result)
+        elif stage == Stage.SHADOW:
+            authoritative_result, nonauthoritative_result = self.__write_both(old, new, tracker)
+            write_result = WriteResult(authoritative_result, nonauthoritative_result)
+        elif stage == Stage.LIVE:
+            authoritative_result, nonauthoritative_result = self.__write_both(new, old, tracker)
+            write_result = WriteResult(authoritative_result, nonauthoritative_result)
+        elif stage == Stage.RAMPDOWN:
+            authoritative_result, nonauthoritative_result = self.__write_both(new, old, tracker)
+            write_result = WriteResult(authoritative_result, nonauthoritative_result)
+        else:
+            result = new.run()
+            write_result = WriteResult(result)
+
+        event = tracker.build()
+        if isinstance(event, str):
+            log.error("error occurred generating migration op event %s", event)
+
+        return write_result
+
+    def __read_both(self, authoritative: Executor, nonauthoritative: Executor, tracker: OpTracker) -> OperationResult:
+        if self.__read_execution_order == ExecutionOrder.PARALLEL:
+            futures = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                futures.append(executor.submit(lambda: (True, authoritative.run())))
+                futures.append(executor.submit(lambda: (False, nonauthoritative.run())))
+
+                for future in concurrent.futures.as_completed(futures):
+                    is_authoritative, result = future.result()
+                    if is_authoritative:
+                        authoritative_result = result
+                    else:
+                        nonauthoritative_result = result
+
+        elif self.__read_execution_order == ExecutionOrder.RANDOM:
+            # TODO(sampling-ratio): Add a sampler check here
+            nonauthoritative_result = nonauthoritative.run()
+            authoritative_result = authoritative.run()
+        else:
+            authoritative_result = authoritative.run()
+            nonauthoritative_result = nonauthoritative.run()
+
+        if self.__read_config.comparison is None:
+            return authoritative_result
+
+        compare = self.__read_config.comparison
+        if authoritative_result.is_success() and nonauthoritative_result.is_success():
+            tracker.consistent(lambda: compare(authoritative_result.value, nonauthoritative_result.value))
+
+        return authoritative_result
+
+    def __write_both(self, authoritative: Executor, nonauthoritative: Executor, tracker: OpTracker) -> Tuple[OperationResult, Optional[OperationResult]]:
+        authoritative_result = authoritative.run()
+        tracker.invoked(authoritative.origin)
+
+        if not authoritative_result.is_success():
+            return authoritative_result, None
+
+        nonauthoritative_result = nonauthoritative.run()
+        tracker.invoked(nonauthoritative.origin)
+
+        return authoritative_result, nonauthoritative_result
 
 
 class MigratorBuilder:
@@ -187,3 +284,52 @@ class MigratorBuilder:
             self.__measure_latency,
             self.__measure_errors,
         )
+
+
+class Executor:
+    """
+    Utility class for executing migration operations while also tracking our
+    built-in migration measurements.
+    """
+
+    def __init__(
+        self,
+        origin: Origin,
+        fn: MigratorFn,
+        tracker: OpTracker,
+        measure_latency: bool,
+        measure_errors: bool,
+        payload: Any
+    ):
+        self.__origin = origin
+        self.__fn = fn
+        self.__tracker = tracker
+        self.__measure_latency = measure_latency
+        self.__measure_errors = measure_errors
+        self.__payload = payload
+
+    @property
+    def origin(self) -> Origin:
+        return self.__origin
+
+    def run(self) -> OperationResult:
+        """
+        Execute the configured operation and track any available measurements.
+        """
+        start = datetime.now()
+
+        try:
+            result = self.__fn(self.__payload)
+        except Exception as e:
+            result = Result.fail(f"'{self.__origin.value} operation raised an exception", e)
+
+        # Record required tracker measurements
+        if self.__measure_latency:
+            self.__tracker.latency(self.__origin, datetime.now() - start)
+
+        if self.__measure_errors and not result.is_success():
+            self.__tracker.error(self.__origin)
+
+        self.__tracker.invoked(self.__origin)
+
+        return OperationResult(self.__origin, result)

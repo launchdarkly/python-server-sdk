@@ -147,21 +147,41 @@ class Stage(Enum):
             return None
 
 
-class OperationResult:
+class OperationResult(Result):
     """
     The OperationResult wraps a :class:`ldclient.Result` pair an origin with a result.
     """
 
     def __init__(self, origin: Origin, result: Result):
+        super().__init__(result.value, result.error, result.exception)
         self.__origin = origin
-        self.__result = result
 
     @property
     def origin(self) -> Origin:
         return self.__origin
 
-    def __getattr__(self, attr):
-        return getattr(self.wrappee, attr)
+
+class WriteResult:
+    """
+    A write result contains the operation results against both the
+    authoritative and non-authoritative origins.
+
+    Authoritative writes are always executed first. In the event of a failure,
+    the non-authoritative write will not be executed, resulting in a None value
+    in the final WriteResult.
+    """
+
+    def __init__(self, authoritative: OperationResult, nonauthoritative: Optional[OperationResult] = None):
+        self.__authoritative = authoritative
+        self.__nonauthoritative = nonauthoritative
+
+    @property
+    def authoritative(self) -> OperationResult:
+        return self.__authoritative
+
+    @property
+    def nonauthoritative(self) -> Optional[OperationResult]:
+        return self.__nonauthoritative
 
 
 class MigrationConfig:
