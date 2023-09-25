@@ -5,7 +5,10 @@ from ldclient.migrations import MigratorBuilder
 from ldclient import Result
 from ldclient.migrations.types import Stage, Origin, MigratorFn, ExecutionOrder
 from ldclient.migrations.migrator import Migrator
+from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.versioned_data_kind import FEATURES
+from ldclient.impl.events.types import EventInputEvaluation
+from ldclient.impl.util import timedelta_millis
 from testing.builders import FlagBuilder
 from testing.test_ldclient import make_client, user
 from typing import List
@@ -112,7 +115,6 @@ class TestPassingPayloadThrough:
 
 
 class TestTrackingInvoked:
-    @pytest.mark.skip("cannot finish until we have migration op event")
     @pytest.mark.parametrize(
         "stage,origins",
         [
@@ -131,9 +133,14 @@ class TestTrackingInvoked:
         result = migrator.read(stage.value, user, Stage.LIVE)
 
         assert result.is_success()
-        # TODO: Add tests that ensure each of the provided origins are in the invoked measurement
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
 
-    @pytest.mark.skip("cannot finish until we have migration op event")
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert len(origins) == len(event.invoked)
+        assert all(o in event.invoked for o in origins)
+
     @pytest.mark.parametrize(
         "stage,origins",
         [
@@ -152,11 +159,16 @@ class TestTrackingInvoked:
         result = migrator.write(stage.value, user, Stage.LIVE)
 
         assert result.authoritative.is_success()
-        # TODO: Add tests that ensure each of the provided origins are in the invoked measurement
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert len(origins) == len(event.invoked)
+        assert all(o in event.invoked for o in origins)
 
 
 class TestTrackingLatency:
-    @pytest.mark.skip("cannot finish until we have migration op event")
     @pytest.mark.parametrize(
         "stage,origins",
         [
@@ -173,6 +185,7 @@ class TestTrackingLatency:
             sleep(0.1)
             return Result.success("success")
 
+        builder.track_latency(True)
         builder.read(delay, delay)
         migrator = builder.build()
         assert isinstance(migrator, Migrator)
@@ -180,11 +193,16 @@ class TestTrackingLatency:
         result = migrator.read(stage.value, user, Stage.LIVE)
 
         assert result.is_success()
-        # TODO: Add tests that ensure each of the provided origins are in the
-        # latency measurement. We should also make sure the reported latency is
-        # >= the 0.1 we are sleeping for.
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
 
-    @pytest.mark.skip("cannot finish until we have migration op event")
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert len(origins) == len(event.latencies)
+        for o in origins:
+            assert o in event.latencies
+            assert event.latencies[o] >= timedelta(milliseconds=100)
+
     @pytest.mark.parametrize(
         "stage,origins",
         [
@@ -201,27 +219,26 @@ class TestTrackingLatency:
             sleep(0.1)
             return Result.success("success")
 
+        builder.track_latency(True)
         builder.write(delay, delay)
         migrator = builder.build()
         assert isinstance(migrator, Migrator)
 
-        result = migrator.read(stage.value, user, Stage.LIVE)
+        result = migrator.write(stage.value, user, Stage.LIVE)
 
-        assert result.is_success()
-        # TODO: Add tests that ensure each of the provided origins are in the
-        # latency measurement. We should also make sure the reported latency is
-        # >= the 0.1 we are sleeping for.
+        assert result.authoritative.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert len(origins) == len(event.latencies)
+        for o in origins:
+            assert o in event.latencies
+            assert event.latencies[o] >= timedelta(milliseconds=100)
 
 
 class TestTrackingErrors:
-    @pytest.mark.skip("cannot finish until we have migration op event")
-    def test_errors(self, builder: MigratorBuilder, stage: Stage, origins: List[Origin]):
-        # TODO: Add tests similar to the invoked tracking
-        pass
-
-
-class TestTrackingConsistency:
-    @pytest.mark.skip("cannot finish until we have migration op event")
     @pytest.mark.parametrize(
         "stage,origins",
         [
@@ -233,10 +250,165 @@ class TestTrackingConsistency:
             pytest.param(Stage.COMPLETE, [Origin.NEW], id="complete"),
         ],
     )
-    def test_consistency(self, builder: MigratorBuilder, stage: Stage, origins: List[Origin]):
-        # TODO: Add tests that check when it is the same, different, and when
-        # it throws an exception.
-        pass
+    def test_reads(self, builder: MigratorBuilder, stage: Stage, origins: List[Origin]):
+        builder.track_errors(True)
+        builder.read(lambda _: Result.fail("fail"), lambda _: Result.fail("fail"))
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.read(stage.value, user, Stage.LIVE)
+
+        assert not result.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert len(origins) == len(event.errors)
+        assert all(o in event.errors for o in origins)
+
+    @pytest.mark.parametrize(
+        "stage,origin",
+        [
+            pytest.param(Stage.OFF, Origin.OLD, id="off"),
+            pytest.param(Stage.DUALWRITE, Origin.OLD, id="dualwrite"),
+            pytest.param(Stage.SHADOW, Origin.OLD, id="shadow"),
+            pytest.param(Stage.LIVE, Origin.NEW, id="live"),
+            pytest.param(Stage.RAMPDOWN, Origin.NEW, id="rampdown"),
+            pytest.param(Stage.COMPLETE, Origin.NEW, id="complete"),
+        ],
+    )
+    def test_authoritative_writes(self, builder: MigratorBuilder, stage: Stage, origin: Origin):
+        builder.track_errors(True)
+        builder.write(lambda _: Result.fail("fail"), lambda _: Result.fail("fail"))
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.write(stage.value, user, Stage.LIVE)
+
+        assert not result.authoritative.is_success()
+        assert result.nonauthoritative is None
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert 1 == len(event.errors)
+        assert origin in event.errors
+
+    @pytest.mark.parametrize(
+        "stage,fail_old,fail_new,origin",
+        [
+            # Skip OFF and COMPLETE since they don't have non-authoritative writes
+            pytest.param(Stage.DUALWRITE, False, True, Origin.NEW, id="dualwrite"),
+            pytest.param(Stage.SHADOW, False, True, Origin.NEW, id="shadow"),
+            pytest.param(Stage.LIVE, True, False, Origin.OLD, id="live"),
+            pytest.param(Stage.RAMPDOWN, True, False, Origin.OLD, id="rampdown"),
+        ],
+    )
+    def test_nonauthoritative_writes(self, builder: MigratorBuilder, stage: Stage, fail_old: bool, fail_new: bool, origin: Origin):
+        def success(_):
+            return Result.success(None)
+
+        def fail(_):
+            return Result.fail("fail")
+
+        builder.track_errors(True)
+        builder.write(fail if fail_old else success, fail if fail_new else success)
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.write(stage.value, user, Stage.LIVE)
+
+        assert result.authoritative.is_success()
+        assert result.nonauthoritative is not None
+        assert not result.nonauthoritative.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert 1 == len(event.errors)
+        assert origin in event.errors
+
+
+class TestTrackingConsistency:
+    @pytest.mark.parametrize(
+        "stage",
+        [
+            pytest.param(Stage.OFF, id="off"),
+            pytest.param(Stage.DUALWRITE, id="dualwrite"),
+            # SHADOW and LIVE are tested separately since they actually trigger consistency checks.
+            pytest.param(Stage.RAMPDOWN, id="rampdown"),
+            pytest.param(Stage.COMPLETE, id="complete"),
+        ],
+    )
+    def test_consistency_is_not_run_in_most_stages(self, builder: MigratorBuilder, stage: Stage):
+        builder.read(lambda _: Result.success("value"), lambda _: Result.success("value"), lambda lhs, rhs: lhs == rhs)
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.read(stage.value, user, Stage.LIVE)
+        assert result.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert event.consistent is None
+
+    @pytest.mark.parametrize(
+        "stage,old,new,expected",
+        [
+            # SHADOW and LIVE are the only two stages that run both origins for read.
+            pytest.param(Stage.SHADOW, "value", "value", True, id="shadow matches"),
+            pytest.param(Stage.LIVE, "value", "value", True, id="live matches"),
+
+            pytest.param(Stage.SHADOW, "old", "new", False, id="shadow does not match"),
+            pytest.param(Stage.LIVE, "old", "new", False, id="live does not match"),
+        ],
+    )
+    def test_consistency_is_tracked_correctly(self, builder: MigratorBuilder, stage: Stage, old: str, new: str, expected: bool):
+        builder.read(lambda _: Result.success(old), lambda _: Result.success(new), lambda lhs, rhs: lhs == rhs)
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.read(stage.value, user, Stage.LIVE)
+        assert result.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert event.consistent is expected
+
+    @pytest.mark.parametrize(
+        "stage,old,new,expected",
+        [
+            # SHADOW and LIVE are the only two stages that run both origins for read.
+            pytest.param(Stage.SHADOW, "value", "value", True, id="shadow matches"),
+            pytest.param(Stage.LIVE, "value", "value", True, id="live matches"),
+
+            pytest.param(Stage.SHADOW, "old", "new", False, id="shadow does not match"),
+            pytest.param(Stage.LIVE, "old", "new", False, id="live does not match"),
+        ],
+    )
+    def test_consistency_handles_exceptions(self, builder: MigratorBuilder, stage: Stage, old: str, new: str, expected: bool):
+        def raise_exception(lhs, rhs):
+            raise Exception("error")
+
+        builder.read(lambda _: Result.success(old), lambda _: Result.success(new), raise_exception)
+        migrator = builder.build()
+        assert isinstance(migrator, Migrator)
+
+        result = migrator.read(stage.value, user, Stage.LIVE)
+        assert result.is_success()
+        events = builder._client._event_processor._events  # type: ignore
+        assert isinstance(events[0], EventInputEvaluation)
+
+        event = events[1]
+        assert isinstance(event, MigrationOpEvent)
+        assert event.consistent is None
 
 
 class TestHandlesExceptionsInMigratorFn:
@@ -331,7 +503,7 @@ class TestSupportsExectionOrder:
         start = datetime.now()
         result = migrator.read('live', user, Stage.LIVE)
         delta = datetime.now() - start
-        ms = delta / timedelta(milliseconds=1)
+        ms = timedelta_millis(delta)
 
         assert result.is_success()
         assert ms >= min_time

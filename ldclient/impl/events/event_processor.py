@@ -7,18 +7,21 @@ from collections import namedtuple
 from email.utils import parsedate
 import json
 from threading import Event, Lock, Thread
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 import time
 import uuid
 import queue
 import urllib3
 from ldclient.config import Config
+from datetime import timedelta
 
 from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.impl.util import timedelta_millis
 from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
@@ -90,6 +93,66 @@ class EventOutputFormatter:
             if e.metric_value is not None:
                 out['metricValue'] = e.metric_value
             return out
+        elif isinstance(e, MigrationOpEvent):
+            out = {
+                'kind': 'migration_op',
+                'creationDate': e.timestamp,
+                'contextKeys': self._context_keys(e.context),
+                'evaluation': {
+                    'key': e.flag.key,
+                    'value': e.detail.value
+                }
+            }
+
+            if e.default_stage:
+                out["evaluation"]["default"] = e.default_stage.value
+            if e.detail.variation_index is not None:
+                out["evaluation"]["variation"] = e.detail.variation_index
+            if e.detail.reason is not None:
+                out["evaluation"]["reason"] = e.detail.reason
+
+            # TODO(sampling-ratio): Add sampling ratio here when we support it
+            out["samplingRatio"] = 1
+
+            measurements: List[Dict] = []
+
+            if len(e.invoked) > 0:
+                measurements.append(
+                    {
+                        "key": "invoked",
+                        "values": {origin.value: True for origin in e.invoked}
+                    }
+                )
+
+            if e.consistent is not None:
+                measurement = {
+                    "key": "consistent",
+                    "value": e.consistent
+                }
+                # TODO(sampling-ratio): Add sampling ratio if appropriate
+                measurements.append(measurement)
+
+            if len(e.latencies) > 0:
+                measurements.append(
+                    {
+                        "key": "latency_ms",
+                        "values": {o.value: timedelta_millis(d) for o, d in e.latencies.items()}
+                    }
+                )
+
+            if len(e.errors) > 0:
+                measurements.append(
+                    {
+                        "key": "error",
+                        "values": {origin.value: True for origin in e.errors}
+                    }
+                )
+
+            if len(measurements):
+                out["measurements"] = measurements
+
+            return out
+
         return None
 
     """
@@ -329,6 +392,9 @@ class EventDispatcher:
         elif isinstance(event, EventInputCustom):
             context = event.context
             full_event = event
+        elif isinstance(event, MigrationOpEvent):
+            full_event = event
+
 
         # For each context we haven't seen before, we add an index event - unless this is already
         # an identify event.
@@ -342,7 +408,7 @@ class EventDispatcher:
 
         if full_event:
             self._outbox.add_event(full_event)
-        
+
         if debug_event:
             self._outbox.add_event(debug_event)
 

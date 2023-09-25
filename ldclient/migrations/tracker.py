@@ -5,8 +5,43 @@ from ldclient.evaluation import EvaluationDetail
 from ldclient.context import Context
 from ldclient.impl.model import FeatureFlag
 from threading import Lock
-from ldclient.impl.events.types import EventInputMigrationOp
+from ldclient.impl.events.types import EventInput
 from ldclient.migrations.types import Stage, Operation, Origin
+from ldclient.impl.util import log
+
+
+class MigrationOpEvent(EventInput):
+    """
+    A migration op event represents the results of a migration-assisted read or
+    write operation.
+
+    The event includes optional measurements reporting on consistency checks,
+    error reporting, and operation latency values.
+
+    This event should not be constructed directly; rather, it should be built
+    through :class:`ldclient.migrations.OpTracker()`.
+    """
+    __slots__ = ['flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
+
+    def __init__(self, timestamp: int, context: Context, flag: FeatureFlag, operation: Operation, default_stage: Stage, detail: EvaluationDetail, invoked: Set[Origin], consistent: Optional[bool], consistent_ratio: Optional[int], errors: Set[Origin], latencies: Dict[Origin, timedelta]):
+        super().__init__(timestamp, context)
+        self.flag = flag
+        self.operation = operation
+        self.default_stage = default_stage
+        self.detail = detail
+        self.invoked = invoked
+        self.consistent = consistent
+        self.consistent_ratio = consistent_ratio
+        self.errors = errors
+        self.latencies = latencies
+
+    # def to_debugging_dict(self) -> dict:
+    #     # TODO(mmk): Fill this out.
+    #     return {
+    #         "timestamp": self.timestamp,
+    #         "context": self.context.to_dict(),
+    #     }
+
 
 
 class OpTracker:
@@ -90,7 +125,11 @@ class OpTracker:
         """
         # TODO(sampling-ratio): Add sampling checking here
         with self.__mutex:
-            self.__consistent = is_consistent()
+            try:
+                self.__consistent = is_consistent()
+            except Exception as e:
+                log.error("exception raised during consistency check %s; failed to record measurement", repr(e))
+
         return self
 
     def error(self, origin: Origin) -> 'OpTracker':
@@ -120,14 +159,14 @@ class OpTracker:
             self.__latencies[origin] = duration
         return self
 
-    def build(self) -> Union[EventInputMigrationOp, str]:
+    def build(self) -> Union[MigrationOpEvent, str]:
         """
-        Creates an instance of :class:`ldclient.impl.EventInputMigrationOp()`.
+        Creates an instance of :class:`MigrationOpEvent()`.
         This event data can be provided to
         :func:`ldclient.client.LDClient.track_migration_op()` to rely this
         metric information upstream to LaunchDarkly services.
 
-        :return: A :class:`ldclient.impl.EventInputMigrationOp()` or a string
+        :return: A :class:`MigrationOpEvent()` or a string
             describing the type of failure.
         """
         with self.__mutex:
@@ -147,7 +186,7 @@ class OpTracker:
             # TODO: Inject this time function or something
             timestamp = int(time.time() * 1_000)
 
-            return EventInputMigrationOp(
+            return MigrationOpEvent(
                 timestamp,
                 self.__context,
                 self.__flag,

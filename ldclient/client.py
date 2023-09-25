@@ -191,6 +191,26 @@ class LDClient:
     def _send_event(self, event):
         self._event_processor.send_event(event)
 
+    def track_migration_op(self, tracker: OpTracker):
+        """
+        Tracks the results of a migrations operation. This event includes
+        measurements which can be used to enhance the observability of a
+        migration within the LaunchDarkly UI.
+
+        Customers making use of the :class:`ldclient.MigrationBuilder` should
+        not need to call this method manually.
+
+        Customers not using the builder should provide this method with the
+        tracker returned from calling :func:`migration_variation`.
+        """
+        event = tracker.build()
+
+        if isinstance(event, str):
+            log.error("error generting migration op event %s; no event will be emitted", event)
+            return
+
+        self._send_event(event)
+
     def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None,
               metric_value: Optional[AnyNum]=None):
         """Tracks that an application-defined event occurred.

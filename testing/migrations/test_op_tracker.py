@@ -1,8 +1,7 @@
 import pytest
 from datetime import timedelta
-from ldclient.migrations import OpTracker, Stage, Operation, Origin
+from ldclient.migrations import OpTracker, Stage, Operation, Origin, MigrationOpEvent
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.events.types import EventInputMigrationOp
 from testing.builders import build_off_flag_with_value
 from testing.test_ldclient import user
 
@@ -28,7 +27,7 @@ def tracker(bare_tracker) -> OpTracker:
 class TestBuilding:
     def test_can_build_successfully(self, tracker: OpTracker):
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
     def test_fails_without_operation(self, bare_tracker: OpTracker):
         event = bare_tracker.build()
@@ -135,7 +134,7 @@ class TestTrackInvocations:
         bare_tracker.invoked(origin)
 
         event = bare_tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.invoked) == 1
         assert origin in event.invoked
@@ -146,7 +145,7 @@ class TestTrackInvocations:
         bare_tracker.invoked(Origin.NEW)
 
         event = bare_tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.invoked) == 2
         assert Origin.OLD in event.invoked
@@ -157,7 +156,7 @@ class TestTrackInvocations:
         tracker.invoked(False)  # type: ignore[arg-type]
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.invoked) == 2
         assert Origin.OLD in event.invoked
@@ -173,7 +172,7 @@ class TestTrackConsistency:
             self, tracker: OpTracker, consistent: bool):
         tracker.consistent(lambda: consistent)
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert event.consistent is consistent
         assert event.consistent_ratio is None
@@ -210,7 +209,7 @@ class TestTrackErrors:
         tracker.error(origin)
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.errors) == 1
         assert origin in event.errors
@@ -221,7 +220,7 @@ class TestTrackErrors:
         tracker.error(Origin.NEW)
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.errors) == 2
         assert Origin.OLD in event.errors
@@ -232,7 +231,7 @@ class TestTrackErrors:
         tracker.error(False)  # type: ignore[arg-type]
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.errors) == 0
 
@@ -250,7 +249,7 @@ class TestTrackLatencies:
         tracker.latency(origin, timedelta(milliseconds=10))
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.latencies) == 1
         assert event.latencies[origin] == timedelta(milliseconds=10)
@@ -261,7 +260,7 @@ class TestTrackLatencies:
         tracker.latency(Origin.NEW, timedelta(milliseconds=5))
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.latencies) == 2
         assert event.latencies[Origin.OLD] == timedelta(milliseconds=10)
@@ -272,6 +271,6 @@ class TestTrackLatencies:
         tracker.latency(False, timedelta(milliseconds=5))  # type: ignore[arg-type]
 
         event = tracker.build()
-        assert isinstance(event, EventInputMigrationOp)
+        assert isinstance(event, MigrationOpEvent)
 
         assert len(event.latencies) == 0

@@ -6,10 +6,15 @@ import time
 from typing import Any, Optional
 from ldclient.impl.http import _base_headers
 from urllib.parse import urlparse, urlunparse
+from datetime import timedelta
 
 
 def current_time_millis() -> int:
     return int(time.time() * 1000)
+
+
+def timedelta_millis(delta: timedelta) -> float:
+    return delta / timedelta(milliseconds=1)
 
 
 log = logging.getLogger('ldclient.util')  # historical logger name

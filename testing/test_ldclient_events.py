@@ -1,9 +1,12 @@
 from ldclient.client import LDClient, Config, Context
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.events.types import EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.impl.stubs import NullEventProcessor
 from ldclient.versioned_data_kind import FEATURES
+from ldclient.migrations import OpTracker, Stage, Operation, Origin
 
 from testing.builders import *
 from testing.stub_util import MockUpdateProcessor
@@ -71,6 +74,39 @@ def test_identify_invalid_context():
     with make_client() as client:
         client.identify(Context.create(''))
         assert count_events(client) == 0
+
+
+def test_migration_op():
+    detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+    flag = FlagBuilder('key').version(100).on(True).variations('value').build()
+    tracker = OpTracker(flag, context, detail, Stage.OFF)
+    tracker.operation(Operation.READ)
+    tracker.invoked(Origin.OLD)
+
+    with make_client() as client:
+        client.track_migration_op(tracker)
+
+        e = get_first_event(client)
+        assert isinstance(e, MigrationOpEvent)
+        assert e.flag == flag
+        assert e.context == context
+        assert e.operation == Operation.READ
+        assert e.detail == detail
+        assert e.invoked == set([Origin.OLD])
+
+
+def test_does_not_send_bad_event():
+    detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+    tracker = OpTracker(None, context, detail, Stage.OFF)
+
+    with make_client() as client:
+        client.track_migration_op(tracker)
+        client.identify(context) # Emit this to ensure events are working
+
+
+        # This is only identify if the op tracker fails to build
+        e = get_first_event(client)
+        assert isinstance(e, EventInputIdentify)
 
 
 def test_track():

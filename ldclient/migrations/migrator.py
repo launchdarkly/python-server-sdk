@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Optional, Union, Any, Tuple, TYPE_CHECKING
 from ldclient.migrations.types import ExecutionOrder, OperationResult, WriteResult, Stage, MigrationConfig, MigratorFn, MigratorCompareFn, Operation, Origin
 from ldclient.migrations.tracker import OpTracker
-from ldclient.impl.util import Result, log
+from ldclient.impl.util import Result
 
 if TYPE_CHECKING:
     from ldclient import LDClient, Context
@@ -83,9 +83,7 @@ class MigratorImpl(Migrator):
         else:
             result = new.run()
 
-        event = tracker.build()
-        if isinstance(event, str):
-            log.error("error occurred generating migration op event %s", event)
+        self.__client.track_migration_op(tracker)
 
         return result
 
@@ -115,9 +113,7 @@ class MigratorImpl(Migrator):
             result = new.run()
             write_result = WriteResult(result)
 
-        event = tracker.build()
-        if isinstance(event, str):
-            log.error("error occurred generating migration op event %s", event)
+        self.__client.track_migration_op(tracker)
 
         return write_result
 
@@ -174,7 +170,8 @@ class MigratorBuilder:
     """
 
     def __init__(self, client: LDClient):
-        self.__client = client
+        # Single _ to prevent mangling; useful for testing
+        self._client = client
 
         # Default settings as required by the spec
         self.__read_execution_order = ExecutionOrder.PARALLEL
@@ -277,7 +274,7 @@ class MigratorBuilder:
             return "write configuration not provided"
 
         return MigratorImpl(
-            self.__client,
+            self._client,
             self.__read_execution_order,
             self.__read_config,
             self.__write_config,

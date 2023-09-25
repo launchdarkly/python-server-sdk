@@ -1,13 +1,20 @@
+import pytest
 import json
 from threading import Thread
+from typing import Set, Dict
+from datetime import timedelta
 import time
 import uuid
 
 from ldclient.config import Config
 from ldclient.context import Context
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
+from ldclient.migrations.types import Operation, Origin, Stage
+from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.impl.util import timedelta_millis
 
 from testing.builders import *
 from testing.proxy_test_util import do_proxy_tests
@@ -55,6 +62,122 @@ class DefaultTestProcessor(DefaultEventProcessor):
         config = Config(**kwargs)
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
         DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator = diagnostic_accumulator)
+
+
+@pytest.mark.parametrize(
+    "operation,default_stage,invoked",
+    [
+        pytest.param(Operation.READ, Stage.OFF, {Origin.OLD}, id="read off"),
+        pytest.param(Operation.READ, Stage.DUALWRITE, {Origin.OLD}, id="read dualwrite"),
+        pytest.param(Operation.READ, Stage.SHADOW, {Origin.OLD, Origin.NEW}, id="read shadow"),
+        pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
+        pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
+        pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
+
+        pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
+        pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD, Origin.NEW}, id="write dualwrite"),
+        pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD, Origin.NEW}, id="write shadow"),
+        pytest.param(Operation.WRITE, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="write live"),
+        pytest.param(Operation.WRITE, Stage.RAMPDOWN, {Origin.OLD, Origin.NEW}, id="write rampdown"),
+        pytest.param(Operation.WRITE, Stage.COMPLETE, {Origin.OLD, Origin.NEW}, id="write complete"),
+    ],
+)
+def test_migration_op_event_is_queued_with_invoked(operation: Operation, default_stage: Stage, invoked: Set[Origin]):
+    with DefaultTestProcessor() as ep:
+        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), invoked, None, None, set(), {})
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1
+        check_migration_op_event(output[0], e)
+
+
+@pytest.mark.parametrize(
+    "operation,default_stage,errors",
+    [
+        pytest.param(Operation.READ, Stage.OFF, {Origin.OLD}, id="read off"),
+        pytest.param(Operation.READ, Stage.DUALWRITE, {Origin.OLD}, id="read dualwrite"),
+        pytest.param(Operation.READ, Stage.SHADOW, {Origin.OLD, Origin.NEW}, id="read shadow"),
+        pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
+        pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
+        pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
+
+        pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
+        pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD}, id="write dualwrite"),
+        pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD}, id="write shadow"),
+        pytest.param(Operation.WRITE, Stage.LIVE, {Origin.NEW}, id="write live"),
+        pytest.param(Operation.WRITE, Stage.RAMPDOWN, {Origin.NEW}, id="write rampdown"),
+        pytest.param(Operation.WRITE, Stage.COMPLETE, {Origin.NEW}, id="write complete"),
+    ],
+)
+def test_migration_op_event_is_queued_with_errors(operation: Operation, default_stage: Stage, errors: Set[Origin]):
+    with DefaultTestProcessor() as ep:
+        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, errors, {})
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1
+        check_migration_op_event(output[0], e)
+
+
+@pytest.mark.parametrize(
+    "operation,default_stage,latencies",
+    [
+        pytest.param(Operation.READ, Stage.OFF, {Origin.OLD: 100}, id="read off"),
+        pytest.param(Operation.READ, Stage.DUALWRITE, {Origin.OLD: 100}, id="read dualwrite"),
+        pytest.param(Operation.READ, Stage.SHADOW, {Origin.OLD: 100, Origin.NEW: 100}, id="read shadow"),
+        pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD: 100, Origin.NEW: 100}, id="read live"),
+        pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW: 100}, id="read rampdown"),
+        pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW: 100}, id="read complete"),
+
+        pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD: 100}, id="write off"),
+        pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD: 100, Origin.NEW: 100}, id="write dualwrite"),
+        pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD: 100, Origin.NEW: 100}, id="write shadow"),
+        pytest.param(Operation.WRITE, Stage.LIVE, {Origin.OLD: 100, Origin.NEW: 100}, id="write live"),
+        pytest.param(Operation.WRITE, Stage.RAMPDOWN, {Origin.OLD: 100, Origin.NEW: 100}, id="write rampdown"),
+        pytest.param(Operation.WRITE, Stage.COMPLETE, {Origin.NEW: 100}, id="write complete"),
+    ],
+)
+def test_migration_op_event_is_queued_with_latencies(operation: Operation, default_stage: Stage, latencies: Dict[Origin, float]):
+    with DefaultTestProcessor() as ep:
+        delta_latencies = {origin: timedelta(milliseconds=ms) for origin, ms in latencies.items()}
+        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1
+        check_migration_op_event(output[0], e)
+
+
+@pytest.mark.parametrize(
+    "operation,default_stage",
+    [
+        pytest.param(Operation.READ, Stage.OFF, id="read off"),
+        pytest.param(Operation.READ, Stage.DUALWRITE, id="read dualwrite"),
+        pytest.param(Operation.READ, Stage.SHADOW, id="read shadow"),
+        pytest.param(Operation.READ, Stage.LIVE, id="read live"),
+        pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
+        pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
+
+        pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
+        pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
+        pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
+        pytest.param(Operation.WRITE, Stage.LIVE, id="write live"),
+        pytest.param(Operation.WRITE, Stage.RAMPDOWN, id="write rampdown"),
+        pytest.param(Operation.WRITE, Stage.COMPLETE, id="write complete"),
+    ],
+)
+def test_migration_op_event_is_queued_with_consistency(operation: Operation, default_stage: Stage):
+    # TODO(sampling-ratio): Add sampling ratio when we have it
+    for value in [True, False, None]:
+        with DefaultTestProcessor() as ep:
+            e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, value, None, set(), {})
+            ep.send_event(e)
+
+            output = flush_and_get_events(ep)
+            assert len(output) == 1
+            check_migration_op_event(output[0], e)
+
 
 def test_identify_event_is_queued():
     with DefaultTestProcessor() as ep:
@@ -490,6 +613,46 @@ def check_feature_event(data, source: EventInputEvaluation):
     assert data.get('default') == source.default_value
     assert data['contextKeys'] == make_context_keys(source.context)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
+
+
+def check_migration_op_event(data, source: MigrationOpEvent):
+    assert data['kind'] == 'migration_op'
+    assert data['creationDate'] == source.timestamp
+    assert data['contextKeys'] == make_context_keys(source.context)
+    assert data['evaluation']['key'] == source.flag.key
+    assert data['evaluation']['value'] == source.detail.value
+
+    if source.default_stage is not None:
+        assert data['evaluation']['default'] == source.default_stage.value
+
+    if source.detail.variation_index is not None:
+        assert data['evaluation']['variation'] == source.detail.variation_index
+
+    if source.detail.reason is not None:
+        assert data['evaluation']['reason'] == source.detail.reason
+
+    # TODO(sampling-ratio): Add sampling ratio here when we support it
+    assert data['samplingRatio'] == 1
+
+    index = 0
+    if len(source.invoked):
+        assert data['measurements'][index]['key'] == 'invoked'
+        assert data['measurements'][index]['values'] == {origin.value: True for origin in source.invoked}
+        index += 1
+
+    if source.consistent is not None:
+        assert data['measurements'][index]['key'] == 'consistent'
+        assert data['measurements'][index]['value'] == source.consistent
+        index += 1
+
+    if len(source.latencies):
+        assert data['measurements'][index]['key'] == 'latency_ms'
+        assert data['measurements'][index]['values'] == {o.value: timedelta_millis(d) for o, d in source.latencies.items()}
+        index += 1
+
+    if len(source.errors):
+        assert data['measurements'][index]['key'] == 'error'
+        assert data['measurements'][index]['values'] == {origin.value: True for origin in source.errors}
 
 def check_debug_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'debug'
