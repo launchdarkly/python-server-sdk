@@ -10,7 +10,7 @@ from testing.test_ldclient import user
 def bare_tracker() -> OpTracker:
     flag = build_off_flag_with_value("flag", True).build()
     detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-    tracker = OpTracker(flag, user, detail, Stage.LIVE)
+    tracker = OpTracker("flag", flag, user, detail, Stage.LIVE)
 
     return tracker
 
@@ -29,20 +29,30 @@ class TestBuilding:
         event = tracker.build()
         assert isinstance(event, MigrationOpEvent)
 
+    def test_can_build_successfully_without_a_flag(self):
+        detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+        tracker = OpTracker("flag", None, user, detail, Stage.LIVE)
+        tracker.operation(Operation.READ)
+        tracker.invoked(Origin.OLD)
+
+        event = tracker.build()
+        assert isinstance(event, MigrationOpEvent)
+
     def test_fails_without_operation(self, bare_tracker: OpTracker):
         event = bare_tracker.build()
 
         assert isinstance(event, str)
         assert event == "operation not provided"
 
-    def test_fails_without_flag(self):
+    def test_fails_with_empty_key(self):
         detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-        tracker = OpTracker(None, user, detail, Stage.LIVE)
+        flag = build_off_flag_with_value("flag", True).build()
+        tracker = OpTracker("", flag, user, detail, Stage.LIVE)
         tracker.operation(Operation.WRITE)
         event = tracker.build()
 
         assert isinstance(event, str)
-        assert event == "flag not provided"
+        assert event == "migration operation cannot contain an empty key"
 
     def test_fails_with_invalid_operation(self, bare_tracker: OpTracker):
         bare_tracker.operation("invalid operation")  # type: ignore[arg-type]
@@ -62,7 +72,7 @@ class TestBuilding:
         flag = build_off_flag_with_value("flag", True).build()
         detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
         invalid_context = {"kind": "multi", "key": "user-key"}
-        tracker = OpTracker(flag, invalid_context, detail, Stage.LIVE)
+        tracker = OpTracker("flag", flag, invalid_context, detail, Stage.LIVE)
         tracker.operation(Operation.WRITE)
         tracker.invoked(Origin.OLD)
         event = tracker.build()
@@ -178,7 +188,7 @@ class TestTrackConsistency:
     def test_with_check_ratio_of_1(self, consistent):
         flag = build_off_flag_with_value("flag", 'off').migrations(MigrationSettingsBuilder().check_ratio(1).build()).build()
         detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-        tracker = OpTracker(flag, user, detail, Stage.LIVE)
+        tracker = OpTracker("flag", flag, user, detail, Stage.LIVE)
         tracker.consistent(lambda: consistent)
         tracker.operation(Operation.READ)
         tracker.invoked(Origin.OLD)
@@ -194,7 +204,7 @@ class TestTrackConsistency:
     def test_can_disable_with_check_ratio_of_0(self, consistent: bool):
         flag = build_off_flag_with_value("flag", 'off').migrations(MigrationSettingsBuilder().check_ratio(0).build()).build()
         detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-        tracker = OpTracker(flag, user, detail, Stage.LIVE)
+        tracker = OpTracker("flag", flag, user, detail, Stage.LIVE)
         tracker.consistent(lambda: consistent)
         tracker.operation(Operation.READ)
         tracker.invoked(Origin.OLD)

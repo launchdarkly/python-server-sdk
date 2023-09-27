@@ -30,8 +30,8 @@ filtered_context = {
     '_meta': {'redactedAttributes': ['name']}
 }
 flag = FlagBuilder('flagkey').version(2).build()
-flag_with_0_sampling_ratio = FlagBuilder('flagkey').version(2).sampling_ratio(0).build()
-flag_excluded_from_summaries = FlagBuilder('flagkey').version(2).exclude_from_summaries(True).build()
+flag_with_0_sampling_ratio = FlagBuilder('flagkey').version(3).sampling_ratio(0).build()
+flag_excluded_from_summaries = FlagBuilder('flagkey').version(4).exclude_from_summaries(True).build()
 timestamp = 10000
 
 ep = None
@@ -63,7 +63,35 @@ class DefaultTestProcessor(DefaultEventProcessor):
             kwargs['sdk_key'] = 'SDK_KEY'
         config = Config(**kwargs)
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
-        DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator = diagnostic_accumulator)
+        DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator=diagnostic_accumulator)
+
+
+@pytest.mark.parametrize(
+    "operation,default_stage",
+    [
+        pytest.param(Operation.READ, Stage.OFF, id="read off"),
+        pytest.param(Operation.READ, Stage.DUALWRITE, id="read dualwrite"),
+        pytest.param(Operation.READ, Stage.SHADOW, id="read shadow"),
+        pytest.param(Operation.READ, Stage.LIVE, id="read live"),
+        pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
+        pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
+
+        pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
+        pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
+        pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
+        pytest.param(Operation.WRITE, Stage.LIVE, id="write live"),
+        pytest.param(Operation.WRITE, Stage.RAMPDOWN, id="write rampdown"),
+        pytest.param(Operation.WRITE, Stage.COMPLETE, id="write complete"),
+    ],
+)
+def test_migration_op_event_is_queued_without_flag(operation: Operation, default_stage: Stage):
+    with DefaultTestProcessor() as ep:
+        e = MigrationOpEvent(timestamp, context, "key", None, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1
+        check_migration_op_event(output[0], e)
 
 
 @pytest.mark.parametrize(
@@ -86,7 +114,7 @@ class DefaultTestProcessor(DefaultEventProcessor):
 )
 def test_migration_op_event_is_queued_with_invoked(operation: Operation, default_stage: Stage, invoked: Set[Origin]):
     with DefaultTestProcessor() as ep:
-        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), invoked, None, None, set(), {})
+        e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), invoked, None, None, set(), {})
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -114,7 +142,7 @@ def test_migration_op_event_is_queued_with_invoked(operation: Operation, default
 )
 def test_migration_op_event_is_queued_with_errors(operation: Operation, default_stage: Stage, errors: Set[Origin]):
     with DefaultTestProcessor() as ep:
-        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, errors, {})
+        e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, errors, {})
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -143,7 +171,7 @@ def test_migration_op_event_is_queued_with_errors(operation: Operation, default_
 def test_migration_op_event_is_queued_with_latencies(operation: Operation, default_stage: Stage, latencies: Dict[Origin, float]):
     with DefaultTestProcessor() as ep:
         delta_latencies = {origin: timedelta(milliseconds=ms) for origin, ms in latencies.items()}
-        e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies)
+        e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -153,7 +181,7 @@ def test_migration_op_event_is_queued_with_latencies(operation: Operation, defau
 
 def test_migration_op_event_is_disabled_with_sampling_ratio():
     with DefaultTestProcessor() as ep:
-        e = MigrationOpEvent(timestamp, context, flag_with_0_sampling_ratio, Operation.READ, Stage.OFF, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
+        e = MigrationOpEvent(timestamp, context, flag_with_0_sampling_ratio.key, flag_with_0_sampling_ratio, Operation.READ, Stage.OFF, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
         ep.send_event(e)
 
         # NOTE: Have to send an identify event; otherwise, we will timeout waiting on no events.
@@ -186,7 +214,7 @@ def test_migration_op_event_is_disabled_with_sampling_ratio():
 def test_migration_op_event_is_queued_with_consistency(operation: Operation, default_stage: Stage):
     for value in [True, False, None]:
         with DefaultTestProcessor() as ep:
-            e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, value, None, set(), {})
+            e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, value, None, set(), {})
             ep.send_event(e)
 
             output = flush_and_get_events(ep)
@@ -670,8 +698,11 @@ def check_migration_op_event(data, source: MigrationOpEvent):
     assert data['kind'] == 'migration_op'
     assert data['creationDate'] == source.timestamp
     assert data['contextKeys'] == make_context_keys(source.context)
-    assert data['evaluation']['key'] == source.flag.key
+    assert data['evaluation']['key'] == source.key
     assert data['evaluation']['value'] == source.detail.value
+
+    if source.flag is not None:
+        assert data['evaluation']['version'] == source.flag.version
 
     if source.default_stage is not None:
         assert data['evaluation']['default'] == source.default_stage.value
@@ -682,7 +713,7 @@ def check_migration_op_event(data, source: MigrationOpEvent):
     if source.detail.reason is not None:
         assert data['evaluation']['reason'] == source.detail.reason
 
-    if source.flag.sampling_ratio is not None and source.flag.sampling_ratio != 1:
+    if source.flag is not None and source.flag.sampling_ratio is not None and source.flag.sampling_ratio != 1:
         assert data['samplingRatio'] == source.flag.sampling_ratio
 
     index = 0
@@ -695,7 +726,7 @@ def check_migration_op_event(data, source: MigrationOpEvent):
         assert data['measurements'][index]['key'] == 'consistent'
         assert data['measurements'][index]['value'] == source.consistent
 
-        if source.flag.migrations is not None:
+        if source.flag is not None and source.flag.migrations is not None:
             check_ratio = source.flag.migrations.check_ratio
             if check_ratio is not None and check_ratio != 1:
                 assert data['measurements'][index]['samplingRatio'] == check_ratio

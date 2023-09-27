@@ -5,6 +5,8 @@ from .types import *
 __all__ = [
     'Migrator',
     'MigratorBuilder',
+    'MigratorCompareFn',
+    'MigratorFn',
 
     'OpTracker',
 

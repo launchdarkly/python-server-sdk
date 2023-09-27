@@ -47,6 +47,17 @@ class ExecutionOrder(Enum):
     run time at the cost of the thread overhead.
     """
 
+    @staticmethod
+    def from_str(order: str) -> Optional['ExecutionOrder']:
+        """
+        This method will create a Stage enum corresponding to the given string.
+        If the string doesn't map to a stage, None will returned.
+        """
+        try:
+            return next(e for e in ExecutionOrder if e.value == order)
+        except StopIteration:
+            return None
+
 
 class Operation(Enum):
     """

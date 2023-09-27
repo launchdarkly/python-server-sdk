@@ -97,7 +97,7 @@ class FlagBuilder(BaseBuilder):
         return self._set('samplingRatio', value)
 
     def migrations(self, value: MigrationSettings) -> FlagBuilder:
-        return self._set('migrations', value)
+        return self._set('migration', value)
 
 
 class MigrationSettingsBuilder(BaseBuilder):

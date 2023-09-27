@@ -23,10 +23,13 @@ class MigrationOpEvent(EventInput):
     This event should not be constructed directly; rather, it should be built
     through :class:`ldclient.migrations.OpTracker()`.
     """
-    __slots__ = ['flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
+    __slots__ = ['key', 'flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
 
-    def __init__(self, timestamp: int, context: Context, flag: FeatureFlag, operation: Operation, default_stage: Stage, detail: EvaluationDetail, invoked: Set[Origin], consistent: Optional[bool], consistent_ratio: Optional[int], errors: Set[Origin], latencies: Dict[Origin, timedelta]):
-        super().__init__(timestamp, context, flag.sampling_ratio)
+    def __init__(self, timestamp: int, context: Context, key: str, flag: Optional[FeatureFlag], operation: Operation, default_stage: Stage, detail: EvaluationDetail, invoked: Set[Origin], consistent: Optional[bool], consistent_ratio: Optional[int], errors: Set[Origin], latencies: Dict[Origin, timedelta]):
+        sampling_ratio = None if flag is None else flag.sampling_ratio
+        super().__init__(timestamp, context, sampling_ratio)
+
+        self.key = key
         self.flag = flag
         self.operation = operation
         self.default_stage = default_stage
@@ -41,7 +44,7 @@ class MigrationOpEvent(EventInput):
         return {
             "timestamp": self.timestamp,
             "context": self.context.to_dict(),
-            "flag": {"key": self.flag.key},
+            "flag": None if self.flag is None else {"key": self.flag.key},
             "operation": self.operation.value,
             "default_stage": self.default_stage.value,
             "detail": self.detail,
@@ -68,11 +71,13 @@ class OpTracker:
 
     def __init__(
         self,
+        key: str,
         flag: Optional[FeatureFlag],
         context: Union[Context, dict],
         detail: EvaluationDetail,
         default_stage: Stage
     ):
+        self.__key = key
         self.__flag = flag
 
         if not isinstance(context, Context):
@@ -187,8 +192,8 @@ class OpTracker:
         with self.__mutex:
             if self.__operation is None:
                 return "operation not provided"
-            if self.__flag is None:
-                return "flag not provided"
+            if len(self.__key) == 0:
+                return "migration operation cannot contain an empty key"
             if len(self.__invoked) == 0:
                 return "no origins were invoked"
             if not self.__context.valid:
@@ -204,6 +209,7 @@ class OpTracker:
             return MigrationOpEvent(
                 timestamp,
                 self.__context,
+                self.__key,
                 self.__flag,
                 self.__operation,
                 self.__default_stage,

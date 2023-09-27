@@ -109,8 +109,8 @@ class FeatureFlag(ModelEntity):
         self._debug_events_until_date = opt_number(data, 'debugEventsUntilDate')
 
         self._migrations = None
-        if 'migrations' in data:
-            self._migrations = MigrationSettings(opt_dict(data, 'migrations') or {})
+        if 'migration' in data:
+            self._migrations = MigrationSettings(opt_dict(data, 'migration') or {})
 
         self._exclude_from_summaries = opt_bool(data, 'excludeFromSummaries') or False
         self._sampling_ratio = opt_int(data, 'samplingRatio')

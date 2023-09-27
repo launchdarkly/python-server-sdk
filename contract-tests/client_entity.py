@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+import requests
 from typing import Optional
 
 from big_segment_store_fixture import BigSegmentStoreFixture
@@ -10,6 +11,7 @@ from ldclient.config import BigSegmentsConfig
 
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from ldclient import MigratorBuilder, ExecutionOrder, MigratorFn, Operation, Stage
 from ldclient import *
 
 
@@ -55,7 +57,7 @@ class ClientEntity:
             _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = BigSegmentsConfig(**big_config)
-        
+
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
 
@@ -98,7 +100,7 @@ class ClientEntity:
 
     def secure_mode_hash(self, params: dict) -> dict:
         return {"result": self.client.secure_mode_hash(params["context"])}
-    
+
     def context_build(self, params: dict) -> dict:
         if params.get("multi"):
             b = Context.multi_builder()
@@ -106,7 +108,7 @@ class ClientEntity:
                 b.add(self._context_build_single(c))
             return self._context_response(b.build())
         return self._context_response(self._context_build_single(params["single"]))
-    
+
     def _context_build_single(self, params: dict) -> Context:
         b = Context.builder(params["key"])
         if "kind" in params:
@@ -122,7 +124,7 @@ class ClientEntity:
             for attr in params.get("private"):
                 b.private(attr)
         return b.build()
-    
+
     def context_convert(self, params: dict) -> dict:
         input = params["input"]
         try:
@@ -130,12 +132,12 @@ class ClientEntity:
             return self._context_response(Context.from_dict(props))
         except Exception as e:
             return {"error": str(e)}
-    
+
     def _context_response(self, c: Context) -> dict:
         if c.valid:
             return {"output": c.to_json_string()}
         return {"error": c.error}
-    
+
     def get_big_segment_store_status(self) -> dict:
         status = self.client.big_segment_store_status_provider.status
         return {
@@ -143,9 +145,54 @@ class ClientEntity:
             "stale": status.stale
         }
 
+    def migration_variation(self, params: dict) -> dict:
+        stage, _ = self.client.migration_variation(params["key"], params["context"], Stage.from_str(params["defaultStage"]))
+
+        return {'result': stage.value}
+
+    def migration_operation(self, params: dict) -> dict:
+        builder = MigratorBuilder(self.client)
+
+        if params["readExecutionOrder"] == "concurrent":
+            params["readExecutionOrder"] = "parallel"
+
+        builder.read_execution_order(ExecutionOrder.from_str(params["readExecutionOrder"]))
+        builder.track_latency(params["trackLatency"])
+        builder.track_errors(params["trackErrors"])
+
+        def callback(endpoint) -> MigratorFn:
+            def fn(payload) -> Result:
+                response = requests.post(endpoint, data=payload)
+
+                if response.status_code == 200:
+                    return Result.success(response.text)
+
+                return Result.error(f"Request failed with status code {response.status_code}")
+
+            return fn
+
+        if params["trackConsistency"]:
+            builder.read(callback(params["oldEndpoint"]), callback(params["newEndpoint"]), lambda lhs, rhs: lhs == rhs)
+        else:
+            builder.read(callback(params["oldEndpoint"]), callback(params["newEndpoint"]))
+
+        builder.write(callback(params["oldEndpoint"]), callback(params["newEndpoint"]))
+        migrator = builder.build()
+
+        if isinstance(migrator, str):
+            return {"result": migrator}
+
+        if params["operation"] == Operation.READ.value:
+            result = migrator.read(params["key"], params["context"], Stage.from_str(params["defaultStage"]), params["payload"])
+            return {"result": result.value if result.is_success() else result.error}
+
+        result = migrator.write(params["key"], params["context"], Stage.from_str(params["defaultStage"]), params["payload"])
+        return {"result": result.authoritative.value if result.authoritative.is_success() else result.authoritative.error}
+
     def close(self):
         self.client.close()
         self.log.info('Test ended')
+
 
 def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
     if params_in.get(name_in) is not None:

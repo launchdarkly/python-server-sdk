@@ -99,13 +99,16 @@ class EventOutputFormatter:
             out = {
                 'kind': 'migration_op',
                 'creationDate': e.timestamp,
+                'operation': e.operation.value,
                 'contextKeys': self._context_keys(e.context),
                 'evaluation': {
-                    'key': e.flag.key,
+                    'key': e.key,
                     'value': e.detail.value
                 }
             }
 
+            if e.flag is not None:
+                out["evaluation"]["version"] = e.flag.version
             if e.default_stage:
                 out["evaluation"]["default"] = e.default_stage.value
             if e.detail.variation_index is not None:

@@ -79,7 +79,7 @@ def test_identify_invalid_context():
 def test_migration_op():
     detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
     flag = FlagBuilder('key').version(100).on(True).variations('value').build()
-    tracker = OpTracker(flag, context, detail, Stage.OFF)
+    tracker = OpTracker('key', flag, context, detail, Stage.OFF)
     tracker.operation(Operation.READ)
     tracker.invoked(Origin.OLD)
 
@@ -97,7 +97,7 @@ def test_migration_op():
 
 def test_does_not_send_bad_event():
     detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-    tracker = OpTracker(None, context, detail, Stage.OFF)
+    tracker = OpTracker('key', None, context, detail, Stage.OFF)
 
     with make_client() as client:
         client.track_migration_op(tracker)

@@ -347,7 +347,7 @@ class LDClient:
             default_stage = Stage.OFF
 
         detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
-        tracker = OpTracker(flag, context, detail, default_stage)
+        tracker = OpTracker(key, flag, context, detail, default_stage)
 
         stage = Stage.from_str(str(detail.value))
 
