@@ -1,6 +1,8 @@
 from typing import Callable, Optional, Union, Set, Dict
 import time
 from datetime import timedelta
+from random import Random
+from ldclient.impl.sampler import Sampler
 from ldclient.evaluation import EvaluationDetail
 from ldclient.context import Context
 from ldclient.impl.model import FeatureFlag
@@ -24,7 +26,7 @@ class MigrationOpEvent(EventInput):
     __slots__ = ['flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
 
     def __init__(self, timestamp: int, context: Context, flag: FeatureFlag, operation: Operation, default_stage: Stage, detail: EvaluationDetail, invoked: Set[Origin], consistent: Optional[bool], consistent_ratio: Optional[int], errors: Set[Origin], latencies: Dict[Origin, timedelta]):
-        super().__init__(timestamp, context)
+        super().__init__(timestamp, context, flag.sampling_ratio)
         self.flag = flag
         self.operation = operation
         self.default_stage = default_stage
@@ -35,13 +37,20 @@ class MigrationOpEvent(EventInput):
         self.errors = errors
         self.latencies = latencies
 
-    # def to_debugging_dict(self) -> dict:
-    #     # TODO(mmk): Fill this out.
-    #     return {
-    #         "timestamp": self.timestamp,
-    #         "context": self.context.to_dict(),
-    #     }
-
+    def to_debugging_dict(self) -> dict:
+        return {
+            "timestamp": self.timestamp,
+            "context": self.context.to_dict(),
+            "flag": {"key": self.flag.key},
+            "operation": self.operation.value,
+            "default_stage": self.default_stage.value,
+            "detail": self.detail,
+            "invoked": self.invoked,
+            "consistent": self.consistent,
+            "consistent_ratio": self.consistent_ratio,
+            "errors": self.errors,
+            "latencies": self.latencies,
+        }
 
 
 class OpTracker:
@@ -78,9 +87,15 @@ class OpTracker:
         self.__operation: Optional[Operation] = None
         self.__invoked: Set[Origin] = set()
         self.__consistent: Optional[bool] = None
-        self.__consistent_ratio: Optional[int] = None  # TODO: Get this from the flag
+
+        self.__consistent_ratio: int = 1
+        if flag is not None and flag.migrations is not None and flag.migrations.check_ratio is not None:
+            self.__consistent_ratio = flag.migrations.check_ratio
+
         self.__errors: Set[Origin] = set()
         self.__latencies: Dict[Origin, timedelta] = {}
+
+        self.__sampler = Sampler(Random())
 
     def operation(self, op: Operation) -> 'OpTracker':
         """
@@ -123,10 +138,10 @@ class OpTracker:
 
         :param is_consistent: closure to return result of comparison check
         """
-        # TODO(sampling-ratio): Add sampling checking here
         with self.__mutex:
             try:
-                self.__consistent = is_consistent()
+                if self.__sampler.sample(self.__consistent_ratio):
+                    self.__consistent = is_consistent()
             except Exception as e:
                 log.error("exception raised during consistency check %s; failed to record measurement", repr(e))
 
@@ -195,7 +210,7 @@ class OpTracker:
                 self.__detail,
                 self.__invoked.copy(),
                 self.__consistent,
-                self.__consistent_ratio,
+                None if self.__consistent is None else self.__consistent_ratio,
                 self.__errors.copy(),
                 self.__latencies.copy())
 

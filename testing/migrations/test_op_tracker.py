@@ -2,7 +2,7 @@ import pytest
 from datetime import timedelta
 from ldclient.migrations import OpTracker, Stage, Operation, Origin, MigrationOpEvent
 from ldclient.evaluation import EvaluationDetail
-from testing.builders import build_off_flag_with_value
+from testing.builders import build_off_flag_with_value, MigrationSettingsBuilder
 from testing.test_ldclient import user
 
 
@@ -164,36 +164,47 @@ class TestTrackInvocations:
 
 
 class TestTrackConsistency:
-    @pytest.mark.parametrize(
-        "consistent",
-        [True, False],
-    )
-    def test_without_sampling_ratio(
+    @pytest.mark.parametrize("consistent", [True, False])
+    def test_without_check_ratio(
             self, tracker: OpTracker, consistent: bool):
         tracker.consistent(lambda: consistent)
         event = tracker.build()
         assert isinstance(event, MigrationOpEvent)
 
         assert event.consistent is consistent
+        assert event.consistent_ratio == 1
+
+    @pytest.mark.parametrize("consistent", [True, False])
+    def test_with_check_ratio_of_1(self, consistent):
+        flag = build_off_flag_with_value("flag", 'off').migrations(MigrationSettingsBuilder().check_ratio(1).build()).build()
+        detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+        tracker = OpTracker(flag, user, detail, Stage.LIVE)
+        tracker.consistent(lambda: consistent)
+        tracker.operation(Operation.READ)
+        tracker.invoked(Origin.OLD)
+        tracker.invoked(Origin.NEW)
+
+        event = tracker.build()
+        assert isinstance(event, MigrationOpEvent)
+
+        assert event.consistent is consistent
+        assert event.consistent_ratio == 1
+
+    @pytest.mark.parametrize("consistent", [True, False])
+    def test_can_disable_with_check_ratio_of_0(self, consistent: bool):
+        flag = build_off_flag_with_value("flag", 'off').migrations(MigrationSettingsBuilder().check_ratio(0).build()).build()
+        detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+        tracker = OpTracker(flag, user, detail, Stage.LIVE)
+        tracker.consistent(lambda: consistent)
+        tracker.operation(Operation.READ)
+        tracker.invoked(Origin.OLD)
+        tracker.invoked(Origin.NEW)
+
+        event = tracker.build()
+        assert isinstance(event, MigrationOpEvent)
+
+        assert event.consistent is None
         assert event.consistent_ratio is None
-
-    @pytest.mark.skip(reason="sampling ratio is not yet supported")
-    def test_with_sampling_ratio_of_1(
-            self, tracker: OpTracker, consistent: bool):
-        # TODO(sampling-ratio): Fill in test
-        pass
-
-    @pytest.mark.skip(reason="sampling ratio is not yet supported")
-    def test_can_disable_with_sampling_ratio_of_0(
-            self, tracker: OpTracker, consistent: bool):
-        # TODO(sampling-ratio): Fill in test
-        pass
-
-    @pytest.mark.skip(reason="sampling ratio is not yet supported")
-    def test_with_non_trivial_sampling_ratio(
-            self, tracker: OpTracker, consistent: bool):
-        # TODO(sampling-ratio): Fill in test
-        pass
 
 
 class TestTrackErrors:

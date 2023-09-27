@@ -2,10 +2,12 @@ from __future__ import annotations
 import concurrent.futures
 from datetime import datetime
 from abc import ABCMeta, abstractmethod
+from random import Random
 from typing import Optional, Union, Any, Tuple, TYPE_CHECKING
 from ldclient.migrations.types import ExecutionOrder, OperationResult, WriteResult, Stage, MigrationConfig, MigratorFn, MigratorCompareFn, Operation, Origin
 from ldclient.migrations.tracker import OpTracker
 from ldclient.impl.util import Result
+from ldclient.impl.sampler import Sampler
 
 if TYPE_CHECKING:
     from ldclient import LDClient, Context
@@ -49,6 +51,7 @@ class MigratorImpl(Migrator):
 
     def __init__(
         self,
+        sampler: Sampler,
         client: LDClient,
         read_execution_order: ExecutionOrder,
         read_config: MigrationConfig,
@@ -56,6 +59,7 @@ class MigratorImpl(Migrator):
         measure_latency: bool,
         measure_errors: bool
     ):
+        self.__sampler = sampler
         self.__client = client
         self.__read_execution_order = read_execution_order
         self.__read_config = read_config
@@ -131,8 +135,7 @@ class MigratorImpl(Migrator):
                     else:
                         nonauthoritative_result = result
 
-        elif self.__read_execution_order == ExecutionOrder.RANDOM:
-            # TODO(sampling-ratio): Add a sampler check here
+        elif self.__read_execution_order == ExecutionOrder.RANDOM and self.__sampler.sample(2):
             nonauthoritative_result = nonauthoritative.run()
             authoritative_result = authoritative.run()
         else:
@@ -274,6 +277,7 @@ class MigratorBuilder:
             return "write configuration not provided"
 
         return MigratorImpl(
+            Sampler(Random()),
             self._client,
             self.__read_execution_order,
             self.__read_config,

@@ -14,6 +14,7 @@ import queue
 import urllib3
 from ldclient.config import Config
 from datetime import timedelta
+from random import Random
 
 from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
@@ -27,6 +28,7 @@ from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import check_if_error_is_recoverable_and_log, current_time_millis, is_http_error_recoverable, log, _headers
+from ldclient.impl.sampler import Sampler
 from ldclient.interfaces import EventProcessor
 
 __MAX_FLUSH_THREADS__ = 5
@@ -111,8 +113,8 @@ class EventOutputFormatter:
             if e.detail.reason is not None:
                 out["evaluation"]["reason"] = e.detail.reason
 
-            # TODO(sampling-ratio): Add sampling ratio here when we support it
-            out["samplingRatio"] = 1
+            if e.sampling_ratio is not None and e.sampling_ratio != 1:
+                out["samplingRatio"] = e.sampling_ratio
 
             measurements: List[Dict] = []
 
@@ -129,7 +131,10 @@ class EventOutputFormatter:
                     "key": "consistent",
                     "value": e.consistent
                 }
-                # TODO(sampling-ratio): Add sampling ratio if appropriate
+
+                if e.consistent_ratio is not None and e.consistent_ratio != 1:
+                    measurement["samplingRatio"] = e.consistent_ratio
+
                 measurements.append(measurement)
 
             if len(e.latencies) > 0:
@@ -328,6 +333,7 @@ class EventDispatcher:
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
+        self._sampler = Sampler(Random())
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
         self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
@@ -377,10 +383,12 @@ class EventDispatcher:
         can_add_index = True
         full_event = None  # type: Any
         debug_event = None  # type: Optional[DebugEvent]
+        sampling_ratio = 1 if event.sampling_ratio is None else event.sampling_ratio
 
         if isinstance(event, EventInputEvaluation):
             context = event.context
-            self._outbox.add_to_summary(event)
+            if not event.exclude_from_summaries:
+                self._outbox.add_to_summary(event)
             if event.track_events:
                 full_event = event
             if self._should_debug_event(event):
@@ -395,7 +403,6 @@ class EventDispatcher:
         elif isinstance(event, MigrationOpEvent):
             full_event = event
 
-
         # For each context we haven't seen before, we add an index event - unless this is already
         # an identify event.
         if context is not None:
@@ -406,10 +413,10 @@ class EventDispatcher:
                 else:
                     self._outbox.add_event(IndexEvent(event.timestamp, context))
 
-        if full_event:
+        if full_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(full_event)
 
-        if debug_event:
+        if debug_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(debug_event)
 
     def _should_debug_event(self, event: EventInputEvaluation):

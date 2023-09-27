@@ -30,6 +30,8 @@ filtered_context = {
     '_meta': {'redactedAttributes': ['name']}
 }
 flag = FlagBuilder('flagkey').version(2).build()
+flag_with_0_sampling_ratio = FlagBuilder('flagkey').version(2).sampling_ratio(0).build()
+flag_excluded_from_summaries = FlagBuilder('flagkey').version(2).exclude_from_summaries(True).build()
 timestamp = 10000
 
 ep = None
@@ -149,6 +151,20 @@ def test_migration_op_event_is_queued_with_latencies(operation: Operation, defau
         check_migration_op_event(output[0], e)
 
 
+def test_migration_op_event_is_disabled_with_sampling_ratio():
+    with DefaultTestProcessor() as ep:
+        e = MigrationOpEvent(timestamp, context, flag_with_0_sampling_ratio, Operation.READ, Stage.OFF, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
+        ep.send_event(e)
+
+        # NOTE: Have to send an identify event; otherwise, we will timeout waiting on no events.
+        identify_event = EventInputIdentify(timestamp, context)
+        ep.send_event(identify_event)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1  # Got the identify but not the migration op
+        check_identify_event(output[0], identify_event)
+
+
 @pytest.mark.parametrize(
     "operation,default_stage",
     [
@@ -168,7 +184,6 @@ def test_migration_op_event_is_queued_with_latencies(operation: Operation, defau
     ],
 )
 def test_migration_op_event_is_queued_with_consistency(operation: Operation, default_stage: Stage):
-    # TODO(sampling-ratio): Add sampling ratio when we have it
     for value in [True, False, None]:
         with DefaultTestProcessor() as ep:
             e = MigrationOpEvent(timestamp, context, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, value, None, set(), {})
@@ -207,6 +222,28 @@ def test_individual_feature_event_is_queued_with_index_event():
         check_index_event(output[0], e)
         check_feature_event(output[1], e)
         check_summary_event(output[2])
+
+
+def test_individual_feature_event_is_ignored_for_0_sampling_ratio():
+    with DefaultTestProcessor() as ep:
+        e = EventInputEvaluation(timestamp, context, flag_with_0_sampling_ratio.key, flag_with_0_sampling_ratio, 1, 'value', None, 'default', None, True)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 2
+        check_index_event(output[0], e)
+        check_summary_event(output[1])
+
+
+def test_exclude_can_keep_feature_event_from_summary():
+    with DefaultTestProcessor() as ep:
+        e = EventInputEvaluation(timestamp, context, flag_excluded_from_summaries.key, flag_excluded_from_summaries, 1, 'value', None, 'default', None, True)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 2
+        check_index_event(output[0], e)
+        check_feature_event(output[1], e)
 
 def test_context_is_filtered_in_index_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
@@ -275,6 +312,20 @@ def test_event_can_be_both_tracked_and_debugged():
         check_feature_event(output[1], e)
         check_debug_event(output[2], e)
         check_summary_event(output[3])
+
+
+def test_debug_event_can_be_disabled_with_sampling_ratio():
+    with DefaultTestProcessor() as ep:
+        future_time = now() + 100000
+        debugged_flag = FlagBuilder(flag.key).version(flag.version).debug_events_until_date(future_time).sampling_ratio(0).build()
+        e = EventInputEvaluation(timestamp, context, debugged_flag.key, debugged_flag, 1, 'value', None, 'default', None, True)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 2
+        check_index_event(output[0], e)
+        check_summary_event(output[1])
+
 
 def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_before_expiration_time():
     with DefaultTestProcessor() as ep:
@@ -631,8 +682,8 @@ def check_migration_op_event(data, source: MigrationOpEvent):
     if source.detail.reason is not None:
         assert data['evaluation']['reason'] == source.detail.reason
 
-    # TODO(sampling-ratio): Add sampling ratio here when we support it
-    assert data['samplingRatio'] == 1
+    if source.flag.sampling_ratio is not None and source.flag.sampling_ratio != 1:
+        assert data['samplingRatio'] == source.flag.sampling_ratio
 
     index = 0
     if len(source.invoked):
@@ -643,6 +694,12 @@ def check_migration_op_event(data, source: MigrationOpEvent):
     if source.consistent is not None:
         assert data['measurements'][index]['key'] == 'consistent'
         assert data['measurements'][index]['value'] == source.consistent
+
+        if source.flag.migrations is not None:
+            check_ratio = source.flag.migrations.check_ratio
+            if check_ratio is not None and check_ratio != 1:
+                assert data['measurements'][index]['samplingRatio'] == check_ratio
+
         index += 1
 
     if len(source.latencies):
@@ -653,6 +710,7 @@ def check_migration_op_event(data, source: MigrationOpEvent):
     if len(source.errors):
         assert data['measurements'][index]['key'] == 'error'
         assert data['measurements'][index]['values'] == {origin.value: True for origin in source.errors}
+
 
 def check_debug_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'debug'
