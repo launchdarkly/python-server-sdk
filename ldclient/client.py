@@ -347,15 +347,16 @@ class LDClient:
             default_stage = Stage.OFF
 
         detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
+
+        if isinstance(detail.value, str):
+            stage = Stage.from_str(detail.value)
+            if stage is not None:
+                tracker = OpTracker(key, flag, context, detail, default_stage)
+                return stage, tracker
+
+        detail = EvaluationDetail(default_stage.value, None, error_reason('WRONG_TYPE'))
         tracker = OpTracker(key, flag, context, detail, default_stage)
-
-        stage = Stage.from_str(str(detail.value))
-
-        if stage is None:
-            log.error("value is not a valid stage; using default stage")
-            return default_stage, tracker
-
-        return stage, tracker
+        return default_stage, tracker
 
     def _evaluate_internal(self, key: str, context: Union[Context, dict], default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)

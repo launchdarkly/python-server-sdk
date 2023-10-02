@@ -1,7 +1,7 @@
 import pytest
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.versioned_data_kind import FEATURES
-from ldclient.migrations import Stage
+from ldclient.migrations import Stage, Operation, Origin
 
 from testing.builders import FlagBuilder
 from testing.test_ldclient import make_client, user
@@ -34,9 +34,16 @@ def test_uses_default_if_flag_returns_invalid_stage():
     client = make_client(store)
 
     stage, tracker = client.migration_variation('key', user, Stage.LIVE)
+    tracker.operation(Operation.READ)
+    tracker.invoked(Origin.OLD)
 
     assert stage == Stage.LIVE
     assert tracker is not None
+
+    event = tracker.build()
+    assert event.detail.value == Stage.LIVE.value
+    assert event.detail.variation_index is None
+    assert event.detail.reason["errorKind"] == "WRONG_TYPE"
 
 
 @pytest.mark.parametrize(
