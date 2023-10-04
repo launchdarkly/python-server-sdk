@@ -183,7 +183,7 @@ class OpTracker:
         """
         Creates an instance of :class:`MigrationOpEvent()`.
         This event data can be provided to
-        :func:`ldclient.client.LDClient.track_migration_op()` to rely this
+        :func:`ldclient.client.LDClient.track_migration_op()` to relay this
         metric information upstream to LaunchDarkly services.
 
         :return: A :class:`MigrationOpEvent()` or a string
