@@ -84,7 +84,7 @@ class TestBuilding:
         "invoked,recorded",
         [
             pytest.param(Origin.OLD, Origin.NEW, id="invoked old measured new"),
-            pytest.param(Origin.OLD, Origin.NEW, id="invoked new measured old"),
+            pytest.param(Origin.NEW, Origin.OLD, id="invoked new measured old"),
         ],
     )
     def test_latency_invoked_mismatch(
@@ -101,7 +101,7 @@ class TestBuilding:
         "invoked,recorded",
         [
             pytest.param(Origin.OLD, Origin.NEW, id="invoked old measured new"),
-            pytest.param(Origin.OLD, Origin.NEW, id="invoked new measured old"),
+            pytest.param(Origin.NEW, Origin.OLD, id="invoked new measured old"),
         ],
     )
     def test_error_invoked_mismatch(
