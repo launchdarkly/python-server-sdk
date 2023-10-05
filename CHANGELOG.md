@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.1.7] - 2023-10-05
+### Changed:
+- Loosened urllib3 requirement to <3
+
 ## [8.1.6] - 2023-09-06
 ### Changed:
 - Recoverable errors are logged as a warning not an error. (Thanks, [fritzdj](https://github.com/launchdarkly/python-server-sdk/pull/219)!)
