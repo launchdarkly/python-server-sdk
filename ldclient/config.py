@@ -222,7 +222,7 @@ class Config:
           ignored if this option is set to true. By default, this is false.
           For more information, read the LaunchDarkly
           documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
-        :param array private_attribute: Marks a set of attributes private. Any users sent to LaunchDarkly
+        :param array private_attributes: Marks a set of attributes private. Any users sent to LaunchDarkly
           with this configuration active will have these attributes removed. Each item can be either the
           name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
           property within a JSON object value as private.
