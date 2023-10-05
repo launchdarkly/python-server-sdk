@@ -230,9 +230,9 @@ class OpTracker:
             if origin in self.__errors:
                 return f"provided error for origin '{origin.value}' without recording invocation"
 
-            # A consistency measurement only makes sense if TWO origins were
-            # executed. Otherwise, there is nothing to compare against.
-            if self.__consistent is not None and len(self.__invoked) != 2:
-                return "provided consistency without recording both invocations"
+        # A consistency measurement only makes sense if TWO origins were
+        # executed. Otherwise, there is nothing to compare against.
+        if self.__consistent is not None and len(self.__invoked) != 2:
+            return "provided consistency without recording both invocations"
 
         return None
