@@ -136,7 +136,15 @@ jobs:
       - checkout
       - run:
           name: install Python 3
-          command: choco install python --no-progress
+          command: |
+            choco install pyenv-win --force
+            refreshenv
+            pyenv install 3.11.0b3
+            pyenv global 3.11.0b3
+            [System.Environment]::SetEnvironmentVariable('PYENV',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
+            [System.Environment]::SetEnvironmentVariable('PYENV_ROOT',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
+            [System.Environment]::SetEnvironmentVariable('PYENV_HOME',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
+            [System.Environment]::SetEnvironmentVariable('path', $env:USERPROFILE + "\.pyenv\pyenv-win\bin;" + $env:USERPROFILE + "\.pyenv\pyenv-win\shims;" + [System.Environment]::GetEnvironmentVariable('path', "User"),"User")
       - run: python --version
       - run:
           name: set up DynamoDB
