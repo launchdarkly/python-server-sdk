@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import threading
 import traceback
+import warnings
 
 from ldclient.config import Config
 from ldclient.context import Context
@@ -204,6 +205,8 @@ class LDClient:
         the SDK will convert the user to a Context. There is some overhead to this conversion,
         so it is more efficient to pass a Context.
 
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
+
         :param event_name: the name of the event
         :param context: the evaluation context or user associated with the event
         :param data: optional additional data associated with the event
@@ -211,6 +214,7 @@ class LDClient:
           numeric custom metrics; can be omitted if this event is used by only non-numeric metrics
         """
         if not isinstance(context, Context):
+            warnings.warn("track will require a Context instance in 9.0.0", DeprecationWarning)
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Invalid context for track (%s)" % context.error)
@@ -233,9 +237,12 @@ class LDClient:
         the SDK will convert the user to a Context. There is some overhead to this conversion,
         so it is more efficient to pass a Context.
 
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
+
         :param context: the context to register
         """
         if not isinstance(context, Context):
+            warnings.warn("identify will require a Context instance in 9.0.0", DeprecationWarning)
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Invalid context for identify (%s)" % context.error)
@@ -280,6 +287,8 @@ class LDClient:
         the SDK will convert the user to a Context. There is some overhead to this conversion,
         so it is more efficient to pass a Context.
 
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
+
         :param key: the unique key for the feature flag
         :param context: the evaluation context or user
         :param default: the default value of the flag, to be used if the value is not
@@ -298,6 +307,8 @@ class LDClient:
         If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
         the SDK will convert the user to a Context. There is some overhead to this conversion,
         so it is more efficient to pass a Context.
+
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
 
         :param key: the unique key for the feature flag
         :param context: the evaluation context or user
@@ -325,6 +336,7 @@ class LDClient:
                 return EvaluationDetail(default, None, reason)
 
         if not isinstance(context, Context):
+            warnings.warn("variation methods will require a Context instance in 9.0.0", DeprecationWarning)
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
@@ -367,6 +379,8 @@ class LDClient:
 
         This method does not send analytics events back to LaunchDarkly.
 
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
+
         :param user: the end user requesting the feature flags
         :param kwargs: optional parameters affecting how the state is computed - see below
 
@@ -396,6 +410,7 @@ class LDClient:
                 return FeatureFlagsState(False)
 
         if not isinstance(context, Context):
+            warnings.warn("all_flags_state will require a Context instance in 9.0.0", DeprecationWarning)
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
@@ -445,11 +460,14 @@ class LDClient:
 
         For more information, see the documentation on
         `Secure mode <https://docs.launchdarkly.com/sdk/features/secure-mode#configuring-secure-mode-in-the-javascript-client-side-sdk>`_.
-        
+
+        DEPRECATED: This method will no longer accept a dictionary for the context parameter starting in 9.0.0
+
         :param context: the evaluation context or user
         :return: the hash string
         """
         if not isinstance(context, Context):
+            warnings.warn("secure_mode_hash will require a Context instance in 9.0.0", DeprecationWarning)
             context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
