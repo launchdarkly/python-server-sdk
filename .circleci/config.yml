@@ -7,14 +7,11 @@ workflows:
   test:
     jobs:
       - test-linux:
-          name: Python 3.7
-          docker-image: cimg/python:3.7
+          name: Python 3.8
+          docker-image: cimg/python:3.8
           test-build-docs: true
           skip-sse-contract-tests: true
           skip-contract-tests: true
-      - test-linux:
-          name: Python 3.8
-          docker-image: cimg/python:3.8
       - test-linux:
           name: Python 3.9
           docker-image: cimg/python:3.9

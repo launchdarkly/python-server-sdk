@@ -102,12 +102,6 @@ def test_client_sends_diagnostics():
                 data = json.loads(r.body)
                 assert data['kind'] == 'diagnostic-init'
 
-# The TLS tests are skipped in Python 3.7 because the embedded HTTPS server does not work correctly, causing
-# a TLS handshake failure on the client side. It's unclear whether this is a problem with the self-signed
-# certificate we are using or with some other server settings, but it does not appear to be a client-side
-# problem since we know that the SDK is able to connect to secure LD endpoints.
-
-@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 7, reason = "test is skipped in Python 3.7")
 def test_cannot_connect_with_selfsigned_cert_by_default():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
@@ -120,7 +114,6 @@ def test_cannot_connect_with_selfsigned_cert_by_default():
         with LDClient(config = config, start_wait = 1.5) as client:
             assert not client.is_initialized()
 
-@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 7, reason = "test is skipped in Python 3.7")
 def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
@@ -134,7 +127,6 @@ def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
         with LDClient(config = config) as client:
             assert client.is_initialized()
 
-@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 7, reason = "test is skipped in Python 3.7")
 def test_can_connect_with_selfsigned_cert_if_disable_ssl_verification_is_true():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
@@ -148,7 +140,6 @@ def test_can_connect_with_selfsigned_cert_if_disable_ssl_verification_is_true():
         with LDClient(config = config) as client:
             assert client.is_initialized()
 
-@pytest.mark.skipif(sys.version_info.major == 3 and sys.version_info.minor == 7, reason = "test is skipped in Python 3.7")
 def test_can_connect_with_selfsigned_cert_by_setting_ca_certs():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
