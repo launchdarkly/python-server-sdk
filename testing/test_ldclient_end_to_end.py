@@ -1,4 +1,4 @@
-from ldclient.client import LDClient
+from ldclient.client import LDClient, Context
 from ldclient.config import Config, HTTPConfig
 from testing.http_util import BasicResponse, SequentialHandler, start_secure_server, start_server
 from testing.stub_util import make_put_event, poll_content, stream_content
@@ -8,7 +8,7 @@ import pytest
 import sys
 
 sdk_key = 'sdk-key'
-user = { 'key': 'userkey' }
+user = Context.from_dict({ 'key': 'userkey', 'kind': 'user' })
 always_true_flag = { 'key': 'flagkey', 'version': 1, 'on': False, 'offVariation': 1, 'variations': [ False, True ] }
 
 def test_client_starts_in_streaming_mode():

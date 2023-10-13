@@ -1,5 +1,6 @@
 import pytest
 from datetime import timedelta
+from ldclient import Context
 from ldclient.migrations import OpTracker, Stage, Operation, Origin, MigrationOpEvent
 from ldclient.evaluation import EvaluationDetail
 from testing.builders import build_off_flag_with_value, MigrationSettingsBuilder
@@ -71,7 +72,7 @@ class TestBuilding:
     def test_with_invalid_context(self):
         flag = build_off_flag_with_value("flag", True).build()
         detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
-        invalid_context = {"kind": "multi", "key": "user-key"}
+        invalid_context = Context.from_dict({"kind": "multi", "key": "user-key"})
         tracker = OpTracker("flag", flag, invalid_context, detail, Stage.LIVE)
         tracker.operation(Operation.WRITE)
         tracker.invoked(Origin.OLD)

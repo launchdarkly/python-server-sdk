@@ -5,7 +5,7 @@ import tempfile
 import threading
 import time
 
-from ldclient.client import LDClient
+from ldclient.client import LDClient, Context
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.integrations import Files
@@ -227,7 +227,7 @@ def test_evaluates_full_flag_with_client_as_expected():
     try:
         factory = Files.new_data_source(paths = path)
         client = LDClient(config=Config('SDK_KEY', update_processor_class = factory, send_events = False))
-        value = client.variation('flag1', { 'key': 'user' }, '')
+        value = client.variation('flag1', Context.from_dict({'key': 'user', 'kind': 'user'}), '')
         assert value == 'on'
     finally:
         os.remove(path)
@@ -239,7 +239,7 @@ def test_evaluates_simplified_flag_with_client_as_expected():
     try:
         factory = Files.new_data_source(paths = path)
         client = LDClient(config=Config('SDK_KEY', update_processor_class = factory, send_events = False))
-        value = client.variation('flag2', { 'key': 'user' }, '')
+        value = client.variation('flag2', Context.from_dict({'key': 'user', 'kind': 'user'}), '')
         assert value == 'value2'
     finally:
         os.remove(path)

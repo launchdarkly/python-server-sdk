@@ -16,7 +16,7 @@ def _escape_key_for_fully_qualified_key(key: str) -> str:
     # When building a fully-qualified key, ':' and '%' are percent-escaped; we do not use a full
     # URL-encoding function because implementations of this are inconsistent across platforms.
     return key.replace('%', '%25').replace(':', '%3A')
-    
+
 def _validate_kind(kind: str) -> Optional[str]:
     if kind == '':
         return 'context kind must not be empty'
@@ -182,21 +182,14 @@ class Context:
     def from_dict(cls, props: dict) -> Context:
         """
         Creates a Context from properties in a dictionary, corresponding to the JSON
-        representation of a context or a user.
+        representation of a context.
 
-        If the dictionary has a "kind" property, then it is interpreted as a context using
-        the LaunchDarkly JSON schema for contexts. If it does not have a "kind" property, it
-        is interpreted as a context with "user" kind using the somewhat different LaunchDarkly
-        JSON schema for users in older LaunchDarkly SDKs.
-
-        :param props: the context/user properties
+        :param props: the context properties
         :return: a context
         """
         if props is None:
             return Context.__create_with_error('Cannot use None as a context')
-        if 'kind' not in props:
-            return Context.__from_dict_old_user(props)
-        kind = props['kind']
+        kind = props.get('kind')
         if not isinstance(kind, str):
             return Context.__create_with_schema_type_error('kind')
         if kind == 'multi':
@@ -214,7 +207,7 @@ class Context:
     def builder(cls, key: str) -> ContextBuilder:
         """
         Creates a builder for building a Context.
-        
+
         You may use :class:`ldclient.ContextBuilder` methods to set additional attributes and/or
         change the context kind before calling :func:`ldclient.ContextBuilder.build()`. If you
         do not change any values, the defaults for the Context are that its ``kind`` is :const:`DEFAULT_KIND`,
@@ -232,12 +225,12 @@ class Context:
 
         """
         return ContextBuilder(key)
-    
+
     @classmethod
     def builder_from_context(cls, context: Context) -> ContextBuilder:
         """
         Creates a builder whose properties are the same as an existing single-kind Context.
-        
+
         You may then change the builder's state in any way and call :func:`ldclient.ContextBuilder.build()`
         to create a new independent Context.
 
@@ -245,7 +238,7 @@ class Context:
         :return: a new builder
         """
         return ContextBuilder(context.key, context)
-    
+
     @classmethod
     def multi_builder(cls) -> ContextMultiBuilder:
         """
@@ -263,12 +256,12 @@ class Context:
         :see: :func:`create_multi()`
         """
         return ContextMultiBuilder()
-    
+
     @property
     def valid(self) -> bool:
         """
         True for a valid Context, or False for an invalid one.
-        
+
         A valid context is one that can be used in SDK operations. An invalid context is one that
         is missing necessary attributes or has invalid attributes, indicating an incorrect usage
         of the SDK API. The only ways for a context to be invalid are:
@@ -292,22 +285,22 @@ class Context:
         :attr:`valid` or :attr:`error`.
         """
         return self.__error is None
-    
+
     @property
     def error(self) -> Optional[str]:
         """
         Returns None for a valid Context, or an error message for an invalid one.
-        
+
         If this is None, then :attr:`valid` is True. If it is not None, then :attr:`valid` is
         False.
         """
         return self.__error
-    
+
     @property
     def multiple(self) -> bool:
         """
         True if this is a multi-context.
-        
+
         If this value is True, then :attr:`kind` is guaranteed to be :const:`MULTI_KIND`, and
         you can inspect the individual context for each kind with :func:`get_individual_context()`.
 
@@ -317,12 +310,12 @@ class Context:
         :see: :func:`create_multi()`
         """
         return self.__multi is not None
-    
+
     @property
     def kind(self) -> str:
         """
         Returns the context's ``kind`` attribute.
-        
+
         Every valid context has a non-empty kind. For multi-contexts, this value is
         :const:`MULTI_KIND` and the kinds within the context can be inspected with
         :func:`get_individual_context()`.
@@ -336,7 +329,7 @@ class Context:
     def key(self) -> str:
         """
         Returns the context's ``key`` attribute.
-        
+
         For a single context, this value is set by :func:`create`, or :func:`ldclient.ContextBuilder.key()`.
 
         For a multi-context, there is no single value and :attr:`key` returns an empty string. Use
@@ -347,12 +340,12 @@ class Context:
         :see: :func:`create()`
         """
         return self.__key
-    
+
     @property
     def name(self) -> Optional[str]:
         """
         Returns the context's ``name`` attribute.
-        
+
         For a single context, this value is set by :func:`ldclient.ContextBuilder.name()`. It is
         None if no value was set.
 
@@ -363,7 +356,7 @@ class Context:
         :see: :func:`ldclient.ContextBuilder.name()`
         """
         return self.__name
-    
+
     @property
     def anonymous(self) -> bool:
         """
@@ -395,18 +388,18 @@ class Context:
         by :func:`ldclient.ContextBuilder.set()`. It can also be one of the built-in ones
         like "kind", "key", or "name"; in such cases, it is equivalent to :attr:`kind`,
         :attr:`key`, or :attr:`name`.
-        
+
         For a multi-context, the only supported attribute name is "kind". Use
         :func:`get_individual_context()` to get the context for a particular kind and then get
         its attributes.
-        
+
         If the value is found, the return value is the attribute value. If there is no such
         attribute, the return value is None. An attribute that actually exists cannot have a
         value of None.
 
         Context has a ``__getitem__`` magic method equivalent to ``get``, so ``context['attr']``
         behaves the same as ``context.get('attr')``.
-        
+
         :param attribute: the desired attribute name
         :return: the attribute value, or None if there is no such attribute
 
@@ -423,7 +416,7 @@ class Context:
         if self.__attributes is None:
             return None
         return self.__attributes.get(attribute)
-    
+
     @property
     def individual_context_count(self) -> int:
         """
@@ -441,7 +434,7 @@ class Context:
         if self.__multi is None:
             return 1
         return len(self.__multi)
-    
+
     def get_individual_context(self, kind: Union[int, str]) -> Optional[Context]:
         """
         Returns the single-kind Context corresponding to one of the kinds in this context.
@@ -458,7 +451,7 @@ class Context:
         of :attr:`individual_context_count`), and the return value on success is one of the
         individual Contexts within. Or, if ``kind`` is a string, it must match the context
         kind of one of the individual contexts.
-        
+
         If there is no context corresponding to ``kind``, the method returns None.
 
         :param kind: the index or string value of a context kind
@@ -479,8 +472,8 @@ class Context:
             return self if kind == 0 else None
         if kind < 0 or kind >= len(self.__multi):
             return None
-        return self.__multi[kind] 
-    
+        return self.__multi[kind]
+
     @property
     def custom_attributes(self) -> Iterable[str]:
         """
@@ -489,19 +482,19 @@ class Context:
         For a single-kind context, this includes all the names that were passed to
         :func:`ldclient.ContextBuilder.set()` as long as the values were not None (since a
         value of None in LaunchDarkly is equivalent to the attribute not being set).
-    
+
         For a multi-context, there are no such names.
 
         :return: an iterable
         """
         return () if self.__attributes is None else self.__attributes
-    
+
     @property
     def _attributes(self) -> Optional[dict[str, Any]]:
         # for internal use by ContextBuilder - we don't want to expose the original dict
         # since that would break immutability
         return self.__attributes
-    
+
     @property
     def private_attributes(self) -> Iterable[str]:
         """
@@ -534,7 +527,7 @@ class Context:
         """
         Returns a dictionary of properties corresponding to the JSON representation of the
         context (as an associative array), in the standard format used by LaunchDarkly SDKs.
-        
+
         Use this method if you are passing context data to the front end for use with the
         LaunchDarkly JavaScript SDK.
 
@@ -548,18 +541,18 @@ class Context:
                 ret[c.kind] = c.__to_dict_single(False)
             return ret
         return self.__to_dict_single(True)
-    
+
     def to_json_string(self) -> str:
         """
         Returns the JSON representation of the context as a string, in the standard format
         used by LaunchDarkly SDKs.
-        
+
         This is equivalent to calling :func:`to_dict()` and then ``json.dumps()``.
 
         :return: the JSON representation as a string
         """
         return json.dumps(self.to_dict(), separators=(',', ':'))
-    
+
     def __to_dict_single(self, with_kind: bool) -> dict[str, Any]:
         ret = {"key": self.__key}  # type: Dict[str, Any]
         if with_kind:
@@ -598,43 +591,6 @@ class Context:
                 if not b.try_set(k, v):
                     return Context.__create_with_schema_type_error(k)
         return b.build()
-    
-    @classmethod
-    def __from_dict_old_user(self, props: dict) -> Context:
-        b = ContextBuilder('').kind('user')
-        has_key = False
-        for k, v in props.items():
-            if k == 'custom':
-                if v is None:
-                    continue
-                if not isinstance(v, dict):
-                    return Context.__create_with_schema_type_error(k)
-                for k1, v1 in v.items():
-                    b.set(k1, v1)
-            elif k == 'privateAttributeNames':
-                if v is None:
-                    continue
-                if not isinstance(v, list):
-                    return Context.__create_with_schema_type_error(k)
-                for pa in v:
-                    if not isinstance(pa, str):
-                        return Context.__create_with_schema_type_error(k)
-                    b.private(pa)
-            elif k in _USER_STRING_ATTRS:
-                if v is None:
-                    continue
-                if not isinstance(v, str):
-                    return Context.__create_with_schema_type_error(k)
-                b.set(k, v)
-            else:
-                if k == 'anonymous' and v is None:
-                    v = False  # anonymous: null was allowed in the old user model
-                if not b.try_set(k, v):
-                    return Context.__create_with_schema_type_error(k)
-                if k == 'key':
-                    has_key = True
-        b._allow_empty_key(has_key)
-        return b.build()
 
     def __getitem__(self, attribute) -> Any:
         return self.get(attribute) if isinstance(attribute, str) else None
@@ -654,7 +610,7 @@ class Context:
         if not self.valid:
             return "[invalid context: %s]" % self.__error
         return self.to_json_string()
-    
+
     def __eq__(self, other) -> bool:
         """
         Compares contexts for deep equality of their attributes.
@@ -740,13 +696,13 @@ class ContextBuilder:
             self.__copy_on_write_attrs = self.__attributes is not None
             self.__copy_on_write_private = self.__private is not None
         self.__allow_empty_key = False
-    
+
     def build(self) -> Context:
         """
         Creates a Context from the current builder properties.
 
         The Context is immutable and will not be affected by any subsequent actions on the builder.
-    
+
         It is possible to specify invalid attributes for a ContextBuilder, such as an empty key.
         Instead of throwing an exception, the ContextBuilder always returns an Context and you can
         check :attr:`ldclient.Context.valid` or :attr:`ldclient.Context.error` to see if it has
@@ -760,11 +716,11 @@ class ContextBuilder:
         self.__copy_on_write_private = (self.__private is not None)
         return Context(self.__kind, self.__key, self.__name, self.__anonymous, self.__attributes, self.__private,
             None, self.__allow_empty_key)
-    
+
     def key(self, key: str) -> ContextBuilder:
         """
         Sets the context's key attribute.
-        
+
         Every context has a key, which is always a string. It cannot be an empty string, but
         there are no other restrictions on its value.
 
@@ -785,17 +741,17 @@ class ContextBuilder:
 
         The meaning of the context kind is completely up to the application. Validation rules are
         as follows:
-    
+
         * It may only contain letters, numbers, and the characters ``.``, ``_``, and ``-``.
         * It cannot equal the literal string "kind".
         * For a single context, it cannot equal "multi".
-        
+
         :param kind: the context kind
         :return: the builder
         """
         self.__kind = kind
         return self
-    
+
     def name(self, name: Optional[str]) -> ContextBuilder:
         """
         Sets the context's name attribute.
@@ -805,13 +761,13 @@ class ContextBuilder:
         * Unlike most other attributes, it is always a string if it is specified.
         * The LaunchDarkly dashboard treats this attribute as the preferred display name for
           contexts.
-        
+
         :param name: the context name (None to unset the attribute)
         :return: the builder
         """
         self.__name = name
         return self
-    
+
     def anonymous(self, anonymous: bool) -> ContextBuilder:
         """
         Sets whether the context is only intended for flag evaluations and should not be
@@ -837,7 +793,7 @@ class ContextBuilder:
         """
         self.__anonymous = anonymous
         return self
-    
+
     def set(self, attribute: str, value: Any) -> ContextBuilder:
         """
         Sets the value of any attribute for the context.
@@ -846,7 +802,7 @@ class ContextBuilder:
         as :func:`private()`. If ``attributeName`` is ``"private"``, you will be setting an attribute
         with that name which you can use in evaluations or to record data for your own purposes,
         but it will be unrelated to :func:`private()`.
-        
+
         The allowable types for context attributes are equivalent to JSON types: boolean, number,
         string, array (list), or object (dictionary). For all attribute names that do not have
         special meaning to LaunchDarkly, you may use any of those types. Values of different JSON
@@ -859,7 +815,7 @@ class ContextBuilder:
         * ``"kind"``, ``"key"``: Must be a string. See :func:`kind()` and :func:`key()`.
         * ``"name"``: Must be a string or None. See :func:`name()`.
         * ``"anonymous"``: Must be a boolean. See :func:`anonymous()`.
-        
+
         The attribute name ``"_meta"`` is not allowed, because it has special meaning in the
         JSON schema for contexts; any attempt to set an attribute with this name has no
         effect.
@@ -878,7 +834,7 @@ class ContextBuilder:
         """
         self.try_set(attribute, value)
         return self
-    
+
     def try_set(self, attribute: str, value: Any) -> bool:
         """
         Same as :func:`set()`, but returns a boolean indicating whether the attribute was
@@ -887,7 +843,7 @@ class ContextBuilder:
         :param attribute: the attribute name to set
         :param value: the value to set
         :return: True if successful; False if the name was invalid or the value was not an
-          allowed type for that attribute        
+          allowed type for that attribute
         """
         if attribute == '' or attribute == '_meta':
             return False
@@ -921,7 +877,7 @@ class ContextBuilder:
         else:
             self.__attributes[attribute] = value
         return True
-    
+
     def private(self, *attributes: str) -> ContextBuilder:
         """
         Designates any number of Context attributes, or properties within them, as private: that is,
@@ -955,7 +911,7 @@ class ContextMultiBuilder:
     Use this builder if you need to construct a :class:`ldclient.Context` that contains multiple contexts,
     each for a different context kind. To define a regular context for a single kind, use
     :func:`ldclient.Context.create()` or :func:`ldclient.Context.builder()`.
-    
+
     Obtain an instance of ContextMultiBuilder by calling :func:`ldclient.Context.multi_builder()`;
     then, call :func:`add()` to specify the individual context for each kind. The method returns a
     reference to the same builder, so calls can be chained:
@@ -969,13 +925,13 @@ class ContextMultiBuilder:
     def __init__(self):
         self.__contexts = []  # type: list[Context]
         self.__copy_on_write = False
-    
+
     def build(self) -> Context:
         """
         Creates a Context from the current builder properties.
 
         The Context is immutable and will not be affected by any subsequent actions on the builder.
-        
+
         It is possible for a ContextMultiBuilder to represent an invalid state. Instead of throwing
         an exception, the ContextMultiBuilder always returns a Context, and you can check
         :attr:`ldclient.Context.valid` or :attr:`ldclient.Context.error` to see if it has an
@@ -993,7 +949,7 @@ class ContextMultiBuilder:
         self.__copy_on_write = True
         # Context constructor will handle validation
         return Context(None, '', None, False, None, None, self.__contexts)
-    
+
     def add(self, context: Context) -> ContextMultiBuilder:
         """
         Adds an individual Context for a specific kind to the builer.
@@ -1014,7 +970,7 @@ class ContextMultiBuilder:
 
             c1plus2 = Context.multi_builder.add(c1).add(c2).build()
             multi2 = Context.multi_builder().add(c1plus2).add(c3).build()
-        
+
         :param context: the context to add
         :return: the builder
         """

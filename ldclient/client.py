@@ -211,7 +211,7 @@ class LDClient:
 
         self._send_event(event)
 
-    def track(self, event_name: str, context: Union[dict, Context], data: Optional[Any]=None,
+    def track(self, event_name: str, context: Context, data: Optional[Any]=None,
               metric_value: Optional[AnyNum]=None):
         """Tracks that an application-defined event occurred.
 
@@ -222,25 +222,19 @@ class LDClient:
         Note that event delivery is asynchronous, so the event may not actually be sent until later;
         see :func:`flush()`.
 
-        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
-        the SDK will convert the user to a Context. There is some overhead to this conversion,
-        so it is more efficient to pass a Context.
-
         :param event_name: the name of the event
-        :param context: the evaluation context or user associated with the event
+        :param context: the evaluation context associated with the event
         :param data: optional additional data associated with the event
         :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
           numeric custom metrics; can be omitted if this event is used by only non-numeric metrics
         """
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
         if not context.valid:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name,
                 context, data, metric_value))
 
-    def identify(self, context: Union[Context, dict]):
+    def identify(self, context: Context):
         """Reports details about an evaluation context.
 
         This method simply creates an analytics event containing the context properties, to
@@ -251,20 +245,11 @@ class LDClient:
         need to use :func:`identify()` if you want to identify the context without evaluating a
         flag.
 
-        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
-        the SDK will convert the user to a Context. There is some overhead to this conversion,
-        so it is more efficient to pass a Context.
-
         :param context: the context to register
         """
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
+
         if not context.valid:
             log.warning("Invalid context for identify (%s)" % context.error)
-        elif context.key == '' and not context.multiple:
-            # This could be a valid context for evaluations (if it was using the old user schema)
-            # but an identify event with an empty key is no good.
-            log.warning("Empty user key for identify")
         else:
             self._send_event(self._event_factory_default.new_identify_event(context))
 
@@ -295,15 +280,11 @@ class LDClient:
             return
         return self._event_processor.flush()
 
-    def variation(self, key: str, context: Union[Context, dict], default: Any) -> Any:
+    def variation(self, key: str, context: Context, default: Any) -> Any:
         """Calculates the value of a feature flag for a given context.
 
-        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
-        the SDK will convert the user to a Context. There is some overhead to this conversion,
-        so it is more efficient to pass a Context.
-
         :param key: the unique key for the feature flag
-        :param context: the evaluation context or user
+        :param context: the evaluation context
         :param default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
@@ -311,19 +292,15 @@ class LDClient:
         detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
         return detail.value
 
-    def variation_detail(self, key: str, context: Union[Context, dict], default: Any) -> EvaluationDetail:
+    def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
         describes the way the value was determined.
 
         The ``reason`` property in the result will also be included in analytics events, if you are
         capturing detailed event data for this flag.
 
-        If you pass a dictionary of user attributes instead of a :class:`ldclient.Context`,
-        the SDK will convert the user to a Context. There is some overhead to this conversion,
-        so it is more efficient to pass a Context.
-
         :param key: the unique key for the feature flag
-        :param context: the evaluation context or user
+        :param context: the evaluation context
         :param default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
@@ -332,7 +309,7 @@ class LDClient:
         detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
         return detail
 
-    def migration_variation(self, key: str, context: Union[Context, dict], default_stage: Stage) -> Tuple[Stage, OpTracker]:
+    def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
         """
         This method returns the migration stage of the migration feature flag
         for the given evaluation context.
@@ -358,7 +335,7 @@ class LDClient:
         tracker = OpTracker(key, flag, context, detail, default_stage)
         return default_stage, tracker
 
-    def _evaluate_internal(self, key: str, context: Union[Context, dict], default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
@@ -374,8 +351,6 @@ class LDClient:
                 self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
                 return EvaluationDetail(default, None, reason), None
 
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
@@ -409,15 +384,15 @@ class LDClient:
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
-    def all_flags_state(self, context: Union[Context, dict], **kwargs) -> FeatureFlagsState:
-        """Returns an object that encapsulates the state of all feature flags for a given user,
+    def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
+        """Returns an object that encapsulates the state of all feature flags for a given context,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
         `Bootstrapping <https://docs.launchdarkly.com/sdk/features/bootstrapping#javascript>`_.
 
         This method does not send analytics events back to LaunchDarkly.
 
-        :param user: the end user requesting the feature flags
+        :param context: the end context requesting the feature flags
         :param kwargs: optional parameters affecting how the state is computed - see below
 
         :Keyword Arguments:
@@ -432,7 +407,7 @@ class LDClient:
             turned on
 
         :return: a FeatureFlagsState object (will never be None; its ``valid`` property will be False
-          if the client is offline, has not been initialized, or the user is None or has no key)
+          if the client is offline, has not been initialized, or the context is invalid)
         """
         if self._config.offline:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
@@ -445,8 +420,6 @@ class LDClient:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
                 return FeatureFlagsState(False)
 
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
             return FeatureFlagsState(False)
@@ -490,17 +463,15 @@ class LDClient:
 
         return state
 
-    def secure_mode_hash(self, context: Union[Context, dict]) -> str:
+    def secure_mode_hash(self, context: Context) -> str:
         """Creates a hash string that can be used by the JavaScript SDK to identify a context.
 
         For more information, see the documentation on
         `Secure mode <https://docs.launchdarkly.com/sdk/features/secure-mode#configuring-secure-mode-in-the-javascript-client-side-sdk>`_.
 
-        :param context: the evaluation context or user
+        :param context: the evaluation context
         :return: the hash string
         """
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
         if not context.valid:
             log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
             return ""

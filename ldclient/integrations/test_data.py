@@ -24,7 +24,7 @@ class TestData():
     ::
 
         td = TestData.data_source()
-        td.update(td.flag('flag-key-1').variation_for_all_users(True))
+        td.update(td.flag('flag-key-1').variation_for_all(True))
 
         client = LDClient(config=Config('SDK_KEY', update_processor_class = td))
 
@@ -278,14 +278,6 @@ class FlagBuilder():
 
         return self
 
-    def variation_for_all_users(self, variation: Union[bool, int]) -> 'FlagBuilder':
-        """Deprecated name for variation_for_all().
-
-        .. deprecated:: 8.0.0
-           Use :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_all()`.
-        """
-        return self.variation_for_all(variation)
-
     def variation_for_all(self, variation: Union[bool, int]) -> 'FlagBuilder':
         """Sets the flag to always return the specified variation for all contexts.
 
@@ -300,17 +292,9 @@ class FlagBuilder():
         :return: the flag builder
         """
         if isinstance(variation, bool):
-            return self.boolean_flag().variation_for_all_users(_variation_for_boolean(variation))
+            return self.boolean_flag().variation_for_all(_variation_for_boolean(variation))
         else:
             return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
-
-    def value_for_all_users(self, value: Any) -> 'FlagBuilder':
-        """Deprecated name for value_for_all().
-
-        .. deprecated:: 8.0.0
-           Use :meth:`ldclient.integrations.test_data.FlagBuilder.value_for_all()`.
-        """
-        return self.value_for_all(value)
 
     def value_for_all(self, value: Any) -> 'FlagBuilder':
         """
@@ -324,7 +308,7 @@ class FlagBuilder():
         :param value the desired value to be returned for all users
         :return the flag builder
         """
-        return self.variations(value).variation_for_all_users(0)
+        return self.variations(value).variation_for_all(0)
 
     def variation_for_user(self, user_key: str, variation: Union[bool, int]) -> 'FlagBuilder':
         """Sets the flag to return the specified variation for a specific user key when targeting
@@ -360,7 +344,7 @@ class FlagBuilder():
         if isinstance(variation, bool):
             # `variation` is True/False value
             return self.boolean_flag().variation_for_key(context_kind, context_key, _variation_for_boolean(variation))
-        
+
         # `variation` specifies the index of the variation to set
         targets = self._targets.get(context_kind)
         if targets is None:

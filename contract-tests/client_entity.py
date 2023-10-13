@@ -11,7 +11,7 @@ from ldclient.config import BigSegmentsConfig
 
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
-from ldclient import MigratorBuilder, ExecutionOrder, MigratorFn, Operation, Stage
+from ldclient import Context, MigratorBuilder, ExecutionOrder, MigratorFn, Operation, Stage
 from ldclient import *
 
 
@@ -41,7 +41,7 @@ class ClientEntity:
                 opts["events_max_pending"] = events["capacity"]
             opts["diagnostic_opt_out"] = not events.get("enableDiagnostics", False)
             opts["all_attributes_private"] = events.get("allAttributesPrivate", False)
-            opts["private_attribute_names"] = events.get("globalPrivateAttributes", {})
+            opts["private_attributes"] = events.get("globalPrivateAttributes", {})
             _set_optional_time_prop(events, "flushIntervalMs", opts, "flush_interval")
         else:
             opts["send_events"] = False
@@ -70,12 +70,12 @@ class ClientEntity:
         response = {}
 
         if params.get("detail", False):
-            detail = self.client.variation_detail(params["flagKey"], params["context"], params["defaultValue"])
+            detail = self.client.variation_detail(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
             response["value"] = detail.value
             response["variationIndex"] = detail.variation_index
             response["reason"] = detail.reason
         else:
-            response["value"] = self.client.variation(params["flagKey"], params["context"], params["defaultValue"])
+            response["value"] = self.client.variation(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
 
         return response
 
@@ -85,21 +85,21 @@ class ClientEntity:
         opts["with_reasons"] = params.get("withReasons", False)
         opts["details_only_for_tracked_flags"] = params.get("detailsOnlyForTrackedFlags", False)
 
-        state = self.client.all_flags_state(params["context"], **opts)
+        state = self.client.all_flags_state(Context.from_dict(params["context"]), **opts)
 
         return {"state": state.to_json_dict()}
 
     def track(self, params: dict):
-        self.client.track(params["eventKey"], params["context"], params["data"], params.get("metricValue", None))
+        self.client.track(params["eventKey"], Context.from_dict(params["context"]), params["data"], params.get("metricValue", None))
 
     def identify(self, params: dict):
-        self.client.identify(params["context"])
+        self.client.identify(Context.from_dict(params["context"]))
 
     def flush(self):
         self.client.flush()
 
     def secure_mode_hash(self, params: dict) -> dict:
-        return {"result": self.client.secure_mode_hash(params["context"])}
+        return {"result": self.client.secure_mode_hash(Context.from_dict(params["context"]))}
 
     def context_build(self, params: dict) -> dict:
         if params.get("multi"):
@@ -146,7 +146,7 @@ class ClientEntity:
         }
 
     def migration_variation(self, params: dict) -> dict:
-        stage, _ = self.client.migration_variation(params["key"], params["context"], Stage.from_str(params["defaultStage"]))
+        stage, _ = self.client.migration_variation(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]))
 
         return {'result': stage.value}
 
@@ -183,10 +183,10 @@ class ClientEntity:
             return {"result": migrator}
 
         if params["operation"] == Operation.READ.value:
-            result = migrator.read(params["key"], params["context"], Stage.from_str(params["defaultStage"]), params["payload"])
+            result = migrator.read(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
             return {"result": result.value if result.is_success() else result.error}
 
-        result = migrator.write(params["key"], params["context"], Stage.from_str(params["defaultStage"]), params["payload"])
+        result = migrator.write(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
         return {"result": result.authoritative.value if result.authoritative.is_success() else result.authoritative.error}
 
     def close(self):

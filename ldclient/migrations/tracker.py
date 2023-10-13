@@ -73,17 +73,13 @@ class OpTracker:
         self,
         key: str,
         flag: Optional[FeatureFlag],
-        context: Union[Context, dict],
+        context: Context,
         detail: EvaluationDetail,
         default_stage: Stage
     ):
         self.__key = key
         self.__flag = flag
-
-        if not isinstance(context, Context):
-            context = Context.from_dict(context)
         self.__context = context
-
         self.__detail = detail
         self.__default_stage = default_stage
 

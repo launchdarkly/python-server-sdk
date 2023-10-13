@@ -58,15 +58,9 @@ def test_identify_with_user_dict():
         assert e.context == context
 
 
-def test_identify_no_user():
-    with make_client() as client:
-        client.identify(None)
-        assert count_events(client) == 0
-
-
 def test_identify_no_user_key():
     with make_client() as client:
-        client.identify({ 'name': 'nokey' })
+        client.identify(Context.from_dict({ 'kind': 'user', 'name': 'nokey' }))
         assert count_events(client) == 0
 
 
@@ -151,12 +145,6 @@ def test_track_with_metric_value():
         assert e.context == context
         assert e.data == 42
         assert e.metric_value == 1.5
-
-
-def test_track_no_context():
-    with make_client() as client:
-        client.track('my_event', None)
-        assert count_events(client) == 0
 
 
 def test_track_invalid_context():
@@ -305,15 +293,6 @@ def test_event_for_unknown_feature():
             e.reason is None and
             e.default_value == 'default' and
             e.track_events is False)
-
-
-def test_no_event_for_existing_feature_with_no_context():
-    feature = build_off_flag_with_value('feature.key', 'value').track_events(True).build()
-    store = InMemoryFeatureStore()
-    store.init({FEATURES: {feature.key: feature.to_json_dict()}})
-    with make_client(store) as client:
-        assert 'default' == client.variation(feature.key, None, default='default')
-        assert count_events(client) == 0
 
 
 def test_no_event_for_existing_feature_with_invalid_context():

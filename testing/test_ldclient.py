@@ -15,17 +15,17 @@ unreachable_uri="http://fake"
 
 
 context = Context.builder('xyz').set('bizzle', 'def').build()
-user = {
+user = Context.from_dict({
     u'key': u'xyz',
-    u'custom': {
-        u'bizzle': u'def'
-    }
-}
+    u'kind': u'user',
+    u'bizzle': u'def'
+})
 
-anonymous_user = {
+anonymous_user = Context.from_dict({
     u'key': u'abc',
+    u'kind': u'user',
     u'anonymous': True
-}
+})
 
 def make_client(store = InMemoryFeatureStore()):
     return LDClient(config=Config(sdk_key = 'SDK_KEY',
@@ -128,7 +128,7 @@ def test_no_defaults():
 
 def test_secure_mode_hash():
     context_to_hash = Context.create('Message')
-    equivalent_user_to_hash = {'key': 'Message'}
+    equivalent_user_to_hash = Context.from_dict({'key': 'Message', 'kind': 'user'})
     expected_hash = "aa747c502a898200f9e4fa21bac68136f886a0e27aec70ba06daf2e2a5cb5597"
     with make_offline_client() as client:
         assert client.secure_mode_hash(context_to_hash) == expected_hash
