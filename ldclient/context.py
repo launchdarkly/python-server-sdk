@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import json
 import re
+import warnings
 from typing import Any, Dict, Optional, Union
 
 
@@ -188,6 +189,8 @@ class Context:
         the LaunchDarkly JSON schema for contexts. If it does not have a "kind" property, it
         is interpreted as a context with "user" kind using the somewhat different LaunchDarkly
         JSON schema for users in older LaunchDarkly SDKs.
+
+        DEPRECATED: The legacy user format is deprecated and will be removed in 9.0.0
 
         :param props: the context/user properties
         :return: a context
@@ -601,6 +604,7 @@ class Context:
     
     @classmethod
     def __from_dict_old_user(self, props: dict) -> Context:
+        warnings.warn("legacy user format will be removed in 9.0.0", DeprecationWarning)
         b = ContextBuilder('').kind('user')
         has_key = False
         for k, v in props.items():
