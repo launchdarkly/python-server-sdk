@@ -2,6 +2,11 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.2.0] - 2023-10-17
+### Deprecated:
+- Creating an `LDContext` using the legacy user format has been deprecated and will be removed in the next major release. To learn more, read the [Contexts documentation](https://docs.launchdarkly.com/guides/flags/intro-contexts).
+- Providing client methods `track`, `identify`, `variation`, `variation_detail`, `all_flags_state`, and `secure_mode_hash` with a context dictionary is deprecated. In the next major release, a `Context` will be required.
+
 ## [8.1.7] - 2023-10-05
 ### Changed:
 - Loosened urllib3 requirement to <3
