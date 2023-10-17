@@ -197,7 +197,7 @@ class WriteResult:
 
 class MigrationConfig:
     """
-    A migration config stores references to callable methods which execution
+    A migration config stores references to callable methods which execute
     customer defined read or write operations on old or new origins of
     information. For read operations, an optional comparison function also be
     defined.
