@@ -21,6 +21,9 @@ workflows:
       - test-linux:
           name: Python 3.11
           docker-image: cimg/python:3.11
+      - test-linux:
+          name: Python 3.12
+          docker-image: cimg/python:3.12
       - test-windows:
           name: Windows Python 3
           py3: true
@@ -57,6 +60,7 @@ jobs:
           name: install requirements
           command: |
             pip install --upgrade pip
+            pip install setuptools
             pip install -r test-requirements.txt;
             pip install -r test-filesource-optional-requirements.txt;
             pip install -r consul-requirements.txt;
@@ -133,15 +137,7 @@ jobs:
       - checkout
       - run:
           name: install Python 3
-          command: |
-            choco install pyenv-win --force
-            refreshenv
-            pyenv install 3.11.0b3
-            pyenv global 3.11.0b3
-            [System.Environment]::SetEnvironmentVariable('PYENV',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
-            [System.Environment]::SetEnvironmentVariable('PYENV_ROOT',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
-            [System.Environment]::SetEnvironmentVariable('PYENV_HOME',$env:USERPROFILE + "\.pyenv\pyenv-win\","User")
-            [System.Environment]::SetEnvironmentVariable('path', $env:USERPROFILE + "\.pyenv\pyenv-win\bin;" + $env:USERPROFILE + "\.pyenv\pyenv-win\shims;" + [System.Environment]::GetEnvironmentVariable('path', "User"),"User")
+          command: choco install python --no-progress
       - run: python --version
       - run:
           name: set up DynamoDB
@@ -179,6 +175,7 @@ jobs:
           name: install requirements
           command: |
             python --version
+            pip install setuptools
             pip install -r test-requirements.txt
             pip install -r consul-requirements.txt
             python setup.py install
