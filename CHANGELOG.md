@@ -2,6 +2,25 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.0.0] - 2023-10-17
+The latest version of this SDK supports the ability to manage migrations or modernizations, using migration flags. You might use this functionality if you are optimizing queries, upgrading to new tech stacks, migrating from one database to another, or other similar technology changes. Migration flags are part of LaunchDarkly's Early Access Program. This feature is available to all LaunchDarkly customers but may undergo additional changes before it is finalized.
+
+For detailed information about this version, refer to the list below. For information on how to upgrade from the previous version, read the [migration guide](https://docs.launchdarkly.com/sdk/server-side/python/migration-8-to-9).
+
+### Added:
+- A new `Migrator` type which provides an out-of-the-box configurable migration framework.
+- For more advanced use cases, added new `migration_variation` and `track_migration_op` methods on `LDClient`.
+
+### Changed:
+- Raised `pyyaml` dependency to `>=5.3`.
+
+### Removed:
+- Python 3.7 support was removed.
+- The legacy user format for contexts is no longer supported.  To learn more, read the [Contexts documentation](https://docs.launchdarkly.com/guides/flags/intro-contexts).
+- Methods which originally took a `Context` or a `dict` now only accept a `Context`.
+- Previously deprecated config options `user_cache_size`, `user_cache_time`, `user_keys_capacity`, `user_keys_flush_interval`, and `private_attribute_names` have been removed.
+- Previously deprecated test data flag builder method `variation_for_all_users` has been removed.
+
 ## [8.2.0] - 2023-10-17
 ### Deprecated:
 - Creating an `LDContext` using the legacy user format has been deprecated and will be removed in the next major release. To learn more, read the [Contexts documentation](https://docs.launchdarkly.com/guides/flags/intro-contexts).
