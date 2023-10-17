@@ -1,6 +1,7 @@
 import json
 import socket
 import ssl
+from ssl import SSLContext, PROTOCOL_TLSv1_2
 from threading import Thread
 import time
 import queue
@@ -46,10 +47,10 @@ class MockServerWrapper(Thread):
         self.uri = '%s://localhost:%d' % ('https' if secure else 'http', port)
         self.server = HTTPServer(('localhost', port), MockServerRequestHandler)
         if secure:
-            self.server.socket = ssl.wrap_socket(
+            context = SSLContext(PROTOCOL_TLSv1_2)
+            context.load_cert_chain('./testing/selfsigned.pem', './testing/selfsigned.key')
+            self.server.socket = context.wrap_socket(
                 self.server.socket,
-                certfile='./testing/selfsigned.pem', # this is a pre-generated self-signed cert that is valid for 100 years
-                keyfile='./testing/selfsigned.key',
                 server_side=True
             )
         self.server.server_wrapper = self
@@ -76,7 +77,7 @@ class MockServerWrapper(Thread):
     def wait_until_request_received(self):
         req = self.requests.get()
         self.requests.put(req)
-        
+
     def should_have_requests(self, count):
         if self.requests.qsize() != count:
             rs = []

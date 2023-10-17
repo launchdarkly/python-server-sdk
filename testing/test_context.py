@@ -204,18 +204,6 @@ class TestContext:
         assert_context_invalid(Context.from_dict({'kind': 'multi'}))
         assert_context_invalid(Context.from_dict({'kind': 'multi', 'kind1': 'x'}))
 
-    def test_json_decoding_old_user(self):
-        assert Context.from_dict({'key': 'key1'}) == Context.create('key1', 'user')
-        assert Context.from_dict({'key': 'key1', 'name': 'b'}) == Context.builder('key1').name('b').build()
-        assert Context.from_dict({'key': 'key1', 'custom': {'b': True}}) == \
-            Context.builder('key1').set('b', True).build()
-
-        assert_context_valid(Context.from_dict({'key': ''}))
-        assert_context_invalid(Context.from_dict({}))
-        assert_context_invalid(Context.from_dict({'key': None}))
-        assert_context_invalid(Context.from_dict({'key': 3}))
-        assert_context_invalid(Context.from_dict({'key': 'a', 'name': 3}))
-
 
 class TestContextMulti:
     def test_create_multi(self):

@@ -7,23 +7,28 @@ from collections import namedtuple
 from email.utils import parsedate
 import json
 from threading import Event, Lock, Thread
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 import time
 import uuid
 import queue
 import urllib3
 from ldclient.config import Config
+from datetime import timedelta
+from random import Random
 
 from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.impl.util import timedelta_millis
 from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import check_if_error_is_recoverable_and_log, current_time_millis, is_http_error_recoverable, log, _headers
+from ldclient.impl.sampler import Sampler
 from ldclient.interfaces import EventProcessor
 
 __MAX_FLUSH_THREADS__ = 5
@@ -90,6 +95,72 @@ class EventOutputFormatter:
             if e.metric_value is not None:
                 out['metricValue'] = e.metric_value
             return out
+        elif isinstance(e, MigrationOpEvent):
+            out = {
+                'kind': 'migration_op',
+                'creationDate': e.timestamp,
+                'operation': e.operation.value,
+                'contextKeys': self._context_keys(e.context),
+                'evaluation': {
+                    'key': e.key,
+                    'value': e.detail.value
+                }
+            }
+
+            if e.flag is not None:
+                out["evaluation"]["version"] = e.flag.version
+            if e.default_stage:
+                out["evaluation"]["default"] = e.default_stage.value
+            if e.detail.variation_index is not None:
+                out["evaluation"]["variation"] = e.detail.variation_index
+            if e.detail.reason is not None:
+                out["evaluation"]["reason"] = e.detail.reason
+
+            if e.sampling_ratio is not None and e.sampling_ratio != 1:
+                out["samplingRatio"] = e.sampling_ratio
+
+            measurements: List[Dict] = []
+
+            if len(e.invoked) > 0:
+                measurements.append(
+                    {
+                        "key": "invoked",
+                        "values": {origin.value: True for origin in e.invoked}
+                    }
+                )
+
+            if e.consistent is not None:
+                measurement = {
+                    "key": "consistent",
+                    "value": e.consistent
+                }
+
+                if e.consistent_ratio is not None and e.consistent_ratio != 1:
+                    measurement["samplingRatio"] = e.consistent_ratio
+
+                measurements.append(measurement)
+
+            if len(e.latencies) > 0:
+                measurements.append(
+                    {
+                        "key": "latency_ms",
+                        "values": {o.value: timedelta_millis(d) for o, d in e.latencies.items()}
+                    }
+                )
+
+            if len(e.errors) > 0:
+                measurements.append(
+                    {
+                        "key": "error",
+                        "values": {origin.value: True for origin in e.errors}
+                    }
+                )
+
+            if len(measurements):
+                out["measurements"] = measurements
+
+            return out
+
         return None
 
     """
@@ -265,6 +336,7 @@ class EventDispatcher:
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
+        self._sampler = Sampler(Random())
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
         self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
@@ -314,10 +386,12 @@ class EventDispatcher:
         can_add_index = True
         full_event = None  # type: Any
         debug_event = None  # type: Optional[DebugEvent]
+        sampling_ratio = 1 if event.sampling_ratio is None else event.sampling_ratio
 
         if isinstance(event, EventInputEvaluation):
             context = event.context
-            self._outbox.add_to_summary(event)
+            if not event.exclude_from_summaries:
+                self._outbox.add_to_summary(event)
             if event.track_events:
                 full_event = event
             if self._should_debug_event(event):
@@ -328,6 +402,8 @@ class EventDispatcher:
             can_add_index = False  # an index event would be redundant if there's an identify event
         elif isinstance(event, EventInputCustom):
             context = event.context
+            full_event = event
+        elif isinstance(event, MigrationOpEvent):
             full_event = event
 
         # For each context we haven't seen before, we add an index event - unless this is already
@@ -340,10 +416,10 @@ class EventDispatcher:
                 else:
                     self._outbox.add_event(IndexEvent(event.timestamp, context))
 
-        if full_event:
+        if full_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(full_event)
-        
-        if debug_event:
+
+        if debug_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(debug_event)
 
     def _should_debug_event(self, event: EventInputEvaluation):

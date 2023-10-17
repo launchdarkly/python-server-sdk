@@ -1,9 +1,12 @@
 from ldclient.client import LDClient, Config, Context
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.events.types import EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.impl.stubs import NullEventProcessor
 from ldclient.versioned_data_kind import FEATURES
+from ldclient.migrations import OpTracker, Stage, Operation, Origin
 
 from testing.builders import *
 from testing.stub_util import MockUpdateProcessor
@@ -55,15 +58,9 @@ def test_identify_with_user_dict():
         assert e.context == context
 
 
-def test_identify_no_user():
-    with make_client() as client:
-        client.identify(None)
-        assert count_events(client) == 0
-
-
 def test_identify_no_user_key():
     with make_client() as client:
-        client.identify({ 'name': 'nokey' })
+        client.identify(Context.from_dict({ 'kind': 'user', 'name': 'nokey' }))
         assert count_events(client) == 0
 
 
@@ -71,6 +68,39 @@ def test_identify_invalid_context():
     with make_client() as client:
         client.identify(Context.create(''))
         assert count_events(client) == 0
+
+
+def test_migration_op():
+    detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+    flag = FlagBuilder('key').version(100).on(True).variations('value').build()
+    tracker = OpTracker('key', flag, context, detail, Stage.OFF)
+    tracker.operation(Operation.READ)
+    tracker.invoked(Origin.OLD)
+
+    with make_client() as client:
+        client.track_migration_op(tracker)
+
+        e = get_first_event(client)
+        assert isinstance(e, MigrationOpEvent)
+        assert e.flag == flag
+        assert e.context == context
+        assert e.operation == Operation.READ
+        assert e.detail == detail
+        assert e.invoked == set([Origin.OLD])
+
+
+def test_does_not_send_bad_event():
+    detail = EvaluationDetail('value', 0, {'kind': 'OFF'})
+    tracker = OpTracker('key', None, context, detail, Stage.OFF)
+
+    with make_client() as client:
+        client.track_migration_op(tracker)
+        client.identify(context) # Emit this to ensure events are working
+
+
+        # This is only identify if the op tracker fails to build
+        e = get_first_event(client)
+        assert isinstance(e, EventInputIdentify)
 
 
 def test_track():
@@ -115,12 +145,6 @@ def test_track_with_metric_value():
         assert e.context == context
         assert e.data == 42
         assert e.metric_value == 1.5
-
-
-def test_track_no_context():
-    with make_client() as client:
-        client.track('my_event', None)
-        assert count_events(client) == 0
 
 
 def test_track_invalid_context():
@@ -269,15 +293,6 @@ def test_event_for_unknown_feature():
             e.reason is None and
             e.default_value == 'default' and
             e.track_events is False)
-
-
-def test_no_event_for_existing_feature_with_no_context():
-    feature = build_off_flag_with_value('feature.key', 'value').track_events(True).build()
-    store = InMemoryFeatureStore()
-    store.init({FEATURES: {feature.key: feature.to_json_dict()}})
-    with make_client(store) as client:
-        assert 'default' == client.variation(feature.key, None, default='default')
-        assert count_events(client) == 0
 
 
 def test_no_event_for_existing_feature_with_invalid_context():

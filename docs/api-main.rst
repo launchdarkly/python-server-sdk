@@ -26,3 +26,10 @@ ldclient.evaluation module
 .. automodule:: ldclient.evaluation
     :members:
     :special-members: __init__
+
+ldclient.migrations module
+--------------------------
+
+.. automodule:: ldclient.migrations
+    :members:
+    :special-members: __init__

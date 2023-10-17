@@ -13,12 +13,14 @@ from typing import Any, Callable, Optional
 # these at high volume, we want them to be efficient so we use attributes and slots rather
 # than dictionaries.
 
-class EventInput:
-    __slots__ = ['timestamp', 'context']
 
-    def __init__(self, timestamp: int, context: Context):
+class EventInput:
+    __slots__ = ['timestamp', 'context', 'sampling_ratio']
+
+    def __init__(self, timestamp: int, context: Context, sampling_ratio: Optional[int] = None):
         self.timestamp = timestamp
         self.context = context
+        self.sampling_ratio = sampling_ratio
 
     def __repr__(self) -> str:  # used only in test debugging
         return "%s(%s)" % (self.__class__.__name__, json.dumps(self.to_debugging_dict()))
@@ -29,13 +31,14 @@ class EventInput:
     def to_debugging_dict(self) -> dict:
         pass
 
+
 class EventInputEvaluation(EventInput):
-    __slots__ = ['key', 'flag', 'variation', 'value', 'reason', 'default_value', 'prereq_of', 'track_events']
+    __slots__ = ['key', 'flag', 'variation', 'value', 'reason', 'default_value', 'prereq_of', 'track_events', 'sampling_ratio', 'exclude_from_summaries']
 
     def __init__(self, timestamp: int, context: Context, key: str, flag: Optional[FeatureFlag],
                  variation: Optional[int], value: Any, reason: Optional[dict],
                  default_value: Any, prereq_of: Optional[FeatureFlag] = None, track_events: bool = False):
-        super().__init__(timestamp, context)
+        super().__init__(timestamp, context, 1 if flag is None else flag.sampling_ratio)
         self.key = key
         self.flag = flag
         self.variation = variation
@@ -44,7 +47,8 @@ class EventInputEvaluation(EventInput):
         self.default_value = default_value
         self.prereq_of = prereq_of
         self.track_events = track_events
-    
+        self.exclude_from_summaries = False if flag is None else flag.exclude_from_summaries
+
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
@@ -56,15 +60,20 @@ class EventInputEvaluation(EventInput):
             "reason": self.reason,
             "default_value": self.default_value,
             "prereq_of": {"key": self.prereq_of.key} if self.prereq_of else None,
-            "track_events": self.track_events
+            "track_events": self.track_events,
+            "exclude_from_summaries": self.exclude_from_summaries,
+            "sampling_ratio": self.sampling_ratio,
         }
+
 
 class EventInputIdentify(EventInput):
     def to_debugging_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
-            "context": self.context.to_dict()
+            "context": self.context.to_dict(),
+            "sampling_ratio": self.sampling_ratio,
         }
+
 
 class EventInputCustom(EventInput):
     __slots__ = ['key', 'data', 'metric_value']
@@ -79,10 +88,12 @@ class EventInputCustom(EventInput):
         return {
             "timestamp": self.timestamp,
             "context": self.context.to_dict(),
+            "sampling_ratio": self.sampling_ratio,
             "key": self.key,
             "data": self.data,
             "metric_value": self.metric_value
         }
+
 
 # Event constructors are centralized here to avoid mistakes and repetitive logic.
 # The LDClient owns two instances of EventFactory: one that always embeds evaluation reasons

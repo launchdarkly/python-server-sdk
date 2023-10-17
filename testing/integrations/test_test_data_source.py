@@ -1,7 +1,7 @@
 import pytest
 from typing import Callable
 
-from ldclient.client import LDClient
+from ldclient.client import LDClient, Context
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.versioned_data_kind import FEATURES
@@ -33,7 +33,7 @@ def verify_flag_builder(desc: str, expected_props: dict, builder_actions: Callab
         'variations': [True, False],
         'offVariation': 1,
         'fallthrough': {'variation': 0}
-    }    
+    }
     all_expected_props.update(expected_props)
 
     td = TestData.data_source()
@@ -337,7 +337,7 @@ def test_can_handle_multiple_clients():
 
     assert store2.get(FEATURES, 'flag') == FEATURES.decode(built_flag)
 
-    flag_builder_v2 = td.flag('flag').variation_for_all_users(False)
+    flag_builder_v2 = td.flag('flag').variation_for_all(False)
     td.update(flag_builder_v2)
     built_flag_v2 = flag_builder_v2._build(2)
 
@@ -365,7 +365,7 @@ def test_flag_evaluation_with_client():
                 .then_return(True))
 
     # user1 should satisfy the rule (matching firstname, not matching country)
-    user1 = { 'key': 'user1', 'firstName': 'Mike', 'country': 'us' }
+    user1 = Context.from_dict({ 'kind': 'user', 'key': 'user1', 'firstName': 'Mike', 'country': 'us' })
     eval1 = client.variation_detail('test-flag', user1, default='default')
 
     assert eval1.value == True
@@ -373,7 +373,7 @@ def test_flag_evaluation_with_client():
     assert eval1.reason['kind'] == 'RULE_MATCH'
 
     # user2 should NOT satisfy the rule (not matching firstname despite not matching country)
-    user2 = { 'key': 'user2', 'firstName': 'Joe', 'country': 'us' }
+    user2 = Context.from_dict({ 'kind': 'user', 'key': 'user2', 'firstName': 'Joe', 'country': 'us' })
     eval2 = client.variation_detail('test-flag', user2, default='default')
 
     assert eval2.value == False
@@ -395,7 +395,7 @@ def test_flag_can_evaluate_all_flags():
                 .and_not_match('country', 'gb')
                 .then_return(True))
 
-    user1 = { 'key': 'user1', 'firstName': 'Mike', 'country': 'us' }
+    user1 = Context.from_dict({ 'kind': 'user', 'key': 'user1', 'firstName': 'Mike', 'country': 'us' })
     flags_state = client.all_flags_state(user1, with_reasons=True)
 
     assert flags_state.valid

@@ -68,6 +68,8 @@ def status():
             'context-type',
             'secure-mode-hash',
             'tags',
+            'migrations',
+            'event-sampling'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
@@ -130,6 +132,10 @@ def post_client_command(id):
         response = client.context_convert(sub_params)
     elif command == "getBigSegmentStoreStatus":
         response = client.get_big_segment_store_status()
+    elif command == "migrationVariation":
+        response = client.migration_variation(sub_params)
+    elif command == "migrationOperation":
+        response = client.migration_operation(sub_params)
     else:
         return ('', 400)
 
