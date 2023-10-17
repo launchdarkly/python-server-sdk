@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import threading
 import traceback
+import warnings
 
 from ldclient.config import Config
 from ldclient.context import Context

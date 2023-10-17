@@ -12,7 +12,8 @@ publications:
 
 branches:
   - name: main
-    description: 8.x
+    description: 9.x
+  - name: 8.x
   - name: 7.x
   - name: 6.x
 
