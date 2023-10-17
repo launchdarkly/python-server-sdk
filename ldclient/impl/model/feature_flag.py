@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, Union, Dict
 
 from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.entity import *
@@ -28,11 +28,11 @@ class Target:
         self._context_kind = opt_str(data, 'contextKind')
         self._variation = req_int(data, 'variation')
         self._values = set(req_str_list(data, 'values'))
-    
+
     @property
     def context_kind(self) -> Optional[str]:
         return self._context_kind
-    
+
     @property
     def variation(self) -> int:
         return self._variation
@@ -50,11 +50,11 @@ class FlagRule:
         self._variation_or_rollout = VariationOrRollout(data)
         self._clauses = list(Clause(item) for item in req_dict_list(data, 'clauses'))
         self._track_events = opt_bool(data, 'trackEvents')
-    
+
     @property
     def id(self) -> Optional[str]:
         return self._id
-    
+
     @property
     def clauses(self) -> List[Clause]:
         return self._clauses
@@ -66,6 +66,17 @@ class FlagRule:
     @property
     def variation_or_rollout(self) -> VariationOrRollout:
         return self._variation_or_rollout
+
+
+class MigrationSettings:
+    __slots__ = ['_check_ratio']
+
+    def __init__(self, data: Dict):
+        self._check_ratio = opt_int(data, 'checkRatio')
+
+    @property
+    def check_ratio(self) -> Optional[int]:
+        return self._check_ratio
 
 
 class FeatureFlag(ModelEntity):
@@ -97,10 +108,17 @@ class FeatureFlag(ModelEntity):
         self._track_events_fallthrough = opt_bool(data, 'trackEventsFallthrough')
         self._debug_events_until_date = opt_number(data, 'debugEventsUntilDate')
 
+        self._migrations = None
+        if 'migration' in data:
+            self._migrations = MigrationSettings(opt_dict(data, 'migration') or {})
+
+        self._exclude_from_summaries = opt_bool(data, 'excludeFromSummaries') or False
+        self._sampling_ratio = opt_int(data, 'samplingRatio')
+
     @property
     def key(self) -> str:
         return self._key
-    
+
     @property
     def version(self) -> int:
         return self._version
@@ -108,7 +126,7 @@ class FeatureFlag(ModelEntity):
     @property
     def deleted(self) -> bool:
         return self._deleted
-    
+
     @property
     def variations(self) -> List[Any]:
         return self._variations
@@ -156,3 +174,15 @@ class FeatureFlag(ModelEntity):
     @property
     def debug_events_until_date(self) -> Optional[Union[int, float]]:
         return self._debug_events_until_date
+
+    @property
+    def migrations(self) -> Optional[MigrationSettings]:
+        return self._migrations
+
+    @property
+    def exclude_from_summaries(self) -> bool:
+        return self._exclude_from_summaries
+
+    @property
+    def sampling_ratio(self) -> Optional[int]:
+        return self._sampling_ratio

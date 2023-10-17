@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from ldclient.impl.model.attribute_ref import AttributeRef, opt_attr_ref_with_opt_context_kind
 from ldclient.impl.model.entity import *
@@ -19,7 +19,7 @@ class WeightedVariation:
     @property
     def weight(self) -> int:
         return self._weight
-    
+
     @property
     def untracked(self) -> int:
         return self._untracked
@@ -64,11 +64,11 @@ class VariationOrRollout:
         self._variation = opt_int(data, 'variation')
         rollout = opt_dict(data, 'rollout')
         self._rollout = None if rollout is None else Rollout(rollout)
-    
+
     @property
     def variation(self) -> Optional[int]:
         return self._variation
-    
+
     @property
     def rollout(self) -> Optional[Rollout]:
         return self._rollout

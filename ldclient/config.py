@@ -36,8 +36,6 @@ class BigSegmentsConfig:
                  store: Optional[BigSegmentStore] = None,
                  context_cache_size: int=1000,
                  context_cache_time: float=5,
-                 user_cache_size: Optional[int]=None,
-                 user_cache_time: Optional[float]=None,
                  status_poll_interval: float=5,
                  stale_after: float=120):
         """
@@ -47,16 +45,14 @@ class BigSegmentsConfig:
             by the SDK at any given time
         :param context_cache_time: the maximum length of time (in seconds) that the Big Segment state
             for a context will be cached by the SDK
-        :param user_cache_size: deprecated alias for `context_cache_size`
-        :param user_cache_time: deprecated alias for `context_cache_time`
         :param status_poll_interval: the interval (in seconds) at which the SDK will poll the Big
             Segment store to make sure it is available and to determine how long ago it was updated
         :param stale_after: the maximum length of time between updates of the Big Segments data
             before the data is considered out of date
         """
         self.__store = store
-        self.__context_cache_size = context_cache_size if user_cache_size is None else user_cache_size
-        self.__context_cache_time = context_cache_time if user_cache_time is None else user_cache_time
+        self.__context_cache_size = context_cache_size
+        self.__context_cache_time = context_cache_time
         self.__status_poll_interval = status_poll_interval
         self.__stale_after = stale_after
         pass
@@ -72,16 +68,6 @@ class BigSegmentsConfig:
     @property
     def context_cache_time(self) -> float:
         return self.__context_cache_time
-
-    @property
-    def user_cache_size(self) -> int:
-        """Deprecated alias for :attr:`context_cache_size`."""
-        return self.context_cache_size
-
-    @property
-    def user_cache_time(self) -> float:
-        """Deprecated alias for :attr:`context_cache_time`."""
-        return self.context_cache_time
 
     @property
     def status_poll_interval(self) -> float:
@@ -176,13 +162,10 @@ class Config:
                  feature_requester_class=None,
                  event_processor_class: Callable[['Config'], EventProcessor]=None,
                  private_attributes: Set[str]=set(),
-                 private_attribute_names: Set[str]=set(),
                  all_attributes_private: bool=False,
                  offline: bool=False,
                  context_keys_capacity: int=1000,
                  context_keys_flush_interval: float=300,
-                 user_keys_capacity: Optional[int] = None,
-                 user_keys_flush_interval: Optional[float] = None,
                  diagnostic_opt_out: bool=False,
                  diagnostic_recording_interval: int=900,
                  wrapper_name: Optional[str]=None,
@@ -226,8 +209,6 @@ class Config:
           with this configuration active will have these attributes removed. Each item can be either the
           name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
           property within a JSON object value as private.
-        :param array private_attribute_names: Deprecated alias for ``private_attributes`` ("names" is no longer
-          strictly accurate because these could also be attribute reference paths).
         :param all_attributes_private: If true, all user attributes (other than the key) will be
           private, not just the attributes specified in ``private_attributes``.
         :param feature_store: A FeatureStore implementation
@@ -235,8 +216,6 @@ class Config:
           one time, so that duplicate context details will not be sent in analytics events.
         :param context_keys_flush_interval: The interval in seconds at which the event processor will
           reset its set of known context keys.
-        :param user_keys_capacity: Deprecated alias for ``context_keys_capacity``.
-        :param user_keys_flush_interval: Deprecated alias for ``context_keys_flush_interval``.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
         :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
@@ -278,11 +257,11 @@ class Config:
         if offline is True:
             send_events = False
         self.__send_events = True if send_events is None else send_events
-        self.__private_attributes = private_attributes or private_attribute_names
+        self.__private_attributes = private_attributes
         self.__all_attributes_private = all_attributes_private
         self.__offline = offline
-        self.__context_keys_capacity = context_keys_capacity if user_keys_capacity is None else user_keys_capacity
-        self.__context_keys_flush_interval = context_keys_flush_interval if user_keys_flush_interval is None else user_keys_flush_interval
+        self.__context_keys_capacity = context_keys_capacity
+        self.__context_keys_flush_interval = context_keys_flush_interval
         self.__diagnostic_opt_out = diagnostic_opt_out
         self.__diagnostic_recording_interval = max(diagnostic_recording_interval, 60)
         self.__wrapper_name = wrapper_name
@@ -409,10 +388,6 @@ class Config:
         return list(self.__private_attributes)
 
     @property
-    def private_attribute_names(self) -> List[str]:
-        return self.private_attributes
-
-    @property
     def all_attributes_private(self) -> bool:
         return self.__all_attributes_private
 
@@ -427,16 +402,6 @@ class Config:
     @property
     def context_keys_flush_interval(self) -> float:
         return self.__context_keys_flush_interval
-
-    @property
-    def user_keys_capacity(self) -> int:
-        """Deprecated name for :attr:`context_keys_capacity`."""
-        return self.context_keys_capacity
-
-    @property
-    def user_keys_flush_interval(self) -> float:
-        """Deprecated name for :attr:`context_keys_flush_interval`."""
-        return self.context_keys_flush_interval
 
     @property
     def diagnostic_opt_out(self) -> bool:

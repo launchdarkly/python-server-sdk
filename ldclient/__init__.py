@@ -3,10 +3,11 @@ The ldclient module contains the most common top-level entry points for the SDK.
 """
 
 from ldclient.impl.rwlock import ReadWriteLock as _ReadWriteLock
-from ldclient.impl.util import log
+from ldclient.impl.util import log, Result
 from ldclient.version import VERSION
 from .client import *
 from .context import *
+from .migrations import *
 
 __version__ = VERSION
 
@@ -104,9 +105,11 @@ __all__ = [
     'ContextBuilder',
     'ContextMultiBuilder',
     'LDClient',
+    'Result',
     'client',
     'context',
     'evaluation',
     'integrations',
-    'interfaces'
+    'interfaces',
+    'migrations'
 ]
