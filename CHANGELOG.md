@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.2.1] - 2023-10-23
+### Fixed:
+- Replace deprecated `utcfromtimestamp` usage.
+
 ## [8.2.0] - 2023-10-17
 ### Deprecated:
 - Creating an `LDContext` using the legacy user format has been deprecated and will be removed in the next major release. To learn more, read the [Contexts documentation](https://docs.launchdarkly.com/guides/flags/intro-contexts).
