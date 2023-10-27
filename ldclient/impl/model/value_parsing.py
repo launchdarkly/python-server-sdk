@@ -1,7 +1,7 @@
 import re
 from re import Pattern
 from semver import VersionInfo
-from datetime import tzinfo, timedelta, datetime
+from datetime import tzinfo, timedelta, datetime, timezone
 from numbers import Number
 from typing import Any, Optional
 
@@ -9,8 +9,8 @@ import pyrfc3339
 
 _ZERO = timedelta(0)
 
-# A UTC class.
 
+# A UTC class.
 class _UTC(tzinfo):
     """UTC"""
 
@@ -23,7 +23,8 @@ class _UTC(tzinfo):
     def dst(self, dt):
         return _ZERO
 
-_epoch = datetime.utcfromtimestamp(0).replace(tzinfo=_UTC())
+
+_epoch = datetime.fromtimestamp(0, timezone.utc)
 
 
 def is_number(input: Any) -> bool:
