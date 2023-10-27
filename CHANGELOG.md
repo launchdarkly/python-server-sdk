@@ -2,6 +2,10 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.0.1] - 2023-10-27
+### Fixed:
+- Replace deprecated `utcfromtimestamp` usage.
+
 ## [8.2.1] - 2023-10-23
 ### Fixed:
 - Replace deprecated `utcfromtimestamp` usage.
