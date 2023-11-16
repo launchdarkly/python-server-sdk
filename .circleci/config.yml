@@ -10,7 +10,6 @@ workflows:
           name: Python 3.8
           docker-image: cimg/python:3.8
           test-build-docs: true
-          skip-sse-contract-tests: true
           skip-contract-tests: true
       - test-linux:
           name: Python 3.9
@@ -42,9 +41,6 @@ jobs:
       test-with-mypy:
         type: boolean
         default: true
-      skip-sse-contract-tests:
-        type: boolean
-        default: false
       skip-contract-tests:
         type: boolean
         default: false
@@ -94,20 +90,6 @@ jobs:
                 name: verify docs can be built successfully
                 command: |
                   make docs
-
-      - unless:
-          condition: <<parameters.skip-sse-contract-tests>>
-          steps:
-          - run:
-              name: build SSE contract test service
-              command: cd sse-contract-tests && make build-test-service
-          - run:
-              name: start SSE contract test service
-              command: cd sse-contract-tests && make start-test-service
-              background: true
-          - run:
-              name: run SSE contract tests
-              command: cd sse-contract-tests && make run-contract-tests
 
       - unless:
           condition: <<parameters.skip-contract-tests>>
