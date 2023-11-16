@@ -1,22 +1,17 @@
-"""
-Default implementation of the streaming component.
-"""
-# currently excluded from documentation - see docs/README.md
-
 from collections import namedtuple
-
 import json
 from threading import Thread
-
-import logging
 import time
 
 from ldclient.impl.http import HTTPFactory, _http_factory
-from ldclient.impl.retry_delay import RetryDelayStrategy, DefaultBackoffStrategy, DefaultJitterStrategy
-from ldclient.impl.sse import SSEClient
-from ldclient.impl.util import log, UnsuccessfulResponseException, http_error_message, is_http_error_recoverable
+from ldclient.impl.util import http_error_message, is_http_error_recoverable, log
 from ldclient.interfaces import UpdateProcessor
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+
+from ld_eventsource import SSEClient
+from ld_eventsource.actions import Event, Fault
+from ld_eventsource.config import ConnectStrategy, ErrorStrategy, RetryDelayStrategy
+from ld_eventsource.errors import HTTPStatusError
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
@@ -41,79 +36,59 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
-        self._es_started = None
-        self._retry_delay = RetryDelayStrategy(
-            config.initial_reconnect_delay,
-            BACKOFF_RESET_INTERVAL,
-            DefaultBackoffStrategy(MAX_RETRY_DELAY),
-            DefaultJitterStrategy(JITTER_RATIO))
+        self._connection_attempt_start_time = None
 
-        # We need to suppress the default logging behavior of the backoff package, because
-        # it logs messages at ERROR level with variable content (the delay time) which will
-        # prevent monitors from coalescing multiple messages. The backoff package attempts
-        # to suppress its own output by default by giving the logger a NullHandler, but it
-        # will still propagate up to the root logger unless we do this:
-        logging.getLogger('backoff').propagate = False
-
-    # Retry/backoff logic:
-    # Upon any error establishing the stream connection we retry with backoff + jitter.
-    # Upon any error processing the results of the stream we reconnect after one second.
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
-        attempts = 0
-        while self._running:
-            if attempts > 0:
-                delay = self._retry_delay.next_retry_delay(time.time())
-                log.info("Will reconnect after delay of %fs" % delay)
-                time.sleep(delay)
-            attempts += 1
-            try:
-                self._es_started = int(time.time() * 1000)
-                messages = self._connect()
-                for msg in messages:
-                    if not self._running:
-                        break
-                    self._retry_delay.set_good_since(time.time())
-                    message_ok = self.process_message(self._store, msg)
-                    if message_ok:
-                        self._record_stream_init(False)
-                        self._es_started = None
-                    if message_ok is True and self._ready.is_set() is False:
+        self._sse = self._create_sse_client()
+        self._connection_attempt_start_time = time.time()
+        for action in self._sse.all:
+            if isinstance(action, Event):
+                try:
+                    message_ok = self._process_message(action)
+                except Exception as e:
+                    log.info("Error while handling stream event; will restart stream: %s" % e)
+                    self._sse.interrupt()
+                if message_ok:
+                    self._record_stream_init(False)
+                    self._connection_attempt_start_time = None
+                    if not self._ready.is_set():
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
-            except UnsuccessfulResponseException as e:
-                self._record_stream_init(True)
-                self._es_started = None
-
-                http_error_message_result = http_error_message(e.status, "stream connection")
-                if is_http_error_recoverable(e.status):
-                    log.warning(http_error_message_result)
-                else:
-                    log.error(http_error_message_result)
-                    self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
-                    self.stop()
+            elif isinstance(action, Fault):
+                if not self._handle_error(action.error):
                     break
-            except Exception as e:
-                log.warning("Unexpected error on stream connection: %s, will retry" % e)
-                self._record_stream_init(True)
-                self._es_started = None
-                # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
+        self._sse.close()
 
-    def _record_stream_init(self, failed):
-        if self._diagnostic_accumulator and self._es_started:
+    def _record_stream_init(self, failed: bool):
+        if self._diagnostic_accumulator and self._connection_attempt_start_time:
             current_time = int(time.time() * 1000)
-            self._diagnostic_accumulator.record_stream_init(current_time, current_time - self._es_started, failed)
+            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
+            self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
-    def _connect(self):
+    def _create_sse_client(self) -> SSEClient:
         # We don't want the stream to use the same read timeout as the rest of the SDK.
         http_factory = _http_factory(self._config)
-        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
-        client = SSEClient(
-            self._uri,
-            http_factory = stream_http_factory
+        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config,
+            override_read_timeout=stream_read_timeout)
+        return SSEClient(
+            connect=ConnectStrategy.http(
+                url=self._uri,
+                headers=http_factory.base_headers,
+                pool=stream_http_factory.create_pool_manager(1, self._uri),
+                urllib3_request_options={"timeout": stream_http_factory.timeout}
+            ),
+            error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
+            initial_retry_delay=self._config.initial_reconnect_delay,
+            retry_delay_strategy=RetryDelayStrategy.default(
+                max_delay=MAX_RETRY_DELAY,
+                backoff_multiplier=2,
+                jitter_multiplier=JITTER_RATIO
+            ),
+            retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
+            logger=log
         )
-        return client.events
 
     def stop(self):
         log.info("Stopping StreamingUpdateProcessor")
@@ -123,8 +98,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         return self._running and self._ready.is_set() is True and self._store.initialized is True
 
     # Returns True if we initialized the feature store
-    @staticmethod
-    def process_message(store, msg):
+    def _process_message(self, msg: Event) -> bool:
         if msg.event == 'put':
             all_data = json.loads(msg.data)
             init_data = {
@@ -133,7 +107,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             }
             log.debug("Received put event with %d flags and %d segments",
                 len(init_data[FEATURES]), len(init_data[SEGMENTS]))
-            store.init(init_data)
+            self._store.init(init_data)
             return True
         elif msg.event == 'patch':
             payload = json.loads(msg.data)
@@ -142,7 +116,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
             target = StreamingUpdateProcessor._parse_path(path)
             if target is not None:
-                store.upsert(target.kind, obj)
+                self._store.upsert(target.kind, obj)
             else:
                 log.warning("Patch for unknown path: %s", path)
         elif msg.event == 'delete':
@@ -153,15 +127,39 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             log.debug("Received delete event for %s, New version: [%d]", path, version)
             target = StreamingUpdateProcessor._parse_path(path)
             if target is not None:
-                store.delete(target.kind, target.key, version)
+                self._store.delete(target.kind, target.key, version)
             else:
                 log.warning("Delete for unknown path: %s", path)
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
 
+    # Returns true to continue, false to stop
+    def _handle_error(self, error: Exception) -> bool:
+        if not self._running:
+            return False  # don't retry if we've been deliberately stopped
+        if isinstance(error, HTTPStatusError):
+            self._record_stream_init(True)
+            self._connection_attempt_start_time = None
+
+            http_error_message_result = http_error_message(error.status, "stream connection")
+            if not is_http_error_recoverable(error.status):
+                log.error(http_error_message_result)
+                self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
+                self.stop()
+                return False
+            else:
+                log.warning(http_error_message_result)
+        else:
+            log.warning("Unexpected error on stream connection: %s, will retry" % error)
+            self._record_stream_init(True)
+            self._connection_attempt_start_time = None
+            # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
+        self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
+        return True
+
     @staticmethod
-    def _parse_path(path):
+    def _parse_path(path: str):
         for kind in [FEATURES, SEGMENTS]:
             if path.startswith(kind.stream_api_path):
                 return ParsedPath(kind = kind, key = path[len(kind.stream_api_path):])
@@ -170,6 +168,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     # magic methods for "with" statement (used in testing)
     def __enter__(self):
         return self
-    
+
     def __exit__(self, type, value, traceback):
         self.stop()

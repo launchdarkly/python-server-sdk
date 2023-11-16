@@ -22,8 +22,7 @@ TEMP_TEST_OUTPUT=/tmp/contract-test-service.log
 # TEST_HARNESS_PARAMS := $(TEST_HARNESS_PARAMS) \
 
 
-# port 8000 and 9000 is already used in the CI environment because we're
-# running a DynamoDB container and an SSE contract test
+# port 8000 is already used in the CI environment because we're running a DynamoDB container
 PORT=10000
 
 build-contract-tests:

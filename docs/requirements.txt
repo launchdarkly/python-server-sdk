@@ -2,7 +2,6 @@ sphinx
 sphinx_rtd_theme
 sphinx-autodoc-typehints
 
-backoff>=1.4.3
 certifi>=2018.4.16
 expiringdict>=1.1.4
 pyRFC3339>=1.0
