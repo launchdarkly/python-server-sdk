@@ -20,6 +20,9 @@ def make_put_event(flags = [], segments = []):
     data = { "data": { "flags": make_items_map(flags), "segments": make_items_map(segments) } }
     return 'event:put\ndata: %s\n\n' % json.dumps(data)
 
+def make_invalid_put_event():
+    return 'event:put\ndata: {"data": {\n\n'
+
 def make_patch_event(kind, item):
     path = '%s%s' % (kind.stream_api_path, item['key'])
     data = { "path": path, "data": item_as_json(item) }

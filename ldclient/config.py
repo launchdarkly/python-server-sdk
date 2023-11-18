@@ -8,7 +8,7 @@ from typing import Optional, Callable, List, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.util import log, validate_application_info
-from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor
+from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, DataSourceUpdateSink
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -269,6 +269,7 @@ class Config:
         self.__http = http
         self.__big_segments = BigSegmentsConfig() if not big_segments else big_segments
         self.__application = validate_application_info(application or {}, log)
+        self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
@@ -439,6 +440,20 @@ class Config:
         the appropriately configured dict to the {Config} object.
         """
         return self.__application
+
+    @property
+    def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:
+        """
+        Returns the component that allows a data source to push data into the SDK.
+
+        This property should only be set by the SDK. Long term access of this
+        property is not supported; it is temporarily being exposed to maintain
+        backwards compatibility while the SDK structure is updated.
+
+        Custom data source implementations should integrate with this sink if
+        they want to provide support for data source status listeners.
+        """
+        return self._data_source_update_sink
 
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':

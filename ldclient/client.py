@@ -20,14 +20,16 @@ from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl, DataSourceStatusProviderImpl
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model.feature_flag import FeatureFlag
+from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
-from ldclient.interfaces import BigSegmentStoreStatusProvider, FeatureRequester, FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureRequester, FeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.feature_store import FeatureStore
 from ldclient.migrations import Stage, OpTracker
@@ -100,6 +102,10 @@ class LDClient:
         self._event_factory_with_reasons = EventFactory(True)
 
         store = _FeatureStoreClientWrapper(self._config.feature_store)
+
+        listeners = Listeners()
+        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+        self.__data_source_status_provider = DataSourceStatusProviderImpl(listeners, self._config._data_source_update_sink)
         self._store = store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
@@ -488,6 +494,21 @@ class LDClient:
         tracking changes in this status.
         """
         return self.__big_segment_store_manager.status_provider
+
+    @property
+    def data_source_status_provider(self) -> DataSourceStatusProvider:
+        """
+        Returns an interface for tracking the status of the data source.
+
+        The data source is the mechanism that the SDK uses to get feature flag configurations, such
+        as a streaming connection (the default) or poll requests. The
+        :class:`ldclient.interfaces.DataSourceStatusProvider` has methods for checking whether the
+        data source is (as far as the SDK knows) currently operational and tracking changes in this
+        status.
+
+        :return: The data source status provider
+        """
+        return self.__data_source_status_provider
 
 
 __all__ = ['LDClient', 'Config']

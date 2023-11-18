@@ -14,3 +14,15 @@ def test_can_redact_password(password_redaction_tests):
     input, expected = password_redaction_tests
 
     assert redact_password(input) == expected
+
+
+class SpyListener:
+    def __init__(self):
+        self._statuses = []
+
+    def __call__(self, status):
+        self._statuses.append(status)
+
+    @property
+    def statuses(self):
+        return self._statuses
