@@ -251,4 +251,4 @@ class Files:
 
         :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property
         """
-        return lambda config, store, ready : _FileDataSource(store, ready, paths, auto_update, poll_interval, force_polling)
+        return lambda config, store, ready : _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)

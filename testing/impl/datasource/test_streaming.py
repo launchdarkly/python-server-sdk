@@ -1,19 +1,23 @@
-import json
 import pytest
 from threading import Event
+from typing import List
 import time
 
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
+from ldclient.impl.listeners import Listeners
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+from ldclient.interfaces import DataSourceStatus, DataSourceState, DataSourceErrorKind
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 
 from testing.builders import *
 from testing.http_util import start_server, BasicResponse, CauseNetworkError, SequentialHandler
 from testing.proxy_test_util import do_proxy_tests
-from testing.stub_util import make_delete_event, make_patch_event, make_put_event, stream_content
+from testing.stub_util import make_delete_event, make_patch_event, make_put_event, make_invalid_put_event, stream_content
+from testing.test_util import SpyListener
 
 brief_delay = 0.001
 
@@ -189,7 +193,7 @@ def test_retries_on_network_error():
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
                 server.await_request
@@ -207,7 +211,7 @@ def test_recoverable_http_error(status):
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
                 server.should_have_requests(3)
@@ -224,7 +228,7 @@ def test_unrecoverable_http_error(status):
             server.for_path('/all', error_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(5)
                 assert not sp.initialized()
                 server.should_have_requests(1)
@@ -283,6 +287,108 @@ def test_records_diagnostic_on_stream_init_failure():
                 assert len(recorded_inits) == 2
                 assert recorded_inits[0]['failed'] is True
                 assert recorded_inits[1]['failed'] is False
+@pytest.mark.parametrize("status", [ 400, 408, 429, 500, 503 ])
+def test_status_includes_http_code(status):
+    error_handler = BasicResponse(status)
+    store = InMemoryFeatureStore()
+    ready = Event()
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            two_errors_then_success = SequentialHandler(error_handler, error_handler, stream)
+            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+
+            spy = SpyListener()
+            listeners = Listeners()
+            listeners.add(spy)
+
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+            server.for_path('/all', two_errors_then_success)
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sp.initialized()
+                server.should_have_requests(3)
+
+                assert len(spy.statuses) == 3
+
+                assert spy.statuses[0].state == DataSourceState.INITIALIZING
+                assert spy.statuses[0].error.kind == DataSourceErrorKind.ERROR_RESPONSE
+                assert spy.statuses[0].error.status_code == status
+
+                assert spy.statuses[1].state == DataSourceState.INITIALIZING
+                assert spy.statuses[1].error.kind == DataSourceErrorKind.ERROR_RESPONSE
+                assert spy.statuses[1].error.status_code == status
+
+                assert spy.statuses[2].state == DataSourceState.VALID
+                assert spy.statuses[2].error.kind == DataSourceErrorKind.ERROR_RESPONSE
+                assert spy.statuses[2].error.status_code == status
+
+
+def test_invalid_json_triggers_listener():
+    store = InMemoryFeatureStore()
+    ready = Event()
+    with start_server() as server:
+        with stream_content(make_put_event()) as valid_stream, stream_content(make_invalid_put_event()) as invalid_stream:
+            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+
+            statuses: List[DataSourceStatus] = []
+            listeners = Listeners()
+
+            def listener(s):
+                if len(statuses) == 0:
+                    invalid_stream.close()
+                statuses.append(s)
+            listeners.add(listener)
+
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+            server.for_path('/all', SequentialHandler(invalid_stream, valid_stream))
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sp.initialized()
+                server.should_have_requests(2)
+
+                assert len(statuses) == 2
+
+                assert statuses[0].state == DataSourceState.INITIALIZING
+                assert statuses[0].error.kind == DataSourceErrorKind.INVALID_DATA
+                assert statuses[0].error.status_code == 0
+
+                assert statuses[1].state == DataSourceState.VALID
+
+def test_failure_transitions_from_valid():
+    store = InMemoryFeatureStore()
+    ready = Event()
+    error_handler = BasicResponse(401)
+    with start_server() as server:
+        config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+
+        spy = SpyListener()
+        listeners = Listeners()
+        listeners.add(spy)
+
+        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+
+        # The sink has special handling for failures before the state is valid. So we manually set this to valid so we
+        # can exercise the other branching logic within the sink.
+        config.data_source_update_sink.update_status(DataSourceState.VALID, None)
+        server.for_path('/all', error_handler)
+
+        with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            sp.start()
+            ready.wait(start_wait)
+            server.should_have_requests(1)
+
+            assert len(spy.statuses) == 2
+
+            assert spy.statuses[0].state == DataSourceState.VALID
+
+            assert spy.statuses[1].state == DataSourceState.OFF
+            assert spy.statuses[1].error.kind == DataSourceErrorKind.ERROR_RESPONSE
+            assert spy.statuses[1].error.status_code == 401
+
 
 def expect_item(store, kind, item):
     assert store.get(kind, item['key'], lambda x: x) == item

@@ -1,6 +1,8 @@
 import json
 import os
 import traceback
+import time
+from typing import Optional
 
 have_yaml = False
 try:
@@ -20,16 +22,19 @@ except ImportError:
 
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
-from ldclient.interfaces import UpdateProcessor
+from ldclient.interfaces import UpdateProcessor, DataSourceUpdateSink, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+
 
 def _sanitize_json_item(item):
     if not ('version' in item):
         item['version'] = 1
 
+
 class _FileDataSource(UpdateProcessor):
-    def __init__(self, store, ready, paths, auto_update, poll_interval, force_polling):
+    def __init__(self, store, data_source_update_sink: Optional[DataSourceUpdateSink], ready, paths, auto_update, poll_interval, force_polling):
         self._store = store
+        self._data_source_update_sink = data_source_update_sink
         self._ready = ready
         self._inited = False
         self._paths = paths
@@ -39,6 +44,23 @@ class _FileDataSource(UpdateProcessor):
         self._auto_updater = None
         self._poll_interval = poll_interval
         self._force_polling = force_polling
+
+    def _sink_or_store(self):
+        """
+        The original implementation of this class relied on the feature store
+        directly, which we are trying to move away from. Customers who might have
+        instantiated this directly for some reason wouldn't know they have to set
+        the config's sink manually, so we have to fall back to the store if the
+        sink isn't present.
+
+        The next major release should be able to simplify this structure and
+        remove the need for fall back to the data store because the update sink
+        should always be present.
+        """
+        if self._data_source_update_sink is None:
+            return self._store
+
+        return self._data_source_update_sink
 
     def start(self):
         self._load_all()
@@ -65,13 +87,25 @@ class _FileDataSource(UpdateProcessor):
             except Exception as e:
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
+                if self._data_source_update_sink is not None:
+                    self._data_source_update_sink.update_status(
+                        DataSourceState.INTERRUPTED,
+                        DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time, str(e))
+                    )
                 return
         try:
-            self._store.init(all_data)
+            self._sink_or_store().init(all_data)
             self._inited = True
+            if self._data_source_update_sink is not None:
+                self._data_source_update_sink.update_status(DataSourceState.VALID, None)
         except Exception as e:
             log.error('Unable to store data: %s' % repr(e))
             traceback.print_exc()
+            if self._data_source_update_sink is not None:
+                self._data_source_update_sink.update_status(
+                    DataSourceState.INTERRUPTED,
+                    DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e))
+                )
 
     def _load_file(self, path, all_data):
         content = None

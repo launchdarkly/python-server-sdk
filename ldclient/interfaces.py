@@ -7,6 +7,8 @@ They may be useful in writing new implementations of these components, or for te
 from abc import ABCMeta, abstractmethod, abstractproperty
 from .versioned_data_kind import VersionedDataKind
 from typing import Any, Callable, Mapping, Optional
+from enum import Enum
+
 
 class FeatureStore:
     """
@@ -291,12 +293,12 @@ class BigSegmentStore:
     def get_membership(self, context_hash: str) -> Optional[dict]:
         """
         Queries the store for a snapshot of the current segment state for a specific context.
-    
+
         The context_hash is a base64-encoded string produced by hashing the context key as defined
         by the Big Segments specification; the store implementation does not need to know the details
         of how this is done, because it deals only with already-hashed keys, but the string can be
         assumed to only contain characters that are valid in base64.
-    
+
         The return value should be either a ``dict``, or None if the context is not referenced in any big
         segments. Each key in the dictionary is a "segment reference", which is how segments are
         identified in Big Segment data. This string is not identical to the segment key-- the SDK
@@ -306,7 +308,7 @@ class BigSegmentStore:
         explicitly included (that is, if both an include and an exclude existed in the data, the
         include would take precedence). If the context's status in a particular segment is undefined,
         there should be no key or value for that segment.
-    
+
         This dictionary may be cached by the SDK, so it should not be modified after it is created.
         It is a snapshot of the segment membership state at one point in time.
 
@@ -338,7 +340,7 @@ class BigSegmentStoreStatus:
         """
         True if the Big Segment store is able to respond to queries, so that the SDK can evaluate
         whether a user is in a segment or not.
-    
+
         If this property is False, the store is not able to make queries (for instance, it may not have
         a valid database connection). In this case, the SDK will treat any reference to a Big Segment
         as if no users are included in that segment. Also, the :func:`ldclient.evaluation.EvaluationDetail.reason`
@@ -346,7 +348,7 @@ class BigSegmentStoreStatus:
         available will have a ``bigSegmentsStatus`` of ``"STORE_ERROR"``.
         """
         return self.__available
-    
+
     @property
     def stale(self) -> bool:
         """
@@ -365,19 +367,19 @@ class BigSegmentStoreStatus:
 class BigSegmentStoreStatusProvider:
     """
     An interface for querying the status of a Big Segment store.
-    
+
     The Big Segment store is the component that receives information about Big Segments, normally
     from a database populated by the LaunchDarkly Relay Proxy. Big Segments are a specific type
     of user segments. For more information, read the LaunchDarkly documentation:
     https://docs.launchdarkly.com/home/users/big-segments
-    
+
     An implementation of this abstract class is returned by :func:`ldclient.client.LDClient.big_segment_store_status_provider`.
     Application code never needs to implement this interface.
-    
+
     There are two ways to interact with the status. One is to simply get the current status; if its
     ``available`` property is true, then the SDK is able to evaluate user membership in Big Segments,
     and the ``stale`` property indicates whether the data might be out of date.
-    
+
     The other way is to subscribe to status change notifications. Applications may wish to know if
     there is an outage in the Big Segment store, or if it has become stale (the Relay Proxy has
     stopped updating it with new data), since then flag evaluations that reference a Big Segment
@@ -412,5 +414,284 @@ class BigSegmentStoreStatusProvider:
 
         :param listener: a listener that was previously added with :func:`add_listener()`; if it was not,
             this method does nothing
+        """
+        pass
+
+
+class DataSourceState(Enum):
+    """
+    Enumeration representing the states a data source can be in at any given time.
+    """
+
+    INITIALIZING = 'initializing'
+    """
+    The initial state of the data source when the SDK is being initialized.
+
+    If it encounters an error that requires it to retry initialization, the state will remain at
+    :class:`DataSourceState.INITIALIZING` until it either succeeds and becomes {VALID}, or permanently fails and
+    becomes {OFF}.
+    """
+
+    VALID = 'valid'
+    """
+    Indicates that the data source is currently operational and has not had any problems since the
+    last time it received data.
+
+    In streaming mode, this means that there is currently an open stream connection and that at least
+    one initial message has been received on the stream. In polling mode, it means that the last poll
+    request succeeded.
+    """
+
+    INTERRUPTED = 'interrupted'
+    """
+    Indicates that the data source encountered an error that it will attempt to recover from.
+
+    In streaming mode, this means that the stream connection failed, or had to be dropped due to some
+    other error, and will be retried after a backoff delay. In polling mode, it means that the last poll
+    request failed, and a new poll request will be made after the configured polling interval.
+    """
+
+    OFF = 'off'
+    """
+    Indicates that the data source has been permanently shut down.
+
+    This could be because it encountered an unrecoverable error (for instance, the LaunchDarkly service
+    rejected the SDK key; an invalid SDK key will never become valid), or because the SDK client was
+    explicitly shut down.
+    """
+
+
+class DataSourceErrorKind(Enum):
+    """
+    Enumeration representing the types of errors a data source can encounter.
+    """
+
+    UNKNOWN = 'unknown'
+    """
+    An unexpected error, such as an uncaught exception.
+    """
+
+    NETWORK_ERROR = 'network_error'
+    """
+    An I/O error such as a dropped connection.
+    """
+
+    ERROR_RESPONSE = 'error_response'
+    """
+    The LaunchDarkly service returned an HTTP response with an error status.
+    """
+
+    INVALID_DATA = 'invalid_data'
+    """
+    The SDK received malformed data from the LaunchDarkly service.
+    """
+
+    STORE_ERROR = 'store_error'
+    """
+    The data source itself is working, but when it tried to put an update into the data store, the data
+    store failed (so the SDK may not have the latest data).
+
+    Data source implementations do not need to report this kind of error; it will be automatically
+    reported by the SDK when exceptions are detected.
+    """
+
+
+class DataSourceErrorInfo:
+    """
+    A description of an error condition that the data source encountered.
+    """
+
+    def __init__(self, kind: DataSourceErrorKind, status_code: int, time: float, message: Optional[str]):
+        self.__kind = kind
+        self.__status_code = status_code
+        self.__time = time
+        self.__message = message
+
+    @property
+    def kind(self) -> DataSourceErrorKind:
+        """
+        :return: The general category of the error
+        """
+        return self.__kind
+
+    @property
+    def status_code(self) -> int:
+        """
+        :return: An HTTP status or zero.
+        """
+        return self.__status_code
+
+    @property
+    def time(self) -> float:
+        """
+        :return: Unix timestamp when the error occurred
+        """
+        return self.__time
+
+    @property
+    def message(self) -> Optional[str]:
+        """
+        :return: Message an error message if applicable, or None
+        """
+        return self.__message
+
+
+class DataSourceStatus:
+    """
+    Information about the data source's status and about the last status change.
+    """
+
+    def __init__(self, state: DataSourceState, state_since: float, last_error: Optional[DataSourceErrorInfo]):
+        self.__state = state
+        self.__state_since = state_since
+        self.__last_error = last_error
+
+    @property
+    def state(self) -> DataSourceState:
+        """
+        :return: The basic state of the data source.
+        """
+        return self.__state
+
+    @property
+    def since(self) -> float:
+        """
+        :return: Unix timestamp of the last state transition.
+        """
+        return self.__state_since
+
+    @property
+    def error(self) -> Optional[DataSourceErrorInfo]:
+        """
+        :return: A description of the last error, or None if there are no errors since startup
+        """
+        return self.__last_error
+
+
+class DataSourceStatusProvider:
+    """
+    An interface for querying the status of the SDK's data source. The data source is the component
+    that receives updates to feature flag data; normally this is a streaming connection, but it
+    could be polling or file data depending on your configuration.
+
+    An implementation of this interface is returned by
+    :func:`ldclient.client.LDClient.data_source_status_provider`. Application code never needs to
+    implement this interface.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractproperty
+    def status(self) -> DataSourceStatus:
+        """
+        Returns the current status of the data source.
+
+        All the built-in data source implementations are guaranteed to update this status whenever they
+        successfully initialize, encounter an error, or recover after an error.
+
+        For a custom data source implementation, it is the responsibility of the data source to push
+        status updates to the SDK; if it does not do so, the status will always be reported as
+        :class:`DataSourceState.INITIALIZING`.
+
+        :return: the status
+        """
+        pass
+
+    @abstractmethod
+    def add_listener(self, listener: Callable[[DataSourceStatus], None]):
+        """
+        Subscribes for notifications of status changes.
+
+        The listener is a function or method that will be called with a single parameter: the
+        new ``DataSourceStatus``.
+
+        :param listener: the listener to add
+        """
+        pass
+
+    @abstractmethod
+    def remove_listener(self, listener: Callable[[DataSourceStatus], None]):
+        """
+        Unsubscribes from notifications of status changes.
+
+        :param listener: a listener that was previously added with :func:`add_listener()`; if it was not,
+            this method does nothing
+        """
+        pass
+
+
+class DataSourceUpdateSink:
+    """
+    Interface that a data source implementation will use to push data into
+    the SDK.
+
+    The data source interacts with this object, rather than manipulating
+    the data store directly, so that the SDK can perform any other
+    necessary operations that must happen when data is updated.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
+        """
+        Initializes (or re-initializes) the store with the specified set of entities. Any
+        existing entries will be removed. Implementations can assume that this data set is up to
+        date-- there is no need to perform individual version comparisons between the existing
+        objects and the supplied features.
+
+        If possible, the store should update the entire data set atomically. If that is not possible,
+        it should iterate through the outer hash and then the inner hash using the existing iteration
+        order of those hashes (the SDK will ensure that the items were inserted into the hashes in
+        the correct order), storing each item, and then delete any leftover items at the very end.
+
+        :param all_data: All objects to be stored
+        """
+        pass
+
+    @abstractmethod
+    def upsert(self, kind: VersionedDataKind, item: dict):
+        """
+        Attempt to add an entity, or update an existing entity with the same key. An update
+        should only succeed if the new item's version is greater than the old one;
+        otherwise, the method should do nothing.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        """
+        pass
+
+    @abstractmethod
+    def delete(self, kind: VersionedDataKind, key: str, version: int):
+        """
+        Attempt to delete an entity if it exists. Deletion should only succeed if the
+        version parameter is greater than the existing entity's version; otherwise, the
+        method should do nothing.
+
+        :param kind: The kind of object to delete
+        :param key: The key of the object to be deleted
+        :param version: The version for the delete operation
+        """
+        pass
+
+    @abstractmethod
+    def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
+        """
+        Informs the SDK of a change in the data source's status.
+
+        Data source implementations should use this method if they have any
+        concept of being in a valid state, a temporarily disconnected state,
+        or a permanently stopped state.
+
+        If `new_state` is different from the previous state, and/or
+        `new_error` is non-null, the SDK will start returning the new status
+        (adding a timestamp for the change) from :class:`DataSourceStatusProvider.status`, and
+        will trigger status change events to any registered listeners.
+
+        A special case is that if {new_state} is :class:`DataSourceState.INTERRUPTED`, but the
+        previous state was :class:`DataSourceState.INITIALIZING`, the state will remain at
+        :class:`DataSourceState.INITIALIZING` because :class:`DataSourceState.INTERRUPTED` is only meaningful
+        after a successful startup.
+
+        :param new_state: The updated state of the data source
+        :param new_error: An optional error if the new state is an error condition
         """
         pass
