@@ -1,0 +1,31 @@
+name: Publish Package
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Is this a dry run? If so no package will be published.'
+        type: boolean
+        required: true
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+    # Needed to get tokens during publishing.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.0.0
+        name: 'Get PyPI token'
+        with:
+          aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
+          ssm_parameter_pairs: '/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN'
+
+      - id: publish
+        name: Publish Package
+        uses: ./.github/actions/publish
+        with:
+          token: ${{env.PYPI_AUTH_TOKEN}}
+          dry_run: ${{ inputs.dry_run }}

@@ -1,6 +1,6 @@
 # LaunchDarkly Server-side SDK for Python
 
-[![Circle CI](https://img.shields.io/circleci/project/launchdarkly/python-server-sdk.png)](https://circleci.com/gh/launchdarkly/python-server-sdk)
+[![Actions Status](https://github.com/launchdarkly/python-server-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/launchdarkly/python-server-sdk/actions/workflows/ci.yml)
 [![readthedocs](https://readthedocs.org/projects/launchdarkly-python-sdk/badge/)](https://launchdarkly-python-sdk.readthedocs.io/en/latest/)
 
 [![PyPI](https://img.shields.io/pypi/v/launchdarkly-server-sdk.svg?maxAge=2592000)](https://pypi.python.org/pypi/launchdarkly-server-sdk)
