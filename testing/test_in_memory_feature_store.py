@@ -5,6 +5,12 @@ from ldclient.interfaces import FeatureStore
 
 from testing.feature_store_test_base import FeatureStoreTestBase, FeatureStoreTester
 
+def test_in_memory_status_checks():
+    store = InMemoryFeatureStore()
+
+    assert store.is_monitoring_enabled() is False
+    assert store.is_available() is True
+
 
 class InMemoryFeatureStoreTester(FeatureStoreTester):
     def create_feature_store(self) -> FeatureStore:

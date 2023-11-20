@@ -32,11 +32,20 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         :param cache_config: the caching parameters
         """
         self._core = core
+        self.__has_available_method = callable(getattr(core, 'is_available', None))
+
         if cache_config.enabled:
             self._cache = ExpiringDict(max_len=cache_config.capacity, max_age_seconds=cache_config.expiration)
         else:
             self._cache = None
         self._inited = False
+
+    def is_monitoring_enabled(self) -> bool:
+        return self.__has_available_method
+
+    def is_available(self) -> bool:
+        # We know is_available exists since we are checking __has_available_method
+        return self._core.is_available() if self.__has_available_method else False  # type: ignore
 
     def init(self, all_encoded_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         """

@@ -45,6 +45,13 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         self._prefix = ("launchdarkly" if prefix is None else prefix) + "/"
         self._client = consul.Consul(**opts)
 
+    def is_available(self) -> bool:
+        try:
+            self._client.kv.get(self._inited_key())
+            return True
+        except BaseException:
+            return False
+
     def init_internal(self, all_data):
         # Start by reading the existing keys; we will later delete any of these that weren't in all_data.
         index, keys = self._client.kv.get(self._prefix, recurse=True, keys=True)

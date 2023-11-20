@@ -5,6 +5,7 @@ from ldclient.interfaces import UpdateProcessor
 
 from testing.integrations.big_segment_store_test_base import *
 from testing.integrations.persistent_feature_store_test_base import *
+from testing.test_util import skip_database_tests
 
 import time
 
@@ -16,6 +17,24 @@ except ImportError:
     pass
 
 pytestmark = pytest.mark.skipif(not have_dynamodb, reason="skipping DynamoDB tests because boto3 module is not installed")
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def dynamodb_defaults_to_available():
+    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name,
+        prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
+    assert dynamodb.is_monitoring_enabled() is True
+    assert dynamodb.is_available() is True
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def dynamodb_detects_nonexistent_store():
+    options = DynamoDBTestHelper.options
+    options['endpoint_url'] = 'http://i-mean-what-are-the-odds'
+    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name,
+        prefix=prefix, caching=caching, dynamodb_opts=options)
+    assert dynamodb.is_monitoring_enabled() is True
+    assert dynamodb.is_available() is False
 
 
 class DynamoDBTestHelper:

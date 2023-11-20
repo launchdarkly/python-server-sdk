@@ -2,7 +2,7 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-from typing import Optional, Any, Dict, Mapping, Union, Tuple
+from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable
 
 from .impl import AnyNum
 
@@ -21,17 +21,19 @@ from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl, DataSourceStatusProviderImpl
+from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl, DataStoreStatusProviderImpl
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
-from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureRequester, FeatureStore, FlagTracker
+from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureStore, FlagTracker, DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
-from ldclient.feature_store import FeatureStore
 from ldclient.migrations import Stage, OpTracker
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 
@@ -39,33 +41,121 @@ from threading import Lock
 
 
 
+
 class _FeatureStoreClientWrapper(FeatureStore):
     """Provides additional behavior that the client requires before or after feature store operations.
-    Currently this just means sorting the data set for init(). In the future we may also use this
-    to provide an update listener capability.
+    Currently this just means sorting the data set for init() and dealing with data store status listeners.
     """
 
-    def __init__(self, store: FeatureStore):
+    def __init__(self, store: FeatureStore, store_update_sink: DataStoreUpdateSink):
         self.store = store
+        self.__store_update_sink = store_update_sink
+        self.__monitoring_enabled = self.is_monitoring_enabled()
+
+        # Covers the following variables
+        self.__lock = ReadWriteLock()
+        self.__last_available = True
+        self.__poller: Optional[RepeatingTask] = None
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data))
+        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
 
     def get(self, kind, key, callback):
-        return self.store.get(kind, key, callback)
+        return self.__wrapper(lambda: self.store.get(kind, key, callback))
 
     def all(self, kind, callback):
-        return self.store.all(kind, callback)
+        return self.__wrapper(lambda: self.store.all(kind, callback))
 
     def delete(self, kind, key, version):
-        return self.store.delete(kind, key, version)
+        return self.__wrapper(lambda: self.store.delete(kind, key, version))
 
     def upsert(self, kind, item):
-        return self.store.upsert(kind, item)
+        return self.__wrapper(lambda: self.store.upsert(kind, item))
 
     @property
     def initialized(self) -> bool:
         return self.store.initialized
+
+    def __wrapper(self, fn: Callable):
+        try:
+            return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __update_availability(self, available: bool):
+        try:
+            self.__lock.lock()
+            if available == self.__last_available:
+                return
+            self.__last_available = available
+        finally:
+            self.__lock.unlock()
+
+        status = DataStoreStatus(available, False)
+
+        if available:
+            log.warn("Persistent store is available again")
+
+        self.__store_update_sink.update_status(status)
+
+        if available:
+            try:
+                self.__lock.lock()
+                if self.__poller is not None:
+                    self.__poller.stop()
+                    self.__poller = None
+            finally:
+                self.__lock.unlock()
+
+            return
+
+        log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
+        task = RepeatingTask(0.5, 0, self.__check_availability)
+
+        self.__lock.lock()
+        self.__poller = task
+        self.__poller.start()
+        self.__lock.unlock()
+
+    def __check_availability(self):
+        try:
+            if self.store.available:
+                self.__update_availability(True)
+        except BaseException as e:
+            log.error("Unexpected error from data store status function: %s", e)
+
+    def is_monitoring_enabled(self) -> bool:
+        """
+        This methods determines whether the wrapped store can support enabling monitoring.
+
+        The wrapped store must provide a monitoring_enabled method, which must
+        be true. But this alone is not sufficient.
+
+        Because this class wraps all interactions with a provided store, it can
+        technically "monitor" any store. However, monitoring also requires that
+        we notify listeners when the store is available again.
+
+        We determine this by checking the store's `available?` method, so this
+        is also a requirement for monitoring support.
+
+        These extra checks won't be necessary once `available` becomes a part
+        of the core interface requirements and this class no longer wraps every
+        feature store.
+        """
+
+        if not hasattr(self.store, 'is_monitoring_enabled'):
+            return False
+
+        if not hasattr(self.store, 'is_available'):
+            return False
+
+        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
+        if not callable(monitoring_enabled):
+            return False
+
+        return monitoring_enabled()
 
 
 def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
@@ -102,7 +192,11 @@ class LDClient:
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
-        store = _FeatureStoreClientWrapper(self._config.feature_store)
+        data_store_listeners = Listeners()
+        store_sink = DataStoreUpdateSinkImpl(data_store_listeners)
+        store = _FeatureStoreClientWrapper(self._config.feature_store, store_sink)
+
+        self.__data_store_status_provider = DataStoreStatusProviderImpl(store, store_sink)
 
         data_source_listeners = Listeners()
         flag_change_listeners = Listeners()
@@ -514,6 +608,21 @@ class LDClient:
         :return: The data source status provider
         """
         return self.__data_source_status_provider
+
+    @property
+    def data_store_status_provider(self) -> DataStoreStatusProvider:
+        """
+        Returns an interface for tracking the status of a persistent data store.
+
+        The provider has methods for checking whether the data store is (as far
+        as the SDK knows) currently operational, tracking changes in this
+        status, and getting cache statistics. These are only relevant for a
+        persistent data store; if you are using an in-memory data store, then
+        this method will return a stub object that provides no information.
+
+        :return: The data store status provider
+        """
+        return self.__data_store_status_provider
 
     @property
     def flag_tracker(self) -> FlagTracker:

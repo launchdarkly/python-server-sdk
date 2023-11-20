@@ -1,5 +1,4 @@
 from abc import abstractmethod, abstractproperty
-from os import environ
 import pytest
 
 from ldclient.feature_store import CacheConfig
@@ -7,8 +6,7 @@ from ldclient.interfaces import FeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 from testing.feature_store_test_base import FeatureStoreTestBase, FeatureStoreTester, StoreTestScope
-
-skip_database_tests = environ.get('LD_SKIP_DATABASE_TESTS') == '1'
+from testing.test_util import skip_database_tests
 
 
 # The standard test suite to be run against all persistent feature store implementations. See

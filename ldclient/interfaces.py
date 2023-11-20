@@ -4,6 +4,7 @@ This submodule contains interfaces for various components of the SDK.
 They may be useful in writing new implementations of these components, or for testing.
 """
 from ldclient.context import Context
+from ldclient.impl.listeners import Listeners
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from .versioned_data_kind import VersionedDataKind
@@ -90,6 +91,58 @@ class FeatureStore:
         Returns whether the store has been initialized yet or not
         """
 
+    # WARN: This isn't a required method on a FeatureStore yet. The SDK will
+    # currently check if the provided store responds to this method, and if
+    # it does, will take appropriate action based on the documented behavior
+    # below. This will become required in a future major version release of
+    # the SDK.
+    #
+    # @abstractmethod
+    # def is_monitoring_enabled(self) -> bool:
+    #     """
+    #     Returns true if this data store implementation supports status
+    #     monitoring.
+    #
+    #     This is normally only true for persistent data stores but it could also
+    #     be true for any custom :class:`FeatureStore` implementation.
+    #
+    #     Returning true means that the store guarantees that if it ever enters
+    #     an invalid state (that is, an operation has failed or it knows that
+    #     operations cannot succeed at the moment), it will publish a status
+    #     update, and will then publish another status update once it has
+    #     returned to a valid state.
+    #
+    #     Custom implementations must implement :func:`FeatureStore.is_available`
+    #     which synchronously checks if the store is available. Without this
+    #     method, the SDK cannot ensure status updates will occur once the store
+    #     has gone offline.
+    #
+    #     The same value will be returned from
+    #     :func:`DataStoreStatusProvider.is_monitoring_enabled`.
+    #     """
+
+    # WARN: This isn't a required method on a FeatureStore. The SDK will
+    # check if the provided store responds to this method, and if it does,
+    # will take appropriate action based on the documented behavior below.
+    # Usage of this method will be dropped in a future version of the SDK.
+    #
+    # @abstractmethod
+    # def is_available(self) -> bool:
+    #     """
+    #     Tests whether the data store seems to be functioning normally.
+    #
+    #     This should not be a detailed test of different kinds of operations,
+    #     but just the smallest possible operation to determine whether (for
+    #     instance) we can reach the database.
+    #
+    #     Whenever one of the store's other methods throws an exception, the SDK
+    #     will assume that it may have become unavailable (e.g. the database
+    #     connection was lost). The SDK will then call is_available at intervals
+    #     until it returns true.
+    #
+    #     :return: true if the underlying data store is reachable
+    #     """
+
 
 class FeatureStoreCore:
     """
@@ -157,6 +210,28 @@ class FeatureStoreCore:
         based on looking at what is in the data store. The method does not need to worry about caching
         this value; ``CachingStoreWrapper`` will only call it when necessary.
         """
+
+    # WARN: This isn't a required method on a FeatureStoreCore. The SDK will
+    # check if the provided store responds to this method, and if it does,
+    # will take appropriate action based on the documented behavior below.
+    # Usage of this method will be dropped in a future version of the SDK.
+    #
+    # @abstractmethod
+    # def is_available(self) -> bool:
+    #     """
+    #     Tests whether the data store seems to be functioning normally.
+    #
+    #     This should not be a detailed test of different kinds of operations,
+    #     but just the smallest possible operation to determine whether (for
+    #     instance) we can reach the database.
+    #
+    #     Whenever one of the store's other methods throws an exception, the SDK
+    #     will assume that it may have become unavailable (e.g. the database
+    #     connection was lost). The SDK will then call is_available at intervals
+    #     until it returns true.
+    #
+    #     :return: true if the underlying data store is reachable
+    #     """
 
 
 # Internal use only. Common methods for components that perform a task in the background.
@@ -828,3 +903,148 @@ class FlagTracker:
         :param listener: The listener to trigger if the value has changed
         """
         pass
+
+
+class DataStoreStatus:
+    """
+    Information about the data store's status.
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self, available: bool, stale: bool):
+        self.__available = available
+        self.__stale = stale
+
+    @property
+    def available(self) -> bool:
+        """
+        Returns true if the SDK believes the data store is now available.
+
+        This property is normally true. If the SDK receives an exception while
+        trying to query or update the data store, then it sets this property to
+        false (notifying listeners, if any) and polls the store at intervals
+        until a query succeeds. Once it succeeds, it sets the property back to
+        true (again notifying listeners).
+
+        :return: if store is available
+        """
+        return self.__available
+
+    @property
+    def stale(self) -> bool:
+        """
+        Returns true if the store may be out of date due to a previous
+        outage, so the SDK should attempt to refresh all feature flag data
+        and rewrite it to the store.
+
+        This property is not meaningful to application code.
+
+        :return: true if data should be rewritten
+        """
+
+
+class DataStoreUpdateSink:
+    """
+    Interface that a data store implementation can use to report information
+    back to the SDK.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def status(self) -> DataStoreStatus:
+        """
+        Inspect the data store's operational status.
+        """
+        pass
+
+    @abstractmethod
+    def update_status(self, status: DataStoreStatus):
+        """
+        Reports a change in the data store's operational status.
+
+        This is what makes the status monitoring mechanisms in
+        :class:`DataStoreStatusProvider` work.
+
+        :param status: the updated status properties
+        """
+        pass
+
+    @abstractproperty
+    def listeners(self) -> Listeners:
+        """
+        Access the listeners associated with this sink instance.
+        """
+        pass
+
+
+class DataStoreStatusProvider:
+    """
+    An interface for querying the status of a persistent data store.
+
+    An implementation of this interface is returned by :func:`ldclient.client.LDClient.data_store_status_provider`.
+    Application code should not implement this interface.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractproperty
+    def status(self) -> DataStoreStatus:
+        """
+        Returns the current status of the store.
+
+        This is only meaningful for persistent stores, or any custom data store implementation that makes use of
+        the status reporting mechanism provided by the SDK. For the default in-memory store, the status will always
+        be reported as "available".
+
+        :return: the latest status
+        """
+
+    @abstractmethod
+    def is_monitoring_enabled(self) -> bool:
+        """
+        Indicates whether the current data store implementation supports status
+        monitoring.
+
+        This is normally true for all persistent data stores, and false for the
+        default in-memory store. A true value means that any listeners added
+        with {#add_listener} can expect to be notified if there is any error in
+        storing data, and then notified again when the error condition is
+        resolved. A false value means that the status is not meaningful and
+        listeners should not expect to be notified.
+
+        :return: true if status monitoring is enabled
+        """
+
+    @abstractmethod
+    def add_listener(self, listener: Callable[[DataStoreStatus], None]):
+        """
+        Subscribes for notifications of status changes.
+
+        Applications may wish to know if there is an outage in a persistent
+        data store, since that could mean that flag evaluations are unable to
+        get the flag data from the store (unless it is currently cached) and
+        therefore might return default values.
+
+        If the SDK receives an exception while trying to query or update the
+        data store, then it notifies listeners that the store appears to be
+        offline ({Status#available} is false) and begins polling the store at
+        intervals until a query succeeds. Once it succeeds, it notifies
+        listeners again with {Status#available} set to true.
+
+        This method has no effect if the data store implementation does not
+        support status tracking, such as if you are using the default in-memory
+        store rather than a persistent store.
+
+        :param listener: the listener to add
+        """
+
+    @abstractmethod
+    def remove_listener(self, listener: Callable[[DataStoreStatus], None]):
+        """
+        Unsubscribes from notifications of status changes.
+
+        This method has no effect if the data store implementation does not
+        support status tracking, such as if you are using the default in-memory
+        store rather than a persistent store.
+
+        :param listener: the listener to remove; if no such listener was added, this does nothing
+        """

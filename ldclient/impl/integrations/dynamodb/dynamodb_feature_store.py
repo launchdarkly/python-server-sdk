@@ -53,6 +53,14 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         self._prefix = (prefix + ":") if prefix else ""
         self._client = boto3.client('dynamodb', **dynamodb_opts)
 
+    def is_available(self) -> bool:
+        try:
+            inited_key = self._inited_key()
+            self._get_item_by_keys(inited_key, inited_key)
+            return True
+        except BaseException:
+            return False
+
     def init_internal(self, all_data):
         # Start by reading the existing keys; we will later delete any of these that weren't in all_data.
         unused_old_keys = self._read_existing_keys(all_data.keys())

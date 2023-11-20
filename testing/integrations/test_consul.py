@@ -1,6 +1,8 @@
 from ldclient.integrations import Consul
 
 from testing.integrations.persistent_feature_store_test_base import *
+from testing.test_util import skip_database_tests
+import pytest
 
 have_consul = False
 try:
@@ -10,6 +12,20 @@ except ImportError:
     pass
 
 pytestmark = pytest.mark.skipif(not have_consul, reason="skipping Consul tests because consul module is not installed")
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def consul_defaults_to_available():
+    consul = Consul.new_feature_store()
+    assert consul.is_monitoring_enabled() is True
+    assert consul.is_available() is True
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def consul_detects_nonexistent_store():
+    consul = Consul.new_feature_store(host='http://i-mean-what-are-the-odds')
+    assert consul.is_monitoring_enabled() is True
+    assert consul.is_available() is False
 
 
 class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
