@@ -1,0 +1,11 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "versioning": "default",
+      "include-v-in-tag": false,
+      "extra-files": ["ldclient/version.py"],
+      "include-component-in-tag": false
+    }
+  }
+}
