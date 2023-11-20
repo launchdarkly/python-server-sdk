@@ -25,7 +25,7 @@ brief_delay = 0.001
 # the test server running at localhost tests are *extremely* slow. It looks like a similar issue to what's
 # described at https://stackoverflow.com/questions/2617615/slow-python-http-server-on-localhost but we had no
 # luck with the advice that was given there.
-start_wait = 5
+start_wait = 10
 update_wait = 3
 
 def test_request_properties():

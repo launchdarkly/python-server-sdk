@@ -1,0 +1,134 @@
+name: Quality control checks
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md' # Do not need to run CI for markdown changes.
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 8000:8000
+      consul:
+        image: hashicorp/consul
+        ports:
+          - 8500:8500
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install requirements
+        run: |
+          pipx install virtualenv
+          pip install setuptools
+          pip install -r test-requirements.txt
+          pip install -r test-filesource-optional-requirements.txt
+          pip install -r consul-requirements.txt
+          python setup.py install
+          pip freeze
+
+      - name: Run tests
+        run: pytest -s testing -W error::SyntaxWarning
+
+      - name: Test packaging
+        run: |
+          sudo rm -rf dist *.egg-info
+          ./test-packaging/test-packaging.sh
+
+      - name: Verify typehints
+        run: make lint
+
+      - name: Verify docs can be successfully built
+        run: make docs
+
+      - name: Build contract tests
+        run: make build-contract-tests
+
+      - name: Start contract test service
+        run: make start-contract-test-service &
+
+      - name: run contract tests
+        run: make run-contract-tests
+
+  windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: powershell
+
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup DynamoDB
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
+          mkdir dynamo
+          Expand-Archive -Path dynamo.zip -DestinationPath dynamo
+          cd dynamo
+          cmd /c "START /b java -Djava.library.path=./DynamoDBLocal_lib -jar ./DynamoDBLocal.jar"
+
+      - name: Setup Consul
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          iwr -outf consul.zip https://releases.hashicorp.com/consul/1.4.2/consul_1.4.2_windows_amd64.zip
+          mkdir consul
+          Expand-Archive -Path consul.zip -DestinationPath consul
+          cd consul
+          sc.exe create "Consul" binPath="$(Get-Location)/consul.exe agent -dev"
+          sc.exe start "Consul"
+
+      - name: Setup Redis
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          iwr -outf redis.zip https://github.com/MicrosoftArchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip
+          mkdir redis
+          Expand-Archive -Path redis.zip -DestinationPath redis
+          cd redis
+          ./redis-server --service-install
+          ./redis-server --service-start
+          Start-Sleep -s 5
+          ./redis-cli ping
+
+      - name: Install requirements
+        run: |
+          pip install setuptools
+          pip install -r test-requirements.txt
+          pip install -r test-filesource-optional-requirements.txt
+          pip install -r consul-requirements.txt
+          python setup.py install
+          pip freeze
+
+      - name: Run tests
+        run: pytest -s testing -W error::SyntaxWarning
