@@ -27,20 +27,20 @@ class VersionedDataKind:
     @property
     def namespace(self) -> str:
         return self._namespace
-    
+
     @property
     def request_api_path(self) -> str:
         return self._request_api_path
-    
+
     @property
     def stream_api_path(self) -> str:
         return self._stream_api_path
-    
+
     def decode(self, data: Any) -> Any:
         if self._decoder is None or isinstance(data, ModelEntity):
             return data
         return self._decoder(data)
-    
+
     def encode(self, item: Any) -> dict:
         return item.to_json_dict() if isinstance(item, ModelEntity) else item
 
@@ -51,11 +51,11 @@ class VersionedDataKindWithOrdering(VersionedDataKind):
         super().__init__(namespace, request_api_path, stream_api_path, decoder)
         self._priority = priority
         self._get_dependency_keys = get_dependency_keys
-    
+
     @property
     def priority(self) -> int:
         return self._priority
-    
+
     @property
     def get_dependency_keys(self) -> Optional[Callable[[dict], Iterable[str]]]:
         return self._get_dependency_keys

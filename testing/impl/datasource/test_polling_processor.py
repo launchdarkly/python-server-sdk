@@ -53,7 +53,7 @@ def test_successful_request_puts_feature_data_in_store():
     listeners.add(spy)
 
     config = Config("SDK_KEY")
-    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
     setup_processor(config)
     ready.wait()
     assert store.get(FEATURES, "flagkey", lambda x: x) == flag
@@ -99,7 +99,7 @@ def verify_unrecoverable_http_error(http_status_code, ignore_mock):
     listeners.add(spy)
 
     config = Config("SDK_KEY")
-    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
 
     mock_requester.exception = UnsuccessfulResponseException(http_status_code)
     setup_processor(config)
@@ -120,7 +120,7 @@ def verify_recoverable_http_error(http_status_code, ignore_mock):
     listeners.add(spy)
 
     config = Config("SDK_KEY")
-    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
 
     mock_requester.exception = UnsuccessfulResponseException(http_status_code)
     setup_processor(config)
