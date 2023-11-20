@@ -301,7 +301,7 @@ def test_status_includes_http_code(status):
             listeners = Listeners()
             listeners.add(spy)
 
-            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -341,7 +341,7 @@ def test_invalid_json_triggers_listener():
                 statuses.append(s)
             listeners.add(listener)
 
-            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
             server.for_path('/all', SequentialHandler(invalid_stream, valid_stream))
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -369,7 +369,7 @@ def test_failure_transitions_from_valid():
         listeners = Listeners()
         listeners.add(spy)
 
-        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
 
         # The sink has special handling for failures before the state is valid. So we manually set this to valid so we
         # can exercise the other branching logic within the sink.

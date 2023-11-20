@@ -138,7 +138,7 @@ def test_loads_flags_on_start_from_json():
 
     try:
         config = Config("SDK_KEY")
-        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
         source = make_data_source(config, paths = path)
         source.start()
         assert store.initialized is True
@@ -158,7 +158,7 @@ def test_handles_invalid_format_correctly():
 
     try:
         config = Config("SDK_KEY")
-        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
+        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
         source = make_data_source(config, paths = path)
         source.start()
         assert store.initialized is False

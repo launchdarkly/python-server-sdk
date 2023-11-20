@@ -29,10 +29,11 @@ from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
-from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureRequester, FeatureStore
+from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureRequester, FeatureStore, FlagTracker
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.feature_store import FeatureStore
 from ldclient.migrations import Stage, OpTracker
+from ldclient.impl.flag_tracker import FlagTrackerImpl
 
 from threading import Lock
 
@@ -103,9 +104,13 @@ class LDClient:
 
         store = _FeatureStoreClientWrapper(self._config.feature_store)
 
-        listeners = Listeners()
-        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners)
-        self.__data_source_status_provider = DataSourceStatusProviderImpl(listeners, self._config._data_source_update_sink)
+        data_source_listeners = Listeners()
+        flag_change_listeners = Listeners()
+
+        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners, lambda key, context: self.variation(key, context, None))
+
+        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, data_source_listeners, flag_change_listeners)
+        self.__data_source_status_provider = DataSourceStatusProviderImpl(data_source_listeners, self._config._data_source_update_sink)
         self._store = store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
@@ -509,6 +514,18 @@ class LDClient:
         :return: The data source status provider
         """
         return self.__data_source_status_provider
+
+    @property
+    def flag_tracker(self) -> FlagTracker:
+        """
+        Returns an interface for tracking changes in feature flag configurations.
+
+        The :class:`ldclient.interfaces.FlagTracker` contains methods for
+        requesting notifications about feature flag changes using an event
+        listener model.
+        """
+        return self.__flag_tracker
+
 
 
 __all__ = ['LDClient', 'Config']

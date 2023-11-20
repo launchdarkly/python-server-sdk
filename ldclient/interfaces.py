@@ -3,6 +3,7 @@ This submodule contains interfaces for various components of the SDK.
 
 They may be useful in writing new implementations of these components, or for testing.
 """
+from ldclient.context import Context
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from .versioned_data_kind import VersionedDataKind
@@ -28,7 +29,7 @@ class FeatureStore:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any]=lambda x: x) -> Any:
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         """
         Retrieves the object to which the specified key is mapped, or None if the key is not found
         or the associated object has a ``deleted`` property of True. The retrieved object, if any (a
@@ -41,7 +42,7 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any]=lambda x: x) -> Any:
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         """
         Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
         to objects can be transformed by the specified callback.
@@ -258,6 +259,7 @@ class BigSegmentStoreMetadata:
     """
     Values returned by :func:`BigSegmentStore.get_metadata()`.
     """
+
     def __init__(self, last_up_to_date: Optional[int]):
         self.__last_up_to_date = last_up_to_date
         pass
@@ -324,6 +326,7 @@ class BigSegmentStore:
         """
         pass
 
+
 class BigSegmentStoreStatus:
     """
     Information about the state of a Big Segment store, provided by :class:`BigSegmentStoreStatusProvider`.
@@ -331,6 +334,7 @@ class BigSegmentStoreStatus:
     Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
     documentation: https://docs.launchdarkly.com/home/users/big-segments
     """
+
     def __init__(self, available: bool, stale: bool):
         self.__available = available
         self.__stale = stale
@@ -693,5 +697,134 @@ class DataSourceUpdateSink:
 
         :param new_state: The updated state of the data source
         :param new_error: An optional error if the new state is an error condition
+        """
+        pass
+
+
+class FlagChange:
+    """
+    Change event fired when some aspect of the flag referenced by the key has changed.
+    """
+
+    def __init__(self, key: str):
+        self.__key = key
+
+    @property
+    def key(self) -> str:
+        """
+        :return: The flag key that was modified by the store.
+        """
+        return self.__key
+
+
+class FlagValueChange:
+    """
+    Change event fired when the evaluated value for the specified flag key has changed.
+    """
+
+    def __init__(self, key, old_value, new_value):
+        self.__key = key
+        self.__old_value = old_value
+        self.__new_value = new_value
+
+    @property
+    def key(self):
+        """
+        :return: The flag key that was modified by the store.
+        """
+        return self.__key
+
+    @property
+    def old_value(self):
+        """
+        :return: The old evaluation result prior to the flag changing
+        """
+        return self.__old_value
+
+    @property
+    def new_value(self):
+        """
+        :return: The new evaluation result after to the flag was changed
+        """
+        return self.__new_value
+
+
+class FlagTracker:
+    """
+    An interface for tracking changes in feature flag configurations.
+
+    An implementation of this interface is returned by :class:`ldclient.client.LDClient.flag_tracker`.
+    Application code never needs to implement this interface.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def add_listener(self, listener: Callable[[FlagChange], None]):
+        """
+        Registers a listener to be notified of feature flag changes in general.
+
+        The listener will be notified whenever the SDK receives any change to any feature flag's configuration,
+        or to a user segment that is referenced by a feature flag. If the updated flag is used as a prerequisite
+        for other flags, the SDK assumes that those flags may now behave differently and sends flag change events
+        for them as well.
+
+        Note that this does not necessarily mean the flag's value has changed for any particular evaluation
+        context, only that some part of the flag configuration was changed so that it may return a
+        different value than it previously returned for some context. If you want to track flag value changes,
+        use :func:`add_flag_value_change_listener` instead.
+
+        It is possible, given current design restrictions, that a listener might be notified when no change has
+        occurred. This edge case will be addressed in a later version of the SDK. It is important to note this issue
+        does not affect :func:`add_flag_value_change_listener` listeners.
+
+        If using the file data source, any change in a data file will be treated as a change to every flag. Again,
+        use :func:`add_flag_value_change_listener` (or just re-evaluate the flag # yourself) if you want to know whether
+        this is a change that really affects a flag's value.
+
+        Change events only work if the SDK is actually connecting to LaunchDarkly (or using the file data source).
+        If the SDK is only reading flags from a database then it cannot know when there is a change, because
+        flags are read on an as-needed basis.
+
+        The listener will be called from a worker thread.
+
+        Calling this method for an already-registered listener has no effect.
+
+        :param listener: listener to call when flag has changed
+        """
+        pass
+
+    @abstractmethod
+    def remove_listener(self, listener: Callable[[FlagChange], None]):
+        """
+        Unregisters a listener so that it will no longer be notified of feature flag changes.
+
+        Calling this method for a listener that was not previously registered has no effect.
+
+        :param listener: the listener to remove
+        """
+        pass
+
+    @abstractmethod
+    def add_flag_value_change_listener(self, key: str, context: Context, listener: Callable[[FlagValueChange], None]):
+        """
+        Registers a listener to be notified of a change in a specific feature flag's value for a specific
+        evaluation context.
+
+        When you call this method, it first immediately evaluates the feature flag. It then uses
+        :func:`add_listener` to start listening for feature flag configuration
+        changes, and whenever the specified feature flag changes, it re-evaluates the flag for the same context.
+        It then calls your listener if and only if the resulting value has changed.
+
+        All feature flag evaluations require an instance of :class:`ldclient.context.Context`. If the feature flag you are
+        tracking does not have any context targeting rules, you must still pass a dummy context such as
+        :func:`ldclient.context.Context.create("for-global-flags")`. If you do not want the user to appear on your dashboard,
+        use the anonymous property which can be set via the context builder.
+
+        The returned listener represents the subscription that was created by this method
+        call; to unsubscribe, pass that object (not your listener) to :func:`remove_listener`.
+
+        :param key: The flag key to monitor
+        :param context: The context to evaluate against the flag
+        :param listener: The listener to trigger if the value has changed
         """
         pass
