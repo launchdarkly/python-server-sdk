@@ -1,5 +1,6 @@
 import pytest
 from time import sleep
+from unittest.mock import Mock
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
@@ -71,6 +72,21 @@ class CustomError(Exception):
     pass
 
 class TestCachingStoreWrapper:
+    @pytest.mark.parametrize("available", [False, True])
+    def test_monitoring_enabled_if_available_is_defined(self, available: bool):
+        core = Mock()
+        core.is_available = lambda: available
+
+        wrapper = make_wrapper(core, False)
+
+        assert wrapper.is_monitoring_enabled() is True
+        assert wrapper.is_available() is available
+
+    @pytest.mark.parametrize("available", [False, True])
+    def test_monitoring_not_enabled_if_available_is_not_defined(self, available: bool):
+        wrapper = make_wrapper(MockCore(), False)
+        assert wrapper.is_monitoring_enabled() is False
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_item(self, cached):
         core = MockCore()

@@ -24,6 +24,13 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         self.test_update_hook = None  # exposed for testing
         log.info("Started RedisFeatureStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
 
+    def is_available(self) -> bool:
+        try:
+            self.initialized_internal()
+            return True
+        except BaseException:
+            return False
+
     def _items_key(self, kind):
         return "{0}:{1}".format(self._prefix, kind.namespace)
 

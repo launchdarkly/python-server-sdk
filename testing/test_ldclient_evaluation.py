@@ -323,7 +323,7 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2, 'key3': flag3 } })
     client = make_client(store)
     state = client.all_flags_state(user, with_reasons=True, details_only_for_tracked_flags=True)
-    assert state.valid == True
+    assert state.valid is True
     result = state.to_json_dict()
     assert result == {
         'key1': 'value1',

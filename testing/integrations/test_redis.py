@@ -4,7 +4,9 @@ from ldclient.versioned_data_kind import FEATURES
 
 from testing.integrations.big_segment_store_test_base import *
 from testing.integrations.persistent_feature_store_test_base import *
+from testing.test_util import skip_database_tests
 
+import pytest
 import json
 
 have_redis = False
@@ -17,11 +19,25 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not have_redis, reason="skipping Redis tests because redis module is not installed")
 
 
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def redis_defaults_to_available():
+    redis = Redis.new_feature_store()
+    assert redis.is_monitoring_enabled() is True
+    assert redis.is_available() is True
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def redis_detects_nonexistent_store():
+    redis = Redis.new_feature_store(url='http://i-mean-what-are-the-odds')
+    assert redis.is_monitoring_enabled() is True
+    assert redis.is_available() is False
+
+
 class RedisTestHelper:
     @staticmethod
     def make_client() -> redis.StrictRedis:
         return redis.StrictRedis(host="localhost", port=6379, db=0)
-    
+
     def clear_data_for_prefix(prefix):
         r = RedisTestHelper.make_client()
         for key in r.keys("%s:*" % prefix):

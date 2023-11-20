@@ -147,13 +147,13 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
 
 
 class DataSourceStatusProviderImpl(DataSourceStatusProvider):
-    def __init__(self, listeners: Listeners, updates_sink: DataSourceUpdateSinkImpl):
+    def __init__(self, listeners: Listeners, update_sink: DataSourceUpdateSinkImpl):
         self.__listeners = listeners
-        self.__updates_sink = updates_sink
+        self.__update_sink = update_sink
 
     @property
     def status(self) -> DataSourceStatus:
-        return self.__updates_sink.status
+        return self.__update_sink.status
 
     def add_listener(self, listener: Callable[[DataSourceStatus], None]):
         self.__listeners.add(listener)

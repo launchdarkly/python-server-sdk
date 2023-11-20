@@ -1,5 +1,8 @@
 from ldclient.impl.util import redact_password
 import pytest
+import os
+
+skip_database_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 
 @pytest.fixture(params = [
     ("rediss://user:password=@redis-server-url:6380/0?ssl_cert_reqs=CERT_REQUIRED", "rediss://user:xxxx@redis-server-url:6380/0?ssl_cert_reqs=CERT_REQUIRED"),

@@ -78,6 +78,12 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
         self._initialized = False
         self._items = defaultdict(dict)
 
+    def is_monitoring_enabled(self) -> bool:
+        return False
+
+    def is_available(self) -> bool:
+        return True
+
     def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any]=lambda x: x) -> Any:
         """
         """
