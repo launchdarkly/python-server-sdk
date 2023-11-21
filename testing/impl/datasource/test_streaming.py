@@ -21,7 +21,7 @@ brief_delay = 0.001
 # the test server running at localhost tests are *extremely* slow. It looks like a similar issue to what's
 # described at https://stackoverflow.com/questions/2617615/slow-python-http-server-on-localhost but we had no
 # luck with the advice that was given there.
-start_wait = 5
+start_wait = 10
 update_wait = 3
 
 def test_request_properties():
@@ -189,7 +189,7 @@ def test_retries_on_network_error():
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
                 server.await_request
@@ -207,7 +207,7 @@ def test_recoverable_http_error(status):
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
                 server.should_have_requests(3)
@@ -224,7 +224,7 @@ def test_unrecoverable_http_error(status):
             server.for_path('/all', error_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()                
+                sp.start()
                 ready.wait(5)
                 assert not sp.initialized()
                 server.should_have_requests(1)
