@@ -1,7 +1,8 @@
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from ldclient.impl.dependency_tracker import DependencyTracker
 from ldclient.impl.listeners import Listeners
-from ldclient.interfaces import DataSourceStatusProvider, DataSourceUpdateSink, DataSourceStatus, FeatureStore, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind, FlagChange
+from ldclient.interfaces import DataSourceStatusProvider, DataSourceUpdateSink, DataSourceStatus, FeatureStore, \
+    DataSourceState, DataSourceErrorInfo, DataSourceErrorKind, FlagChange, AsyncDataSourceUpdateSink
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.versioned_data_kind import VersionedDataKind
 from ldclient.impl.dependency_tracker import KindAndKey
@@ -10,7 +11,7 @@ import time
 from typing import Callable, Mapping, Optional, Set
 
 
-class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
+class DataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
     def __init__(self, store: FeatureStore, status_listeners: Listeners, flag_change_listeners: Listeners):
         self.__store = store
         self.__status_listeners = status_listeners
@@ -32,19 +33,19 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         finally:
             self.__lock.runlock()
 
-    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
         old_data = None
 
-        def init_store():
+        async def init_store():
             nonlocal old_data
             if self.__flag_change_listeners.has_listeners():
                 old_data = {}
                 for kind in [FEATURES, SEGMENTS]:
                     old_data[kind] = self.__store.all(kind, lambda x: x)
 
-            self.__store.init(all_data)
+            await self.__store.init(all_data)
 
-        self.__monitor_store_update(init_store)
+        await self.__monitor_store_update(init_store)
         self.__reset_tracker_with_new_data(all_data)
 
         if old_data is None:
@@ -54,7 +55,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
             self.__compute_changed_items_for_full_data_set(old_data, all_data)
         )
 
-    def upsert(self, kind: VersionedDataKind, item: dict):
+    async def upsert(self, kind: VersionedDataKind, item: dict):
         self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
 
         # TODO(sc-212471): We only want to do this if the store successfully
@@ -62,7 +63,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         key = item.get('key', '')
         self.__update_dependency_for_single_item(kind, key, item)
 
-    def delete(self, kind: VersionedDataKind, key: str, version: int):
+    async def delete(self, kind: VersionedDataKind, key: str, version: int):
         self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
         self.__update_dependency_for_single_item(kind, key, None)
 
@@ -92,9 +93,9 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         if status_to_broadcast is not None:
             self.__status_listeners.notify(status_to_broadcast)
 
-    def __monitor_store_update(self, fn: Callable[[], None]):
+    async def __monitor_store_update(self, fn: Callable[[], None]):
         try:
-            fn()
+            await fn()
         except Exception as e:
             error_info = DataSourceErrorInfo(
                 DataSourceErrorKind.STORE_ERROR,

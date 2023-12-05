@@ -76,7 +76,7 @@ class _FeatureStoreClientWrapper(AsyncFeatureStore):
     @property
     async def initialized(self) -> bool:
         # TODO: Pycharm angry.
-        return await self.store.initialized
+        return self.store.initialized
 
     async def __wrapper(self, fn: Callable):
         try:
@@ -182,7 +182,7 @@ class LDClient:
     Client instances are thread-safe.
     """
 
-    def __init__(self, config: Config, start_wait: float = 5, loop=None):
+    def __init__(self, config: Config, loop=None):
         """Constructs a new LDClient instance.
 
         :param config: optional custom configuration
@@ -234,20 +234,26 @@ class LDClient:
 
         diagnostic_accumulator = self._set_event_processor(self._config)
 
-        update_processor_ready = threading.Event()
+        update_processor_ready = asyncio.Event()
         self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready,
                                                              diagnostic_accumulator)
         self._update_processor.start()
 
-        if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
-            log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
-            update_processor_ready.wait(start_wait)
+        self.__update_processor_ready = update_processor_ready;
 
-        if self._update_processor.initialized() is True:
-            log.info("Started LaunchDarkly Client: OK")
-        else:
-            log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
-                        "Feature Flags may not yet be available.")
+        # if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
+        #     log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
+        #     update_processor_ready.wait(start_wait)
+        #
+        # if self._update_processor.initialized() is True:
+        #     log.info("Started LaunchDarkly Client: OK")
+        # else:
+        #     log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
+        #                 "Feature Flags may not yet be available.")
+
+    async def wait_for_initialization(self):
+        # TODO: Timeout and race promise?
+        return await self.__update_processor_ready.wait()
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:

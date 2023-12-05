@@ -65,7 +65,7 @@ class AsyncFeatureRequester:
 
 
 class AsyncPollingUpdateProcessor(UpdateProcessor):
-    def __init__(self, config: Config, store: AsyncFeatureStore, ready: Event, loop=None):
+    def __init__(self, config: Config, store: AsyncFeatureStore, ready: asyncio.Event, loop=None):
         self._polling_task = None
         self._config = config
         self._data_source_update_sink: Optional[AsyncDataSourceUpdateSink] = config.data_source_update_sink
@@ -77,8 +77,7 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
     async def _polling_loop(self):
         while True:
             await self._poll()
-            # asyncio.sleep(self._config.poll_interval)
-            asyncio.sleep(30)
+            asyncio.sleep(self._config.poll_interval)
 
     def start(self):
         log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
@@ -124,8 +123,8 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
     async def _poll(self):
         try:
             all_data = await self._feature_requester.get_all_data()
-            self._sink_or_store().init(all_data)
-            if not self._ready.is_set() and self._store.initialized:
+            await self._sink_or_store().init(all_data)
+            if not self._ready.is_set() and await self._store.initialized:
                 log.info("PollingUpdateProcessor initialized ok")
                 self._ready.set()
 
