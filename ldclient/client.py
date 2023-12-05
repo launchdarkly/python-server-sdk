@@ -39,7 +39,7 @@ from ldclient.impl.flag_tracker import FlagTrackerImpl
 
 from threading import Lock
 
-
+from .impl.datasource.async_polling import AsyncPollingUpdateProcessor
 
 
 class _FeatureStoreClientWrapper(FeatureStore):
@@ -266,12 +266,14 @@ class LDClient:
         log.info("Disabling streaming API")
         log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
 
-        if config.feature_requester_class:
-            feature_requester = config.feature_requester_class(config)
-        else:
-            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
+        # if config.feature_requester_class:
+        #     feature_requester = config.feature_requester_class(config)
+        # else:
+        #     feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
+        #
+        # return PollingUpdateProcessor(config, feature_requester, store, ready)
 
-        return PollingUpdateProcessor(config, feature_requester, store, ready)
+        return AsyncPollingUpdateProcessor(config, store, ready, loop=self._loop)
 
     def get_sdk_key(self) -> Optional[str]:
         """Returns the configured SDK key.
