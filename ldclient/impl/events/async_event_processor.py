@@ -31,18 +31,18 @@ class AsyncDefaultEventProcessor(EventProcessor):
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
-        self._publish_task = asyncio.run_coroutine_threadsafe(self._event_pubishing_loop(config.flush_interval), loop)
+        self._publish_task = asyncio.run_coroutine_threadsafe(self._event_publishing_loop(config.flush_interval), loop)
         self._cache_clear_task = asyncio.run_coroutine_threadsafe(self._context_keys_flush_loop(config.context_keys_flush_interval), loop)
         self._diagnostic_task = asyncio.run_coroutine_threadsafe(self._diagnostic_events_loop(config.diagnostic_recording_interval), loop)
         self._config = config
         self._disabled = False
         self._sampler = Sampler(Random())
         self._context_key_lru_cache = SimpleLRUCache(config.context_keys_capacity)
-        # TODO: Pass this during construction
+        # TODO: Share the same client session with as much of the SDK as possible.
         self._http_client_session = aiohttp.ClientSession(loop=loop)
         self._loop = loop
 
-    async def _event_pubishing_loop(self, flush_interval: int):
+    async def _event_publishing_loop(self, flush_interval: int):
         while True:
             # TODO: Calculate the delay to account for time sending.
             await asyncio.sleep(flush_interval)
@@ -233,3 +233,4 @@ class AsyncDefaultEventProcessor(EventProcessor):
     async def _stop(self):
         self._publish_task.cancel()
         self._cache_clear_task.cancel()
+        self._diagnostic_events_loop.cancel()
