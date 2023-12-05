@@ -4,7 +4,9 @@ import uuid
 from email.utils import parsedate
 from calendar import timegm
 from random import Random
+from typing import Optional
 
+from ldclient.config import Config
 from ldclient.impl.events.debug_event import DebugEvent
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_buffer import EventBuffer
@@ -17,6 +19,7 @@ from ldclient.interfaces import EventProcessor
 from ldclient.impl.util import log, _headers, is_http_error_recoverable, current_time_millis, \
     check_if_error_is_recoverable_and_log
 from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
 
 import aiohttp
 
@@ -25,15 +28,18 @@ __CURRENT_EVENT_SCHEMA__ = 4
 
 class AsyncDefaultEventProcessor(EventProcessor):
 
-    def __init__(self, config, diagnostic_accumulator=None, loop=None):
+    def __init__(self, loop: asyncio.events.AbstractEventLoop, config: Config,
+                 diagnostic_accumulator: Optional[_DiagnosticAccumulator] = None):
         self._event_buffer = EventBuffer(config.events_max_pending)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
         self._publish_task = asyncio.run_coroutine_threadsafe(self._event_publishing_loop(config.flush_interval), loop)
-        self._cache_clear_task = asyncio.run_coroutine_threadsafe(self._context_keys_flush_loop(config.context_keys_flush_interval), loop)
-        self._diagnostic_task = asyncio.run_coroutine_threadsafe(self._diagnostic_events_loop(config.diagnostic_recording_interval), loop)
+        self._cache_clear_task = asyncio.run_coroutine_threadsafe(
+            self._context_keys_flush_loop(config.context_keys_flush_interval), loop)
+        self._diagnostic_task = asyncio.run_coroutine_threadsafe(
+            self._diagnostic_events_loop(config.diagnostic_recording_interval), loop)
         self._config = config
         self._disabled = False
         self._sampler = Sampler(Random())
@@ -90,15 +96,17 @@ class AsyncDefaultEventProcessor(EventProcessor):
                 'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
         while True:
             await asyncio.sleep(flush_interval)
+            self._send_and_reset_diagnostics()
 
     async def _do_flush(self):
         # noinspection PyBroadException
         try:
             payload = self._event_buffer.get_payload()
+            self._event_buffer.clear()
             if len(payload.events) > 0 or not payload.summary.is_empty():
                 output_events = self._formatter.make_output_events(payload.events, payload.summary)
                 await self._do_send(output_events, len(payload.events))
-                self._event_buffer.clear()
+
         except Exception as e:
             log.warning(
                 'Unhandled exception in event processor. Analytics events were not processed.',
