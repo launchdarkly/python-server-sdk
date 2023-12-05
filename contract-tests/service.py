@@ -1,3 +1,6 @@
+import asyncio
+from threading import Thread
+
 from client_entity import ClientEntity
 
 import json
@@ -9,9 +12,16 @@ from flask.logging import default_handler
 from logging.config import dictConfig
 from werkzeug.exceptions import HTTPException
 
-
 default_port = 8000
 
+def start_background_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+loop = asyncio.new_event_loop()
+t = Thread(target=start_background_loop, args=(loop,), daemon=True)
+t.start()
 
 # logging configuration
 dictConfig({
@@ -33,9 +43,9 @@ dictConfig({
     },
     'loggers': {
         'ldclient': {
-            'level': 'INFO', # change to 'DEBUG' to enable SDK debug logging
+            'level': 'INFO',  # change to 'DEBUG' to enable SDK debug logging
         },
-        'werkzeug': { 'level': 'ERROR' } # disable irrelevant Flask app logging
+        'werkzeug': {'level': 'ERROR'}  # disable irrelevant Flask app logging
     }
 })
 
@@ -56,6 +66,7 @@ def handle_exception(e):
     app.logger.exception(e)
     return str(e), 500
 
+
 @app.route('/', methods=['GET'])
 def status():
     body = {
@@ -74,10 +85,12 @@ def status():
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
 
+
 @app.route('/', methods=['DELETE'])
 def delete_stop_service():
     global_log.info("Test service has told us to exit")
     os._exit(0)
+
 
 @app.route('/', methods=['POST'])
 def post_create_client():
@@ -89,7 +102,7 @@ def post_create_client():
     client_id = str(client_counter)
     resource_url = '/clients/%s' % client_id
 
-    client = ClientEntity(options['tag'], options['configuration'])
+    client = ClientEntity(options['tag'], options['configuration'], loop)
 
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
@@ -143,6 +156,7 @@ def post_client_command(id):
         return ('', 201)
     return (json.dumps(response), 200)
 
+
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
     global clients
@@ -154,9 +168,15 @@ def delete_client(id):
     client.close()
     return ('', 202)
 
-if __name__ == "__main__":
+def main():
     port = default_port
     if sys.argv[len(sys.argv) - 1] != 'service.py':
         port = int(sys.argv[len(sys.argv) - 1])
     global_log.info('Listening on port %d', port)
     app.run(host='0.0.0.0', port=port)
+    global_log.info('Stopping')
+
+if __name__ == "__main__":
+    main()
+    # asyncio.ensure_future(main())
+    # asyncio.get_event_loop().run_forever()
