@@ -16,11 +16,11 @@ class FlagValueChangeListener:
         self.__lock = ReadWriteLock()
         self.__value = eval_fn(key, context)
 
-    def __call__(self, flag_change: FlagChange):
+    async def __call__(self, flag_change: FlagChange):
         if flag_change.key != self.__key:
             return
 
-        new_value = self.__eval_fn(self.__key, self.__context)
+        new_value = await self.__eval_fn(self.__key, self.__context)
 
         self.__lock.lock()
         old_value, self.__value = self.__value, new_value

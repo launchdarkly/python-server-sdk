@@ -33,7 +33,7 @@ from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureStore, FlagTracker, \
-    DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider
+    DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider, AsyncFeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.migrations import Stage, OpTracker
 from ldclient.impl.flag_tracker import FlagTrackerImpl
@@ -43,12 +43,12 @@ from threading import Lock
 from .impl.datasource.async_polling import AsyncPollingUpdateProcessor
 
 
-class _FeatureStoreClientWrapper(FeatureStore):
+class _FeatureStoreClientWrapper(AsyncFeatureStore):
     """Provides additional behavior that the client requires before or after feature store operations.
     Currently this just means sorting the data set for init() and dealing with data store status listeners.
     """
 
-    def __init__(self, store: FeatureStore, store_update_sink: DataStoreUpdateSink):
+    def __init__(self, store: AsyncFeatureStore, store_update_sink: DataStoreUpdateSink):
         self.store = store
         self.__store_update_sink = store_update_sink
         self.__monitoring_enabled = self.is_monitoring_enabled()
@@ -58,28 +58,29 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__last_available = True
         self.__poller: Optional[RepeatingTask] = None
 
-    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
+        return await self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
 
-    def get(self, kind, key, callback):
-        return self.__wrapper(lambda: self.store.get(kind, key, callback))
+    async def get(self, kind, key):
+        return await self.__wrapper(lambda: self.store.get(kind, key))
 
-    def all(self, kind, callback):
-        return self.__wrapper(lambda: self.store.all(kind, callback))
+    async def all(self, kind):
+        return await self.__wrapper(lambda: self.store.all(kind))
 
-    def delete(self, kind, key, version):
-        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+    async def delete(self, kind, key, version):
+        return await self.__wrapper(lambda: self.store.delete(kind, key, version))
 
-    def upsert(self, kind, item):
-        return self.__wrapper(lambda: self.store.upsert(kind, item))
+    async def upsert(self, kind, item):
+        return await self.__wrapper(lambda: self.store.upsert(kind, item))
 
     @property
-    def initialized(self) -> bool:
-        return self.store.initialized
+    async def initialized(self) -> bool:
+        # TODO: Pycharm angry.
+        return await self.store.initialized
 
-    def __wrapper(self, fn: Callable):
+    async def __wrapper(self, fn: Callable):
         try:
-            return fn()
+            return await fn()
         except BaseException:
             if self.__monitoring_enabled:
                 self.__update_availability(False)
@@ -159,15 +160,18 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return monitoring_enabled()
 
 
-def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
+async def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
     # This decorator around store.get provides backward compatibility with any custom data
     # store implementation that might still be returning a dict, instead of our data model
     # classes like FeatureFlag.
-    item = store.get(kind, key, lambda x: x)
+    item = await store.get(kind, key)
     return kind.decode(item) if isinstance(item, dict) else item
 
 
 class LDClient:
+    async def __tracker_eval(self, key, context):
+        return await self.variation(key, context, None)
+
     """The LaunchDarkly SDK client object.
 
     Applications should configure the client at startup time and continue to use it throughout the lifetime
@@ -204,14 +208,13 @@ class LDClient:
         data_source_listeners = Listeners()
         flag_change_listeners = Listeners()
 
-        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners,
-                                              lambda key, context: self.variation(key, context, None))
+        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners, self.__tracker_eval)
 
         self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, data_source_listeners,
                                                                          flag_change_listeners)
         self.__data_source_status_provider = DataSourceStatusProviderImpl(data_source_listeners,
                                                                           self._config._data_source_update_sink)
-        self._store = store  # type: FeatureStore
+        self._store = store  # type: AsyncFeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
@@ -322,7 +325,7 @@ class LDClient:
         event = tracker.build()
 
         if isinstance(event, str):
-            log.error("error generting migration op event %s; no event will be emitted", event)
+            log.error("error generating migration op event %s; no event will be emitted", event)
             return
 
         self._send_event(event)
@@ -396,7 +399,7 @@ class LDClient:
             return
         return self._event_processor.flush()
 
-    def variation(self, key: str, context: Context, default: Any) -> Any:
+    async def variation(self, key: str, context: Context, default: Any) -> Any:
         """Calculates the value of a feature flag for a given context.
 
         :param key: the unique key for the feature flag
@@ -405,10 +408,10 @@ class LDClient:
           available from LaunchDarkly
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
-        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
+        detail, _ = await self._evaluate_internal(key, context, default, self._event_factory_default)
         return detail.value
 
-    def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
+    async def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
         describes the way the value was determined.
 
@@ -422,10 +425,10 @@ class LDClient:
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
           flag value and evaluation reason
         """
-        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+        detail, _ = await self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
         return detail
 
-    def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
+    async def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
         """
         This method returns the migration stage of the migration feature flag
         for the given evaluation context.
@@ -439,7 +442,7 @@ class LDClient:
             log.error(f"default stage {default_stage} is not a valid stage; using 'off' instead")
             default_stage = Stage.OFF
 
-        detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
+        detail, flag = await self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
 
         if isinstance(detail.value, str):
             stage = Stage.from_str(detail.value)
@@ -451,7 +454,7 @@ class LDClient:
         tracker = OpTracker(key, flag, context, detail, default_stage)
         return default_stage, tracker
 
-    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[
+    async def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[
         EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
@@ -475,7 +478,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._store, FEATURES, key)
+            flag = await _get_store_item(self._store, FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())

@@ -14,7 +14,7 @@ from ldclient.config import Config
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import UnsuccessfulResponseException, http_error_message, is_http_error_recoverable, log, \
     _headers, throw_if_unsuccessful_response
-from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor, DataSourceUpdateSink, \
+from ldclient.interfaces import FeatureRequester, AsyncFeatureStore, UpdateProcessor, AsyncDataSourceUpdateSink, \
     DataSourceErrorInfo, DataSourceErrorKind, DataSourceState
 
 import time
@@ -65,10 +65,10 @@ class AsyncFeatureRequester:
 
 
 class AsyncPollingUpdateProcessor(UpdateProcessor):
-    def __init__(self, config: Config, store: FeatureStore, ready: Event, loop=None):
+    def __init__(self, config: Config, store: AsyncFeatureStore, ready: Event, loop=None):
         self._polling_task = None
         self._config = config
-        self._data_source_update_sink: Optional[DataSourceUpdateSink] = config.data_source_update_sink
+        self._data_source_update_sink: Optional[AsyncDataSourceUpdateSink] = config.data_source_update_sink
         self._store = store
         self._ready = ready
         self._loop = loop

@@ -12,6 +12,82 @@ from typing import Any, Callable, Mapping, Optional
 from enum import Enum
 
 
+class AsyncFeatureStore:
+    """
+    Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
+    Implementations should permit concurrent access and updates.
+
+    An "object", for ``FeatureStore``, is simply a dict of arbitrary data which must have at least
+    three properties: ``key`` (its unique key), ``version`` (the version number provided by
+    LaunchDarkly), and ``deleted`` (True if this is a placeholder for a deleted object).
+
+    Delete and upsert requests are versioned: if the version number in the request is less than
+    the currently stored version of the object, the request should be ignored.
+
+    These semantics support the primary use case for the store, which synchronizes a collection
+    of objects based on update messages that may be received out-of-order.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    async def get(self, kind: VersionedDataKind, key: str) -> Any:
+        """
+        Retrieves the object to which the specified key is mapped, or None if the key is not found
+        or the associated object has a ``deleted`` property of True. The retrieved object, if any (a
+        dict) can be transformed by the specified callback.
+
+        :param kind: The kind of object to get
+        :param key: The key whose associated object is to be returned
+        """
+
+    @abstractmethod
+    async def all(self, kind: VersionedDataKind) -> Any:
+        """
+        Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
+        to objects can be transformed by the specified callback.
+
+        :param kind: The kind of objects to get
+        """
+
+    @abstractmethod
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
+        """
+        Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
+        will be removed. Implementations can assume that this set of objects is up to date-- there is no
+        need to perform individual version comparisons between the existing objects and the supplied data.
+
+        :param all_data: All objects to be stored
+        """
+
+    @abstractmethod
+    async def delete(self, kind: VersionedDataKind, key: str, version: int):
+        """
+        Deletes the object associated with the specified key, if it exists and its version is less than
+        the specified version. The object should be replaced in the data store by a
+        placeholder with the specified version and a "deleted" property of TErue.
+
+        :param kind: The kind of object to delete
+        :param key: The key of the object to be deleted
+        :param version: The version for the delete operation
+        """
+
+    @abstractmethod
+    async def upsert(self, kind: VersionedDataKind, item: dict):
+        """
+        Updates or inserts the object associated with the specified key. If an item with the same key
+        already exists, it should update it only if the new item's version property is greater than
+        the old one.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        """
+
+    @abstractmethod
+    async def initialized(self) -> bool:
+        """
+        Returns whether the store has been initialized yet or not
+        """
+
 class FeatureStore:
     """
     Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
@@ -697,6 +773,83 @@ class DataSourceStatusProvider:
         """
         pass
 
+
+class AsyncDataSourceUpdateSink:
+    """
+    Interface that a data source implementation will use to push data into
+    the SDK.
+
+    The data source interacts with this object, rather than manipulating
+    the data store directly, so that the SDK can perform any other
+    necessary operations that must happen when data is updated.
+    """
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
+        """
+        Initializes (or re-initializes) the store with the specified set of entities. Any
+        existing entries will be removed. Implementations can assume that this data set is up to
+        date-- there is no need to perform individual version comparisons between the existing
+        objects and the supplied features.
+
+        If possible, the store should update the entire data set atomically. If that is not possible,
+        it should iterate through the outer hash and then the inner hash using the existing iteration
+        order of those hashes (the SDK will ensure that the items were inserted into the hashes in
+        the correct order), storing each item, and then delete any leftover items at the very end.
+
+        :param all_data: All objects to be stored
+        """
+        pass
+
+    @abstractmethod
+    async def upsert(self, kind: VersionedDataKind, item: dict):
+        """
+        Attempt to add an entity, or update an existing entity with the same key. An update
+        should only succeed if the new item's version is greater than the old one;
+        otherwise, the method should do nothing.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        """
+        pass
+
+    @abstractmethod
+    async def delete(self, kind: VersionedDataKind, key: str, version: int):
+        """
+        Attempt to delete an entity if it exists. Deletion should only succeed if the
+        version parameter is greater than the existing entity's version; otherwise, the
+        method should do nothing.
+
+        :param kind: The kind of object to delete
+        :param key: The key of the object to be deleted
+        :param version: The version for the delete operation
+        """
+        pass
+
+    @abstractmethod
+    async def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
+        """
+        Informs the SDK of a change in the data source's status.
+
+        Data source implementations should use this method if they have any
+        concept of being in a valid state, a temporarily disconnected state,
+        or a permanently stopped state.
+
+        If `new_state` is different from the previous state, and/or
+        `new_error` is non-null, the SDK will start returning the new status
+        (adding a timestamp for the change) from :class:`DataSourceStatusProvider.status`, and
+        will trigger status change events to any registered listeners.
+
+        A special case is that if {new_state} is :class:`DataSourceState.INTERRUPTED`, but the
+        previous state was :class:`DataSourceState.INITIALIZING`, the state will remain at
+        :class:`DataSourceState.INITIALIZING` because :class:`DataSourceState.INTERRUPTED` is only meaningful
+        after a successful startup.
+
+        :param new_state: The updated state of the data source
+        :param new_error: An optional error if the new state is an error condition
+        """
+        pass
 
 class DataSourceUpdateSink:
     """

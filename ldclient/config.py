@@ -6,9 +6,10 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 
 from typing import Optional, Callable, List, Set
 
-from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.impl.util import log, validate_application_info
-from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, DataSourceUpdateSink
+from ldclient.interfaces import BigSegmentStore, EventProcessor, UpdateProcessor, DataSourceUpdateSink, \
+    AsyncFeatureStore
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -155,10 +156,10 @@ class Config:
                  initial_reconnect_delay: float=1,
                  defaults: dict={},
                  send_events: Optional[bool]=None,
-                 update_processor_class: Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]=None,
+                 update_processor_class: Optional[Callable[[str, 'Config', AsyncFeatureStore], UpdateProcessor]]=None,
                  poll_interval: float=30,
                  use_ldd: bool=False,
-                 feature_store: Optional[FeatureStore]=None,
+                 feature_store: Optional[AsyncFeatureStore]=None,
                  feature_requester_class=None,
                  event_processor_class: Callable[['Config'], EventProcessor]=None,
                  private_attributes: Set[str]=set(),
@@ -248,7 +249,7 @@ class Config:
         self.__initial_reconnect_delay = initial_reconnect_delay
         self.__poll_interval = max(poll_interval, 30.0)
         self.__use_ldd = use_ldd
-        self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
+        self.__feature_store = AsyncInMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__events_max_pending = events_max_pending
@@ -342,7 +343,7 @@ class Config:
         return self.__stream_uri + STREAM_FLAGS_PATH
 
     @property
-    def update_processor_class(self) -> Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]:
+    def update_processor_class(self) -> Optional[Callable[[str, 'Config', AsyncFeatureStore], UpdateProcessor]]:
         return self.__update_processor_class
 
     @property
@@ -361,7 +362,7 @@ class Config:
         return self.__use_ldd
 
     @property
-    def feature_store(self) -> FeatureStore:
+    def feature_store(self) -> AsyncFeatureStore:
         return self.__feature_store
 
     @property

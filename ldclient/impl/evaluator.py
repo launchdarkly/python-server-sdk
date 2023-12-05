@@ -6,7 +6,7 @@ from ldclient.impl.model import *
 
 import hashlib
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Awaitable
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
 # the ldclient.evaluation module.
@@ -67,9 +67,9 @@ class Evaluator:
     """
     def __init__(
         self,
-        get_flag: Callable[[str], Optional[FeatureFlag]],
-        get_segment: Callable[[str], Optional[Segment]],
-        get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]],
+        get_flag: Callable[[str], Awaitable[Optional[FeatureFlag]]],
+        get_segment: Callable[[str], Awaitable[Optional[Segment]]],
+        get_big_segments_membership: Callable[[str], Awaitable[Tuple[Optional[dict], str]]],
         logger: Optional[logging.Logger] = None
     ):
         """
@@ -84,11 +84,11 @@ class Evaluator:
         self.__get_big_segments_membership = get_big_segments_membership
         self.__logger = logger
 
-    def evaluate(self, flag: FeatureFlag, context: Context, event_factory: EventFactory) -> EvalResult:
+    async def evaluate(self, flag: FeatureFlag, context: Context, event_factory: EventFactory) -> EvalResult:
         state = EvalResult()
         state.original_flag_key = flag.key
         try:
-            state.detail = self._evaluate(flag, context, state, event_factory)
+            state.detail = await self._evaluate(flag, context, state, event_factory)
         except EvaluationException as e:
             if self.__logger is not None:
                 self.__logger.error('Could not evaluate flag "%s": %s' % (flag.key, e.message))
@@ -98,11 +98,11 @@ class Evaluator:
             state.detail.reason['bigSegmentsStatus'] = state.big_segments_status
         return state
 
-    def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> EvaluationDetail:
+    async def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> EvaluationDetail:
         if not flag.on:
             return _get_off_value(flag, {'kind': 'OFF'})
 
-        prereq_failure_reason = self._check_prerequisites(flag, context, state, event_factory)
+        prereq_failure_reason = await self._check_prerequisites(flag, context, state, event_factory)
         if prereq_failure_reason is not None:
             return _get_off_value(flag, prereq_failure_reason)
 
@@ -120,7 +120,7 @@ class Evaluator:
         # Walk through fallthrough and see if it matches
         return _get_value_for_variation_or_rollout(flag, flag.fallthrough, context, {'kind': 'FALLTHROUGH'})
 
-    def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> Optional[dict]:
+    async def _check_prerequisites(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> Optional[dict]:
         failed_prereq = None
         prereq_res = None
         if flag.prerequisites.count == 0:
@@ -144,12 +144,12 @@ class Evaluator:
                     raise EvaluationException(('prerequisite relationship to "%s" caused a circular reference;' +
                         ' this is probably a temporary condition due to an incomplete update') % prereq_key)
 
-                prereq_flag = self.__get_flag(prereq_key)
+                prereq_flag = await self.__get_flag(prereq_key)
                 if prereq_flag is None:
                     log.warning("Missing prereq flag: " + prereq_key)
                     failed_prereq = prereq
                 else:
-                    prereq_res = self._evaluate(prereq_flag, context, state, event_factory)
+                    prereq_res = await self._evaluate(prereq_flag, context, state, event_factory)
                     # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
                     # off variation was. But we still need to evaluate it in order to generate an event.
                     if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
@@ -195,16 +195,16 @@ class Evaluator:
                 return _target_match_result(flag, var)
         return None
 
-    def _rule_matches_context(self, rule: FlagRule, context: Context, state: EvalResult) -> bool:
+    async def _rule_matches_context(self, rule: FlagRule, context: Context, state: EvalResult) -> bool:
         for clause in rule.clauses:
-            if not self._clause_matches_context(clause, context, state):
+            if not await self._clause_matches_context(clause, context, state):
                 return False
         return True
 
-    def _clause_matches_context(self, clause: Clause, context: Context, state: EvalResult) -> bool:
+    async def _clause_matches_context(self, clause: Clause, context: Context, state: EvalResult) -> bool:
         if clause.op == 'segmentMatch':
             for seg_key in clause.values:
-                segment = self.__get_segment(seg_key)
+                segment = await self.__get_segment(seg_key)
                 if segment is not None and self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
@@ -229,15 +229,15 @@ class Evaluator:
             return _maybe_negate(clause, False)
         return _maybe_negate(clause, _match_single_context_value(clause, context_value))
 
-    def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
+    async def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
         if state.segment_stack is not None and segment.key in state.segment_stack:
             raise EvaluationException(('segment rule referencing segment "%s" caused a circular reference;' +
                 ' this is probably a temporary condition due to an incomplete update') % segment.key)
         if segment.unbounded:
-            return self._big_segment_match_context(segment, context, state)
-        return self._simple_segment_match_context(segment, context, state, True)
+            return await self._big_segment_match_context(segment, context, state)
+        return await self._simple_segment_match_context(segment, context, state, True)
 
-    def _simple_segment_match_context(self, segment: Segment, context: Context, state: EvalResult, use_includes_and_excludes: bool) -> bool:
+    async def _simple_segment_match_context(self, segment: Segment, context: Context, state: EvalResult, use_includes_and_excludes: bool) -> bool:
         if use_includes_and_excludes:
             if _context_key_is_in_target_list(context, None, segment.included):
                 return True
@@ -257,16 +257,16 @@ class Evaluator:
             state.segment_stack.append(segment.key)
             try:
                 for rule in segment.rules:
-                    if self._segment_rule_matches_context(rule, context, state, segment.key, segment.salt):
+                    if await self._segment_rule_matches_context(rule, context, state, segment.key, segment.salt):
                         return True
                 return False
             finally:
                 state.segment_stack.pop()
         return False
 
-    def _segment_rule_matches_context(self, rule: SegmentRule, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:
+    async def _segment_rule_matches_context(self, rule: SegmentRule, context: Context, state: EvalResult, segment_key: str, salt: str) -> bool:
         for clause in rule.clauses:
-            if not self._clause_matches_context(clause, context, state):
+            if not await self._clause_matches_context(clause, context, state):
                 return False
 
         # If the weight is absent, this rule matches
@@ -278,7 +278,7 @@ class Evaluator:
         weight = rule.weight / 100000.0
         return bucket < weight
 
-    def _big_segment_match_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
+    async def _big_segment_match_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
         generation = segment.generation
         if generation is None:
             # Big segment queries can only be done if the generation is known. If it's unset,
@@ -320,7 +320,7 @@ class Evaluator:
         included = None if membership is None else membership.get(_make_big_segment_ref(segment), None)
         if included is not None:
             return included
-        return self._simple_segment_match_context(segment, context, state, False)
+        return await self._simple_segment_match_context(segment, context, state, False)
 
 
 # The following functions are declared outside Evaluator because they do not depend on any
