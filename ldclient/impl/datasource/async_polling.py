@@ -77,15 +77,15 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
     async def _polling_loop(self):
         while True:
             await self._poll()
-            asyncio.sleep(self._config.poll_interval)
+            await asyncio.sleep(self._config.poll_interval)
 
     def start(self):
         log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
         if self._polling_task is None:
             self._polling_task = asyncio.run_coroutine_threadsafe(self._polling_loop(), self._loop)
 
-    def initialized(self):
-        return self._ready.is_set() is True and self._store.initialized is True
+    async def initialized(self):
+        return self._ready.is_set() is True and await self._store.initialized is True
 
     def stop(self):
         self.__stop_with_error_info(None)

@@ -2,7 +2,7 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 import asyncio
-from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable
+from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable, Awaitable
 
 from .impl import AnyNum
 
@@ -383,7 +383,7 @@ class LDClient:
         """
         return self._config.offline
 
-    def is_initialized(self) -> bool:
+    def is_initialized(self) -> Awaitable[bool]:
         """Returns true if the client has successfully connected to LaunchDarkly.
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
@@ -467,8 +467,8 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if not self.is_initialized():
-            if self._store.initialized:
+        if not await self.is_initialized():
+            if await self._store.initialized:
                 log.warning(
                     "Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
@@ -497,7 +497,7 @@ class LDClient:
             return EvaluationDetail(default, None, reason), None
         else:
             try:
-                result = self._evaluator.evaluate(flag, context, event_factory)
+                result = await self._evaluator.evaluate(flag, context, event_factory)
                 for event in result.events or []:
                     self._send_event(event)
                 detail = result.detail
