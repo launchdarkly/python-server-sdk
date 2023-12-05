@@ -32,7 +32,8 @@ from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureStore, FlagTracker, DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider
+from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureStore, FlagTracker, \
+    DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.migrations import Stage, OpTracker
 from ldclient.impl.flag_tracker import FlagTrackerImpl
@@ -176,7 +177,8 @@ class LDClient:
 
     Client instances are thread-safe.
     """
-    def __init__(self, config: Config, start_wait: float=5, loop=None):
+
+    def __init__(self, config: Config, start_wait: float = 5, loop=None):
         """Constructs a new LDClient instance.
 
         :param config: optional custom configuration
@@ -202,10 +204,13 @@ class LDClient:
         data_source_listeners = Listeners()
         flag_change_listeners = Listeners()
 
-        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners, lambda key, context: self.variation(key, context, None))
+        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners,
+                                              lambda key, context: self.variation(key, context, None))
 
-        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, data_source_listeners, flag_change_listeners)
-        self.__data_source_status_provider = DataSourceStatusProviderImpl(data_source_listeners, self._config._data_source_update_sink)
+        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, data_source_listeners,
+                                                                         flag_change_listeners)
+        self.__data_source_status_provider = DataSourceStatusProviderImpl(data_source_listeners,
+                                                                          self._config._data_source_update_sink)
         self._store = store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
@@ -227,7 +232,8 @@ class LDClient:
         diagnostic_accumulator = self._set_event_processor(self._config)
 
         update_processor_ready = threading.Event()
-        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
+        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready,
+                                                             diagnostic_accumulator)
         self._update_processor.start()
 
         if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
@@ -238,7 +244,7 @@ class LDClient:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
-                     "Feature Flags may not yet be available.")
+                        "Feature Flags may not yet be available.")
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:
@@ -247,7 +253,8 @@ class LDClient:
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
             diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
-            self._event_processor = AsyncDefaultEventProcessor(config, diagnostic_accumulator = diagnostic_accumulator, loop = self._loop)
+            self._event_processor = AsyncDefaultEventProcessor(self._loop, config,
+                                                               diagnostic_accumulator=diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
         return None
@@ -320,8 +327,8 @@ class LDClient:
 
         self._send_event(event)
 
-    def track(self, event_name: str, context: Context, data: Optional[Any]=None,
-              metric_value: Optional[AnyNum]=None):
+    def track(self, event_name: str, context: Context, data: Optional[Any] = None,
+              metric_value: Optional[AnyNum] = None):
         """Tracks that an application-defined event occurred.
 
         This method creates a "custom" analytics event containing the specified event name (key)
@@ -341,7 +348,7 @@ class LDClient:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name,
-                context, data, metric_value))
+                                                                          context, data, metric_value))
 
     def identify(self, context: Context):
         """Reports details about an evaluation context.
@@ -444,7 +451,8 @@ class LDClient:
         tracker = OpTracker(key, flag, context, detail, default_stage)
         return default_stage, tracker
 
-    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[
+        EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
@@ -452,10 +460,12 @@ class LDClient:
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
+                log.warning(
+                    "Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
-                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
-                         + str(default) + " for feature key: " + key)
+                log.warning(
+                    "Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
+                    + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
                 self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
                 return EvaluationDetail(default, None, reason), None
@@ -524,9 +534,11 @@ class LDClient:
 
         if not self.is_initialized():
             if self._store.initialized:
-                log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
+                log.warning(
+                    "all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
-                log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                log.warning(
+                    "all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
                 return FeatureFlagsState(False)
 
         if not context.valid:
@@ -584,7 +596,8 @@ class LDClient:
         if not context.valid:
             log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
             return ""
-        return hmac.new(str(self._config.sdk_key).encode(), context.fully_qualified_key.encode(), hashlib.sha256).hexdigest()
+        return hmac.new(str(self._config.sdk_key).encode(), context.fully_qualified_key.encode(),
+                        hashlib.sha256).hexdigest()
 
     @property
     def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
@@ -637,7 +650,6 @@ class LDClient:
         listener model.
         """
         return self.__flag_tracker
-
 
 
 __all__ = ['LDClient', 'Config']
