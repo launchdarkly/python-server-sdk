@@ -152,12 +152,12 @@ class ClientEntity:
             "stale": status.stale
         }
 
-    def migration_variation(self, params: dict) -> dict:
-        stage, _ = self.client.migration_variation(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]))
+    async def migration_variation(self, params: dict) -> dict:
+        stage, _ = await self.client.migration_variation(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]))
 
         return {'result': stage.value}
 
-    def migration_operation(self, params: dict) -> dict:
+    async def migration_operation(self, params: dict) -> dict:
         builder = MigratorBuilder(self.client)
 
         if params["readExecutionOrder"] == "concurrent":
@@ -190,10 +190,10 @@ class ClientEntity:
             return {"result": migrator}
 
         if params["operation"] == Operation.READ.value:
-            result = migrator.read(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
+            result = await migrator.read(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
             return {"result": result.value if result.is_success() else result.error}
 
-        result = migrator.write(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
+        result = await migrator.write(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
         return {"result": result.authoritative.value if result.authoritative.is_success() else result.authoritative.error}
 
     def close(self):

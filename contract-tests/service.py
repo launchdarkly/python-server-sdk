@@ -151,9 +151,9 @@ async def _do_command(id):
     elif command == "getBigSegmentStoreStatus":
         response = client.get_big_segment_store_status()
     elif command == "migrationVariation":
-        response = client.migration_variation(sub_params)
+        response = await client.migration_variation(sub_params)
     elif command == "migrationOperation":
-        response = client.migration_operation(sub_params)
+        response = await client.migration_operation(sub_params)
     else:
         return ('', 400)
 

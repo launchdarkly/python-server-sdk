@@ -21,7 +21,7 @@ class Migrator:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+    async def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
         """
         Uses the provided flag key and context to execute a migration-backed read operation.
 
@@ -32,7 +32,7 @@ class Migrator:
         """
 
     @abstractmethod
-    def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
+    async def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
         """
         Uses the provided flag key and context to execute a migration-backed write operation.
 
@@ -67,8 +67,8 @@ class MigratorImpl(Migrator):
         self.__measure_latency = measure_latency
         self.__measure_errors = measure_errors
 
-    def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
-        stage, tracker = self.__client.migration_variation(key, context, default_stage)
+    async def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:
+        stage, tracker = await self.__client.migration_variation(key, context, default_stage)
         tracker.operation(Operation.READ)
 
         old = Executor(Origin.OLD, self.__read_config.old, tracker, self.__measure_latency, self.__measure_errors, payload)
@@ -91,8 +91,8 @@ class MigratorImpl(Migrator):
 
         return result
 
-    def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
-        stage, tracker = self.__client.migration_variation(key, context, default_stage)
+    async def write(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> WriteResult:
+        stage, tracker = await self.__client.migration_variation(key, context, default_stage)
         tracker.operation(Operation.WRITE)
 
         old = Executor(Origin.OLD, self.__write_config.old, tracker, self.__measure_latency, self.__measure_errors, payload)
