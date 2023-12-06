@@ -512,7 +512,7 @@ class LDClient:
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
-    def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
+    async def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
         """Returns an object that encapsulates the state of all feature flags for a given context,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
@@ -559,7 +559,7 @@ class LDClient:
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
-            flags_map = self._store.all(FEATURES, lambda x: x)
+            flags_map = await self._store.all(FEATURES, lambda x: x)
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
@@ -570,7 +570,7 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = self._evaluator.evaluate(flag, context, self._event_factory_default).detail
+                detail = await self._evaluator.evaluate(flag, context, self._event_factory_default).detail
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())

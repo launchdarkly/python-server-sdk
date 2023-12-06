@@ -69,31 +69,31 @@ class ClientEntity:
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
 
-        self.client = client.LDClient(config, start_wait / 1000.0, loop=loop)
+        self.client = client.LDClient(config, loop=loop)
 
     def is_initializing(self) -> bool:
         return self.client.is_initialized()
 
-    def evaluate(self, params: dict) -> dict:
+    async def evaluate(self, params: dict) -> dict:
         response = {}
 
         if params.get("detail", False):
-            detail = self.client.variation_detail(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
+            detail = await self.client.variation_detail(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
             response["value"] = detail.value
             response["variationIndex"] = detail.variation_index
             response["reason"] = detail.reason
         else:
-            response["value"] = self.client.variation(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
+            response["value"] = await self.client.variation(params["flagKey"], Context.from_dict(params["context"]), params["defaultValue"])
 
         return response
 
-    def evaluate_all(self, params: dict):
+    async def evaluate_all(self, params: dict):
         opts = {}
         opts["client_side_only"] = params.get("clientSideOnly", False)
         opts["with_reasons"] = params.get("withReasons", False)
         opts["details_only_for_tracked_flags"] = params.get("detailsOnlyForTrackedFlags", False)
 
-        state = self.client.all_flags_state(Context.from_dict(params["context"]), **opts)
+        state = await self.client.all_flags_state(Context.from_dict(params["context"]), **opts)
 
         return {"state": state.to_json_dict()}
 

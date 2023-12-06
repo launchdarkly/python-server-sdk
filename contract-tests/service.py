@@ -93,8 +93,7 @@ def delete_stop_service():
     os._exit(0)
 
 
-@app.route('/', methods=['POST'])
-def post_create_client():
+async def _do_post():
     global client_counter, clients
 
     options = request.get_json()
@@ -103,8 +102,8 @@ def post_create_client():
     client_id = str(client_counter)
     resource_url = '/clients/%s' % client_id
 
-    client = ClientEntity(options['tag'], options['configuration'], loop)
-
+    client = ClientEntity(options['tag'], options['configuration'], asyncio.get_running_loop())
+    await client.client.wait_for_initialization()
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
         return ("Failed to initialize", 500)
@@ -113,8 +112,12 @@ def post_create_client():
     return ('', 201, {'Location': resource_url})
 
 
-@app.route('/clients/<id>', methods=['POST'])
-def post_client_command(id):
+@app.route('/', methods=['POST'])
+def post_create_client():
+    return asyncio.run_coroutine_threadsafe(_do_post(), loop).result()
+
+
+async def _do_command(id):
     global clients
 
     params = request.get_json()
@@ -129,9 +132,9 @@ def post_client_command(id):
     response = None
 
     if command == "evaluate":
-        response = client.evaluate(sub_params)
+        response = await client.evaluate(sub_params)
     elif command == "evaluateAll":
-        response = client.evaluate_all(sub_params)
+        response = await client.evaluate_all(sub_params)
     elif command == "customEvent":
         client.track(sub_params)
     elif command == "identifyEvent":
@@ -157,6 +160,9 @@ def post_client_command(id):
         return ('', 201)
     return (json.dumps(response), 200)
 
+@app.route('/clients/<id>', methods=['POST'])
+def post_client_command(id):
+    return asyncio.run_coroutine_threadsafe(_do_command(id), loop).result()
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
