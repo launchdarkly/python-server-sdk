@@ -28,25 +28,24 @@ __CURRENT_EVENT_SCHEMA__ = 4
 
 class AsyncDefaultEventProcessor(EventProcessor):
 
-    def __init__(self, loop: asyncio.events.AbstractEventLoop, config: Config,
+    def __init__(self, config: Config,
                  diagnostic_accumulator: Optional[_DiagnosticAccumulator] = None):
         self._event_buffer = EventBuffer(config.events_max_pending)
         self._formatter = EventOutputFormatter(config)
         self._last_known_past_time = 0
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
-        self._publish_task = asyncio.run_coroutine_threadsafe(self._event_publishing_loop(config.flush_interval), loop)
-        self._cache_clear_task = asyncio.run_coroutine_threadsafe(
-            self._context_keys_flush_loop(config.context_keys_flush_interval), loop)
-        self._diagnostic_task = asyncio.run_coroutine_threadsafe(
-            self._diagnostic_events_loop(config.diagnostic_recording_interval), loop)
+        self._publish_task = asyncio.create_task(self._event_publishing_loop(config.flush_interval))
+        self._cache_clear_task = asyncio.create_task(
+            self._context_keys_flush_loop(config.context_keys_flush_interval))
+        self._diagnostic_task = asyncio.create_task(
+            self._diagnostic_events_loop(config.diagnostic_recording_interval))
         self._config = config
         self._disabled = False
         self._sampler = Sampler(Random())
         self._context_key_lru_cache = SimpleLRUCache(config.context_keys_capacity)
         # TODO: Share the same client session with as much of the SDK as possible.
-        self._http_client_session = aiohttp.ClientSession(loop=loop)
-        self._loop = loop
+        self._http_client_session = aiohttp.ClientSession()
 
     async def _event_publishing_loop(self, flush_interval: int):
         while True:
@@ -96,7 +95,7 @@ class AsyncDefaultEventProcessor(EventProcessor):
                 'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
         while True:
             await asyncio.sleep(flush_interval)
-            self._send_and_reset_diagnostics()
+            await self._send_and_reset_diagnostics()
 
     async def _do_flush(self):
         # noinspection PyBroadException

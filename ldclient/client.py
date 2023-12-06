@@ -182,7 +182,7 @@ class LDClient:
     Client instances are thread-safe.
     """
 
-    def __init__(self, config: Config, loop=None):
+    def __init__(self, config: Config):
         """Constructs a new LDClient instance.
 
         :param config: optional custom configuration
@@ -192,7 +192,6 @@ class LDClient:
 
         self._config = config
         self._config._validate()
-        self._loop = loop
 
         self._event_processor = None
         self._lock = Lock()
@@ -262,7 +261,7 @@ class LDClient:
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
             diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
-            self._event_processor = AsyncDefaultEventProcessor(self._loop, config,
+            self._event_processor = AsyncDefaultEventProcessor(config,
                                                                diagnostic_accumulator=diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
@@ -289,7 +288,7 @@ class LDClient:
         #
         # return PollingUpdateProcessor(config, feature_requester, store, ready)
 
-        return AsyncPollingUpdateProcessor(config, store, ready, loop=self._loop)
+        return AsyncPollingUpdateProcessor(config, store, ready)
 
     def get_sdk_key(self) -> Optional[str]:
         """Returns the configured SDK key.

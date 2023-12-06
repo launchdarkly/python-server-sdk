@@ -28,12 +28,12 @@ CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 
 
 class AsyncFeatureRequester:
-    def __init__(self, config, loop):
+    def __init__(self, config):
         self._cache = dict()
         self._config = config
         self._poll_uri = config.base_uri + LATEST_ALL_URI
         # TODO: Share the same client session with as much of the SDK as possible.
-        self._http_client_session = aiohttp.ClientSession(loop=loop)
+        self._http_client_session = aiohttp.ClientSession()
 
     async def get_all_data(self):
         uri = self._poll_uri
@@ -65,14 +65,13 @@ class AsyncFeatureRequester:
 
 
 class AsyncPollingUpdateProcessor(UpdateProcessor):
-    def __init__(self, config: Config, store: AsyncFeatureStore, ready: asyncio.Event, loop=None):
+    def __init__(self, config: Config, store: AsyncFeatureStore, ready: asyncio.Event):
         self._polling_task = None
         self._config = config
         self._data_source_update_sink: Optional[AsyncDataSourceUpdateSink] = config.data_source_update_sink
         self._store = store
         self._ready = ready
-        self._loop = loop
-        self._feature_requester = AsyncFeatureRequester(config, loop)
+        self._feature_requester = AsyncFeatureRequester(config)
 
     async def _polling_loop(self):
         while True:
@@ -82,7 +81,7 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
     def start(self):
         log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
         if self._polling_task is None:
-            self._polling_task = asyncio.run_coroutine_threadsafe(self._polling_loop(), self._loop)
+            self._polling_task = asyncio.create_task(self._polling_loop())
 
     async def initialized(self):
         return self._ready.is_set() is True and await self._store.initialized is True

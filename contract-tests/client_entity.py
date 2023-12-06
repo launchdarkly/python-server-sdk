@@ -16,9 +16,8 @@ from ldclient import *
 
 
 class ClientEntity:
-    def __init__(self, tag, config, loop):
+    def __init__(self, tag, config):
         self.log = logging.getLogger(tag)
-        self._loop = loop
         opts = {"sdk_key": config["credential"]}
 
         tags = config.get('tags', {})
@@ -69,7 +68,7 @@ class ClientEntity:
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
 
-        self.client = client.LDClient(config, loop=loop)
+        self.client = client.LDClient(config)
 
     def is_initializing(self) -> bool:
         return self.client.is_initialized()

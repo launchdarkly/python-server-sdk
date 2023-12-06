@@ -102,7 +102,7 @@ async def _do_post():
     client_id = str(client_counter)
     resource_url = '/clients/%s' % client_id
 
-    client = ClientEntity(options['tag'], options['configuration'], asyncio.get_running_loop())
+    client = ClientEntity(options['tag'], options['configuration'])
     await client.client.wait_for_initialization()
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
