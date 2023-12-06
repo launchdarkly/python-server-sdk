@@ -83,8 +83,8 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
         if self._polling_task is None:
             self._polling_task = asyncio.create_task(self._polling_loop())
 
-    async def initialized(self):
-        return self._ready.is_set() is True and await self._store.initialized is True
+    def initialized(self):
+        return self._ready.is_set() is True and self._store.initialized is True
 
     def stop(self):
         self.__stop_with_error_info(None)
@@ -123,7 +123,7 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
         try:
             all_data = await self._feature_requester.get_all_data()
             await self._sink_or_store().init(all_data)
-            if not self._ready.is_set() and await self._store.initialized:
+            if not self._ready.is_set() and self._store.initialized:
                 log.info("PollingUpdateProcessor initialized ok")
                 self._ready.set()
 

@@ -183,7 +183,7 @@ class AsyncDefaultEventProcessor(EventProcessor):
         return False
 
     def send_event(self, event):
-        asyncio.run_coroutine_threadsafe(self._send_event(event), self._loop)
+        asyncio.create_task(self._send_event(event))
 
     async def _send_event(self, event: EventInput):
         if self._disabled:
@@ -232,10 +232,10 @@ class AsyncDefaultEventProcessor(EventProcessor):
             self._event_buffer.add_event(debug_event)
 
     def flush(self):
-        asyncio.run_coroutine_threadsafe(self._do_flush(), self._loop)
+        asyncio.create_task(self._do_flush())
 
     def stop(self):
-        asyncio.run_coroutine_threadsafe(self._stop(), self._loop)
+        asyncio.create_task(self._stop())
 
     async def _stop(self):
         self._publish_task.cancel()

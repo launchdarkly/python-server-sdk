@@ -104,7 +104,7 @@ async def _do_post():
     resource_url = '/clients/%s' % client_id
 
     client = ClientEntity(options['tag'], options['configuration'])
-    await client.client.wait_for_initialization()
+    await client.client.wait_for_initialization(options['configuration'].get("startWaitTimeMs") or 5000)
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
         return ("Failed to initialize", 500)
@@ -167,8 +167,7 @@ def post_client_command(id):
     return asyncio.run_coroutine_threadsafe(_do_command(id), loop).result()
 
 
-@app.route('/clients/<id>', methods=['DELETE'])
-def delete_client(id):
+async def _do_delete_client(id):
     global clients
 
     client = clients[id]
@@ -177,6 +176,11 @@ def delete_client(id):
 
     client.close()
     return ('', 202)
+
+
+@app.route('/clients/<id>', methods=['DELETE'])
+def delete_client(id):
+    return asyncio.run_coroutine_threadsafe(_do_delete_client(id), loop).result()
 
 
 def main():

@@ -41,6 +41,7 @@ from ldclient.impl.flag_tracker import FlagTrackerImpl
 from threading import Lock
 
 from .impl.datasource.async_polling import AsyncPollingUpdateProcessor
+from .impl.datasource.async_streaming import AsyncStreamingUpdateProcessor
 
 
 class _FeatureStoreClientWrapper(AsyncFeatureStore):
@@ -74,7 +75,7 @@ class _FeatureStoreClientWrapper(AsyncFeatureStore):
         return await self.__wrapper(lambda: self.store.upsert(kind, item))
 
     @property
-    async def initialized(self) -> bool:
+    def initialized(self) -> bool:
         # TODO: Pycharm angry.
         return self.store.initialized
 
@@ -250,9 +251,15 @@ class LDClient:
         #     log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
         #                 "Feature Flags may not yet be available.")
 
-    async def wait_for_initialization(self):
-        # TODO: Timeout and race promise?
-        return await self.__update_processor_ready.wait()
+    async def wait_for_initialization(self, timeout: Optional[int] = None):
+        task_set = set()
+
+        if timeout is not None:
+            task_set.add(asyncio.create_task(asyncio.sleep(timeout)))
+
+        task_set.add(asyncio.create_task(self.__update_processor_ready.wait()))
+
+        await asyncio.wait(task_set, return_when=asyncio.FIRST_COMPLETED)
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:
@@ -276,7 +283,8 @@ class LDClient:
             return NullUpdateProcessor(config, store, ready)
 
         if config.stream:
-            return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
+            return AsyncStreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
+            # return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
 
         log.info("Disabling streaming API")
         log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
@@ -382,7 +390,7 @@ class LDClient:
         """
         return self._config.offline
 
-    def is_initialized(self) -> Awaitable[bool]:
+    def is_initialized(self) -> bool:
         """Returns true if the client has successfully connected to LaunchDarkly.
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
@@ -466,8 +474,8 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if not await self.is_initialized():
-            if await self._store.initialized:
+        if not self.is_initialized():
+            if self._store.initialized:
                 log.warning(
                     "Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
@@ -558,7 +566,7 @@ class LDClient:
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
-            flags_map = await self._store.all(FEATURES, lambda x: x)
+            flags_map = await self._store.all(FEATURES)
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
@@ -569,7 +577,7 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = await self._evaluator.evaluate(flag, context, self._event_factory_default).detail
+                detail = (await self._evaluator.evaluate(flag, context, self._event_factory_default)).detail
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())

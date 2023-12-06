@@ -56,7 +56,7 @@ class DataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
         )
 
     async def upsert(self, kind: VersionedDataKind, item: dict):
-        self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
+        await self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
 
         # TODO(sc-212471): We only want to do this if the store successfully
         # updates the record.
@@ -64,7 +64,7 @@ class DataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
         self.__update_dependency_for_single_item(kind, key, item)
 
     async def delete(self, kind: VersionedDataKind, key: str, version: int):
-        self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
+        await self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
         self.__update_dependency_for_single_item(kind, key, None)
 
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):

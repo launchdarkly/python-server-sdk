@@ -57,7 +57,8 @@ class AsyncInMemoryFeatureStore(AsyncFeatureStore, DiagnosticDescription):
             items_of_kind[key] = decoded_item
             log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
 
-    async def initialized(self) -> bool:
+    @property
+    def initialized(self) -> bool:
         return self._initialized
 
     def describe_configuration(self, config) -> str:

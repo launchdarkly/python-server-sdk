@@ -48,7 +48,7 @@ class EvaluationException(Exception):
     def __init__(self, message: str, error_kind: str = 'MALFORMED_FLAG'):
         self._message = message
         self._error_kind = error_kind
-    
+
     @property
     def message(self) -> str:
         return self._message
@@ -113,7 +113,7 @@ class Evaluator:
 
         # Now walk through the rules to see if any match
         for index, rule in enumerate(flag.rules):
-            if self._rule_matches_context(rule, context, state):
+            if await self._rule_matches_context(rule, context, state):
                 return _get_value_for_variation_or_rollout(flag, rule.variation_or_rollout, context,
                     {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.id})
 
@@ -125,7 +125,7 @@ class Evaluator:
         prereq_res = None
         if flag.prerequisites.count == 0:
             return None
-        
+
         try:
             # We use the state object to guard against circular references in prerequisites. To avoid
             # the overhead of creating the state.prereq_stack list in the most common case where
@@ -136,7 +136,7 @@ class Evaluator:
                 if state.prereq_stack is None:
                     state.prereq_stack = []
                 state.prereq_stack.append(flag_key)
-            
+
             for prereq in flag.prerequisites:
                 prereq_key = prereq.key
                 if (prereq_key == state.original_flag_key or
@@ -205,10 +205,10 @@ class Evaluator:
         if clause.op == 'segmentMatch':
             for seg_key in clause.values:
                 segment = await self.__get_segment(seg_key)
-                if segment is not None and self._segment_matches_context(segment, context, state):
+                if segment is not None and await self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
-        
+
         attr = clause.attribute
         if attr is None:
             return False
@@ -220,7 +220,7 @@ class Evaluator:
         context_value = _get_context_value_by_attr_ref(actual_context, attr)
         if context_value is None:
             return False
-        
+
         # is the attr an array?
         if isinstance(context_value, (list, tuple)):
             for v in context_value:
@@ -287,7 +287,7 @@ class Evaluator:
             # that as a "not configured" condition.
             state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
             return False
-        
+
         # A big segment can only apply to one context kind, so if we don't have a key for that kind,
         # we don't need to bother querying the data.
         match_context = context.get_individual_context(segment.unbounded_context_kind or Context.DEFAULT_KIND)
@@ -357,7 +357,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
     variations = rollout.variations
     if len(variations) == 0:
         return (None, False)
-    
+
     bucket_by = None if rollout.is_experiment else rollout.bucket_by
     bucket = _bucket_context(
         rollout.seed,

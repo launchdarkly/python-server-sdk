@@ -82,8 +82,8 @@ class AsyncFeatureStore:
         :param item: The object to update or insert
         """
 
-    @abstractmethod
-    async def initialized(self) -> bool:
+    @abstractproperty
+    def initialized(self) -> bool:
         """
         Returns whether the store has been initialized yet or not
         """
