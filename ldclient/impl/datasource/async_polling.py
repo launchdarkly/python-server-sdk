@@ -42,26 +42,27 @@ class AsyncFeatureRequester:
         if cache_entry is not None:
             headers['If-None-Match'] = cache_entry.etag
 
-        response = await self._http_client_session.get(uri, headers=headers, timeout=aiohttp.ClientTimeout(
-            connect=self._config.http.connect_timeout, sock_read=self._config.http.read_timeout))
-        throw_if_unsuccessful_response(response)
-        if response.status == 304 and cache_entry is not None:
-            data = cache_entry.data
-            etag = cache_entry.etag
-            from_cache = True
-        else:
-            data = await response.json(encoding='UTF-8')
-            etag = response.headers.get('ETag')
-            from_cache = False
-            if etag is not None:
-                self._cache[uri] = CacheEntry(data=data, etag=etag)
-        log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]",
-                  uri, response.status, from_cache, etag)
+        async with await self._http_client_session.get(uri, headers=headers, timeout=aiohttp.ClientTimeout(connect=self._config.http.connect_timeout, sock_read=self._config.http.read_timeout)) as response:
+            throw_if_unsuccessful_response(response)
+            if response.status == 304 and cache_entry is not None:
+                data = cache_entry.data
+                etag = cache_entry.etag
+                from_cache = True
+            else:
+                data = await response.json(encoding='UTF-8')
+                etag = response.headers.get('ETag')
+                from_cache = False
+                if etag is not None:
+                    self._cache[uri] = CacheEntry(data=data, etag=etag)
+            log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]", uri, response.status, from_cache, etag)
 
         return {
             FEATURES: data['flags'],
             SEGMENTS: data['segments']
         }
+
+    async def stop(self):
+        await self._http_client_session.close()
 
 
 class AsyncPollingUpdateProcessor(UpdateProcessor):
@@ -86,10 +87,10 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
     def initialized(self):
         return self._ready.is_set() is True and self._store.initialized is True
 
-    def stop(self):
-        self.__stop_with_error_info(None)
+    async def stop(self):
+        await self.__stop_with_error_info(None)
 
-    def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
+    async def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping PollingUpdateProcessor")
         self._polling_task.cancel()
         self._polling_task = None
@@ -101,6 +102,8 @@ class AsyncPollingUpdateProcessor(UpdateProcessor):
             DataSourceState.OFF,
             error
         )
+
+        await self._feature_requester.stop()
 
     def _sink_or_store(self):
         """

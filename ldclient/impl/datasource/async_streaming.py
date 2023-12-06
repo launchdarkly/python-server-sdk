@@ -62,12 +62,12 @@ class AsyncStreamingUpdateProcessor(Thread, UpdateProcessor):
                     message_ok = await self._process_message(self._sink_or_store(), action)
                 except json.decoder.JSONDecodeError as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    await self._sse.interrupt()
 
                     self._handle_error(e)
                 except Exception as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    await self._sse.interrupt()
 
                     if self._data_source_update_sink is not None:
                         error_info = DataSourceErrorInfo(
@@ -131,12 +131,15 @@ class AsyncStreamingUpdateProcessor(Thread, UpdateProcessor):
             logger=log
         )
 
-    def stop(self):
-        self.__stop_with_error_info(None)
+    async def stop(self):
+        await self.__stop_with_error_info(None)
 
-    def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
+    async def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
+
+        self._streaming_task.cancel()
+        # await self._sse.close()
 
         if self._data_source_update_sink is None:
             return
@@ -145,8 +148,6 @@ class AsyncStreamingUpdateProcessor(Thread, UpdateProcessor):
             DataSourceState.OFF,
             error
         )
-
-        self._streaming_task.cancel()
 
     def _sink_or_store(self) -> AsyncFeatureStore:
         if self._data_source_update_sink is None:

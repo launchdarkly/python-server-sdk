@@ -158,6 +158,7 @@ class AsyncDefaultEventProcessor(EventProcessor):
             next_action_message = "will retry" if can_retry else "some events were dropped"
             try:
                 response = await self._http_client_session.post(uri, data=body, headers=headers)
+                response.close()
 
                 if response.status < 300:
                     return response
@@ -240,4 +241,5 @@ class AsyncDefaultEventProcessor(EventProcessor):
     async def _stop(self):
         self._publish_task.cancel()
         self._cache_clear_task.cancel()
-        self._diagnostic_events_loop.cancel()
+        self._diagnostic_task.cancel()
+        await self._http_client_session.close()

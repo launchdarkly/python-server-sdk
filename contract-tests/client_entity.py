@@ -196,8 +196,8 @@ class ClientEntity:
         result = await migrator.write(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
         return {"result": result.authoritative.value if result.authoritative.is_success() else result.authoritative.error}
 
-    def close(self):
-        self.client.close()
+    async def close(self):
+        await self.client.close()
         self.log.info('Test ended')
 
 

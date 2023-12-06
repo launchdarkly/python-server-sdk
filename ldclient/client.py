@@ -189,6 +189,7 @@ class LDClient:
         :param config: optional custom configuration
         :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
         """
+        # TODO: What are we doing here?
         check_uwsgi()
 
         self._config = config
@@ -303,14 +304,14 @@ class LDClient:
         """
         return self._config.sdk_key
 
-    def close(self):
+    async def close(self):
         """Releases all threads and network connections used by the LaunchDarkly client.
 
         Do not attempt to use the client after calling this method.
         """
         log.info("Closing LaunchDarkly client..")
         self._event_processor.stop()
-        self._update_processor.stop()
+        await self._update_processor.stop()
         self.__big_segment_store_manager.stop()
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
