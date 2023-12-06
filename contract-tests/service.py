@@ -14,6 +14,7 @@ from werkzeug.exceptions import HTTPException
 
 default_port = 8000
 
+
 def start_background_loop(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
@@ -160,9 +161,11 @@ async def _do_command(id):
         return ('', 201)
     return (json.dumps(response), 200)
 
+
 @app.route('/clients/<id>', methods=['POST'])
 def post_client_command(id):
     return asyncio.run_coroutine_threadsafe(_do_command(id), loop).result()
+
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
@@ -175,6 +178,7 @@ def delete_client(id):
     client.close()
     return ('', 202)
 
+
 def main():
     port = default_port
     if sys.argv[len(sys.argv) - 1] != 'service.py':
@@ -182,6 +186,7 @@ def main():
     global_log.info('Listening on port %d', port)
     app.run(host='0.0.0.0', port=port)
     global_log.info('Stopping')
+
 
 if __name__ == "__main__":
     main()
