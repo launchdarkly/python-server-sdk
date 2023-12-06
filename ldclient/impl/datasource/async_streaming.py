@@ -139,7 +139,7 @@ class AsyncStreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
 
         self._streaming_task.cancel()
-        # await self._sse.close()
+        await self._sse.close()
 
         if self._data_source_update_sink is None:
             return
