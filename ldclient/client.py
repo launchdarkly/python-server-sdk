@@ -121,7 +121,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
 
     def __check_availability(self):
         try:
-            if self.store.available:
+            if self.store.is_available():
                 self.__update_availability(True)
         except BaseException as e:
             log.error("Unexpected error from data store status function: %s", e)
