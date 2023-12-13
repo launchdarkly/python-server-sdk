@@ -5,6 +5,6 @@ sphinx-autodoc-typehints
 certifi>=2018.4.16
 expiringdict>=1.1.4
 pyRFC3339>=1.0
-jsonpickle==0.9.3
+jsonpickle>1.4.1
 semver>=2.7.9
 urllib3>=1.22.0,<3
