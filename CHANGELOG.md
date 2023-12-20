@@ -2,6 +2,23 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.1.0](https://github.com/launchdarkly/python-server-sdk/compare/9.0.1...9.1.0) (2023-12-20)
+
+
+### Features
+
+* Add data source status provider support ([#228](https://github.com/launchdarkly/python-server-sdk/issues/228)) ([f733d07](https://github.com/launchdarkly/python-server-sdk/commit/f733d07efc660357ae09afbf9c9fa32fe7712a77))
+* Add support for data store status monitoring ([#252](https://github.com/launchdarkly/python-server-sdk/issues/252)) ([57ca6ac](https://github.com/launchdarkly/python-server-sdk/commit/57ca6aca204798969da3c4c64d50847fa8d12713))
+* Introduce flag change tracker api ([#229](https://github.com/launchdarkly/python-server-sdk/issues/229)) ([4df1762](https://github.com/launchdarkly/python-server-sdk/commit/4df17627e0853e8e78f05e7a3cd30e241ca58e5e))
+* Replace internal es implementation with launchdarkly-eventsource package ([#254](https://github.com/launchdarkly/python-server-sdk/issues/254)) ([99aafd5](https://github.com/launchdarkly/python-server-sdk/commit/99aafd5fafbdc15aafe464b434056fba4f3235d1))
+
+
+### Bug Fixes
+
+* **deps:** Bump jsonpickle to fix CVE-2020-22083 ([#234](https://github.com/launchdarkly/python-server-sdk/issues/234)) ([6280fe8](https://github.com/launchdarkly/python-server-sdk/commit/6280fe8ce29b25397f0a4970fc8059b0be04ffea))
+* **deps:** Bump pyyaml to fix CVE-2020-1747 ([#236](https://github.com/launchdarkly/python-server-sdk/issues/236)) ([48291ec](https://github.com/launchdarkly/python-server-sdk/commit/48291ecb4fa97387b39672b2145dad436ec71e32))
+* Fix data store availability status check ([#237](https://github.com/launchdarkly/python-server-sdk/issues/237)) ([81e2910](https://github.com/launchdarkly/python-server-sdk/commit/81e29106c43b0ab815099f9ecf8c57245c7c9638))
+
 ## [9.0.1] - 2023-10-27
 ### Fixed:
 - Replace deprecated `utcfromtimestamp` usage.
@@ -567,4 +584,3 @@ from a [separate integration test suite](https://github.com/launchdarkly/python-
  
 ### Removed
 - Twisted support has temporarily been removed.
-
