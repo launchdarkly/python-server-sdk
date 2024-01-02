@@ -39,54 +39,45 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install requirements
-        run: |
-          pipx install virtualenv
-          pip install -r test-requirements.txt
-          pip install -r test-filesource-optional-requirements.txt
-          pip install -r consul-requirements.txt
-          python setup.py install
-          pip freeze
+      - name: Install poetry
+        run: pipx install poetry
+
+      - uses: ./.github/actions/build
+      - uses: ./.github/actions/build-docs
 
       - name: Run tests
-        run: pytest -s testing -W error::SyntaxWarning
-
-      - name: Test packaging
-        run: |
-          sudo rm -rf dist *.egg-info
-          ./test-packaging/test-packaging.sh
+        run: make test
 
       - name: Verify typehints
         run: make lint
 
-      - name: Verify docs can be successfully built
-        run: make docs
+        #
+        # SSE contract tests
+        #
 
-      - name: build SSE contract test service
+      - name: install sse contract test dependencies
         if: ${{ matrix.python-version != 3.7 }}
-        run: |
-          cd sse-contract-tests
-          make build-test-service
+        run: make install-sse-contract-tests-deps
 
-      - name: start SSE contract test service
+      - name: start sse contract test service
         if: ${{ matrix.python-version != 3.7 }}
-        run: |
-          cd sse-contract-tests
-          make start-test-service &
+        run: make start-sse-contract-test-service-bg
 
-      - name: run SSE contract tests
+      - name: run sse contract tests
         if: ${{ matrix.python-version != 3.7 }}
-        run: |
-          cd sse-contract-tests
-          make run-contract-tests
+        run: make run-sse-contract-tests
 
-      - name: Build contract tests
-        if: ${{ matrix.python-version != 3.7 }}
-        run: make build-contract-tests
+        #
+        # SDK contract tests
+        #
 
-      - name: Start contract test service
+      - name: install contract test dependencies
         if: ${{ matrix.python-version != 3.7 }}
-        run: make start-contract-test-service &
+        run: make install-contract-tests-deps
+
+      - name: start contract test service
+        if: ${{ matrix.python-version != 3.7 }}
+        run: make start-contract-test-service-bg
 
       - name: run contract tests
         if: ${{ matrix.python-version != 3.7 }}
@@ -143,11 +134,8 @@ jobs:
 
       - name: Install requirements
         run: |
-          pip install -r test-requirements.txt
-          pip install -r test-filesource-optional-requirements.txt
-          pip install -r consul-requirements.txt
-          python setup.py install
-          pip freeze
+          pipx install poetry
+          poetry install --all-extras
 
       - name: Run tests
-        run: pytest -s testing -W error::SyntaxWarning
+        run: make test

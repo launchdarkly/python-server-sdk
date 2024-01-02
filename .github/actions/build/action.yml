@@ -1,0 +1,9 @@
+name: Build distribution files
+description: 'Build distribution files'
+
+runs:
+  using: composite
+  steps:
+    - name: Build distribution files
+      shell: bash
+      run: poetry build
