@@ -1,4 +1,4 @@
-certifi>=2018.4.16
+certifi>=2023.07.22
 expiringdict>=1.1.4
 pyRFC3339>=1.0
 semver>=2.10.2
