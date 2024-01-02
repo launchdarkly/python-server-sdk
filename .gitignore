@@ -10,6 +10,7 @@ __pycache__/
 .Python
 env/
 build/
+!.github/actions/build/
 develop-eggs/
 dist/
 downloads/
@@ -70,3 +71,6 @@ test-packaging-venv
 
 .vscode/
 .python-version
+
+# Poetry
+poetry.lock
