@@ -3,11 +3,6 @@
 
 .PHONY: help install html
 
-SPHINXOPTS    = -W --keep-going
-SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = launchdarkly-server-sdk
-SOURCEDIR     = .
-BUILDDIR      = build
 
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)

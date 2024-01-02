@@ -14,21 +14,22 @@ We encourage pull requests and other contributions from the community. Before su
 
 ### Setup
 
-It's advisable to use [`virtualenv`](https://virtualenv.pypa.io/) to create a development environment within the project directory:
+This project is built using [poetry](https://python-poetry.org/). To learn more about the basics of working with this tool, read [Poetry's basic usage guide](https://python-poetry.org/docs/basic-usage/).
+
+To begin development, active the poetry shell and ensure your dependencies are installed.
 
 ```
-mkvirtualenv python-server-sdk
-source ~/.virtualenvs/python-server-sdk/bin/activate
+poetry shell
+poetry install
 ```
 
-To install the runtime and test requirements:
+This library defines several extra dependencies to optionally enhance the SDK's capabilities. Use the following commands to install one or more of the available extras.
 
 ```
-pip install -r requirements.txt
-pip install -r test-requirements.txt
+poetry install --extras "redis consul dynamodb test-filesource"
+poetry install -E redis -E consul -E dynamodb -E test-filesource
+poetry install --all-extras
 ```
-
-The additional requirements files `consul-requirements.txt`, `dynamodb-requirements.txt`, `redis-requirements.txt`, and `test-filesource-optional-requirements.txt` can also be installed if you need to test the corresponding features.
 
 ### Testing
 
