@@ -11,22 +11,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.11
-
-    - name: Install dependencies
-      shell: bash
-      run: |
-        pip install -r requirements.txt
-        pip install wheel
-        pip install setuptools
-
-    - name: Building publishable packages
-      shell: bash
-      run: python setup.py sdist bdist_wheel
-
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       if: ${{ inputs.dry_run == 'false' }}

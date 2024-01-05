@@ -17,15 +17,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+
+      - name: Install poetry
+        run: pipx install poetry
+
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.0.0
         name: 'Get PyPI token'
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
           ssm_parameter_pairs: '/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN'
 
-      - id: publish
-        name: Publish Package
-        uses: ./.github/actions/publish
+      - uses: ./.github/actions/build
+
+      - uses: ./.github/actions/publish
         with:
           token: ${{env.PYPI_AUTH_TOKEN}}
           dry_run: ${{ inputs.dry_run }}

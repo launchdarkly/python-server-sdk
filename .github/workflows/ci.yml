@@ -39,35 +39,27 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install requirements
-        run: |
-          pipx install virtualenv
-          pip install setuptools
-          pip install -r test-requirements.txt
-          pip install -r test-filesource-optional-requirements.txt
-          pip install -r consul-requirements.txt
-          python setup.py install
-          pip freeze
+      - name: Install poetry
+        run: pipx install poetry
+
+      - uses: ./.github/actions/build
+      - uses: ./.github/actions/build-docs
 
       - name: Run tests
-        run: pytest -s testing -W error::SyntaxWarning
-
-      - name: Test packaging
-        run: |
-          sudo rm -rf dist *.egg-info
-          ./test-packaging/test-packaging.sh
+        run: make test
 
       - name: Verify typehints
         run: make lint
 
-      - name: Verify docs can be successfully built
-        run: make docs
+        #
+        # SDK contract tests
+        #
 
-      - name: Build contract tests
-        run: make build-contract-tests
+      - name: install contract test dependencies
+        run: make install-contract-tests-deps
 
-      - name: Start contract test service
-        run: make start-contract-test-service &
+      - name: start contract test service
+        run: make start-contract-test-service-bg
 
       - name: run contract tests
         run: make run-contract-tests
@@ -123,12 +115,8 @@ jobs:
 
       - name: Install requirements
         run: |
-          pip install setuptools
-          pip install -r test-requirements.txt
-          pip install -r test-filesource-optional-requirements.txt
-          pip install -r consul-requirements.txt
-          python setup.py install
-          pip freeze
+          pipx install poetry
+          poetry install --all-extras
 
       - name: Run tests
-        run: pytest -s testing -W error::SyntaxWarning
+        run: make test

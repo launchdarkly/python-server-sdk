@@ -46,7 +46,6 @@ release = ldclient.__version__
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx_autodoc_typehints',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
 ]
