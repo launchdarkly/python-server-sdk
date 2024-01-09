@@ -15,6 +15,7 @@ from ldclient.migrations.types import Operation, Origin, Stage
 from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.util import timedelta_millis
+from ldclient.impl.events.event_context_formatter import EventContextFormatter
 
 from testing.builders import *
 from testing.proxy_test_util import do_proxy_tests
@@ -23,12 +24,6 @@ from testing.stub_util import MockHttp
 
 default_config = Config("fake_sdk_key")
 context = Context.builder('userkey').name('Red').build()
-filtered_context = context.to_dict()  # TODO: implement attribute redaction
-filtered_context = {
-    'kind': 'user',
-    'key': 'userkey',
-    '_meta': {'redactedAttributes': ['name']}
-}
 flag = FlagBuilder('flagkey').version(2).build()
 flag_with_0_sampling_ratio = FlagBuilder('flagkey').version(3).sampling_ratio(0).build()
 flag_excluded_from_summaries = FlagBuilder('flagkey').version(4).exclude_from_summaries(True).build()
@@ -233,12 +228,13 @@ def test_identify_event_is_queued():
 
 def test_context_is_filtered_in_identify_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
+        formatter = EventContextFormatter(True, [])
         e = EventInputIdentify(timestamp, context)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 1
-        check_identify_event(output[0], e, filtered_context)
+        check_identify_event(output[0], e, formatter.format_context(context))
 
 def test_individual_feature_event_is_queued_with_index_event():
     with DefaultTestProcessor() as ep:
@@ -275,13 +271,14 @@ def test_exclude_can_keep_feature_event_from_summary():
 
 def test_context_is_filtered_in_index_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
+        formatter = EventContextFormatter(True, [])
         e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
         assert len(output) == 3
-        check_index_event(output[0], e, filtered_context)
-        check_feature_event(output[1], e)
+        check_index_event(output[0], e, formatter.format_context(context))
+        check_feature_event(output[1], e, formatter.format_context(context))
         check_summary_event(output[2])
 
 def test_two_events_for_same_context_only_produce_one_index_event():
@@ -682,7 +679,7 @@ def check_index_event(data, source: EventInput, context_json: Optional[dict] = N
     assert data['creationDate'] == source.timestamp
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
 
-def check_feature_event(data, source: EventInputEvaluation):
+def check_feature_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'feature'
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
@@ -690,7 +687,7 @@ def check_feature_event(data, source: EventInputEvaluation):
     assert data.get('variation') == source.variation
     assert data.get('value') == source.value
     assert data.get('default') == source.default_value
-    assert data['contextKeys'] == make_context_keys(source.context)
+    assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
 
 

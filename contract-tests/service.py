@@ -71,7 +71,8 @@ def status():
             'tags',
             'migrations',
             'event-sampling',
-            'polling-gzip'
+            'polling-gzip',
+            'inline-context'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
