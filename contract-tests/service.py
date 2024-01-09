@@ -70,7 +70,8 @@ def status():
             'tags',
             'migrations',
             'event-sampling',
-            'inline-context'
+            'inline-context',
+            'anonymous-redaction',
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})

@@ -234,7 +234,7 @@ def test_context_is_filtered_in_identify_event():
 
         output = flush_and_get_events(ep)
         assert len(output) == 1
-        check_identify_event(output[0], e, formatter.format_context(context))
+        check_identify_event(output[0], e, formatter.format_context(context, False))
 
 def test_individual_feature_event_is_queued_with_index_event():
     with DefaultTestProcessor() as ep:
@@ -277,8 +277,8 @@ def test_context_is_filtered_in_index_event():
 
         output = flush_and_get_events(ep)
         assert len(output) == 3
-        check_index_event(output[0], e, formatter.format_context(context))
-        check_feature_event(output[1], e, formatter.format_context(context))
+        check_index_event(output[0], e, formatter.format_context(context, False))
+        check_feature_event(output[1], e, formatter.format_context(context, False))
         check_summary_event(output[2])
 
 def test_two_events_for_same_context_only_produce_one_index_event():
