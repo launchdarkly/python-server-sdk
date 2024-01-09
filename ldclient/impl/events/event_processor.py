@@ -65,7 +65,7 @@ class EventOutputFormatter:
     def make_output_event(self, e: Any):
         if isinstance(e, EventInputEvaluation):
             out = self._base_eval_props(e, 'feature')
-            out['contextKeys'] = self._context_keys(e.context)
+            out['context'] = self._process_context(e.context)
             return out
         elif isinstance(e, DebugEvent):
             out = self._base_eval_props(e.original_input, 'debug')
