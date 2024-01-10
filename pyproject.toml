@@ -56,7 +56,7 @@ boto3 = ">=1.9.71,<2.0.0"
 coverage = ">=4.4"
 jsonpickle = ">1.4.1"
 pytest-cov = ">=2.4.0"
-pytest-mypy = "==0.8.1"
+pytest-mypy = "==0.10.3"
 mypy = "==0.910"
 
 
