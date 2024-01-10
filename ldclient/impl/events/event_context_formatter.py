@@ -17,7 +17,24 @@ class EventContextFormatter:
             if ar.valid:
                 self._private_attributes.append(ar)
 
-    def format_context(self, context: Context, redact_anonymous: bool) -> dict:
+    def format_context(self, context: Context) -> dict:
+        """
+        Formats a context for use in an analytic event, performing any
+        necessary attribute redaction.
+        """
+        return self._format_context(context, False)
+
+    def format_context_redact_anonymous(self, context: Context) -> dict:
+        """
+        Formats a context for use in an analytic event, performing any
+        necessary attribute redaction.
+
+        If a context is anonoymous, all attributes will be redacted except for
+        key, kind, and anonoymous.
+        """
+        return self._format_context(context, True)
+
+    def _format_context(self, context: Context, redact_anonymous: bool) -> dict:
         if context.multiple:
             out = {'kind': 'multi'}  # type: dict[str, Any]
             for i in range(context.individual_context_count):

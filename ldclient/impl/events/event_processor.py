@@ -194,7 +194,10 @@ class EventOutputFormatter:
         }
 
     def _process_context(self, context: Context, redact_anonymous: bool):
-        return self._context_formatter.format_context(context, redact_anonymous)
+        if redact_anonymous:
+            return self._context_formatter.format_context_redact_anonymous(context)
+
+        return self._context_formatter.format_context(context)
 
     def _context_keys(self, context: Context):
         out = {}
