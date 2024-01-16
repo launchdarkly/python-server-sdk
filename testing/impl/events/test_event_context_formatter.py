@@ -18,6 +18,41 @@ def test_context_with_more_attributes():
         'd': 2
     }
 
+def test_context_can_redact_anonymous_attributes():
+    f = EventContextFormatter(False, [])
+    c = Context.builder('a').name('b').anonymous(True).set('c', True).set('d', 2).build()
+    assert f.format_context_redact_anonymous(c) == {
+        'kind': 'user',
+        'key': 'a',
+        'anonymous': True,
+        '_meta': {
+            'redactedAttributes': ['name', 'c', 'd']
+        }
+    }
+
+def test_multi_kind_context_can_redact_anonymous_attributes():
+    f = EventContextFormatter(False, [])
+    user = Context.builder('user-key').name('b').anonymous(True).set('c', True).set('d', 2).build()
+    org = Context.builder('org-key').kind('org').name('b').set('c', True).set('d', 2).build()
+    multi = Context.create_multi(user, org)
+
+    assert f.format_context_redact_anonymous(multi) == {
+        'kind': 'multi',
+        'user': {
+            'key': 'user-key',
+            'anonymous': True,
+            '_meta': {
+                'redactedAttributes': ['name', 'c', 'd']
+            }
+        },
+        'org': {
+            'key': 'org-key',
+            'name': 'b',
+            'c': True,
+            'd': 2
+        }
+    }
+
 def test_multi_context():
     f = EventContextFormatter(False, [])
     c = Context.create_multi(
