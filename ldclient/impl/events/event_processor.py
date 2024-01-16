@@ -65,23 +65,23 @@ class EventOutputFormatter:
     def make_output_event(self, e: Any):
         if isinstance(e, EventInputEvaluation):
             out = self._base_eval_props(e, 'feature')
-            out['context'] = self._process_context(e.context)
+            out['context'] = self._process_context(e.context, True)
             return out
         elif isinstance(e, DebugEvent):
             out = self._base_eval_props(e.original_input, 'debug')
-            out['context'] = self._process_context(e.original_input.context)
+            out['context'] = self._process_context(e.original_input.context, False)
             return out
         elif isinstance(e, EventInputIdentify):
             return {
                 'kind': 'identify',
                 'creationDate': e.timestamp,
-                'context': self._process_context(e.context)
+                'context': self._process_context(e.context, False)
             }
         elif isinstance(e, IndexEvent):
             return {
                 'kind': 'index',
                 'creationDate': e.timestamp,
-                'context': self._process_context(e.context)
+                'context': self._process_context(e.context, False)
             }
         elif isinstance(e, EventInputCustom):
             out = {
@@ -193,7 +193,10 @@ class EventOutputFormatter:
             'features': flags_out
         }
 
-    def _process_context(self, context: Context):
+    def _process_context(self, context: Context, redact_anonymous: bool):
+        if redact_anonymous:
+            return self._context_formatter.format_context_redact_anonymous(context)
+
         return self._context_formatter.format_context(context)
 
     def _context_keys(self, context: Context):

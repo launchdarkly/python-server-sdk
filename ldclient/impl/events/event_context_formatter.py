@@ -18,20 +18,38 @@ class EventContextFormatter:
                 self._private_attributes.append(ar)
 
     def format_context(self, context: Context) -> Dict:
+        """
+        Formats a context for use in an analytic event, performing any
+        necessary attribute redaction.
+        """
+        return self._format_context(context, False)
+
+    def format_context_redact_anonymous(self, context: Context) -> Dict:
+        """
+        Formats a context for use in an analytic event, performing any
+        necessary attribute redaction.
+
+        If a context is anonoymous, all attributes will be redacted except for
+        key, kind, and anonoymous.
+        """
+        return self._format_context(context, True)
+
+    def _format_context(self, context: Context, redact_anonymous: bool) -> Dict:
         if context.multiple:
             out = {'kind': 'multi'}  # type: Dict[str, Any]
             for i in range(context.individual_context_count):
                 c = context.get_individual_context(i)
                 if c is not None:
-                    out[c.kind] = self._format_context_single(c, False)
+                    out[c.kind] = self._format_context_single(c, False, redact_anonymous)
             return out
         else:
-            return self._format_context_single(context, True)
+            return self._format_context_single(context, True, redact_anonymous)
 
-    def _format_context_single(self, context: Context, include_kind: bool) -> Dict:
+    def _format_context_single(self, context: Context, include_kind: bool, redact_anonymous: bool) -> Dict:
         out = {'key': context.key}  # type: Dict[str, Any]
         if include_kind:
             out['kind'] = context.kind
+
         if context.anonymous:
             out['anonymous'] = True
 
@@ -44,11 +62,11 @@ class EventContextFormatter:
             if ar.valid:
                 all_private.append(ar)
 
-        if context.name is not None and not self._check_whole_attr_private('name', all_private, redacted):
+        if context.name is not None and not self._check_whole_attr_private('name', all_private, redacted, context.anonymous and redact_anonymous):
             out['name'] = context.name
 
         for attr in context.custom_attributes:
-            if not self._check_whole_attr_private(attr, all_private, redacted):
+            if not self._check_whole_attr_private(attr, all_private, redacted, context.anonymous and redact_anonymous):
                 value = context.get(attr)
                 out[attr] = self._redact_json_value(None, attr, value, all_private, redacted)
 
@@ -57,8 +75,8 @@ class EventContextFormatter:
 
         return out
 
-    def _check_whole_attr_private(self, attr: str, all_private: List[AttributeRef], redacted: List[str]) -> bool:
-        if self._all_attributes_private:
+    def _check_whole_attr_private(self, attr: str, all_private: List[AttributeRef], redacted: List[str], redact_all: bool) -> bool:
+        if self._all_attributes_private or redact_all:
             redacted.append(attr)
             return True
         for p in all_private:
