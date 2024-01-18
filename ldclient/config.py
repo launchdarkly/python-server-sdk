@@ -160,7 +160,7 @@ class Config:
                  use_ldd: bool=False,
                  feature_store: Optional[FeatureStore]=None,
                  feature_requester_class=None,
-                 event_processor_class: Callable[['Config'], EventProcessor]=None,
+                 event_processor_class: Optional[Callable[['Config'], EventProcessor]]=None,
                  private_attributes: Set[str]=set(),
                  all_attributes_private: bool=False,
                  offline: bool=False,

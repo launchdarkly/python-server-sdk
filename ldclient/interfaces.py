@@ -266,7 +266,7 @@ class UpdateProcessor(BackgroundOperation):
     """
     __metaclass__ = ABCMeta
 
-    def initialized(self) -> bool:
+    def initialized(self) -> bool:  # type: ignore[empty-body]
         """
         Returns whether the update processor has received feature flags and has initialized its feature store.
         """
@@ -941,6 +941,7 @@ class DataStoreStatus:
 
         :return: true if data should be rewritten
         """
+        return self.__stale
 
 
 class DataStoreUpdateSink:

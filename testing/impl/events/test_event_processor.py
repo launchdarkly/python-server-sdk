@@ -47,7 +47,7 @@ def teardown_function():
         ep.stop()
 
 def make_context_keys(context: Context) -> dict:
-    ret = {}  # type: dict[str, str]
+    ret = {}  # type: Dict[str, str]
     for i in range(context.individual_context_count):
         c = context.get_individual_context(i)
         if c is not None:

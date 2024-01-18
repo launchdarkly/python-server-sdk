@@ -57,7 +57,7 @@ coverage = ">=4.4"
 jsonpickle = ">1.4.1"
 pytest-cov = ">=2.4.0"
 pytest-mypy = "==0.10.3"
-mypy = "==0.910"
+mypy = "==1.8.0"
 
 
 [tool.poetry.group.contract-tests]
