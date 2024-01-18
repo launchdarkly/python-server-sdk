@@ -23,10 +23,10 @@ class Consul:
     DEFAULT_PREFIX = "launchdarkly"
 
     @staticmethod
-    def new_feature_store(host: str=None,
-                          port: int=None,
-                          prefix: str=None,
-                          consul_opts: dict=None,
+    def new_feature_store(host: Optional[str]=None,
+                          port: Optional[int]=None,
+                          prefix: Optional[str]=None,
+                          consul_opts: Optional[dict]=None,
                           caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a Consul-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the

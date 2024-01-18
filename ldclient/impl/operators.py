@@ -109,4 +109,9 @@ ops = {
     "semVerGreaterThan": _semver_greater_than
 }
 
-ops = defaultdict(lambda: lambda l, r, p: False, ops)
+
+def __default_factory():
+    return lambda _l, _r, _p: False
+
+
+ops = defaultdict(__default_factory, ops)

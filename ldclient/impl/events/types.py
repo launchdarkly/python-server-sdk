@@ -29,7 +29,7 @@ class EventInput:
         return isinstance(other, EventInput) and self.to_debugging_dict() == other.to_debugging_dict()
 
     def to_debugging_dict(self) -> dict:
-        pass
+        return {}
 
 
 class EventInputEvaluation(EventInput):

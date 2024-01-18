@@ -167,10 +167,10 @@ class EventOutputFormatter:
     Transform summarizer data into the format used for the event payload.
     """
     def make_summary_event(self, summary: EventSummary):
-        flags_out = dict()  # type: dict[str, Any]
+        flags_out = dict()  # type: Dict[str, Any]
         for key, flag_data in summary.flags.items():
             flag_data_out = {'default': flag_data.default, 'contextKinds': list(flag_data.context_kinds)}
-            counters = []  # type: list[dict[str, Any]]
+            counters = []  # type: List[Dict[str, Any]]
             for ckey, cval in flag_data.counters.items():
                 variation, version = ckey
                 counter = {

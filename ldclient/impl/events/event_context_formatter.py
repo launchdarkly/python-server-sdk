@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 
 from ldclient.context import Context
 from ldclient.impl.model import AttributeRef
@@ -17,9 +17,9 @@ class EventContextFormatter:
             if ar.valid:
                 self._private_attributes.append(ar)
 
-    def format_context(self, context: Context) -> dict:
+    def format_context(self, context: Context) -> Dict:
         if context.multiple:
-            out = {'kind': 'multi'}  # type: dict[str, Any]
+            out = {'kind': 'multi'}  # type: Dict[str, Any]
             for i in range(context.individual_context_count):
                 c = context.get_individual_context(i)
                 if c is not None:
@@ -27,14 +27,14 @@ class EventContextFormatter:
             return out
         else:
             return self._format_context_single(context, True)
-    
-    def _format_context_single(self, context: Context, include_kind: bool) -> dict:
-        out = {'key': context.key}  # type: dict[str, Any]
+
+    def _format_context_single(self, context: Context, include_kind: bool) -> Dict:
+        out = {'key': context.key}  # type: Dict[str, Any]
         if include_kind:
             out['kind'] = context.kind
         if context.anonymous:
             out['anonymous'] = True
-        
+
         redacted = []  # type: List[str]
         all_private = self._private_attributes
         for p in context.private_attributes:
@@ -43,7 +43,7 @@ class EventContextFormatter:
             ar = AttributeRef.from_path(p)
             if ar.valid:
                 all_private.append(ar)
-        
+
         if context.name is not None and not self._check_whole_attr_private('name', all_private, redacted):
             out['name'] = context.name
 
@@ -51,10 +51,10 @@ class EventContextFormatter:
             if not self._check_whole_attr_private(attr, all_private, redacted):
                 value = context.get(attr)
                 out[attr] = self._redact_json_value(None, attr, value, all_private, redacted)
-        
+
         if len(redacted) != 0:
             out['_meta'] = {'redactedAttributes': redacted}
-        
+
         return out
 
     def _check_whole_attr_private(self, attr: str, all_private: List[AttributeRef], redacted: List[str]) -> bool:
@@ -66,7 +66,7 @@ class EventContextFormatter:
                 redacted.append(attr)
                 return True
         return False
-    
+
     def _redact_json_value(self, parent_path: Optional[List[str]], name: str, value: Any, all_private: List[AttributeRef],
                            redacted: List[str]) -> Any:
         if not isinstance(value, dict) or len(value) == 0:
