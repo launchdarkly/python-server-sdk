@@ -39,6 +39,7 @@ def test_request_properties():
                 assert req.method == 'GET'
                 assert req.headers.get('Authorization') == 'sdk-key'
                 assert req.headers.get('User-Agent') == 'PythonClient/' + VERSION
+                assert req.headers['Accept-Encoding'] == 'gzip'
                 assert req.headers.get('X-LaunchDarkly-Wrapper') is None
                 assert req.headers.get('X-LaunchDarkly-Tags') is None
 

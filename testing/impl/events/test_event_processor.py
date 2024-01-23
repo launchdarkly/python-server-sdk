@@ -277,6 +277,14 @@ def test_sdk_key_is_sent():
 
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
+def test_default_headers_are_send():
+    with DefaultTestProcessor() as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('Accept-Encoding') == 'gzip'
+
 def test_wrapper_header_not_sent_when_not_set():
     with DefaultTestProcessor() as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
