@@ -64,7 +64,7 @@ mypy = "==1.8.0"
 optional = true
 
 [tool.poetry.group.contract-tests.dependencies]
-Flask = "3.0.0"
+Flask = "<4"
 requests = ">=2.31.0"
 urllib3 = ">=1.22.0,<3"
 
