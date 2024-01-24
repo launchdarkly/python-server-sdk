@@ -7,14 +7,14 @@ on:
 jobs:
   release-package:
     runs-on: ubuntu-latest
-    outputs:
-      release-created: ${{ steps.release.outputs.release_created }}
-      upload-tag-name: ${{ steps.release.outputs.tag_name }}
-      package-hashes: ${{ steps.build.outputs.package-hashes}}
     permissions:
       id-token: write # Needed if using OIDC to get release secrets.
       contents: write # Contents and pull-requests are for release-please to make releases.
       pull-requests: write
+    outputs:
+      release-created: ${{ steps.release.outputs.release_created }}
+      upload-tag-name: ${{ steps.release.outputs.tag_name }}
+      package-hashes: ${{ steps.build.outputs.package-hashes}}
     steps:
       - uses: google-github-actions/release-please-action@v3
         id: release
