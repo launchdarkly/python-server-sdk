@@ -17,10 +17,8 @@ $ curl --location -O \
 # Run slsa-verifier to verify provenance against package artifacts 
 $ slsa-verifier verify-artifact \
 --provenance-path multiple-provenance.intoto.jsonl \
---source-uri github.com/launchdarkly/launchdarkly-server-sdk \
+--source-uri github.com/launchdarkly/python-server-sdk \
 launchdarkly_server_sdk-VERSION-py3-none-any.whl
-
-TBD OUTPUT
 ```
 
 Alternatively, to verify the provenance manually, the SLSA framework specifies [recommendations for verifying build artifacts](https://slsa.dev/spec/v1.0/verifying-artifacts) in their documentation.
