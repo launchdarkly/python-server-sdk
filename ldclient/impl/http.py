@@ -19,7 +19,9 @@ def _application_header_value(application: dict) -> str:
 
 def _base_headers(config):
     headers = {'Authorization': config.sdk_key or '',
-               'User-Agent': 'PythonClient/' + VERSION}
+               'User-Agent': 'PythonClient/' + VERSION,
+               'Accept-Encoding': 'gzip'
+               }
 
     app_value = _application_header_value(config.application)
     if app_value:

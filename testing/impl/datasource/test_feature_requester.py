@@ -9,7 +9,7 @@ def test_get_all_data_returns_data():
     with start_server() as server:
         config = Config(sdk_key = 'sdk-key', base_uri = server.uri)
         fr = FeatureRequesterImpl(config)
-        
+
         flags = { 'flag1': { 'key': 'flag1' } }
         segments = { 'segment1': { 'key': 'segment1' } }
         resp_data = { 'flags': flags, 'segments': segments }
@@ -31,6 +31,7 @@ def test_get_all_data_sends_headers():
         req = server.require_request()
         assert req.headers['Authorization'] == 'sdk-key'
         assert req.headers['User-Agent'] == 'PythonClient/' + VERSION
+        assert req.headers['Accept-Encoding'] == 'gzip'
         assert req.headers.get('X-LaunchDarkly-Wrapper') is None
         assert req.headers.get('X-LaunchDarkly-Tags') is None
 
