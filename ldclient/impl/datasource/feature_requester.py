@@ -29,6 +29,7 @@ class FeatureRequesterImpl(FeatureRequester):
         uri = self._poll_uri
         hdrs = _headers(self._config)
         cache_entry = self._cache.get(uri)
+        hdrs['Accept-Encoding'] = 'gzip'
         if cache_entry is not None:
             hdrs['If-None-Match'] = cache_entry.etag
         r = self._http.request('GET', uri,

@@ -56,7 +56,7 @@ install-contract-tests-deps:
 	poetry install --with contract-tests
 
 .PHONY: start-contract-test-service
-start-contract-test-service:
+start-contract-test-service: install-contract-tests-deps
 	@cd contract-tests && poetry run python service.py $(PORT)
 
 .PHONY: start-contract-test-service-bg
@@ -71,7 +71,7 @@ run-contract-tests:
 
 .PHONY: contract-tests
 contract-tests: #! Run the contract test harness
-contract-tests: install-contract-tests-deps start-contract-test-service-bg run-contract-tests
+contract-tests: start-contract-test-service-bg run-contract-tests
 
 #
 # SSE contract test service commands
