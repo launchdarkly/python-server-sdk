@@ -69,6 +69,7 @@ def status():
             'context-type',
             'secure-mode-hash',
             'tags',
+            'polling-gzip'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
