@@ -70,7 +70,8 @@ def status():
             'secure-mode-hash',
             'tags',
             'migrations',
-            'event-sampling'
+            'event-sampling',
+            'polling-gzip'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
