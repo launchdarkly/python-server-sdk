@@ -11,6 +11,10 @@ jobs:
       id-token: write # Needed if using OIDC to get release secrets.
       contents: write # Contents and pull-requests are for release-please to make releases.
       pull-requests: write
+    outputs:
+      release-created: ${{ steps.release.outputs.release_created }}
+      upload-tag-name: ${{ steps.release.outputs.tag_name }}
+      package-hashes: ${{ steps.build.outputs.package-hashes}}
     steps:
       - uses: google-github-actions/release-please-action@v3
         id: release
@@ -41,6 +45,7 @@ jobs:
           ssm_parameter_pairs: '/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN'
 
       - uses: ./.github/actions/build
+        id: build
         if: ${{ steps.release.outputs.releases_created }}
 
       - uses: ./.github/actions/build-docs
@@ -51,3 +56,17 @@ jobs:
         with:
           token: ${{env.PYPI_AUTH_TOKEN}}
           dry_run: false
+
+  release-provenance:
+    needs: [ 'release-package' ]
+    if: ${{ needs.release-package.outputs.release-created }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.7.0
+    with:
+      base64-subjects: "${{ needs.release-package.outputs.package-hashes }}"
+      upload-assets: true
+      upload-tag-name: ${{ needs.release-package.outputs.upload-tag-name }}

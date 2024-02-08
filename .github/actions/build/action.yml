@@ -1,5 +1,9 @@
 name: Build distribution files
 description: 'Build distribution files'
+outputs:
+  package-hashes:
+    description: "base64-encoded sha256 hashes of distribution files"
+    value: ${{ steps.package-hashes.outputs.package-hashes }}
 
 runs:
   using: composite
@@ -7,3 +11,9 @@ runs:
     - name: Build distribution files
       shell: bash
       run: poetry build
+    - name: Hash build files for provenance 
+      id: package-hashes
+      shell: bash 
+      working-directory: ./dist
+      run: |
+        echo "package-hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
