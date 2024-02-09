@@ -42,7 +42,6 @@ jobs:
 
   release-provenance:
     needs: [ 'build-publish' ]
-    runs-on: ubuntu-latest
     permissions:
       actions: read
       id-token: write
