@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [8.3.0](https://github.com/launchdarkly/python-server-sdk/compare/8.2.1...8.3.0) (2024-02-14)
+
+
+### Features
+
+* Enable gzip Accept-Encoding header on polling requests ([537b240](https://github.com/launchdarkly/python-server-sdk/commit/537b240558321198796c248a7c7487e2b4dfbf52))
+
 ## [8.2.1] - 2023-10-23
 ### Fixed:
 - Replace deprecated `utcfromtimestamp` usage.
@@ -544,4 +551,3 @@ from a [separate integration test suite](https://github.com/launchdarkly/python-
  
 ### Removed
 - Twisted support has temporarily been removed.
-

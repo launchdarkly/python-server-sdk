@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "launchdarkly-server-sdk"
-version = "8.2.1"
+version = "8.3.0"
 description = "LaunchDarkly SDK for Python"
 authors = ["LaunchDarkly <dev@launchdarkly.com>"]
 license = "Apache-2.0"
