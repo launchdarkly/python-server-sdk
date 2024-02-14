@@ -2,6 +2,27 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.2.0](https://github.com/launchdarkly/python-server-sdk/compare/9.1.0...9.2.0) (2024-02-14)
+
+
+### Features
+
+* Enable gzip Accept-Encoding header on polling requests ([2c2e4fa](https://github.com/launchdarkly/python-server-sdk/commit/2c2e4fa4eaacf1deca24e68b91d73314c39cb986))
+
+
+### Bug Fixes
+
+* **deps:** Update flask requirement from 2.2.5 to 3.0.0 ([#250](https://github.com/launchdarkly/python-server-sdk/issues/250)) ([b3cc0fa](https://github.com/launchdarkly/python-server-sdk/commit/b3cc0facebaf86c3c786171154be3f118caa5abf))
+* **deps:** Update flask requirement from 3.0.0 to &lt;4 ([#254](https://github.com/launchdarkly/python-server-sdk/issues/254)) ([dc5a6ba](https://github.com/launchdarkly/python-server-sdk/commit/dc5a6ba08e7e907be2893458f7420f0addcbe0e3))
+* **deps:** Update jinja2 requirement from 3.0.0 to 3.1.2 ([77a1f76](https://github.com/launchdarkly/python-server-sdk/commit/77a1f76549794efef46560e9349ae52448c63761))
+* **deps:** Update jinja2 requirement from 3.1.2 to 3.1.3 ([#252](https://github.com/launchdarkly/python-server-sdk/issues/252)) ([495604b](https://github.com/launchdarkly/python-server-sdk/commit/495604be3c7b1caa9f61ba15c922778cc3f749fa))
+* **deps:** Update mypy requirement from ==0.910 to ==1.8.0 ([#251](https://github.com/launchdarkly/python-server-sdk/issues/251)) ([cea865e](https://github.com/launchdarkly/python-server-sdk/commit/cea865e967eb8eeedde69c05ed5a89ba4ee4cd63))
+* **deps:** Update pytest-mypy requirement from ==0.8.1 to ==0.10.3 ([#249](https://github.com/launchdarkly/python-server-sdk/issues/249)) ([f2e2e17](https://github.com/launchdarkly/python-server-sdk/commit/f2e2e1722f4d3a57ce0cbaf61db2efa11d35f748))
+* **deps:** Update sphinx requirement from ^1.3.0 to ^6.0.0 ([77a1f76](https://github.com/launchdarkly/python-server-sdk/commit/77a1f76549794efef46560e9349ae52448c63761))
+* **deps:** Update sphinx requirement from ^6.0.0 to &gt;=6,&lt;8 ([#255](https://github.com/launchdarkly/python-server-sdk/issues/255)) ([d4eb5af](https://github.com/launchdarkly/python-server-sdk/commit/d4eb5afbcd27d3a2ffdccf42a62195d8bbf8e84b))
+* **deps:** Update sphinx-rtd-theme requirement from ^1.3.0 to &gt;=1.3,&lt;3.0 ([#253](https://github.com/launchdarkly/python-server-sdk/issues/253)) ([ba2490d](https://github.com/launchdarkly/python-server-sdk/commit/ba2490d89f259af8290e1f6e10534e2922da4ded))
+* Update missing version number change ([#238](https://github.com/launchdarkly/python-server-sdk/issues/238)) ([7efedc8](https://github.com/launchdarkly/python-server-sdk/commit/7efedc879d5b9d2b2decad8eb344cf39af80f993))
+
 ## [9.1.0](https://github.com/launchdarkly/python-server-sdk/compare/9.0.1...9.1.0) (2023-12-20)
 
 
