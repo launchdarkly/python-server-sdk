@@ -6,6 +6,7 @@ As part of [SLSA requirements for level 3 compliance](https://slsa.dev/spec/v1.0
 
 To verify SLSA provenance attestations, we recommend using [slsa-verifier](https://github.com/slsa-framework/slsa-verifier). Example usage for verifying SDK packages is included below:
 
+<!-- x-release-please-start-version -->
 ```
 # Download package from PyPi
 $ pip download --only-binary=:all: launchdarkly-server-sdk
@@ -25,6 +26,7 @@ Verifying artifact launchdarkly_server_sdk-9.2.0-py3-none-any.whl: PASSED
 
 PASSED: Verified SLSA provenance
 ```
+<!-- x-release-please-end -->
 
 Alternatively, to verify the provenance manually, the SLSA framework specifies [recommendations for verifying build artifacts](https://slsa.dev/spec/v1.0/verifying-artifacts) in their documentation.
 

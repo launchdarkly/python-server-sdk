@@ -4,7 +4,7 @@
       "release-type": "python",
       "versioning": "default",
       "include-v-in-tag": false,
-      "extra-files": ["ldclient/version.py"],
+      "extra-files": ["ldclient/version.py", "PROVENANCE.md"],
       "include-component-in-tag": false
     }
   }
