@@ -8,25 +8,31 @@ To verify SLSA provenance attestations, we recommend using [slsa-verifier](https
 
 <!-- x-release-please-start-version -->
 ```
+# Set the version of the SDK to verify
+SDK_VERSION=9.2.0
+```
+<!-- x-release-please-end -->
+
+
+```
 # Download package from PyPi
-$ pip download --only-binary=:all: launchdarkly-server-sdk
+$ pip download --only-binary=:all: launchdarkly-server-sdk==${SDK_VERSION}
 
 # Download provenance from Github release into same directory
 $ curl --location -O \
-  https://github.com/launchdarkly/python-server-sdk/releases/download/9.2.0/multiple.intoto.jsonl
+  https://github.com/launchdarkly/python-server-sdk/releases/download/${SDK_VERSION}/multiple.intoto.jsonl
 
 # Run slsa-verifier to verify provenance against package artifacts 
 $ slsa-verifier verify-artifact \
 --provenance-path multiple.intoto.jsonl \
 --source-uri github.com/launchdarkly/python-server-sdk \
-launchdarkly_server_sdk-9.2.0-py3-none-any.whl
+launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl
 Verified signature against tlog entry index 71399397 at URL: https://rekor.sigstore.dev/api/v1/log/entries/24296fb24b8ad77a95c53f2cb33fe2e8c8fbc04591ebf26e4d2796fb2975c3ba377f1dc14507f421
 Verified build using builder "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.7.0" at commit 5e818265c9f85ae9a111290bd6a4fad1a08786e9
-Verifying artifact launchdarkly_server_sdk-9.2.0-py3-none-any.whl: PASSED
+Verifying artifact launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl: PASSED
 
 PASSED: Verified SLSA provenance
 ```
-<!-- x-release-please-end -->
 
 Alternatively, to verify the provenance manually, the SLSA framework specifies [recommendations for verifying build artifacts](https://slsa.dev/spec/v1.0/verifying-artifacts) in their documentation.
 
