@@ -2,6 +2,19 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.2.1](https://github.com/launchdarkly/python-server-sdk/compare/9.2.0...9.2.1) (2024-03-01)
+
+
+### Bug Fixes
+
+* Raise minimum urllib3 package to 1.26.0 ([#271](https://github.com/launchdarkly/python-server-sdk/issues/271)) ([ffeded9](https://github.com/launchdarkly/python-server-sdk/commit/ffeded9f5f047c70b0ec365401d2b92194232994)), closes [#270](https://github.com/launchdarkly/python-server-sdk/issues/270)
+
+
+### Documentation
+
+* Add example output for PROVENANCE.md [#268](https://github.com/launchdarkly/python-server-sdk/issues/268) ([43cf5bf](https://github.com/launchdarkly/python-server-sdk/commit/43cf5bf52a5a1017f1df400de88795f881a88589))
+* Fix version generation in PROVENANCE file ([#272](https://github.com/launchdarkly/python-server-sdk/issues/272)) ([7dd887e](https://github.com/launchdarkly/python-server-sdk/commit/7dd887e48ad7a51c2fe82654825b90b175b2d591))
+
 ## [9.2.0](https://github.com/launchdarkly/python-server-sdk/compare/9.1.0...9.2.0) (2024-02-14)
 
 
