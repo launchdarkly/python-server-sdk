@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.2.2](https://github.com/launchdarkly/python-server-sdk/compare/9.2.1...9.2.2) (2024-03-07)
+
+
+### Bug Fixes
+
+* Correct typehint on Config.update_processor_class ([#274](https://github.com/launchdarkly/python-server-sdk/issues/274)) ([d386f9c](https://github.com/launchdarkly/python-server-sdk/commit/d386f9c0efa318a128aa0960db0dbe332db1862d)), closes [#273](https://github.com/launchdarkly/python-server-sdk/issues/273)
+
 ## [9.2.1](https://github.com/launchdarkly/python-server-sdk/compare/9.2.0...9.2.1) (2024-03-01)
 
 
