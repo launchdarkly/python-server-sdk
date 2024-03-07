@@ -5,6 +5,7 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 """
 
 from typing import Optional, Callable, List, Set
+from threading import Event
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.util import log, validate_application_info
@@ -155,7 +156,7 @@ class Config:
                  initial_reconnect_delay: float=1,
                  defaults: dict={},
                  send_events: Optional[bool]=None,
-                 update_processor_class: Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]=None,
+                 update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]]=None,
                  poll_interval: float=30,
                  use_ldd: bool=False,
                  feature_store: Optional[FeatureStore]=None,
@@ -218,8 +219,8 @@ class Config:
           reset its set of known context keys.
         :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
-        :param update_processor_class: A factory for an UpdateProcessor implementation taking the sdk key,
-          config, and FeatureStore implementation
+        :param update_processor_class: A factory for an UpdateProcessor implementation taking the config, a FeatureStore
+            implementation, and a threading `Event` to signal readiness.
         :param diagnostic_opt_out: Unless this field is set to True, the client will send
           some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
           improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
@@ -342,7 +343,7 @@ class Config:
         return self.__stream_uri + STREAM_FLAGS_PATH
 
     @property
-    def update_processor_class(self) -> Optional[Callable[[str, 'Config', FeatureStore], UpdateProcessor]]:
+    def update_processor_class(self) -> Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]]:
         return self.__update_processor_class
 
     @property
