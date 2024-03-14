@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.3.0](https://github.com/launchdarkly/python-server-sdk/compare/9.2.2...9.3.0) (2024-03-14)
+
+
+### Features
+
+* Inline contexts for all evaluation events ([#245](https://github.com/launchdarkly/python-server-sdk/issues/245)) ([8b5429b](https://github.com/launchdarkly/python-server-sdk/commit/8b5429bd03194a0bf1e299fa63a559f2888321c0))
+* Redact anonymous attributes within feature events ([#246](https://github.com/launchdarkly/python-server-sdk/issues/246)) ([4022ee2](https://github.com/launchdarkly/python-server-sdk/commit/4022ee2a785dafffab220baf94c5b9610dee0022))
+
 ## [9.2.2](https://github.com/launchdarkly/python-server-sdk/compare/9.2.1...9.2.2) (2024-03-07)
 
 
