@@ -27,9 +27,14 @@ $ slsa-verifier verify-artifact \
 --provenance-path multiple.intoto.jsonl \
 --source-uri github.com/launchdarkly/python-server-sdk \
 launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl
-Verified signature against tlog entry index 71399397 at URL: https://rekor.sigstore.dev/api/v1/log/entries/24296fb24b8ad77a95c53f2cb33fe2e8c8fbc04591ebf26e4d2796fb2975c3ba377f1dc14507f421
-Verified build using builder "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.7.0" at commit 5e818265c9f85ae9a111290bd6a4fad1a08786e9
-Verifying artifact launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl: PASSED
+```
+
+Below is a sample of expected output.
+
+```
+Verified signature against tlog entry index 76390194 at URL: https://rekor.sigstore.dev/api/v1/log/entries/24296fb24b8ad77ac42700bfad5eb5597ea8bda92acb470aade248c01ccfc44047c0cd5b4433021a
+Verified build using builder "https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v1.7.0" at commit c7b42a2e7486904978d77cf05a07280e7e1bbec2
+Verifying artifact launchdarkly_server_sdk-9.2.2-py3-none-any.whl: PASSED
 
 PASSED: Verified SLSA provenance
 ```
