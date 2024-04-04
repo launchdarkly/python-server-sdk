@@ -33,7 +33,7 @@ test: install
 .PHONY: lint
 lint: #! Run type analysis and linting checks
 lint: install
-	@poetry run mypy ldclient testing
+	@poetry run mypy ldclient
 
 #
 # Documentation generation
