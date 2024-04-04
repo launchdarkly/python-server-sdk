@@ -40,7 +40,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install poetry
-        run: pipx install poetry
+        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
       - uses: ./.github/actions/build
       - uses: ./.github/actions/build-docs
@@ -113,10 +113,11 @@ jobs:
           Start-Sleep -s 5
           ./redis-cli ping
 
+      - name: Install poetry
+        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
+
       - name: Install requirements
-        run: |
-          pipx install poetry
-          poetry install --all-extras
+        run: poetry install --all-extras
 
       - name: Run tests
         run: make test

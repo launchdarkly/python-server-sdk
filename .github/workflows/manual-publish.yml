@@ -24,7 +24,7 @@ jobs:
           python-version: 3.8
 
       - name: Install poetry
-        run: pipx install poetry
+        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.0.0
         name: 'Get PyPI token'
