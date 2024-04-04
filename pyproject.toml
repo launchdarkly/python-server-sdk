@@ -21,9 +21,9 @@ classifiers = [
     "Topic :: Software Development",
     "Topic :: Software Development :: Libraries",
 ]
-packages = [
-    { include = "ldclient" },
-    { include = "testing" },
+packages = [ { include = "ldclient" } ]
+exclude = [
+    { path = "ldclient/testing", format = "wheel" }
 ]
 
 [tool.poetry.dependencies]
