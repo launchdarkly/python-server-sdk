@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.3.1](https://github.com/launchdarkly/python-server-sdk/compare/9.3.0...9.3.1) (2024-04-04)
+
+
+### Bug Fixes
+
+* Move tests under ldclient namespace ([#29](https://github.com/launchdarkly/python-server-sdk/issues/29)) ([#283](https://github.com/launchdarkly/python-server-sdk/issues/283)) ([c7d367a](https://github.com/launchdarkly/python-server-sdk/commit/c7d367a7c11501448414842efdff8f404855d414))
+
 ## [9.3.0](https://github.com/launchdarkly/python-server-sdk/compare/9.2.2...9.3.0) (2024-03-14)
 
 
