@@ -70,6 +70,7 @@ def status():
             'secure-mode-hash',
             'tags',
             'migrations',
+            'event-gzip',
             'event-sampling',
             'polling-gzip',
             'inline-context',
