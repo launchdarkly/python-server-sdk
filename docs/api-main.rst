@@ -20,6 +20,12 @@ ldclient.config module
     :members:
     :special-members: __init__
 
+ldclient.hook module
+--------------------------
+
+.. automodule:: ldclient.hook
+    :members:
+
 ldclient.evaluation module
 --------------------------
 
