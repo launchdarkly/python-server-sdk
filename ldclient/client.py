@@ -2,7 +2,7 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable
+from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable, List
 
 from .impl import AnyNum
 
@@ -15,6 +15,7 @@ import warnings
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.feature_store import _FeatureStoreDataSetSorter
+from ldclient.hook import Hook, EvaluationSeriesContext, _EvaluationWithHookResult
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
@@ -187,8 +188,10 @@ class LDClient:
         self._config = config
         self._config._validate()
 
+        self.__hooks_lock = ReadWriteLock()
+        self.__hooks = config.hooks  # type: List[Hook]
+
         self._event_processor = None
-        self._lock = Lock()
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
@@ -395,8 +398,11 @@ class LDClient:
           available from LaunchDarkly
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
-        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
-        return detail.value
+        def evaluate():
+            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
+            return _EvaluationWithHookResult(evaluation_detail=detail)
+
+        return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation", block=evaluate).evaluation_detail.value
 
     def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
@@ -412,8 +418,11 @@ class LDClient:
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
           flag value and evaluation reason
         """
-        detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
-        return detail
+        def evaluate():
+            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+            return _EvaluationWithHookResult(evaluation_detail=detail)
+
+        return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation_detail", block=evaluate).evaluation_detail
 
     def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
         """
@@ -429,17 +438,21 @@ class LDClient:
             log.error(f"default stage {default_stage} is not a valid stage; using 'off' instead")
             default_stage = Stage.OFF
 
-        detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
+        def evaluate():
+            detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
 
-        if isinstance(detail.value, str):
-            stage = Stage.from_str(detail.value)
-            if stage is not None:
-                tracker = OpTracker(key, flag, context, detail, default_stage)
-                return stage, tracker
+            if isinstance(detail.value, str):
+                stage = Stage.from_str(detail.value)
+                if stage is not None:
+                    tracker = OpTracker(key, flag, context, detail, default_stage)
+                    return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': stage, 'tracker': tracker})
 
-        detail = EvaluationDetail(default_stage.value, None, error_reason('WRONG_TYPE'))
-        tracker = OpTracker(key, flag, context, detail, default_stage)
-        return default_stage, tracker
+            detail = EvaluationDetail(default_stage.value, None, error_reason('WRONG_TYPE'))
+            tracker = OpTracker(key, flag, context, detail, default_stage)
+            return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': default_stage, 'tracker': tracker})
+
+        hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage, method="migration_variation", block=evaluate)
+        return hook_result.results['default_stage'], hook_result.results['tracker']
 
     def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
@@ -451,8 +464,7 @@ class LDClient:
             if self._store.initialized:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
-                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: "
-                         + str(default) + " for feature key: " + key)
+                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
                 self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
                 return EvaluationDetail(default, None, reason), None
@@ -582,6 +594,70 @@ class LDClient:
             log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
             return ""
         return hmac.new(str(self._config.sdk_key).encode(), context.fully_qualified_key.encode(), hashlib.sha256).hexdigest()
+
+    def add_hook(self, hook: Hook):
+        """
+        Add a hook to the client. In order to register a hook before the client starts, please use the `hooks` property of
+        `Config`.
+
+        Hooks provide entrypoints which allow for observation of SDK functions.
+
+        :param hook:
+        """
+        if not isinstance(hook, Hook):
+            return
+
+        self.__hooks_lock.lock()
+        self.__hooks.append(hook)
+        self.__hooks_lock.unlock()
+
+    def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], _EvaluationWithHookResult]) -> _EvaluationWithHookResult:
+        """
+        # evaluate_with_hook will run the provided block, wrapping it with evaluation hook support.
+        #
+        # :param key:
+        # :param context:
+        # :param default:
+        # :param method:
+        # :param block:
+        # :return:
+        """
+        hooks = []  # type: List[Hook]
+        try:
+            self.__hooks_lock.rlock()
+
+            if len(self.__hooks) == 0:
+                return block()
+
+            hooks = self.__hooks.copy()
+        finally:
+            self.__hooks_lock.runlock()
+
+        series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
+        hook_data = self.__execute_before_evaluation(hooks, series_context)
+        evaluation_result = block()
+        self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
+
+        return evaluation_result
+
+    def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[Any]:
+        return [
+            self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {}))
+            for hook in hooks
+        ]
+
+    def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[Any], evaluation_detail: EvaluationDetail) -> List[Any]:
+        return [
+            self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
+            for (hook, data) in reversed(list(zip(hooks, hook_data)))
+        ]
+
+    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], dict]) -> Optional[dict]:
+        try:
+            return block()
+        except BaseException as e:
+            log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
+            return None
 
     @property
     def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:

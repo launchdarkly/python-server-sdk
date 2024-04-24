@@ -8,6 +8,7 @@ from typing import Optional, Callable, List, Set
 from threading import Event
 
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.hook import Hook
 from ldclient.impl.util import log, validate_application_info
 from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, DataSourceUpdateSink
 
@@ -173,7 +174,8 @@ class Config:
                  wrapper_version: Optional[str]=None,
                  http: HTTPConfig=HTTPConfig(),
                  big_segments: Optional[BigSegmentsConfig]=None,
-                 application: Optional[dict]=None):
+                 application: Optional[dict]=None,
+                 hooks: Optional[List[Hook]]=None):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -238,6 +240,7 @@ class Config:
         :param http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
           :class:`HTTPConfig`.
         :param application: Optional properties for setting application metadata. See :py:attr:`~application`
+        :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
         """
         self.__sdk_key = sdk_key
 
@@ -270,6 +273,7 @@ class Config:
         self.__http = http
         self.__big_segments = BigSegmentsConfig() if not big_segments else big_segments
         self.__application = validate_application_info(application or {}, log)
+        self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
@@ -441,6 +445,19 @@ class Config:
         the appropriately configured dict to the {Config} object.
         """
         return self.__application
+
+    @property
+    def hooks(self) -> List[Hook]:
+        """
+        Initial set of hooks for the client.
+
+        Hooks provide entrypoints which allow for observation of SDK functions.
+
+        LaunchDarkly provides integration packages, and most applications will
+        not need to implement their own hooks. Refer to the
+        `launchdarkly-server-sdk-otel`.
+        """
+        return self.__hooks
 
     @property
     def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:
