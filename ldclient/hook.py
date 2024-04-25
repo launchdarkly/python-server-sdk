@@ -48,7 +48,7 @@ class Hook:
         return Metadata(name='UNDEFINED')
 
     @abstractmethod
-    def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+    def before_evaluation(self, series_context: EvaluationSeriesContext, data: Any) -> Any:
         """
         The before method is called during the execution of a variation method
         before the flag value has been determined. The method is executed
@@ -63,7 +63,7 @@ class Hook:
         return data
 
     @abstractmethod
-    def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
+    def after_evaluation(self, series_context: EvaluationSeriesContext, data: Any, detail: EvaluationDetail) -> dict:
         """
         The after method is called during the execution of the variation method
         after the flag value has been determined. The method is executed
