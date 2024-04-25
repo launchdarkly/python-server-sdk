@@ -37,10 +37,6 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 from ldclient.migrations import Stage, OpTracker
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 
-from threading import Lock
-
-
-
 
 class _FeatureStoreClientWrapper(FeatureStore):
     """Provides additional behavior that the client requires before or after feature store operations.
@@ -639,24 +635,24 @@ class LDClient:
 
         return evaluation_result
 
-    def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[Any]:
+    def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[dict]:
         return [
             self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {}))
             for hook in hooks
         ]
 
-    def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[Any], evaluation_detail: EvaluationDetail) -> List[Any]:
+    def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
         return [
             self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
             for (hook, data) in reversed(list(zip(hooks, hook_data)))
         ]
 
-    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], Any]) -> Any:
+    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], dict]) -> dict:
         try:
             return block()
         except BaseException as e:
             log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
-            return None
+            return {}
 
     @property
     def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
