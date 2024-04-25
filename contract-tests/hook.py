@@ -1,7 +1,7 @@
 from ldclient.hook import Hook, EvaluationSeriesContext
 from ldclient.evaluation import EvaluationDetail
 
-from typing import Any, Optional
+from typing import Optional
 import requests
 
 
@@ -12,13 +12,13 @@ class PostingHook(Hook):
         self.__data = data
         self.__errors = errors
 
-    def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> Any:
+    def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
         return self.__post("beforeEvaluation", series_context, data, None)
 
-    def after_evaluation(self, series_context: EvaluationSeriesContext, data: Any, detail: EvaluationDetail) -> Any:
+    def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
         return self.__post("afterEvaluation", series_context, data, detail)
 
-    def __post(self, stage: str, series_context: EvaluationSeriesContext, data: Any, detail: Optional[EvaluationDetail]) -> Any:
+    def __post(self, stage: str, series_context: EvaluationSeriesContext, data: dict, detail: Optional[EvaluationDetail]) -> dict:
         if stage in self.__errors:
             raise Exception(self.__errors[stage])
 
@@ -42,4 +42,4 @@ class PostingHook(Hook):
 
         requests.post(self.__callback, json=payload)
 
-        return {**(data or {}), **self.__data.get(stage, {})}
+        return {**data, **self.__data.get(stage, {})}

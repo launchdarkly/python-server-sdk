@@ -2,10 +2,9 @@ from ldclient.evaluation import EvaluationDetail
 from ldclient import LDClient, Config, Context
 from ldclient.hook import Hook, Metadata, EvaluationSeriesContext
 from ldclient.migrations import Stage
-
 from ldclient.integrations.test_data import TestData
 
-from typing import Callable, Any
+from typing import Callable
 
 
 def record(label, log):
@@ -16,7 +15,7 @@ def record(label, log):
 
 
 class MockHook(Hook):
-    def __init__(self, before_evaluation: Callable[[EvaluationSeriesContext, Any], dict], after_evaluation: Callable[[EvaluationSeriesContext, Any, EvaluationDetail], dict]):
+    def __init__(self, before_evaluation: Callable[[EvaluationSeriesContext, dict], dict], after_evaluation: Callable[[EvaluationSeriesContext, dict, EvaluationDetail], dict]):
         self.__before_evaluation = before_evaluation
         self.__after_evaluation = after_evaluation
 
@@ -24,10 +23,10 @@ class MockHook(Hook):
     def metadata(self) -> Metadata:
         return Metadata(name='test-hook')
 
-    def before_evaluation(self, series_context: EvaluationSeriesContext, data):
+    def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
         return self.__before_evaluation(series_context, data)
 
-    def after_evaluation(self, series_context: EvaluationSeriesContext, data, detail: EvaluationDetail):
+    def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
         return self.__after_evaluation(series_context, data, detail)
 
 
@@ -95,7 +94,7 @@ def test_passing_data_from_before_to_after():
     assert calls[0] == "from before"
 
 
-def test_exception_in_before_passes_none():
+def test_exception_in_before_passes_empty_dict():
     def raise_exception(series_context, data):
         raise Exception("error")
 
@@ -107,7 +106,7 @@ def test_exception_in_before_passes_none():
     client.variation('flag-key', user, False)
 
     assert len(calls) == 1
-    assert calls[0] is None
+    assert calls[0] == {}
 
 
 def test_exceptions_do_not_affect_data_passing_order():
@@ -127,7 +126,7 @@ def test_exceptions_do_not_affect_data_passing_order():
     # NOTE: These are reversed since the push happens in the after_evaluation
     # (when hooks are reversed)
     assert calls[0] == "third hook"
-    assert calls[1] is None
+    assert calls[1] ==  {}
     assert calls[2] == "first hook"
 
 
