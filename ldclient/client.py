@@ -2,7 +2,7 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-from typing import Optional, Any, Dict, Mapping, Union, Tuple, Callable, List
+from typing import Optional, Any, Dict, Mapping, Tuple, Callable, List
 
 from .impl import AnyNum
 
@@ -10,7 +10,6 @@ import hashlib
 import hmac
 import threading
 import traceback
-import warnings
 
 from ldclient.config import Config
 from ldclient.context import Context
@@ -451,7 +450,7 @@ class LDClient:
             tracker = OpTracker(key, flag, context, detail, default_stage)
             return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': default_stage, 'tracker': tracker})
 
-        hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage, method="migration_variation", block=evaluate)
+        hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage.value, method="migration_variation", block=evaluate)
         return hook_result.results['default_stage'], hook_result.results['tracker']
 
     def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
@@ -652,7 +651,7 @@ class LDClient:
             for (hook, data) in reversed(list(zip(hooks, hook_data)))
         ]
 
-    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], dict]) -> Optional[dict]:
+    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], Any]) -> Any:
         try:
             return block()
         except BaseException as e:

@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import requests
-from typing import Optional
+from hook import PostingHook
 
 from big_segment_store_fixture import BigSegmentStoreFixture
 
@@ -51,6 +51,9 @@ class ClientEntity:
             _set_optional_time_prop(events, "flushIntervalMs", opts, "flush_interval")
         else:
             opts["send_events"] = False
+
+        if config.get("hooks") is not None:
+            opts["hooks"] = [PostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {})) for h in config["hooks"]["hooks"]]
 
         if config.get("bigSegments") is not None:
             big_params = config["bigSegments"]
