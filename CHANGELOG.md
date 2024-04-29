@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.4.0](https://github.com/launchdarkly/python-server-sdk/compare/9.3.1...9.4.0) (2024-04-29)
+
+
+### Features
+
+* Add support for hooks ([#287](https://github.com/launchdarkly/python-server-sdk/issues/287)) ([eef6e26](https://github.com/launchdarkly/python-server-sdk/commit/eef6e26470afc1cb3f99efa0a07bb501d8a176c4))
+
 ## [9.3.1](https://github.com/launchdarkly/python-server-sdk/compare/9.3.0...9.3.1) (2024-04-04)
 
 
