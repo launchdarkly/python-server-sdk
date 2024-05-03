@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
@@ -61,8 +62,10 @@ jobs:
       - name: start contract test service
         run: make start-contract-test-service-bg
 
-      - name: run contract tests
-        run: make run-contract-tests
+      - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1.0.2
+        with:
+          test_service_port: 9000
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   windows:
     runs-on: windows-latest
@@ -72,6 +75,7 @@ jobs:
         shell: powershell
 
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
