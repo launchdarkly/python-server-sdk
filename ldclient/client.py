@@ -227,9 +227,13 @@ class LDClient:
         self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
         self._update_processor.start()
 
-        if start_wait > 0 and not self._config.offline and not self._config.use_ldd:
-            log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
-            update_processor_ready.wait(start_wait)
+        if not self._config.offline and not self._config.use_ldd:
+            if start_wait > 60:
+                log.warning("LDClient was instantiated with a timeout greater than 60 seconds. We recommend a timeout of less than 60 seconds.")
+
+            if start_wait > 0:
+                log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
+                update_processor_ready.wait(start_wait)
 
         if self._update_processor.initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
