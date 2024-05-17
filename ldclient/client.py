@@ -229,7 +229,7 @@ class LDClient:
 
         if not self._config.offline and not self._config.use_ldd:
             if start_wait > 60:
-                log.warning("LDClient was instantiated with a timeout greater than 60 seconds. We recommend a timeout of less than 60 seconds.")
+                log.warning(f"Client was configured to block for up to {start_wait} seconds when initializing. We recommend blocking no longer than 60.")
 
             if start_wait > 0:
                 log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
