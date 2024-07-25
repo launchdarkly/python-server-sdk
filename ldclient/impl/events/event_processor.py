@@ -560,13 +560,15 @@ def _post_events_with_retry(
 ):
     hdrs = _headers(config)
     hdrs['Content-Type'] = 'application/json'
-    hdrs['Content-Encoding'] = 'gzip'
+    if config.enable_event_compression:
+        hdrs['Content-Encoding'] = 'gzip'
+
     if payload_id:
         hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
         hdrs['X-LaunchDarkly-Payload-ID'] = payload_id
     can_retry = True
     context = "posting %s" % events_description
-    data = gzip.compress(bytes(body, 'utf-8'))
+    data = gzip.compress(bytes(body, 'utf-8')) if config.enable_event_compression else body
     while True:
         next_action_message = "will retry" if can_retry else "some events were dropped"
         try:

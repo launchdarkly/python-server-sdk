@@ -71,6 +71,7 @@ def status():
             'tags',
             'migrations',
             'event-gzip',
+            'optional-event-gzip',
             'event-sampling',
             'polling-gzip',
             'inline-context',
