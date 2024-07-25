@@ -2,6 +2,23 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.5.0](https://github.com/launchdarkly/python-server-sdk/compare/9.4.0...9.5.0) (2024-07-25)
+
+
+### Features
+
+* Add option to enable event payload compression ([#300](https://github.com/launchdarkly/python-server-sdk/issues/300)) ([87c56c9](https://github.com/launchdarkly/python-server-sdk/commit/87c56c94784ba3ccccd0a2001becbf0dd4e71e30))
+
+
+### Bug Fixes
+
+* Log warning if client init timeout is considered high ([#295](https://github.com/launchdarkly/python-server-sdk/issues/295)) ([08514fe](https://github.com/launchdarkly/python-server-sdk/commit/08514fe5c045985f1751c88b86302a05056b633d))
+
+
+### Documentation
+
+* Fix readthedocs generation ([#292](https://github.com/launchdarkly/python-server-sdk/issues/292)) ([9b9c9df](https://github.com/launchdarkly/python-server-sdk/commit/9b9c9dfd790d9922ee09f9bb4cf563cb9c0c453f))
+
 ## [9.4.0](https://github.com/launchdarkly/python-server-sdk/compare/9.3.1...9.4.0) (2024-04-29)
 
 
