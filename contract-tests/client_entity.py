@@ -41,6 +41,7 @@ class ClientEntity:
 
         if config.get("events") is not None:
             events = config["events"]
+            opts["enable_event_compression"] = events.get("enableGzip", False)
             if events.get("baseUri") is not None:
                 opts["events_uri"] = events["baseUri"]
             if events.get("capacity") is not None:
