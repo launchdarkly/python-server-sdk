@@ -1,5 +1,6 @@
 from ldclient.config import Config, HTTPConfig
-from ldclient.testing.http_util import start_server, BasicResponse, JsonResponse
+from ldclient.testing.http_util import start_server
+
 
 # Runs tests of all of our supported proxy server configurations: secure or insecure, configured
 # by Config.http_proxy or by an environment variable, with or without authentication. The action
@@ -16,7 +17,8 @@ def do_proxy_tests(action, action_method, monkeypatch):
         (False, True, False),
         (True, False, False),
         (True, False, True),
-        (True, True, False)]:
+        (True, True, False)
+    ]:
         test_desc = "%s, %s, %s" % (
             "using env vars" if use_env_vars else "using Config",
             "secure" if secure else "insecure",
@@ -27,15 +29,15 @@ def do_proxy_tests(action, action_method, monkeypatch):
             if use_env_vars:
                 monkeypatch.setenv('https_proxy' if secure else 'http_proxy', proxy_uri)
             config = Config(
-                sdk_key = 'sdk_key',
-                base_uri = target_uri,
-                events_uri = target_uri,
-                stream_uri = target_uri,
-                http = HTTPConfig(http_proxy=proxy_uri),
-                diagnostic_opt_out = True)
+                sdk_key='sdk_key',
+                base_uri=target_uri,
+                events_uri=target_uri,
+                stream_uri=target_uri,
+                http=HTTPConfig(http_proxy=proxy_uri),
+                diagnostic_opt_out=True)
             try:
                 action(server, config, secure)
-            except:
+            except Exception:
                 print("test action failed (%s)" % test_desc)
                 raise
             # For an insecure proxy request, our stub server behaves enough like the real thing to satisfy the
@@ -43,7 +45,7 @@ def do_proxy_tests(action, action_method, monkeypatch):
             # actually be an absolute URI for a proxy request.
             try:
                 req = server.require_request()
-            except:
+            except Exception:
                 print("server did not receive a request (%s)" % test_desc)
                 raise
             expected_method = 'CONNECT' if secure else action_method
