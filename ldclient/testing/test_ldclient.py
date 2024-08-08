@@ -75,14 +75,12 @@ def test_client_has_null_update_processor_in_ldd_mode():
         assert isinstance(client._update_processor, NullUpdateProcessor)
 
 
-@pytest.mark.skip("Can't currently use a live stream processor in tests because its error logging will disrupt other tests.")
 def test_client_has_streaming_processor_by_default():
     config = Config(sdk_key="secret", base_uri=unreachable_uri, stream_uri=unreachable_uri, send_events=False)
     with LDClient(config=config, start_wait=0) as client:
         assert isinstance(client._update_processor, StreamingUpdateProcessor)
 
 
-@pytest.mark.skip("Can't currently use a live polling processor in tests because its error logging will disrupt other tests.")
 def test_client_has_polling_processor_if_streaming_is_disabled():
     config = Config(sdk_key="secret", stream=False, base_uri=unreachable_uri, stream_uri=unreachable_uri, send_events=False)
     with LDClient(config=config, start_wait=0) as client:
