@@ -26,7 +26,7 @@ jobs:
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.0.0
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
         name: 'Get PyPI token'
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
