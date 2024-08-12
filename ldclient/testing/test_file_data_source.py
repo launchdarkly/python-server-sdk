@@ -120,11 +120,13 @@ def make_temp_file(content):
     os.close(f)
     return path
 
-
-def replace_file(path, content):
+def update_file(path, content):
     with open(path, 'w') as f:
         f.write(content)
 
+def replace_file(path, content):
+    new_file = make_temp_file(content)
+    os.replace(new_file, path)
 
 def test_does_not_load_data_prior_to_start():
     path = make_temp_file('{"flagValues":{"key":"value"}}')
@@ -234,8 +236,7 @@ def test_does_not_allow_duplicate_keys():
         os.remove(path1)
         os.remove(path2)
 
-
-def test_does_not_reload_modified_file_if_auto_update_is_off():
+def test_does_not_reload_modified_file_if_auto_update_is_off_when_replacing_file():
     path = make_temp_file(flag_only_json)
     try:
         source = make_data_source(Config("SDK_KEY"), paths=path)
@@ -248,16 +249,29 @@ def test_does_not_reload_modified_file_if_auto_update_is_off():
     finally:
         os.remove(path)
 
-
-def do_auto_update_test(options):
+def test_does_not_reload_modified_file_if_auto_update_is_off_when_updating_file():
     path = make_temp_file(flag_only_json)
+    try:
+        source = make_data_source(Config("SDK_KEY"), paths = path)
+        source.start()
+        assert len(store.all(SEGMENTS, lambda x: x)) == 0
+        time.sleep(0.5)
+        update_file(path, segment_only_json)
+        time.sleep(0.5)
+        assert len(store.all(SEGMENTS, lambda x: x)) == 0
+    finally:
+        os.remove(path)
+
+def do_auto_update_test(options, update_fn):
+    path = make_temp_file(flag_only_json)
+
     options['paths'] = path
     try:
         source = make_data_source(Config("SDK_KEY"), **options)
         source.start()
         assert len(store.all(SEGMENTS, lambda x: x)) == 0
         time.sleep(0.5)
-        replace_file(path, segment_only_json)
+        update_fn(path, segment_only_json)
         deadline = time.time() + 20
         while time.time() < deadline:
             time.sleep(0.1)
@@ -267,14 +281,17 @@ def do_auto_update_test(options):
     finally:
         os.remove(path)
 
+def test_reloads_modified_file_if_auto_update_is_on_when_replacing_file():
+    do_auto_update_test({ 'auto_update': True }, replace_file)
 
-def test_reloads_modified_file_if_auto_update_is_on():
-    do_auto_update_test({'auto_update': True})
+def test_reloads_modified_file_in_polling_mode_when_replacing_file():
+    do_auto_update_test({ 'auto_update': True, 'force_polling': True, 'poll_interval': 0.1 }, replace_file)
 
+def test_reloads_modified_file_if_auto_update_is_on_when_updating_file():
+    do_auto_update_test({ 'auto_update': True }, update_file)
 
-def test_reloads_modified_file_in_polling_mode():
-    do_auto_update_test({'auto_update': True, 'force_polling': True, 'poll_interval': 0.1})
-
+def test_reloads_modified_file_in_polling_mode_when_updating_file():
+    do_auto_update_test({ 'auto_update': True, 'force_polling': True, 'poll_interval': 0.1 }, update_file)
 
 def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
