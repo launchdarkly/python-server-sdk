@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0 # If you only need the current version keep this.
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         if: ${{ steps.release.outputs.releases_created }}
         with:
           python-version: 3.8
