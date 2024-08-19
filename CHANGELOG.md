@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.6.0](https://github.com/launchdarkly/python-server-sdk/compare/9.5.0...9.6.0) (2024-08-19)
+
+
+### Features
+
+* `NO_PROXY` environment variable can be used to override `HTTP(S)_PROXY` values ([#301](https://github.com/launchdarkly/python-server-sdk/issues/301)) ([d0913ee](https://github.com/launchdarkly/python-server-sdk/commit/d0913ee44b5fffce70dfd3b01631cc0817f1b2e8))
+
 ## [9.5.0](https://github.com/launchdarkly/python-server-sdk/compare/9.4.0...9.5.0) (2024-07-25)
 
 This release introduces the ability to enable compression of event payloads. When enabled, the SDK will compress events before sending them to the LaunchDarkly servers. This can reduce the bandwidth required to send events, which can be useful in high-traffic environments to reduce egress traffic costs.
