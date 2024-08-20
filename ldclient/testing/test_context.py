@@ -110,22 +110,22 @@ class TestContext:
         assert c.get('kind') == 'b'
         assert c.get('name') == 'c'
         assert c.get('anonymous') is True
-    
+
     def test_get_unknown_attribute(self):
         c = Context.create('a')
         assert c.get('b') is None
-    
+
     def test_private_attributes(self):
         assert list(Context.create('a').private_attributes) == []
 
         c = Context.builder('a').private('b', '/c/d').private('e').build()
         assert list(c.private_attributes) == ['b', '/c/d', 'e']
-    
+
     def test_fully_qualified_key(self):
         assert Context.create('key1').fully_qualified_key == 'key1'
         assert Context.create('key1', 'kind1').fully_qualified_key == 'kind1:key1'
         assert Context.create('key%with:things', 'kind1').fully_qualified_key == 'kind1:key%25with%3Athings'
-    
+
     def test_builder_from_context(self):
         c1 = Context.builder('a').kind('kind1').name('b').set('c', True).private('d').build()
         b = Context.builder_from_context(c1)
@@ -167,7 +167,7 @@ class TestContext:
             Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2'))
         assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) != \
             Context.create('a', 'kind1')
-    
+
         _assert_contexts_from_factory_equal(lambda: Context.create('invalid', 'kind'))
         assert Context.create('invalid', 'kind') != Context.create_multi()  # different errors
 
@@ -195,10 +195,10 @@ class TestContext:
             Context.builder('key1').kind('kind1').anonymous(True).build()
         assert Context.from_dict({'kind': 'kind1', 'key': 'key1', '_meta': {'privateAttributes': ['b']}}) == \
             Context.builder('key1').kind('kind1').private('b').build()
-        
+
         assert Context.from_dict({'kind': 'multi', 'kind1': {'key': 'key1'}, 'kind2': {'key': 'key2'}}) == \
             Context.create_multi(Context.create('key1', 'kind1'), Context.create('key2', 'kind2'))
-        
+
         assert_context_invalid(Context.from_dict({'kind': 'kind1'}))
         assert_context_invalid(Context.from_dict({'kind': 'kind1', 'key': 3}))
         assert_context_invalid(Context.from_dict({'kind': 'multi'}))
@@ -256,15 +256,15 @@ class TestContextErrors:
     def test_key_empty_string(self):
         assert_context_invalid(Context.create(''))
         assert_context_invalid(Context.builder('').build())
-    
+
     @pytest.mark.parametrize('kind', ['kind', 'multi', 'b$c', ''])
     def test_kind_invalid_strings(self, kind):
         assert_context_invalid(Context.create('a', kind))
         assert_context_invalid(Context.builder('a').kind(kind).build())
-    
+
     def test_create_multi_with_no_contexts(self):
         assert_context_invalid(Context.create_multi())
-    
+
     def test_multi_builder_with_no_contexts(self):
         assert_context_invalid(Context.multi_builder().build())
 
@@ -272,17 +272,17 @@ class TestContextErrors:
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('b', 'kind1')
         assert_context_invalid(Context.create_multi(c1, c2))
-    
+
     def test_multi_builder_with_duplicate_kind(self):
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('b', 'kind1')
         assert_context_invalid(Context.multi_builder().add(c1).add(c2).build())
-    
+
     def test_create_multi_with_invalid_context(self):
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('')
         assert_context_invalid(Context.create_multi(c1, c2))
-    
+
     def test_multi_builder_with_invalid_context(self):
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('')
