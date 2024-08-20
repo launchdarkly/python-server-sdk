@@ -50,6 +50,7 @@ class ClientEntity:
             opts["all_attributes_private"] = events.get("allAttributesPrivate", False)
             opts["private_attributes"] = events.get("globalPrivateAttributes", {})
             _set_optional_time_prop(events, "flushIntervalMs", opts, "flush_interval")
+            opts["omit_anonymous_contexts"] = events.get("omitAnonymousContexts", False)
         else:
             opts["send_events"] = False
 

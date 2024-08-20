@@ -287,3 +287,39 @@ class TestContextErrors:
         c1 = Context.create('a', 'kind1')
         c2 = Context.create('')
         assert_context_invalid(Context.multi_builder().add(c1).add(c2).build())
+
+
+class TestAnonymousRedaction:
+    def test_redacting_anonoymous_leads_to_invalid_context(self):
+        original = Context.builder('a').anonymous(True).build()
+        c = original.without_anonymous_contexts()
+
+        assert_context_invalid(c)
+
+    def test_redacting_non_anonymous_does_not_change_context(self):
+        original = Context.builder('a').anonymous(False).build()
+        c = original.without_anonymous_contexts()
+
+        assert_context_valid(c)
+        assert c == original
+
+    def test_can_find_non_anonymous_contexts_from_multi(self):
+        anon = Context.builder('a').anonymous(True).build()
+        nonanon = Context.create('b', 'kind2')
+        mc = Context.create_multi(anon, nonanon)
+
+        filtered = mc.without_anonymous_contexts()
+
+        assert_context_valid(filtered)
+        assert filtered.individual_context_count == 1
+        assert filtered.key == 'b'
+        assert filtered.kind == 'kind2'
+
+    def test_can_filter_all_from_multi(self):
+        a = Context.builder('a').anonymous(True).build()
+        b = Context.builder('b').anonymous(True).build()
+        mc = Context.create_multi(a, b)
+
+        filtered = mc.without_anonymous_contexts()
+
+        assert_context_invalid(filtered)

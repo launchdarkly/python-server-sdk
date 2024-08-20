@@ -176,7 +176,8 @@ class Config:
                  big_segments: Optional[BigSegmentsConfig]=None,
                  application: Optional[dict]=None,
                  hooks: Optional[List[Hook]]=None,
-                 enable_event_compression: bool=False):
+                 enable_event_compression: bool=False,
+                 omit_anonymous_contexts: bool=False):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -243,6 +244,7 @@ class Config:
         :param application: Optional properties for setting application metadata. See :py:attr:`~application`
         :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
+        :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         """
         self.__sdk_key = sdk_key
 
@@ -277,6 +279,7 @@ class Config:
         self.__application = validate_application_info(application or {}, log)
         self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
         self.__enable_event_compression = enable_event_compression
+        self.__omit_anonymous_contexts = omit_anonymous_contexts
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
@@ -465,6 +468,13 @@ class Config:
     @property
     def enable_event_compression(self) -> bool:
         return self.__enable_event_compression
+
+    @property
+    def omit_anonymous_contexts(self) -> bool:
+        """
+        Determines whether or not anonymous contexts will be omitted from index and identify events.
+        """
+        return self.__omit_anonymous_contexts
 
     @property
     def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:
