@@ -236,6 +236,37 @@ def test_context_is_filtered_in_identify_event():
         assert len(output) == 1
         check_identify_event(output[0], e, formatter.format_context(context))
 
+
+def test_omit_anonymous_contexts_suppresses_identify_event():
+    with DefaultTestProcessor(omit_anonymous_contexts=True) as ep:
+        anon_context = Context.builder('userkey').name('Red').anonymous(True).build()
+        e = EventInputIdentify(timestamp, anon_context)
+        ep.send_event(e)
+
+        try:
+            flush_and_get_events(ep)
+            pytest.fail("Expected no events")
+        except AssertionError:
+            pass
+
+
+def test_omit_anonymous_contexts_strips_anonymous_contexts_correctly():
+    with DefaultTestProcessor(omit_anonymous_contexts=True) as ep:
+        a = Context.builder('a').kind('a').anonymous(True).build()
+        b = Context.builder('b').kind('b').anonymous(True).build()
+        c = Context.builder('c').kind('c').anonymous(False).build()
+        mc = Context.multi_builder().add(a).add(b).add(c).build()
+
+        e = EventInputIdentify(timestamp, mc)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 1
+
+        formatter = EventContextFormatter(True, [])
+        check_identify_event(output[0], e, formatter.format_context(c))
+
+
 def test_individual_feature_event_is_queued_with_index_event():
     with DefaultTestProcessor() as ep:
         e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
@@ -244,6 +275,34 @@ def test_individual_feature_event_is_queued_with_index_event():
         output = flush_and_get_events(ep)
         assert len(output) == 3
         check_index_event(output[0], e)
+        check_feature_event(output[1], e)
+        check_summary_event(output[2])
+
+
+def test_omit_anonymous_context_emits_feature_event_without_index():
+    with DefaultTestProcessor(omit_anonymous_contexts=True) as ep:
+        anon = Context.builder('a').anonymous(True).build()
+        e = EventInputEvaluation(timestamp, anon, flag.key, flag, 1, 'value', None, 'default', None, True)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 2
+        check_feature_event(output[0], e)
+        check_summary_event(output[1])
+
+
+def test_omit_anonymous_context_strips_anonymous_from_index_event():
+    with DefaultTestProcessor(omit_anonymous_contexts=True) as ep:
+        a = Context.builder('a').kind('a').anonymous(True).build()
+        b = Context.builder('b').kind('b').anonymous(True).build()
+        c = Context.builder('c').kind('c').anonymous(False).build()
+        mc = Context.multi_builder().add(a).add(b).add(c).build()
+        e = EventInputEvaluation(timestamp, mc, flag.key, flag, 1, 'value', None, 'default', None, True)
+        ep.send_event(e)
+
+        output = flush_and_get_events(ep)
+        assert len(output) == 3
+        check_index_event(output[0], e, c.to_dict())  # Should only contain non-anon context
         check_feature_event(output[1], e)
         check_summary_event(output[2])
 

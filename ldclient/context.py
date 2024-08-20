@@ -381,6 +381,28 @@ class Context:
         """
         return self.__anonymous
 
+    def without_anonymous_contexts(self) -> Context:
+        """
+        For a multi-kind context:
+
+        A multi-kind context is made up of two or more single-kind contexts.
+        This method will first discard any single-kind contexts which are
+        anonymous. It will then create a new multi-kind context from the
+        remaining single-kind contexts. This may result in an invalid context
+        (e.g. all single-kind contexts are anonymous).
+
+        For a single-kind context:
+
+        If the context is not anonymous, this method will return the current
+        context as is and unmodified.
+
+        If the context is anonymous, this method will return an invalid context.
+        """
+        contexts = self.__multi if self.__multi is not None else [self]
+        contexts = [c for c in contexts if not c.anonymous]
+
+        return Context.create_multi(*contexts)
+
     def get(self, attribute: str) -> Any:
         """
         Looks up the value of any attribute of the context by name.

@@ -76,7 +76,8 @@ def status():
             'polling-gzip',
             'inline-context',
             'anonymous-redaction',
-            'evaluation-hooks'
+            'evaluation-hooks',
+            'omit-anonymous-contexts'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})

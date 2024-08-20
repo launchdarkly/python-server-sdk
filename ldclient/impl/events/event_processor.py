@@ -7,14 +7,13 @@ from collections import namedtuple
 from email.utils import parsedate
 import json
 from threading import Event, Lock, Thread
-from typing import Any, List, Optional, Dict
+from typing import Any, List, Optional, Dict, Callable
 import time
 import uuid
 import queue
 import urllib3
 import gzip
 from ldclient.config import Config
-from datetime import timedelta
 from random import Random
 
 from ldclient.context import Context
@@ -341,6 +340,7 @@ class EventDispatcher:
         self._deduplicated_contexts = 0
         self._diagnostic_accumulator = None if config.diagnostic_opt_out else diagnostic_accumulator
         self._sampler = Sampler(Random())
+        self._omit_anonymous_contexts = config.omit_anonymous_contexts
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
         self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
@@ -387,7 +387,6 @@ class EventDispatcher:
         # Decide whether to add the event to the payload. Feature events may be added twice, once for
         # the event (if tracked) and once for debugging.
         context = None  # type: Optional[Context]
-        can_add_index = True
         full_event = None  # type: Any
         debug_event = None  # type: Optional[DebugEvent]
         sampling_ratio = 1 if event.sampling_ratio is None else event.sampling_ratio
@@ -401,30 +400,49 @@ class EventDispatcher:
             if self._should_debug_event(event):
                 debug_event = DebugEvent(event)
         elif isinstance(event, EventInputIdentify):
-            context = event.context
+            if self._omit_anonymous_contexts:
+                context = event.context.without_anonymous_contexts()
+                if not context.valid:
+                    return
+
+                event = EventInputIdentify(event.timestamp, context, event.sampling_ratio)
+
             full_event = event
-            can_add_index = False  # an index event would be redundant if there's an identify event
         elif isinstance(event, EventInputCustom):
             context = event.context
             full_event = event
         elif isinstance(event, MigrationOpEvent):
             full_event = event
 
-        # For each context we haven't seen before, we add an index event - unless this is already
-        # an identify event.
-        if context is not None:
-            already_seen = self._context_keys.put(context.fully_qualified_key, True)
-            if can_add_index:
-                if already_seen:
-                    self._deduplicated_contexts += 1
-                else:
-                    self._outbox.add_event(IndexEvent(event.timestamp, context))
+        self._get_indexable_context(event, lambda c: self._outbox.add_event(IndexEvent(event.timestamp, c)))
 
         if full_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(full_event)
 
         if debug_event and self._sampler.sample(sampling_ratio):
             self._outbox.add_event(debug_event)
+
+    def _get_indexable_context(self, event: EventInput, block: Callable[[Context], None]):
+        if event.context is None:
+            return
+
+        context = event.context
+        if self._omit_anonymous_contexts:
+            context = context.without_anonymous_contexts()
+
+        if not context.valid:
+            return
+
+        already_seen = self._context_keys.put(context.fully_qualified_key, True)
+        if already_seen:
+            self._deduplicated_contexts += 1
+            return
+        elif isinstance(event, EventInputIdentify) or isinstance(event, MigrationOpEvent):
+            return
+
+        block(context)
+
+
 
     def _should_debug_event(self, event: EventInputEvaluation):
         if event.flag is None:
