@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.7.0](https://github.com/launchdarkly/python-server-sdk/compare/9.6.0...9.7.0) (2024-08-20)
+
+
+### Features
+
+* Add option to omit anonymous users from index and identify events ([#306](https://github.com/launchdarkly/python-server-sdk/issues/306)) ([8f13ffe](https://github.com/launchdarkly/python-server-sdk/commit/8f13ffe965b13df6398746866d464722d70e8508))
+
 ## [9.6.0](https://github.com/launchdarkly/python-server-sdk/compare/9.5.0...9.6.0) (2024-08-19)
 
 
