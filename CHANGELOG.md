@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.7.1](https://github.com/launchdarkly/python-server-sdk/compare/9.7.0...9.7.1) (2024-08-26)
+
+
+### Bug Fixes
+
+* Skip empty hosts when processing NO_PROXY variable ([#309](https://github.com/launchdarkly/python-server-sdk/issues/309)) ([82d8117](https://github.com/launchdarkly/python-server-sdk/commit/82d8117bcc375ffd8c3028589905dd4005e31b5a))
+
 ## [9.7.0](https://github.com/launchdarkly/python-server-sdk/compare/9.6.0...9.7.0) (2024-08-20)
 
 
