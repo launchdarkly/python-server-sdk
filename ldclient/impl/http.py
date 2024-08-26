@@ -120,12 +120,15 @@ def _get_proxy_url(target_base_uri):
         return proxy_url
 
     for no_proxy_entry in no_proxy.split(','):
+        if no_proxy_entry == '':
+            continue
         parts = no_proxy_entry.strip().split(':')
         if len(parts) == 1:
             if target_host.endswith(no_proxy_entry):
                 return None
             continue
-
+        if parts[0] == '':
+            continue
         if target_host.endswith(parts[0]) and target_port == int(parts[1]):
             return None
 
