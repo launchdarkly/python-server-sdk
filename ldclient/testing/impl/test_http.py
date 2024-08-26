@@ -16,6 +16,9 @@ from ldclient.impl.http import _get_proxy_url
         ('https://secure.example.com', 'wrong.example.com', 'https://secure.proxy:1234'),
         ('https://secure.example.com:8080', 'secure.example.com', None),
         ('https://secure.example.com:8080', 'secure.example.com:443', 'https://secure.proxy:1234'),
+        ('https://secure.example.com:8080', 'secure.example.com:443,', 'https://secure.proxy:1234'),
+        ('https://secure.example.com:8080', 'secure.example.com:443,,', 'https://secure.proxy:1234'),
+        ('https://secure.example.com:8080', ':8080', 'https://secure.proxy:1234'),
 
         ('https://secure.example.com', 'example.com', None),
         ('https://secure.example.com', 'example.com:443', None),
