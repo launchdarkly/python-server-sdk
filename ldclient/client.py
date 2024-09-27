@@ -108,7 +108,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
             return
 
         log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
-        task = RepeatingTask(0.5, 0, self.__check_availability)
+        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
         self.__lock.lock()
         self.__poller = task
@@ -172,6 +172,7 @@ class LDClient:
 
     Client instances are thread-safe.
     """
+
     def __init__(self, config: Config, start_wait: float=5):
         """Constructs a new LDClient instance.
 
@@ -248,7 +249,7 @@ class LDClient:
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
             diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
-            self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator = diagnostic_accumulator)
+            self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator=diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
         return None
@@ -340,7 +341,7 @@ class LDClient:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name,
-                context, data, metric_value))
+                                                                          context, data, metric_value))
 
     def identify(self, context: Context):
         """Reports details about an evaluation context.
@@ -709,7 +710,6 @@ class LDClient:
         listener model.
         """
         return self.__flag_tracker
-
 
 
 __all__ = ['LDClient', 'Config']
