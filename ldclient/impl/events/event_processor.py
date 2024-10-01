@@ -44,6 +44,7 @@ class DebugEvent:
     def __init__(self, original_input: EventInputEvaluation):
         self.original_input = original_input
 
+
 class IndexEvent:
     __slots__ = ['timestamp', 'context']
 
@@ -57,7 +58,7 @@ class EventOutputFormatter:
         self._context_formatter = EventContextFormatter(config.all_attributes_private, config.private_attributes)
 
     def make_output_events(self, events: List[Any], summary: EventSummary):
-        events_out = [ self.make_output_event(e) for e in events ]
+        events_out = [self.make_output_event(e) for e in events]
         if not summary.is_empty():
             events_out.append(self.make_summary_event(summary))
         return events_out
@@ -163,10 +164,10 @@ class EventOutputFormatter:
 
         return None
 
-    """
-    Transform summarizer data into the format used for the event payload.
-    """
     def make_summary_event(self, summary: EventSummary):
+        """
+        Transform summarizer data into the format used for the event payload.
+        """
         flags_out = dict()  # type: Dict[str, Any]
         for key, flag_data in summary.flags.items():
             flag_data_out = {'default': flag_data.default, 'contextKinds': list(flag_data.context_kinds)}
@@ -246,7 +247,7 @@ class EventPayloadSendTask:
     def _do_send(self, output_events):
         # noinspection PyBroadException
         try:
-            json_body = json.dumps(output_events, separators=(',',':'))
+            json_body = json.dumps(output_events, separators=(',', ':'))
             log.debug('Sending events payload: ' + json_body)
             payload_id = str(uuid.uuid4())
             r = _post_events_with_retry(
@@ -442,8 +443,6 @@ class EventDispatcher:
 
         block(context)
 
-
-
     def _should_debug_event(self, event: EventInputEvaluation):
         if event.flag is None:
             return False
@@ -492,6 +491,11 @@ class EventDispatcher:
     def _do_shutdown(self):
         self._flush_workers.stop()
         self._flush_workers.wait()
+
+        if self._diagnostic_flush_workers:
+            self._diagnostic_flush_workers.stop()
+            self._diagnostic_flush_workers.wait()
+
         if self._close_http:
             self._http.clear()
 
