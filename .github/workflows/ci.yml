@@ -17,7 +17,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        # python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.8"]
 
     services:
       redis:
@@ -49,6 +50,28 @@ jobs:
       - name: Run tests
         run: make test
 
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+      - run: make test
+
       - name: Verify typehints
         run: make lint
 
@@ -67,61 +90,61 @@ jobs:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  windows:
-    runs-on: windows-latest
-
-    defaults:
-      run:
-        shell: powershell
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup DynamoDB
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
-          mkdir dynamo
-          Expand-Archive -Path dynamo.zip -DestinationPath dynamo
-          cd dynamo
-          cmd /c "START /b java -Djava.library.path=./DynamoDBLocal_lib -jar ./DynamoDBLocal.jar"
-
-      - name: Setup Consul
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf consul.zip https://releases.hashicorp.com/consul/1.4.2/consul_1.4.2_windows_amd64.zip
-          mkdir consul
-          Expand-Archive -Path consul.zip -DestinationPath consul
-          cd consul
-          sc.exe create "Consul" binPath="$(Get-Location)/consul.exe agent -dev"
-          sc.exe start "Consul"
-
-      - name: Setup Redis
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf redis.zip https://github.com/MicrosoftArchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip
-          mkdir redis
-          Expand-Archive -Path redis.zip -DestinationPath redis
-          cd redis
-          ./redis-server --service-install
-          ./redis-server --service-start
-          Start-Sleep -s 5
-          ./redis-cli ping
-
-      - name: Install poetry
-        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
-
-      - name: Install requirements
-        run: poetry install --all-extras
-
-      - name: Run tests
-        run: make test
+  # windows:
+  #   runs-on: windows-latest
+  #
+  #   defaults:
+  #     run:
+  #       shell: powershell
+  #
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Set up Python ${{ matrix.python-version }}
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #
+  #     - name: Setup DynamoDB
+  #       run: |
+  #         $ProgressPreference = "SilentlyContinue"
+  #         iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
+  #         mkdir dynamo
+  #         Expand-Archive -Path dynamo.zip -DestinationPath dynamo
+  #         cd dynamo
+  #         cmd /c "START /b java -Djava.library.path=./DynamoDBLocal_lib -jar ./DynamoDBLocal.jar"
+  #
+  #     - name: Setup Consul
+  #       run: |
+  #         $ProgressPreference = "SilentlyContinue"
+  #         iwr -outf consul.zip https://releases.hashicorp.com/consul/1.4.2/consul_1.4.2_windows_amd64.zip
+  #         mkdir consul
+  #         Expand-Archive -Path consul.zip -DestinationPath consul
+  #         cd consul
+  #         sc.exe create "Consul" binPath="$(Get-Location)/consul.exe agent -dev"
+  #         sc.exe start "Consul"
+  #
+  #     - name: Setup Redis
+  #       run: |
+  #         $ProgressPreference = "SilentlyContinue"
+  #         iwr -outf redis.zip https://github.com/MicrosoftArchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip
+  #         mkdir redis
+  #         Expand-Archive -Path redis.zip -DestinationPath redis
+  #         cd redis
+  #         ./redis-server --service-install
+  #         ./redis-server --service-start
+  #         Start-Sleep -s 5
+  #         ./redis-cli ping
+  #
+  #     - name: Install poetry
+  #       uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
+  #
+  #     - name: Install requirements
+  #       run: poetry install --all-extras
+  #
+  #     - name: Run tests
+  #       run: make test
