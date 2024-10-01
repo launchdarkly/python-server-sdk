@@ -21,7 +21,7 @@ class PollingUpdateProcessor(UpdateProcessor):
         self._requester = requester
         self._store = store
         self._ready = ready
-        self._task = RepeatingTask(config.poll_interval, 0, self._poll)
+        self._task = RepeatingTask("ldclient.datasource.polling", config.poll_interval, 0, self._poll)
 
     def start(self):
         log.info("Starting PollingUpdateProcessor with request interval: " + str(self._config.poll_interval))

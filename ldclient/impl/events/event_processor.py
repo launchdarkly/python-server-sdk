@@ -344,7 +344,7 @@ class EventDispatcher:
         self._omit_anonymous_contexts = config.omit_anonymous_contexts
 
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
-        self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.diag_flush")
+        self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.events.diag_flush")
         if self._diagnostic_accumulator is not None:
             init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date,
                                                 self._diagnostic_accumulator.diagnostic_id,
@@ -352,7 +352,7 @@ class EventDispatcher:
             task = DiagnosticEventSendTask(self._http, self._config, init_event)
             self._diagnostic_flush_workers.execute(task.run)
 
-        self._main_thread = Thread(target=self._run_main_loop)
+        self._main_thread = Thread(target=self._run_main_loop, name="ldclient.events.processor")
         self._main_thread.daemon = True
         self._main_thread.start()
 
@@ -504,13 +504,13 @@ class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
-        self._flush_timer = RepeatingTask(config.flush_interval, config.flush_interval, self.flush)
-        self._contexts_flush_timer = RepeatingTask(config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
+        self._flush_timer = RepeatingTask("ldclient.events.flush", config.flush_interval, config.flush_interval, self.flush)
+        self._contexts_flush_timer = RepeatingTask("ldclient.events.context-flush", config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
         self._flush_timer.start()
         self._contexts_flush_timer.start()
         if diagnostic_accumulator is not None:
-            self._diagnostic_event_timer = RepeatingTask(config.diagnostic_recording_interval,
-                config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer = RepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval,
+                                                         config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None

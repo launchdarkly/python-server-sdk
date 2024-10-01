@@ -7,7 +7,7 @@ import time
 
 def test_task_does_not_start_when_created():
     signal = Event()
-    task = RepeatingTask(0.01, 0, lambda: signal.set())
+    task = RepeatingTask("ldclient.testing.set-signal", 0.01, 0, lambda: signal.set())
     try:
         signal_was_set = signal.wait(0.1)
         assert signal_was_set == False
@@ -16,7 +16,7 @@ def test_task_does_not_start_when_created():
 
 def test_task_executes_until_stopped():
     queue = Queue()
-    task = RepeatingTask(0.1, 0, lambda: queue.put(time.time()))
+    task = RepeatingTask("ldclient.testing.enqueue-time", 0.1, 0, lambda: queue.put(time.time()))
     try:
         last = None
         task.start()
@@ -47,7 +47,7 @@ def test_task_can_be_stopped_from_within_the_task():
         if counter >= 2:
             task.stop()
             stopped.set()
-    task = RepeatingTask(0.01, 0, do_task)
+    task = RepeatingTask("ldclient.testing.task-runner", 0.01, 0, do_task)
     try:
         task.start()
         assert stopped.wait(0.1) == True

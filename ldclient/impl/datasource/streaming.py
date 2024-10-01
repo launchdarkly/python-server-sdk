@@ -31,7 +31,7 @@ ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def __init__(self, config, store, ready, diagnostic_accumulator):
-        Thread.__init__(self)
+        Thread.__init__(self, name="ldclient.datasource.streaming")
         self.daemon = True
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
         self._config = config

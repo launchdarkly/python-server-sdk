@@ -4,14 +4,16 @@ from threading import Event, Thread
 import time
 from typing import Callable
 
+
 class RepeatingTask:
     """
     A generic mechanism for calling a callback repeatedly at fixed intervals on a worker thread.
     """
-    def __init__(self, interval: float, initial_delay: float, callable: Callable):
+
+    def __init__(self, label, interval: float, initial_delay: float, callable: Callable):
         """
         Creates the task, but does not start the worker thread yet.
-        
+
         :param interval: maximum time in seconds between invocations of the callback
         :param initial_delay: time in seconds to wait before the first invocation
         :param callable: the function to execute repeatedly
@@ -20,7 +22,7 @@ class RepeatingTask:
         self.__initial_delay = initial_delay
         self.__action = callable
         self.__stop = Event()
-        self.__thread = Thread(target=self._run)
+        self.__thread = Thread(target=self._run, name=f"{label}.repeating")
         self.__thread.daemon = True
 
     def start(self):

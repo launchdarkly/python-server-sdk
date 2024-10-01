@@ -646,8 +646,9 @@ def test_does_not_block_on_full_inbox():
             if message.type == 'stop':
                 message.param.set()
                 return
+
     def start_consuming_events():
-        Thread(target=event_consumer).start()
+        Thread(target=event_consumer, name="ldclient.testing.events.consumer").start()
 
     with DefaultEventProcessor(config, mock_http, dispatcher_factory) as ep:
         ep_inbox = ep_inbox_holder[0]

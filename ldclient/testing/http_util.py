@@ -42,7 +42,7 @@ def start_secure_server():
 
 class MockServerWrapper(Thread):
     def __init__(self, port, secure):
-        Thread.__init__(self)
+        Thread.__init__(self, name="ldclient.testing.mock-server-wrapper")
         self.port = port
         self.uri = '%s://localhost:%d' % ('https' if secure else 'http', port)
         self.server = HTTPServer(('localhost', port), MockServerRequestHandler)

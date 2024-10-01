@@ -189,7 +189,7 @@ class _FileDataSource(UpdateProcessor):
             self._paths = resolved_paths
             self._reloader = reloader
             self._file_times = self._check_file_times()
-            self._timer = RepeatingTask(interval, interval, self._poll)
+            self._timer = RepeatingTask("ldclient.datasource.file.poll", interval, interval, self._poll)
             self._timer.start()
 
         def stop(self):
