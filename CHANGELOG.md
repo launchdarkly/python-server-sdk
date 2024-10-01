@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.7.2](https://github.com/launchdarkly/python-server-sdk/compare/9.7.1...9.7.2) (2024-10-01)
+
+
+### Bug Fixes
+
+* Set explicit names for each spawned thread ([#311](https://github.com/launchdarkly/python-server-sdk/issues/311)) ([9c7777c](https://github.com/launchdarkly/python-server-sdk/commit/9c7777ca4d628f1d19de631310bf8ae5d90ab60a))
+* Shutdown diagnostic thread if enabled ([#312](https://github.com/launchdarkly/python-server-sdk/issues/312)) ([cde6cfb](https://github.com/launchdarkly/python-server-sdk/commit/cde6cfbbaab81d5c20ba0e83cac030f1a4a333ad))
+
 ## [9.7.1](https://github.com/launchdarkly/python-server-sdk/compare/9.7.0...9.7.1) (2024-08-26)
 
 
