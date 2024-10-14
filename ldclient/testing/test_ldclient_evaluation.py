@@ -217,6 +217,86 @@ def test_all_flags_state_returns_state():
         '$valid': True
     }
 
+
+def test_all_flags_state_only_includes_top_level_prereqs():
+    store = InMemoryFeatureStore()
+    store.init(
+        {
+            FEATURES: {
+                'top-level-has-prereqs-1': {
+                    'key': 'top-level-has-prereqs-1',
+                    'version': 100,
+                    'on': True,
+                    'fallthrough': {'variation': 0},
+                    'variations': ['value'],
+                    'prerequisites': [
+                        {'key': 'prereq1', 'variation': 0},
+                        {'key': 'prereq2', 'variation': 0}
+                    ],
+                },
+                'top-level-has-prereqs-2': {
+                    'key': 'top-level-has-prereqs-2',
+                    'version': 100,
+                    'on': True,
+                    'fallthrough': {'variation': 0},
+                    'variations': ['value'],
+                    'prerequisites': [
+                        {'key': 'prereq3', 'variation': 0}
+                    ],
+                },
+                'prereq1': {
+                    'key': 'prereq1',
+                    'version': 200,
+                    'on': True,
+                    'fallthrough': {'variation': 0},
+                    'variations': ['value'],
+                },
+                'prereq2': {
+                    'key': 'prereq2',
+                    'version': 200,
+                    'on': True,
+                    'fallthrough': {'variation': 0},
+                    'variations': ['value'],
+                },
+                'prereq3': {
+                    'key': 'prereq3',
+                    'version': 200,
+                    'on': True,
+                    'fallthrough': {'variation': 0},
+                    'variations': ['value'],
+                },
+            }
+        }
+    )
+    client = make_client(store)
+    state = client.all_flags_state(user)
+    assert state.valid
+    result = state.to_json_dict()
+    assert result == {
+        'top-level-has-prereqs-1': 'value',
+        'top-level-has-prereqs-2': 'value',
+        'prereq1': 'value',
+        'prereq2': 'value',
+        'prereq3': 'value',
+        '$flagsState': {
+            'top-level-has-prereqs-1': {
+                'variation': 0,
+                'version': 100,
+                'prerequisites': ['prereq1', 'prereq2']
+            },
+            'top-level-has-prereqs-2': {
+                'variation': 0,
+                'version': 100,
+                'prerequisites': ['prereq3']
+            },
+            'prereq1': {'variation': 0, 'version': 200},
+            'prereq2': {'variation': 0, 'version': 200},
+            'prereq3': {'variation': 0, 'version': 200},
+        },
+        '$valid': True
+    }
+
+
 def test_all_flags_state_returns_state_with_reasons():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })

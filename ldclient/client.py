@@ -558,7 +558,8 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                detail = self._evaluator.evaluate(flag, context, self._event_factory_default).detail
+                result = self._evaluator.evaluate(flag, context, self._event_factory_default)
+                detail = result.detail
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
@@ -572,6 +573,7 @@ class LDClient:
                 'variation': detail.variation_index,
                 'reason': detail.reason,
                 'version': flag['version'],
+                'prerequisites': result.prerequisites,
                 'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
                 'trackReason': requires_experiment_data,
                 'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),

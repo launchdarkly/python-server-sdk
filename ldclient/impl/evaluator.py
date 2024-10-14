@@ -24,7 +24,7 @@ __BUILTINS__ = ["key", "secondary", "ip", "country", "email",
 # ended up having to do for the context.
 class EvalResult:
     __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership',
-        'original_flag_key', 'prereq_stack', 'segment_stack']
+        'original_flag_key', 'prereq_stack', 'segment_stack', 'depth', 'prerequisites']
 
     def __init__(self):
         self.detail = None
@@ -34,6 +34,12 @@ class EvalResult:
         self.original_flag_key = None  # type: Optional[str]
         self.prereq_stack = None  # type: Optional[List[str]]
         self.segment_stack = None  # type: Optional[List[str]]
+        self.depth = 0
+        self.prerequisites = []  # type: List[str]
+
+    def record_prerequisite(self, key: str):
+        if self.depth == 0:
+            self.prerequisites.append(key)
 
     def add_event(self, event: EventInputEvaluation):
         if self.events is None:
@@ -48,7 +54,7 @@ class EvaluationException(Exception):
     def __init__(self, message: str, error_kind: str = 'MALFORMED_FLAG'):
         self._message = message
         self._error_kind = error_kind
-    
+
     @property
     def message(self) -> str:
         return self._message
@@ -125,7 +131,7 @@ class Evaluator:
         prereq_res = None
         if flag.prerequisites.count == 0:
             return None
-        
+
         try:
             # We use the state object to guard against circular references in prerequisites. To avoid
             # the overhead of creating the state.prereq_stack list in the most common case where
@@ -136,7 +142,7 @@ class Evaluator:
                 if state.prereq_stack is None:
                     state.prereq_stack = []
                 state.prereq_stack.append(flag_key)
-            
+
             for prereq in flag.prerequisites:
                 prereq_key = prereq.key
                 if (prereq_key == state.original_flag_key or
@@ -145,11 +151,15 @@ class Evaluator:
                         ' this is probably a temporary condition due to an incomplete update') % prereq_key)
 
                 prereq_flag = self.__get_flag(prereq_key)
+                state.record_prerequisite(prereq_key)
+
                 if prereq_flag is None:
                     log.warning("Missing prereq flag: " + prereq_key)
                     failed_prereq = prereq
                 else:
+                    state.depth += 1
                     prereq_res = self._evaluate(prereq_flag, context, state, event_factory)
+                    state.depth -= 1
                     # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
                     # off variation was. But we still need to evaluate it in order to generate an event.
                     if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
@@ -208,7 +218,7 @@ class Evaluator:
                 if segment is not None and self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
-        
+
         attr = clause.attribute
         if attr is None:
             return False
@@ -220,7 +230,7 @@ class Evaluator:
         context_value = _get_context_value_by_attr_ref(actual_context, attr)
         if context_value is None:
             return False
-        
+
         # is the attr an array?
         if isinstance(context_value, (list, tuple)):
             for v in context_value:
@@ -287,7 +297,7 @@ class Evaluator:
             # that as a "not configured" condition.
             state.big_segments_status = BigSegmentsStatus.NOT_CONFIGURED
             return False
-        
+
         # A big segment can only apply to one context kind, so if we don't have a key for that kind,
         # we don't need to bother querying the data.
         match_context = context.get_individual_context(segment.unbounded_context_kind or Context.DEFAULT_KIND)
@@ -357,7 +367,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
     variations = rollout.variations
     if len(variations) == 0:
         return (None, False)
-    
+
     bucket_by = None if rollout.is_experiment else rollout.bucket_by
     bucket = _bucket_context(
         rollout.seed,

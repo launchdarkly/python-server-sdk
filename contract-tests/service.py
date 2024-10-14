@@ -77,7 +77,8 @@ def status():
             'inline-context',
             'anonymous-redaction',
             'evaluation-hooks',
-            'omit-anonymous-contexts'
+            'omit-anonymous-contexts',
+            'client-prereq-events'
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
