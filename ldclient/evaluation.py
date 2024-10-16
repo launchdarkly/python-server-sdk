@@ -52,7 +52,7 @@ class EvaluationDetail:
 
         * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
           e.g. ``"FLAG_NOT_FOUND"``
-        
+
         * ``bigSegmentsStatus``: describes the validity of Big Segment information, if and only if
           the flag evaluation required querying at least one Big Segment; otherwise it returns None.
           Allowable values are defined in :class:`BigSegmentsStatus`. For more information, read the
@@ -65,7 +65,7 @@ class EvaluationDetail:
         variations.
         """
         return self.__variation_index is None
-    
+
     def __eq__(self, other) -> bool:
         return self.value == other.value and self.variation_index == other.variation_index and self.reason == other.reason
 
@@ -141,6 +141,8 @@ class FeatureFlagsState:
         if not omit_details:
             meta['version'] = flag_state['version']
 
+        if 'prerequisites' in flag_state and len(flag_state['prerequisites']) > 0:
+            meta['prerequisites'] = flag_state['prerequisites']
         if flag_state['variation'] is not None:
             meta['variation'] = flag_state['variation']
         if trackEvents:
