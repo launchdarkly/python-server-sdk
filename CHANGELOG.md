@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.8.0](https://github.com/launchdarkly/python-server-sdk/compare/9.7.2...9.8.0) (2024-10-16)
+
+
+### Features
+
+* Add support for client-side prerequisite events ([#314](https://github.com/launchdarkly/python-server-sdk/issues/314)) ([3025af4](https://github.com/launchdarkly/python-server-sdk/commit/3025af4dc6499c678e30bb2ae240a30b8c89f101))
+
 ## [9.7.2](https://github.com/launchdarkly/python-server-sdk/compare/9.7.1...9.7.2) (2024-10-01)
 
 
