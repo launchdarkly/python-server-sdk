@@ -120,7 +120,7 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def initialized_internal(self):
         index, resp = self._client.kv.get(self._inited_key())
-        return (resp is not None)
+        return resp is not None
 
     def describe_configuration(self, config):
         return 'Consul'
@@ -132,4 +132,4 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         return self._kind_key(kind) + '/' + key
 
     def _inited_key(self):
-        return self._prefix + ('$inited')
+        return self._prefix + '$inited'

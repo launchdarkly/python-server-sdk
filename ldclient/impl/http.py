@@ -145,7 +145,7 @@ def _get_target_host_and_port(uri: str) -> Tuple[str, int, bool]:
     """
     if '//' not in uri:
         parts = uri.split(':')
-        return (parts[0], int(parts[1]) if len(parts) > 1 else 80, False)
+        return parts[0], int(parts[1]) if len(parts) > 1 else 80, False
 
     parsed = urlparse(uri)
     is_https = parsed.scheme == 'https'

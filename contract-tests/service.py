@@ -81,7 +81,7 @@ def status():
             'client-prereq-events'
         ]
     }
-    return (json.dumps(body), 200, {'Content-type': 'application/json'})
+    return json.dumps(body), 200, {'Content-type': 'application/json'}
 
 @app.route('/', methods=['DELETE'])
 def delete_stop_service():
@@ -102,10 +102,10 @@ def post_create_client():
 
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
-        return ("Failed to initialize", 500)
+        return "Failed to initialize", 500
 
     clients[client_id] = client
-    return ('', 201, {'Location': resource_url})
+    return '', 201, {'Location': resource_url}
 
 
 @app.route('/clients/<id>', methods=['POST'])
@@ -116,7 +116,7 @@ def post_client_command(id):
 
     client = clients[id]
     if client is None:
-        return ('', 404)
+        return '', 404
 
     command = params.get('command')
     sub_params = params.get(command)
@@ -146,11 +146,11 @@ def post_client_command(id):
     elif command == "migrationOperation":
         response = client.migration_operation(sub_params)
     else:
-        return ('', 400)
+        return '', 400
 
     if response is None:
-        return ('', 201)
-    return (json.dumps(response), 200)
+        return '', 201
+    return json.dumps(response), 200
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
@@ -158,10 +158,10 @@ def delete_client(id):
 
     client = clients[id]
     if client is None:
-        return ('', 404)
+        return '', 404
 
     client.close()
-    return ('', 202)
+    return '', 202
 
 if __name__ == "__main__":
     port = default_port

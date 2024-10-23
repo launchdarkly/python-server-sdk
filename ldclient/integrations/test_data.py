@@ -15,7 +15,7 @@ def _variation_for_boolean(variation):
     else:
         return FALSE_VARIATION_INDEX
 
-class TestData():
+class TestData:
     """A mechanism for providing dynamically updatable feature flag state in a
     simplified form to an SDK client in test scenarios.
 
@@ -140,7 +140,7 @@ class TestData():
         finally:
             self._lock.unlock()
 
-class FlagBuilder():
+class FlagBuilder:
     """A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_data.TestData`.
 
     :see: :meth:`ldclient.integrations.test_data.TestData.flag()`
@@ -352,7 +352,7 @@ class FlagBuilder():
             self._targets[context_kind] = targets
 
         for idx, var in enumerate(self._variations):
-            if (idx == variation):
+            if idx == variation:
                 # If there is no set at the current variation, set it to be empty
                 target_for_variation = targets.get(idx)
                 if target_for_variation is None:
@@ -523,7 +523,7 @@ class FlagBuilder():
         return base_flag_object
 
 
-class FlagRuleBuilder():
+class FlagRuleBuilder:
     """
     A builder for feature flag rules to be used with :class:`ldclient.integrations.test_data.FlagBuilder`.
 

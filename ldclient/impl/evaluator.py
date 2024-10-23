@@ -180,7 +180,7 @@ class Evaluator:
             # old-style data has only targets for users
             if len(user_targets) != 0:
                 user_context = context.get_individual_context(Context.DEFAULT_KIND)
-                if (user_context is None):
+                if user_context is None:
                     return None
                 key = user_context.key
                 for t in user_targets:
@@ -359,14 +359,14 @@ def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollou
 def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, context: Context) -> Tuple[Optional[int], bool]:
     var = vr.variation
     if var is not None:
-        return (var, False)
+        return var, False
 
     rollout = vr.rollout
     if rollout is None:
-        return (None, False)
+        return None, False
     variations = rollout.variations
     if len(variations) == 0:
-        return (None, False)
+        return None, False
 
     bucket_by = None if rollout.is_experiment else rollout.bucket_by
     bucket = _bucket_context(
@@ -386,7 +386,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
         sum += wv.weight / 100000.0
         if bucket < sum:
             is_experiment_partition = is_experiment and not wv.untracked
-            return (wv.variation, is_experiment_partition)
+            return wv.variation, is_experiment_partition
 
     # The context's bucket value was greater than or equal to the end of the last bucket. This could happen due
     # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
@@ -394,7 +394,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
     # this case (or changing the scaling, which would potentially change the results for *all* contexts), we
     # will simply put the context in the last bucket.
     is_experiment_partition = is_experiment and not variations[-1].untracked
-    return (variations[-1].variation, is_experiment_partition)
+    return variations[-1].variation, is_experiment_partition
 
 def _bucket_context(
     seed: Optional[int],

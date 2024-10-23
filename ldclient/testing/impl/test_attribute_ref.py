@@ -38,7 +38,8 @@ class TestAttributeRef:
         assert a.depth == 1
         assert a[0] == unescaped
 
-    @pytest.mark.parametrize("input", [("name"), ("name/with/slashes"), ("name~0~1with-what-looks-like-escape-sequences")])
+    @pytest.mark.parametrize("input", ["name", "name/with/slashes",
+                                       "name~0~1with-what-looks-like-escape-sequences"])
     def test_literal(self, input: str):
         a = AttributeRef.from_literal(input)
         assert a.valid is True

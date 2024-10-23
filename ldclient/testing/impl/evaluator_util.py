@@ -69,7 +69,7 @@ class EvaluatorBuilder:
     def _get_big_segments_membership(self, key: str) -> Tuple[Optional[dict], str]:
         if key not in self.__big_segments:
             raise Exception("test made unexpected request for big segments for context key '%s'" % key)
-        return (self.__big_segments[key], self.__big_segments_status)
+        return self.__big_segments[key], self.__big_segments_status
 
 basic_evaluator = EvaluatorBuilder().build()
 

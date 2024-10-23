@@ -80,7 +80,7 @@ class BigSegmentStoreManager:
 
     def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
         if not self.__store:
-            return (None, BigSegmentsStatus.NOT_CONFIGURED)
+            return None, BigSegmentsStatus.NOT_CONFIGURED
         membership = self.__cache.get(user_key)
         if membership is None:
             user_hash = _hash_for_user_key(user_key)
@@ -91,13 +91,13 @@ class BigSegmentStoreManager:
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
-                return (None, BigSegmentsStatus.STORE_ERROR)
+                return None, BigSegmentsStatus.STORE_ERROR
         status = self.__last_status
         if not status:
             status = self.poll_store_and_update_status()
         if not status.available:
-            return (membership, BigSegmentsStatus.STORE_ERROR)
-        return (membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY)
+            return membership, BigSegmentsStatus.STORE_ERROR
+        return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
 
     def get_status(self) -> BigSegmentStoreStatus:
         status = self.__last_status
