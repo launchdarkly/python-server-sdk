@@ -76,7 +76,6 @@ def parse_semver(input: Any) -> Optional[VersionInfo]:
             try:
                 input = _add_zero_version_component(input)
                 return VersionInfo.parse(input)
-                return input
             except ValueError as e:
                 return None
 
