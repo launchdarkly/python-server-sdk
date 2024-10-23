@@ -1,7 +1,10 @@
-import pytest
 import json
+
 import jsonpickle
+import pytest
+
 from ldclient.evaluation import FeatureFlagsState
+
 
 def test_can_get_flag_value():
     state = FeatureFlagsState(True)

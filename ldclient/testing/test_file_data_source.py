@@ -1,22 +1,22 @@
 import json
 import os
-from typing import List
-
-import pytest
 import tempfile
 import threading
 import time
+from typing import List
 
-from ldclient.client import LDClient, Context
+import pytest
+
+from ldclient.client import Context, LDClient
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.integrations import Files
-from ldclient.interfaces import DataSourceStatus, DataSourceState, DataSourceErrorKind
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
+from ldclient.interfaces import (DataSourceErrorKind, DataSourceState,
+                                 DataSourceStatus)
 from ldclient.testing.test_util import SpyListener
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 have_yaml = False
 try:

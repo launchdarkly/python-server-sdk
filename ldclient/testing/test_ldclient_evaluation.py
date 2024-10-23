@@ -1,18 +1,17 @@
 import time
-from ldclient.client import LDClient, Config, Context
+
+from ldclient.client import Config, Context, LDClient
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.big_segments import _hash_for_user_key
 from ldclient.impl.evaluator import _make_big_segment_ref
 from ldclient.interfaces import FeatureStore
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
 from ldclient.testing.builders import *
 from ldclient.testing.mock_components import MockBigSegmentStore
 from ldclient.testing.stub_util import MockEventProcessor, MockUpdateProcessor
 from ldclient.testing.test_ldclient import make_client, user
-
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 flag1 = {
     'key': 'key1',

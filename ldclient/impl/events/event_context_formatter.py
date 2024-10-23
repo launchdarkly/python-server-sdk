@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional
 
 from ldclient.context import Context
 from ldclient.impl.model import AttributeRef

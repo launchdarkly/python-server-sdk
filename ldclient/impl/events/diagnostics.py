@@ -1,10 +1,11 @@
+import platform
 import threading
 import time
 import uuid
-import platform
 
 from ldclient.config import Config
 from ldclient.version import VERSION
+
 
 class _DiagnosticAccumulator:
     def __init__(self, diagnostic_id):

@@ -1,9 +1,9 @@
-import pytest
 import re
+
+import pytest
 from semver import VersionInfo
 
 from ldclient.impl.model import *
-
 from ldclient.testing.builders import *
 
 

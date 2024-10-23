@@ -1,26 +1,28 @@
-import pytest
 import json
-from threading import Thread
-from typing import Set, Dict
-from datetime import timedelta
 import time
 import uuid
+from datetime import timedelta
+from threading import Thread
+from typing import Dict, Set
+
+import pytest
 
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
-from ldclient.impl.events.event_processor import DefaultEventProcessor
-from ldclient.migrations.types import Operation, Origin, Stage
-from ldclient.migrations.tracker import MigrationOpEvent
-from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
-from ldclient.impl.util import timedelta_millis
+from ldclient.impl.events.diagnostics import (_DiagnosticAccumulator,
+                                              create_diagnostic_id)
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
-
+from ldclient.impl.events.event_processor import DefaultEventProcessor
+from ldclient.impl.events.types import (EventInput, EventInputCustom,
+                                        EventInputEvaluation,
+                                        EventInputIdentify)
+from ldclient.impl.util import timedelta_millis
+from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.migrations.types import Operation, Origin, Stage
 from ldclient.testing.builders import *
 from ldclient.testing.proxy_test_util import do_proxy_tests
 from ldclient.testing.stub_util import MockHttp
-
 
 default_config = Config("fake_sdk_key")
 context = Context.builder('userkey').name('Red').build()

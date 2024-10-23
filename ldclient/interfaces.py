@@ -3,13 +3,14 @@ This submodule contains interfaces for various components of the SDK.
 
 They may be useful in writing new implementations of these components, or for testing.
 """
+from abc import ABCMeta, abstractmethod, abstractproperty
+from enum import Enum
+from typing import Any, Callable, Mapping, Optional
+
 from ldclient.context import Context
 from ldclient.impl.listeners import Listeners
 
-from abc import ABCMeta, abstractmethod, abstractproperty
 from .versioned_data_kind import VersionedDataKind
-from typing import Any, Callable, Mapping, Optional
-from enum import Enum
 
 
 class FeatureStore:

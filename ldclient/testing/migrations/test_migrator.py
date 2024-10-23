@@ -1,18 +1,20 @@
-import pytest
 from datetime import datetime, timedelta
-from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.migrations import MigratorBuilder
+from time import sleep
+from typing import List
+
+import pytest
+
 from ldclient import Result
-from ldclient.migrations.types import Stage, Origin, MigratorFn, ExecutionOrder
-from ldclient.migrations.migrator import Migrator
-from ldclient.migrations.tracker import MigrationOpEvent
-from ldclient.versioned_data_kind import FEATURES
+from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.events.types import EventInputEvaluation
 from ldclient.impl.util import timedelta_millis
+from ldclient.migrations import MigratorBuilder
+from ldclient.migrations.migrator import Migrator
+from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.migrations.types import ExecutionOrder, MigratorFn, Origin, Stage
 from ldclient.testing.builders import FlagBuilder
 from ldclient.testing.test_ldclient import make_client, user
-from typing import List
-from time import sleep
+from ldclient.versioned_data_kind import FEATURES
 
 
 def success(payload) -> Result:

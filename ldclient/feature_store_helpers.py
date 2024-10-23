@@ -2,12 +2,15 @@
 This submodule contains support code for writing feature store implementations.
 """
 
-from typing import Dict, Mapping, Any
+from typing import Any, Dict, Mapping
+
 from expiringdict import ExpiringDict
 
-from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
-from ldclient.versioned_data_kind import VersionedDataKind
 from ldclient.feature_store import CacheConfig
+from ldclient.interfaces import (DiagnosticDescription, FeatureStore,
+                                 FeatureStoreCore)
+from ldclient.versioned_data_kind import VersionedDataKind
+
 
 def _ensure_encoded(kind, item):
     return item if isinstance(item, dict) else kind.encode(item)

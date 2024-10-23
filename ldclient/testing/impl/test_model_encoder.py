@@ -1,6 +1,6 @@
-from ldclient.impl.model import *
-
 import json
+
+from ldclient.impl.model import *
 
 
 class MyTestEntity(ModelEntity):

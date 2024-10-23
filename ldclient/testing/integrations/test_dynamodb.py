@@ -1,13 +1,14 @@
-from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import _DynamoDBBigSegmentStore
-from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore, _DynamoDBHelpers
+import time
+
+from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import \
+    _DynamoDBBigSegmentStore
+from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
+    _DynamoDBFeatureStoreCore, _DynamoDBHelpers)
 from ldclient.integrations import DynamoDB
 from ldclient.interfaces import UpdateProcessor
-
 from ldclient.testing.integrations.big_segment_store_test_base import *
 from ldclient.testing.integrations.persistent_feature_store_test_base import *
 from ldclient.testing.test_util import skip_database_tests
-
-import time
 
 have_dynamodb = False
 try:

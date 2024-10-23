@@ -9,10 +9,11 @@ storable objects as completely generic JSON dictionaries, rather than having any
 for features or segments.
 """
 
-from ldclient.impl.model import FeatureFlag, ModelEntity, Segment
-
 from collections import namedtuple
 from typing import Any, Callable, Iterable, Optional
+
+from ldclient.impl.model import FeatureFlag, ModelEntity, Segment
+
 
 # Note that VersionedDataKind without the extra attributes is no longer used in the SDK,
 # but it's preserved here for backward compatibility just in case someone else used it

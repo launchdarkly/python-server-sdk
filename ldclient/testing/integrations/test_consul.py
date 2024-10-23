@@ -1,8 +1,8 @@
-from ldclient.integrations import Consul
+import pytest
 
+from ldclient.integrations import Consul
 from ldclient.testing.integrations.persistent_feature_store_test_base import *
 from ldclient.testing.test_util import skip_database_tests
-import pytest
 
 have_consul = False
 try:

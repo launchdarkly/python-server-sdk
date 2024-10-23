@@ -1,10 +1,11 @@
+import json
+
 import ldclient
 from ldclient import _reset_client
 from ldclient.config import Config
-from ldclient.testing.http_util import start_server, BasicResponse
+from ldclient.testing.http_util import BasicResponse, start_server
 from ldclient.testing.stub_util import make_put_event, stream_content
 from ldclient.testing.sync_util import wait_until
-import json
 
 sdk_key = 'sdk-key'
 

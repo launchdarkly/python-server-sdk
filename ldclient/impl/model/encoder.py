@@ -1,6 +1,7 @@
+import json
+
 from ldclient.impl.model.entity import ModelEntity
 
-import json
 
 class ModelEncoder(json.JSONEncoder):
     """

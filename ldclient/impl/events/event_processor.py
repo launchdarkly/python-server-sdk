@@ -2,34 +2,39 @@
 Implementation details of the analytics event delivery component.
 """
 
+import gzip
+import json
+import queue
+import time
+import uuid
 from calendar import timegm
 from collections import namedtuple
 from email.utils import parsedate
-import json
-from threading import Event, Lock, Thread
-from typing import Any, List, Optional, Dict, Callable
-import time
-import uuid
-import queue
-import urllib3
-import gzip
-from ldclient.config import Config
 from random import Random
+from threading import Event, Lock, Thread
+from typing import Any, Callable, Dict, List, Optional
 
+import urllib3
+
+from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
-from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
-from ldclient.migrations.tracker import MigrationOpEvent
-from ldclient.impl.util import timedelta_millis
+from ldclient.impl.events.types import (EventInput, EventInputCustom,
+                                        EventInputEvaluation,
+                                        EventInputIdentify)
 from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import check_if_error_is_recoverable_and_log, current_time_millis, is_http_error_recoverable, log, _headers
 from ldclient.impl.sampler import Sampler
+from ldclient.impl.util import (_headers,
+                                check_if_error_is_recoverable_and_log,
+                                current_time_millis, is_http_error_recoverable,
+                                log, timedelta_millis)
 from ldclient.interfaces import EventProcessor
+from ldclient.migrations.tracker import MigrationOpEvent
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 4

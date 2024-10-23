@@ -1,6 +1,7 @@
 from ldclient.context import Context
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 
+
 def test_simple_context():
     f = EventContextFormatter(False, [])
     c = Context.create('a')

@@ -3,15 +3,19 @@ Default implementation of the polling component.
 """
 # currently excluded from documentation - see docs/README.md
 
+import time
 from threading import Event
+from typing import Optional
 
 from ldclient.config import Config
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import UnsuccessfulResponseException, http_error_message, is_http_error_recoverable, log
-from ldclient.interfaces import FeatureRequester, FeatureStore, UpdateProcessor, DataSourceUpdateSink, DataSourceErrorInfo, DataSourceErrorKind, DataSourceState
-
-import time
-from typing import Optional
+from ldclient.impl.util import (UnsuccessfulResponseException,
+                                http_error_message, is_http_error_recoverable,
+                                log)
+from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
+                                 DataSourceState, DataSourceUpdateSink,
+                                 FeatureRequester, FeatureStore,
+                                 UpdateProcessor)
 
 
 class PollingUpdateProcessor(UpdateProcessor):

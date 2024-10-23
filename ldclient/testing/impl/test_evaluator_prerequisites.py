@@ -3,7 +3,6 @@ import pytest
 from ldclient.client import Context
 from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.types import EventInputEvaluation
-
 from ldclient.testing.builders import *
 from ldclient.testing.impl.evaluator_util import *
 

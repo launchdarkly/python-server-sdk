@@ -1,6 +1,7 @@
+from typing import Optional
+
 import pytest
 
-from typing import Optional
 from ldclient.impl.http import _get_proxy_url
 
 

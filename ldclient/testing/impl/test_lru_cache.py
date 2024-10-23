@@ -1,5 +1,6 @@
 from ldclient.impl.lru_cache import SimpleLRUCache
 
+
 def test_retains_values_up_to_capacity():
     lru = SimpleLRUCache(3)
     assert lru.put("a", True) == False

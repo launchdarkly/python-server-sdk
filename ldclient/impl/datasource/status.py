@@ -1,13 +1,15 @@
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-from ldclient.impl.dependency_tracker import DependencyTracker
-from ldclient.impl.listeners import Listeners
-from ldclient.interfaces import DataSourceStatusProvider, DataSourceUpdateSink, DataSourceStatus, FeatureStore, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind, FlagChange
-from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.versioned_data_kind import VersionedDataKind
-from ldclient.impl.dependency_tracker import KindAndKey
-
 import time
 from typing import Callable, Mapping, Optional, Set
+
+from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
+from ldclient.impl.listeners import Listeners
+from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
+                                 DataSourceState, DataSourceStatus,
+                                 DataSourceStatusProvider,
+                                 DataSourceUpdateSink, FeatureStore,
+                                 FlagChange)
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
 class DataSourceUpdateSinkImpl(DataSourceUpdateSink):

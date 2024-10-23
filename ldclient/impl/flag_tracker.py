@@ -1,9 +1,9 @@
-from ldclient.interfaces import FlagTracker, FlagChange, FlagValueChange
-from ldclient.impl.listeners import Listeners
-from ldclient.context import Context
-from ldclient.impl.rwlock import ReadWriteLock
-
 from typing import Callable
+
+from ldclient.context import Context
+from ldclient.impl.listeners import Listeners
+from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.interfaces import FlagChange, FlagTracker, FlagValueChange
 
 
 class FlagValueChangeListener:

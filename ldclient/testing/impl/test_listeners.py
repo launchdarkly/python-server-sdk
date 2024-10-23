@@ -1,6 +1,7 @@
+from queue import Queue
+
 from ldclient.impl.listeners import Listeners
 
-from queue import Queue
 
 def test_notify_with_no_listeners_does_not_throw_exception():
     l = Listeners()

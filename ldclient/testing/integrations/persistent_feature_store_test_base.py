@@ -1,13 +1,14 @@
 from abc import abstractmethod, abstractproperty
+
 import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.interfaces import FeatureStore
-from ldclient.versioned_data_kind import FEATURES
-
-from ldclient.testing.feature_store_test_base import FeatureStoreTestBase, FeatureStoreTester, StoreTestScope
+from ldclient.testing.feature_store_test_base import (FeatureStoreTestBase,
+                                                      FeatureStoreTester,
+                                                      StoreTestScope)
 from ldclient.testing.test_util import skip_database_tests
-
+from ldclient.versioned_data_kind import FEATURES
 
 # The standard test suite to be run against all persistent feature store implementations. See
 # ldclient.testing.feature_store_test_base for the basic model being used here. For each database integration,

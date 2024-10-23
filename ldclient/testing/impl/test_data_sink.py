@@ -1,16 +1,17 @@
-import pytest
+from typing import Callable, Dict
+
 import mock
+import pytest
 
-from typing import Dict, Callable
-
-from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.interfaces import DataSourceState, DataSourceErrorKind
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
+from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.testing.builders import (FlagBuilder, FlagRuleBuilder,
+                                       SegmentBuilder, SegmentRuleBuilder,
+                                       make_clause)
 from ldclient.testing.test_util import SpyListener
-from ldclient.testing.builders import FlagBuilder, FlagRuleBuilder, make_clause, SegmentBuilder, SegmentRuleBuilder
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 @pytest.fixture

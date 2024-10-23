@@ -1,6 +1,8 @@
-from ldclient.impl.util import redact_password
-import pytest
 import os
+
+import pytest
+
+from ldclient.impl.util import redact_password
 
 skip_database_tests = os.environ.get('LD_SKIP_DATABASE_TESTS') == '1'
 

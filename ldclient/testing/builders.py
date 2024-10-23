@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any, List ,Optional
+
+from typing import Any, List, Optional
 
 from ldclient.context import Context
 from ldclient.impl.model import *

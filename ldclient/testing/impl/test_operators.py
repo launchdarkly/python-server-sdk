@@ -1,7 +1,6 @@
 import pytest
 
 from ldclient.impl import operators
-
 from ldclient.testing.builders import *
 
 

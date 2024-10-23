@@ -1,14 +1,13 @@
-from client_entity import ClientEntity
-
 import json
 import logging
 import os
 import sys
+from logging.config import dictConfig
+
+from client_entity import ClientEntity
 from flask import Flask, request
 from flask.logging import default_handler
-from logging.config import dictConfig
 from werkzeug.exceptions import HTTPException
-
 
 default_port = 8000
 

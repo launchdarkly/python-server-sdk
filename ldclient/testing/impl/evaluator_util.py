@@ -1,11 +1,11 @@
+from typing import Any, Optional, Tuple, Union
+
 from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
 from ldclient.testing.builders import *
-
-from typing import Any, Optional, Tuple, Union
 
 basic_user = Context.create('user-key')
 fake_timestamp = 0

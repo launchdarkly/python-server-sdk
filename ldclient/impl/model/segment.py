@@ -1,6 +1,7 @@
 from typing import Any, List, Optional, Set
 
-from ldclient.impl.model.attribute_ref import AttributeRef, opt_attr_ref_with_opt_context_kind
+from ldclient.impl.model.attribute_ref import (
+    AttributeRef, opt_attr_ref_with_opt_context_kind)
 from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.entity import *
 

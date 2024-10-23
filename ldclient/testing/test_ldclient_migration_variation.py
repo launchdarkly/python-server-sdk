@@ -1,10 +1,10 @@
 import pytest
-from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.versioned_data_kind import FEATURES
-from ldclient.migrations import Stage, Operation, Origin
 
+from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.migrations import Operation, Origin, Stage
 from ldclient.testing.builders import FlagBuilder
 from ldclient.testing.test_ldclient import make_client, user
+from ldclient.versioned_data_kind import FEATURES
 
 
 def test_uses_default_if_flag_not_found():

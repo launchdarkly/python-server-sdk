@@ -10,7 +10,8 @@ except ImportError:
 from ldclient import log
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
+from ldclient.interfaces import (DiagnosticDescription, FeatureStore,
+                                 FeatureStoreCore)
 
 # 
 # Internal implementation of the Consul feature store.

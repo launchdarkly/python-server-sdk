@@ -1,9 +1,13 @@
-import pytest
 from datetime import timedelta
+
+import pytest
+
 from ldclient import Context
-from ldclient.migrations import OpTracker, Stage, Operation, Origin, MigrationOpEvent
 from ldclient.evaluation import EvaluationDetail
-from ldclient.testing.builders import build_off_flag_with_value, MigrationSettingsBuilder
+from ldclient.migrations import (MigrationOpEvent, Operation, OpTracker,
+                                 Origin, Stage)
+from ldclient.testing.builders import (MigrationSettingsBuilder,
+                                       build_off_flag_with_value)
 from ldclient.testing.test_ldclient import user
 
 

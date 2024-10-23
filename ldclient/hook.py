@@ -1,9 +1,9 @@
-from ldclient.context import Context
-from ldclient.evaluation import EvaluationDetail
-
 from abc import ABCMeta, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from typing import Any
+
+from ldclient.context import Context
+from ldclient.evaluation import EvaluationDetail
 
 
 @dataclass

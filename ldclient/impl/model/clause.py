@@ -1,10 +1,14 @@
 from re import Pattern
-from semver import VersionInfo
 from typing import Any, List, Optional
 
-from ldclient.impl.model.attribute_ref import AttributeRef, req_attr_ref_with_opt_context_kind
+from semver import VersionInfo
+
+from ldclient.impl.model.attribute_ref import (
+    AttributeRef, req_attr_ref_with_opt_context_kind)
 from ldclient.impl.model.entity import *
-from ldclient.impl.model.value_parsing import parse_regex, parse_semver, parse_time
+from ldclient.impl.model.value_parsing import (parse_regex, parse_semver,
+                                               parse_time)
+
 
 class ClausePreprocessedValue:
     __slots__ = ['_as_time', '_as_regex', '_as_semver']

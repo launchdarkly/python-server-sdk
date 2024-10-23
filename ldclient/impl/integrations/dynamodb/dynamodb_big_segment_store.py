@@ -6,9 +6,9 @@ try:
 except ImportError:
     pass
 
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
-
 from typing import List, Optional
+
+from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 
 class _DynamoDBBigSegmentStore(BigSegmentStore):

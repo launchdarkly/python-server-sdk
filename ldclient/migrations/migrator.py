@@ -1,16 +1,21 @@
 from __future__ import annotations
+
 import concurrent.futures
-from datetime import datetime
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 from random import Random
-from typing import Optional, Union, Any, Tuple, TYPE_CHECKING
-from ldclient.migrations.types import ExecutionOrder, OperationResult, WriteResult, Stage, MigrationConfig, MigratorFn, MigratorCompareFn, Operation, Origin
-from ldclient.migrations.tracker import OpTracker
-from ldclient.impl.util import Result
+from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
+
 from ldclient.impl.sampler import Sampler
+from ldclient.impl.util import Result
+from ldclient.migrations.tracker import OpTracker
+from ldclient.migrations.types import (ExecutionOrder, MigrationConfig,
+                                       MigratorCompareFn, MigratorFn,
+                                       Operation, OperationResult, Origin,
+                                       Stage, WriteResult)
 
 if TYPE_CHECKING:
-    from ldclient import LDClient, Context
+    from ldclient import Context, LDClient
 
 
 class Migrator:
