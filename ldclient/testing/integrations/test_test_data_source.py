@@ -9,7 +9,7 @@ from ldclient.versioned_data_kind import FEATURES
 from ldclient.integrations.test_data import TestData, FlagBuilder
 
 
-## Test Data + Data Source
+# Test Data + Data Source
 
 
 def test_makes_valid_datasource():
@@ -222,7 +222,7 @@ def test_updates_after_client_close_have_no_affect():
 
     td.update(td.flag('some-flag'))
 
-    assert store.get(FEATURES, 'some-flag') == None
+    assert store.get(FEATURES, 'some-flag') is None
 
 
 def test_can_handle_multiple_clients():
@@ -268,7 +268,7 @@ def test_flag_evaluation_with_client():
     user1 = Context.from_dict({'kind': 'user', 'key': 'user1', 'firstName': 'Mike', 'country': 'us'})
     eval1 = client.variation_detail('test-flag', user1, default='default')
 
-    assert eval1.value == True
+    assert eval1.value is True
     assert eval1.variation_index == 0
     assert eval1.reason['kind'] == 'RULE_MATCH'
 
@@ -276,7 +276,7 @@ def test_flag_evaluation_with_client():
     user2 = Context.from_dict({'kind': 'user', 'key': 'user2', 'firstName': 'Joe', 'country': 'us'})
     eval2 = client.variation_detail('test-flag', user2, default='default')
 
-    assert eval2.value == False
+    assert eval2.value is False
     assert eval2.variation_index == 1
     assert eval2.reason['kind'] == 'FALLTHROUGH'
 
@@ -297,5 +297,5 @@ def test_flag_can_evaluate_all_flags():
     value = flags_state.get_flag_value('test-flag')
     reason = flags_state.get_flag_reason('test-flag') or {}
 
-    assert value == True
+    assert value is True
     assert reason.get('kind', None) == 'RULE_MATCH'

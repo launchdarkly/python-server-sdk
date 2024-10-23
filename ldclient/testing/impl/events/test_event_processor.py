@@ -54,9 +54,9 @@ def make_context_keys(context: Context) -> dict:
 
 class DefaultTestProcessor(DefaultEventProcessor):
     def __init__(self, **kwargs):
-        if not 'diagnostic_opt_out' in kwargs:
+        if 'diagnostic_opt_out' not in kwargs:
             kwargs['diagnostic_opt_out'] = True
-        if not 'sdk_key' in kwargs:
+        if 'sdk_key' not in kwargs:
             kwargs['sdk_key'] = 'SDK_KEY'
         config = Config(**kwargs)
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
@@ -785,12 +785,12 @@ def check_feature_event(data, source: EventInputEvaluation, context_json: Option
     assert data['kind'] == 'feature'
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
-    assert data.get('version') == None if source.flag is None else source.flag.version
+    assert data.get('version') is None if source.flag is None else source.flag.version
     assert data.get('variation') == source.variation
     assert data.get('value') == source.value
     assert data.get('default') == source.default_value
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
-    assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
+    assert data.get('prereq_of') is None if source.prereq_of is None else source.prereq_of.key
 
 
 def check_migration_op_event(data, source: MigrationOpEvent):
@@ -846,12 +846,12 @@ def check_debug_event(data, source: EventInputEvaluation, context_json: Optional
     assert data['kind'] == 'debug'
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
-    assert data.get('version') == None if source.flag is None else source.flag.version
+    assert data.get('version') is None if source.flag is None else source.flag.version
     assert data.get('variation') == source.variation
     assert data.get('value') == source.value
     assert data.get('default') == source.default_value
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
-    assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
+    assert data.get('prereq_of') is None if source.prereq_of is None else source.prereq_of.key
 
 
 def check_custom_event(data, source: EventInputCustom):

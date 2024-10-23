@@ -1,7 +1,5 @@
 import json
 import logging
-import os
-import sys
 import requests
 from hook import PostingHook
 
@@ -9,8 +7,6 @@ from big_segment_store_fixture import BigSegmentStoreFixture
 
 from ldclient.config import BigSegmentsConfig
 
-# Import ldclient from parent directory
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient import Context, MigratorBuilder, ExecutionOrder, MigratorFn, Operation, Stage
 from ldclient import *
 

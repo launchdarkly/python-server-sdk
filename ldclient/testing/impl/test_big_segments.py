@@ -143,17 +143,17 @@ def test_status_polling_detects_store_unavailability():
         manager.status_provider.add_listener(lambda status: statuses.put(status))
 
         status1 = manager.status_provider.status
-        assert status1.available == True
+        assert status1.available is True
 
         store.setup_metadata_error()
 
         status2 = statuses.get(True, 1.0)
-        assert status2.available == False
+        assert status2.available is False
 
         store.setup_metadata_always_up_to_date()
 
         status3 = statuses.get(True, 1.0)
-        assert status3.available == True
+        assert status3.available is True
     finally:
         manager.stop()
 
@@ -169,16 +169,16 @@ def test_status_polling_detects_stale_status():
         manager.status_provider.add_listener(lambda status: statuses.put(status))
 
         status1 = manager.status_provider.status
-        assert status1.stale == False
+        assert status1.stale is False
 
         store.setup_metadata_always_stale()
 
         status2 = statuses.get(True, 1.0)
-        assert status2.stale == True
+        assert status2.stale is True
 
         store.setup_metadata_always_up_to_date()
 
         status3 = statuses.get(True, 1.0)
-        assert status3.stale == False
+        assert status3.stale is False
     finally:
         manager.stop()

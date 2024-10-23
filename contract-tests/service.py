@@ -9,6 +9,9 @@ from flask.logging import default_handler
 from logging.config import dictConfig
 from werkzeug.exceptions import HTTPException
 
+# Import ldclient from parent directory
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 
 default_port = 8000
 

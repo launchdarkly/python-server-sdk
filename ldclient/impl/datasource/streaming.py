@@ -208,7 +208,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _parse_path(path: str):
         for kind in [FEATURES, SEGMENTS]:
             if path.startswith(kind.stream_api_path):
-                return ParsedPath(kind=kind, key=path[len(kind.stream_api_path) :])
+                return ParsedPath(kind=kind, key=path[len(kind.stream_api_path):])
         return None
 
     # magic methods for "with" statement (used in testing)

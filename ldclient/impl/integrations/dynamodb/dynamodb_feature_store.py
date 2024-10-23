@@ -1,4 +1,6 @@
 import json
+from ldclient import log
+from ldclient.interfaces import FeatureStoreCore
 
 have_dynamodb = False
 try:
@@ -8,10 +10,6 @@ try:
 except ImportError:
     pass
 
-from ldclient import log
-from ldclient.feature_store import CacheConfig
-from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
 #
 # Internal implementation of the DynamoDB feature store.
@@ -181,5 +179,5 @@ class _DynamoDBHelpers:
     @staticmethod
     def batch_write_requests(client, table_name, requests):
         batch_size = 25
-        for batch in (requests[i : i + batch_size] for i in range(0, len(requests), batch_size)):
+        for batch in (requests[i: i + batch_size] for i in range(0, len(requests), batch_size)):
             client.batch_write_item(RequestItems={table_name: batch})

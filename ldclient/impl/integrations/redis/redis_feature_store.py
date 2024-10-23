@@ -1,4 +1,9 @@
 import json
+from ldclient import log
+from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
+from ldclient.versioned_data_kind import FEATURES
+from ldclient.impl.util import redact_password
+from typing import Any, Dict
 
 have_redis = False
 try:
@@ -7,13 +12,6 @@ try:
     have_redis = True
 except ImportError:
     pass
-
-from ldclient import log
-from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
-from ldclient.versioned_data_kind import FEATURES
-from ldclient.impl.util import redact_password
-
-from typing import Any, Dict
 
 
 class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):

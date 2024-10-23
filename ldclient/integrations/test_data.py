@@ -251,7 +251,7 @@ class FlagBuilder:
             return self.variations(True, False).fallthrough_variation(TRUE_VARIATION_INDEX).off_variation(FALSE_VARIATION_INDEX)
 
     def _is_boolean_flag(self):
-        return len(self._variations) == 2 and self._variations[TRUE_VARIATION_INDEX] == True and self._variations[FALSE_VARIATION_INDEX] == False
+        return len(self._variations) == 2 and self._variations[TRUE_VARIATION_INDEX] is True and self._variations[FALSE_VARIATION_INDEX] is False
 
     def variations(self, *variations) -> 'FlagBuilder':
         """Changes the allowable variation values for the flag.

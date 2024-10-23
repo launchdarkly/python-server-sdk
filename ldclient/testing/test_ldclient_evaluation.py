@@ -128,7 +128,7 @@ def test_variation_detail_for_flag_that_evaluates_to_none():
     expected = EvaluationDetail('default', None, {'kind': 'OFF'})
     actual = client.variation_detail('feature.key', user, default='default')
     assert expected == actual
-    assert actual.is_default_value() == True
+    assert actual.is_default_value() is True
 
 
 def test_variation_when_feature_store_throws_error(caplog):
@@ -145,7 +145,7 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
     actual = client.variation_detail('feature.key', Context.from_dict({"key": "user", "kind": "user"}), default='default')
     assert expected == actual
-    assert actual.is_default_value() == True
+    assert actual.is_default_value() is True
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == ['Unexpected error while retrieving feature flag "feature.key": NotImplementedError()']
 
@@ -161,7 +161,7 @@ def test_flag_using_big_segment():
     config = Config(sdk_key='SDK_KEY', feature_store=store, big_segments=BigSegmentsConfig(store=segstore), event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
     with LDClient(config) as client:
         detail = client.variation_detail(flag['key'], user, False)
-        assert detail.value == True
+        assert detail.value is True
         assert detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
 
@@ -333,13 +333,13 @@ def test_all_flags_state_returns_empty_state_if_user_has_no_key():
     store.init({FEATURES: {'key1': flag1, 'key2': flag2}})
     client = make_client(store)
     state = client.all_flags_state(Context.from_dict({}))
-    assert state.valid == False
+    assert state.valid is False
 
 
 def test_all_flags_returns_empty_state_if_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     state = client.all_flags_state(Context.from_dict({"key": "user", "kind": "user"}))
-    assert state.valid == False
+    assert state.valid is False
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == ['Unable to read flags for all_flag_state: NotImplementedError()']

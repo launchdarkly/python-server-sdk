@@ -20,7 +20,7 @@ def test_client_starts_in_streaming_mode():
 
             with LDClient(config=config) as client:
                 assert client.is_initialized()
-                assert client.variation(always_true_flag['key'], user, False) == True
+                assert client.variation(always_true_flag['key'], user, False) is True
 
                 r = stream_server.await_request()
                 assert r.headers['Authorization'] == sdk_key
@@ -33,7 +33,7 @@ def test_client_fails_to_start_in_streaming_mode_with_401_error():
 
         with LDClient(config=config) as client:
             assert not client.is_initialized()
-            assert client.variation(always_true_flag['key'], user, False) == False
+            assert client.variation(always_true_flag['key'], user, False) is False
 
 
 def test_client_retries_connection_in_streaming_mode_with_non_fatal_error():
@@ -45,7 +45,7 @@ def test_client_retries_connection_in_streaming_mode_with_non_fatal_error():
 
             with LDClient(config=config) as client:
                 assert client.is_initialized()
-                assert client.variation(always_true_flag['key'], user, False) == True
+                assert client.variation(always_true_flag['key'], user, False) is True
 
                 r = stream_server.await_request()
                 assert r.headers['Authorization'] == sdk_key
@@ -58,7 +58,7 @@ def test_client_starts_in_polling_mode():
 
         with LDClient(config=config) as client:
             assert client.is_initialized()
-            assert client.variation(always_true_flag['key'], user, False) == True
+            assert client.variation(always_true_flag['key'], user, False) is True
 
             r = poll_server.await_request()
             assert r.headers['Authorization'] == sdk_key
@@ -71,7 +71,7 @@ def test_client_fails_to_start_in_polling_mode_with_401_error():
 
         with LDClient(config=config) as client:
             assert not client.is_initialized()
-            assert client.variation(always_true_flag['key'], user, False) == False
+            assert client.variation(always_true_flag['key'], user, False) is False
 
 
 def test_client_sends_event_without_diagnostics():

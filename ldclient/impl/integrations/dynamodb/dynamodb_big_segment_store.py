@@ -1,3 +1,6 @@
+from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
+from typing import List, Optional
+
 have_dynamodb = False
 try:
     import boto3
@@ -5,10 +8,6 @@ try:
     have_dynamodb = True
 except ImportError:
     pass
-
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
-
-from typing import List, Optional
 
 
 class _DynamoDBBigSegmentStore(BigSegmentStore):

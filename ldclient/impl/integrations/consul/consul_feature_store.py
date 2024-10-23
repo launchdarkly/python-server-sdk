@@ -1,4 +1,6 @@
 import json
+from ldclient import log
+from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 
 have_consul = False
 try:
@@ -7,11 +9,6 @@ try:
     have_consul = True
 except ImportError:
     pass
-
-from ldclient import log
-from ldclient.feature_store import CacheConfig
-from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
 #
 # Internal implementation of the Consul feature store.

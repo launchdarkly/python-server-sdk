@@ -106,7 +106,7 @@ def test_segment_match_clause_retrieves_segment_from_store():
     user = Context.create('foo')
     flag = make_boolean_flag_matching_segment(segment)
 
-    assert evaluator.evaluate(flag, user, event_factory).detail.value == True
+    assert evaluator.evaluate(flag, user, event_factory).detail.value is True
 
 
 def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found():
@@ -114,4 +114,4 @@ def test_segment_match_clause_falls_through_with_no_errors_if_segment_not_found(
     flag = make_boolean_flag_with_clauses(make_clause_matching_segment_key('segkey'))
     evaluator = EvaluatorBuilder().with_unknown_segment('segkey').build()
 
-    assert evaluator.evaluate(flag, user, event_factory).detail.value == False
+    assert evaluator.evaluate(flag, user, event_factory).detail.value is False

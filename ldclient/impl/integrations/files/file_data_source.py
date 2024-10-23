@@ -3,6 +3,10 @@ import os
 import traceback
 import time
 from typing import Optional
+from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.util import log
+from ldclient.interfaces import UpdateProcessor, DataSourceUpdateSink, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 have_yaml = False
 try:
@@ -21,11 +25,6 @@ try:
     have_watchdog = True
 except ImportError:
     pass
-
-from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import log
-from ldclient.interfaces import UpdateProcessor, DataSourceUpdateSink, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 def _sanitize_json_item(item):
@@ -138,7 +137,7 @@ class _FileDataSource(UpdateProcessor):
         for path in self._paths:
             try:
                 resolved_paths.append(os.path.realpath(path))
-            except:
+            except Exception:
                 log.warning('Cannot watch for changes to data file "%s" because it is an invalid path' % path)
         if have_watchdog and not self._force_polling:
             return _FileDataSource.WatchdogAutoUpdater(resolved_paths, self._load_all)
@@ -199,6 +198,6 @@ class _FileDataSource(UpdateProcessor):
             for path in self._paths:
                 try:
                     ret[path] = os.path.getmtime(path)
-                except:
+                except Exception:
                     ret[path] = None
             return ret

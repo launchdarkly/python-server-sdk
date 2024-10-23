@@ -4,8 +4,6 @@ import sys
 from typing import Optional
 import urllib3
 
-# Import ldclient from parent directory
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 

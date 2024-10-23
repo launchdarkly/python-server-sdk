@@ -127,7 +127,7 @@ def test_http_proxy(monkeypatch):
         if secure:
             try:
                 fr.get_all_data()
-            except:
+            except Exception:
                 pass  # we expect this to fail because we don't have a real HTTPS proxy server
         else:
             result = fr.get_all_data()

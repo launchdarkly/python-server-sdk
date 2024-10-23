@@ -327,4 +327,4 @@ def test_does_not_allow_unsafe_yaml():
         os.remove(path)
         if client is not None:
             client.close()
-    assert unsafe_yaml_caused_method_to_be_called == False
+    assert unsafe_yaml_caused_method_to_be_called is False

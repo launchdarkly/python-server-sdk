@@ -11,7 +11,7 @@ def test_big_segment_with_no_generation_is_not_matched():
     evaluator = EvaluatorBuilder().with_segment(segment).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
-    assert result.detail.value == False
+    assert result.detail.value is False
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.NOT_CONFIGURED
 
 
@@ -35,7 +35,7 @@ def _test_matched_with_include(non_default_kind: bool, multi_kind_context: bool)
     evaluator = EvaluatorBuilder().with_segment(segment).with_big_segment_for_key(target_key, segment, True).build()
 
     result = evaluator.evaluate(flag, eval_context, event_factory)
-    assert result.detail.value == True
+    assert result.detail.value is True
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
 
@@ -44,7 +44,7 @@ def test_big_segment_matched_with_rule():
     evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_key(basic_user.key).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
-    assert result.detail.value == True
+    assert result.detail.value is True
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
 
@@ -53,7 +53,7 @@ def test_big_segment_unmatched_by_exclude_regardless_of_rule():
     evaluator = EvaluatorBuilder().with_segment(segment).with_big_segment_for_key(basic_user.key, segment, False).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
-    assert result.detail.value == False
+    assert result.detail.value is False
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
 
@@ -62,5 +62,5 @@ def test_big_segment_status_is_returned_by_provider():
     evaluator = EvaluatorBuilder().with_segment(segment).with_no_big_segments_for_key(basic_user.key).with_big_segments_status(BigSegmentsStatus.NOT_CONFIGURED).build()
     flag = make_boolean_flag_matching_segment(segment)
     result = evaluator.evaluate(flag, basic_user, event_factory)
-    assert result.detail.value == False
+    assert result.detail.value is False
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.NOT_CONFIGURED
