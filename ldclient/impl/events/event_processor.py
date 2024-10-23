@@ -21,13 +21,18 @@ from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
-from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
+from ldclient.impl.events.types import (EventInput, EventInputCustom,
+                                        EventInputEvaluation,
+                                        EventInputIdentify)
 from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.sampler import Sampler
-from ldclient.impl.util import _headers, check_if_error_is_recoverable_and_log, current_time_millis, is_http_error_recoverable, log, timedelta_millis
+from ldclient.impl.util import (_headers,
+                                check_if_error_is_recoverable_and_log,
+                                current_time_millis, is_http_error_recoverable,
+                                log, timedelta_millis)
 from ldclient.interfaces import EventProcessor
 from ldclient.migrations.tracker import MigrationOpEvent
 

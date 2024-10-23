@@ -1,6 +1,7 @@
 from ldclient.config import Config
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
-from ldclient.testing.http_util import BasicResponse, JsonResponse, start_server
+from ldclient.testing.http_util import (BasicResponse, JsonResponse,
+                                        start_server)
 from ldclient.testing.proxy_test_util import do_proxy_tests
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS

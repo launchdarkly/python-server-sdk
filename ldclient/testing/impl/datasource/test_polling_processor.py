@@ -9,7 +9,8 @@ from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.util import UnsuccessfulResponseException
-from ldclient.interfaces import DataSourceErrorKind, DataSourceState, DataSourceStatus
+from ldclient.interfaces import (DataSourceErrorKind, DataSourceState,
+                                 DataSourceStatus)
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import MockFeatureRequester, MockResponse
 from ldclient.testing.test_util import SpyListener
