@@ -18,8 +18,7 @@ from typing import Any, Callable, Iterable, Optional
 # Note that VersionedDataKind without the extra attributes is no longer used in the SDK,
 # but it's preserved here for backward compatibility just in case someone else used it
 class VersionedDataKind:
-    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,
-        decoder: Optional[Callable[[dict], Any]] = None):
+    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str, decoder: Optional[Callable[[dict], Any]] = None):
         self._namespace = namespace
         self._request_api_path = request_api_path
         self._stream_api_path = stream_api_path
@@ -47,9 +46,9 @@ class VersionedDataKind:
 
 
 class VersionedDataKindWithOrdering(VersionedDataKind):
-    def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,
-                 decoder: Optional[Callable[[dict], Any]],
-                 priority: int, get_dependency_keys: Optional[Callable[[dict], Iterable[str]]]):
+    def __init__(
+        self, namespace: str, request_api_path: str, stream_api_path: str, decoder: Optional[Callable[[dict], Any]], priority: int, get_dependency_keys: Optional[Callable[[dict], Iterable[str]]]
+    ):
         super().__init__(namespace, request_api_path, stream_api_path, decoder)
         self._priority = priority
         self._get_dependency_keys = get_dependency_keys
@@ -62,16 +61,14 @@ class VersionedDataKindWithOrdering(VersionedDataKind):
     def get_dependency_keys(self) -> Optional[Callable[[dict], Iterable[str]]]:
         return self._get_dependency_keys
 
-FEATURES = VersionedDataKindWithOrdering(namespace = "features",
-    request_api_path = "/sdk/latest-flags",
-    stream_api_path = "/flags/",
-    decoder = FeatureFlag,
-    priority = 1,
-    get_dependency_keys = lambda flag: (p.get('key') for p in flag.get('prerequisites', [])))
 
-SEGMENTS = VersionedDataKindWithOrdering(namespace = "segments",
-    request_api_path = "/sdk/latest-segments",
-    stream_api_path = "/segments/",
-    decoder = Segment,
-    priority = 0,
-    get_dependency_keys = None)
+FEATURES = VersionedDataKindWithOrdering(
+    namespace="features",
+    request_api_path="/sdk/latest-flags",
+    stream_api_path="/flags/",
+    decoder=FeatureFlag,
+    priority=1,
+    get_dependency_keys=lambda flag: (p.get('key') for p in flag.get('prerequisites', [])),
+)
+
+SEGMENTS = VersionedDataKindWithOrdering(namespace="segments", request_api_path="/sdk/latest-segments", stream_api_path="/segments/", decoder=Segment, priority=0, get_dependency_keys=None)

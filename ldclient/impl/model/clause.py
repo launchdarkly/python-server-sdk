@@ -10,7 +10,7 @@ from ldclient.impl.model.value_parsing import parse_regex, parse_semver, parse_t
 class ClausePreprocessedValue:
     __slots__ = ['_as_time', '_as_regex', '_as_semver']
 
-    def __init__(self, as_time: Optional[float]=None, as_regex: Optional[Pattern]=None, as_semver: Optional[VersionInfo]=None):
+    def __init__(self, as_time: Optional[float] = None, as_regex: Optional[Pattern] = None, as_semver: Optional[VersionInfo] = None):
         self._as_time = as_time
         self._as_regex = as_regex
         self._as_semver = as_semver

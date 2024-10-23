@@ -50,11 +50,11 @@ class BigSegmentStoreTester:
 class BigSegmentStoreTestScope:
     def __init__(self, store: BigSegmentStore):
         self.__store = store
-    
+
     @property
     def store(self) -> BigSegmentStore:
         return self.__store
-    
+
     # These magic methods allow the scope to be automatically cleaned up in a "with" block
     def __enter__(self):
         return self.__store
@@ -106,17 +106,16 @@ class BigSegmentStoreTestBase:
         tester.set_segments(tester.prefix, fake_user_hash, ['key1', 'key2'], [])
         with self.store(tester) as store:
             membership = store.get_membership(fake_user_hash)
-            assert membership == { 'key1': True, 'key2': True }
+            assert membership == {'key1': True, 'key2': True}
 
     def test_get_membership_excludes_only(self, tester):
         tester.set_segments(tester.prefix, fake_user_hash, [], ['key1', 'key2'])
         with self.store(tester) as store:
             membership = store.get_membership(fake_user_hash)
-            assert membership == { 'key1': False, 'key2': False }
-    
+            assert membership == {'key1': False, 'key2': False}
+
     def test_get_membership_includes_and_excludes(self, tester):
         tester.set_segments(tester.prefix, fake_user_hash, ['key1', 'key2'], ['key2', 'key3'])
         with self.store(tester) as store:
             membership = store.get_membership(fake_user_hash)
-            assert membership == { 'key1': True, 'key2': True, 'key3': False }
-    
+            assert membership == {'key1': True, 'key2': True, 'key3': False}

@@ -8,7 +8,7 @@ from ldclient.impl.events.diagnostics import create_diagnostic_id, create_diagno
 
 
 def test_create_diagnostic_id():
-    test_config = Config(sdk_key = "SDK_KEY", http=HTTPConfig())
+    test_config = Config(sdk_key="SDK_KEY", http=HTTPConfig())
     diag_id = create_diagnostic_id(test_config)
     assert len(diag_id) == 2
     uid = diag_id['diagnosticId']
@@ -18,7 +18,7 @@ def test_create_diagnostic_id():
 
 
 def test_create_diagnostic_init():
-    test_config = Config(sdk_key = "SDK_KEY", wrapper_name='django', wrapper_version = '5.1.1')
+    test_config = Config(sdk_key="SDK_KEY", wrapper_name='django', wrapper_version='5.1.1')
     diag_id = create_diagnostic_id(test_config)
     diag_init = create_diagnostic_init(100, diag_id, test_config)
     assert len(diag_init) == 6
@@ -66,11 +66,23 @@ def test_create_diagnostic_config_defaults():
 
 def test_create_diagnostic_config_custom():
     test_store = CachingStoreWrapper(_TestStoreForDiagnostics(), CacheConfig.default())
-    test_config = Config("SDK_KEY", base_uri='https://test.com', events_uri='https://test.com',
-                         events_max_pending=10, flush_interval=1, stream_uri='https://test.com',
-                         stream=False, poll_interval=60, use_ldd=True, feature_store=test_store,
-                         all_attributes_private=True, context_keys_capacity=10, context_keys_flush_interval=60,
-                         http=HTTPConfig(http_proxy = 'proxy', read_timeout=1, connect_timeout=1), diagnostic_recording_interval=60)
+    test_config = Config(
+        "SDK_KEY",
+        base_uri='https://test.com',
+        events_uri='https://test.com',
+        events_max_pending=10,
+        flush_interval=1,
+        stream_uri='https://test.com',
+        stream=False,
+        poll_interval=60,
+        use_ldd=True,
+        feature_store=test_store,
+        all_attributes_private=True,
+        context_keys_capacity=10,
+        context_keys_flush_interval=60,
+        http=HTTPConfig(http_proxy='proxy', read_timeout=1, connect_timeout=1),
+        diagnostic_recording_interval=60,
+    )
     diag_config = _create_diagnostic_config_object(test_config)
 
     assert len(diag_config) == 16
@@ -98,7 +110,7 @@ class _TestStoreForDiagnostics:
 
 
 def test_diagnostic_accumulator():
-    test_config = Config(sdk_key = "SDK_KEY")
+    test_config = Config(sdk_key="SDK_KEY")
     diag_id = create_diagnostic_id(test_config)
     diag_accum = _DiagnosticAccumulator(diag_id)
 
@@ -131,8 +143,7 @@ def test_diagnostic_accumulator():
     assert diag_event['droppedEvents'] == 10
     assert diag_event['deduplicatedUsers'] == 15
     assert diag_event['eventsInLastBatch'] == 50
-    assert diag_event['streamInits'] == [{'timestamp': 100, 'durationMillis': 100, 'failed': False},
-                                         {'timestamp': 300, 'durationMillis': 200, 'failed': True}]
+    assert diag_event['streamInits'] == [{'timestamp': 100, 'durationMillis': 100, 'failed': False}, {'timestamp': 300, 'durationMillis': 200, 'failed': True}]
     json.dumps(diag_event)
 
     reset_diag_event = diag_accum.create_event_and_reset(0, 0)

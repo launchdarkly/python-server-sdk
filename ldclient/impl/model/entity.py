@@ -22,8 +22,7 @@ from typing import Any, List, Optional, Union
 def opt_type(data: dict, name: str, desired_type) -> Any:
     value = data.get(name)
     if value is not None and not isinstance(value, desired_type):
-        raise ValueError('error in flag/segment data: property "%s" should be type %s but was %s"' % \
-            (name, desired_type, value.__class__))
+        raise ValueError('error in flag/segment data: property "%s" should be type %s but was %s"' % (name, desired_type, value.__class__))
     return value
 
 
@@ -46,8 +45,7 @@ def opt_int(data: dict, name: str) -> Optional[int]:
 def opt_number(data: dict, name: str) -> Optional[Union[int, float]]:
     value = data.get(name)
     if value is not None and not isinstance(value, int) and not isinstance(value, float):
-        raise ValueError('error in flag/segment data: property "%s" should be a number but was %s"' % \
-            (name, value.__class__))
+        raise ValueError('error in flag/segment data: property "%s" should be a number but was %s"' % (name, value.__class__))
     return value
 
 
@@ -66,7 +64,7 @@ def opt_str_list(data: dict, name: str) -> List[str]:
 def req_type(data: dict, name: str, desired_type) -> Any:
     value = opt_type(data, name, desired_type)
     if value is None:
-        raise ValueError('error in flag/segment data: required property "%s" is missing' %  name)
+        raise ValueError('error in flag/segment data: required property "%s" is missing' % name)
     return value
 
 
@@ -93,8 +91,7 @@ def req_str_list(data: dict, name: str) -> List[str]:
 def validate_list_type(items: list, name: str, desired_type) -> list:
     for item in items:
         if not isinstance(item, desired_type):
-            raise ValueError('error in flag/segment data: property %s should be an array of %s but an item was %s' % \
-                (name, desired_type, item.__class__))
+            raise ValueError('error in flag/segment data: property %s should be an array of %s but an item was %s' % (name, desired_type, item.__class__))
     return items
 
 
@@ -105,7 +102,7 @@ class ModelEntity:
     def to_json_dict(self):
         return self._data
 
-    def get(self, attribute, default = None) -> Any:
+    def get(self, attribute, default=None) -> Any:
         return self._data.get(attribute, default)
 
     def __getitem__(self, attribute) -> Any:
@@ -118,4 +115,4 @@ class ModelEntity:
         return self.__class__ == other.__class__ and self._data == other._data
 
     def __repr__(self) -> str:
-        return json.dumps(self._data, separators=(',',':'))
+        return json.dumps(self._data, separators=(',', ':'))

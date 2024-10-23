@@ -25,4 +25,3 @@ def test_set_config():
     # illustrates bad behavior- assigning value of ldclient.get() means
     # the old_client didn't get updated when we called set_config()
     assert old_client.get_sdk_key() == old_sdk_key
-

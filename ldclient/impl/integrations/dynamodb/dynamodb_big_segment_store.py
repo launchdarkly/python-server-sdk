@@ -1,6 +1,7 @@
 have_dynamodb = False
 try:
     import boto3
+
     have_dynamodb = True
 except ImportError:
     pass
@@ -28,10 +29,7 @@ class _DynamoDBBigSegmentStore(BigSegmentStore):
 
     def get_metadata(self) -> BigSegmentStoreMetadata:
         key = self._prefix + self.KEY_METADATA
-        data = self._client.get_item(TableName=self._table_name, Key={
-            self.PARTITION_KEY: { "S": key },
-            self.SORT_KEY: { "S": key }
-        })
+        data = self._client.get_item(TableName=self._table_name, Key={self.PARTITION_KEY: {"S": key}, self.SORT_KEY: {"S": key}})
         if data is not None:
             item = data.get('Item')
             if item is not None:
@@ -42,10 +40,7 @@ class _DynamoDBBigSegmentStore(BigSegmentStore):
         return BigSegmentStoreMetadata(None)
 
     def get_membership(self, user_hash: str) -> Optional[dict]:
-        data = self._client.get_item(TableName=self._table_name, Key={
-            self.PARTITION_KEY: { "S": self._prefix + self.KEY_USER_DATA },
-            self.SORT_KEY: { "S": user_hash }
-        })
+        data = self._client.get_item(TableName=self._table_name, Key={self.PARTITION_KEY: {"S": self._prefix + self.KEY_USER_DATA}, self.SORT_KEY: {"S": user_hash}})
         if data is not None:
             item = data.get('Item')
             if item is not None:

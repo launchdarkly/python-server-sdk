@@ -13,8 +13,7 @@ __version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email",
-                "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
 """Settings."""
 start_wait = 5
@@ -99,17 +98,4 @@ def _reset_client():
 __BASE_TYPES__ = (str, float, int, bool)
 
 
-__all__ = [
-    'Config',
-    'Context',
-    'ContextBuilder',
-    'ContextMultiBuilder',
-    'LDClient',
-    'Result',
-    'client',
-    'context',
-    'evaluation',
-    'integrations',
-    'interfaces',
-    'migrations'
-]
+__all__ = ['Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations']

@@ -11,47 +11,35 @@ from ldclient.testing.builders import *
 from ldclient.testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
 
 
-unreachable_uri="http://fake"
+unreachable_uri = "http://fake"
 
 
 context = Context.builder('xyz').set('bizzle', 'def').build()
-user = Context.from_dict({
-    u'key': u'xyz',
-    u'kind': u'user',
-    u'bizzle': u'def'
-})
+user = Context.from_dict({u'key': u'xyz', u'kind': u'user', u'bizzle': u'def'})
 
-anonymous_user = Context.from_dict({
-    u'key': u'abc',
-    u'kind': u'user',
-    u'anonymous': True
-})
+anonymous_user = Context.from_dict({u'key': u'abc', u'kind': u'user', u'anonymous': True})
 
 
-def make_client(store = InMemoryFeatureStore()):
-    return LDClient(config=Config(sdk_key = 'SDK_KEY',
-                                  base_uri=unreachable_uri,
-                                  events_uri=unreachable_uri,
-                                  stream_uri=unreachable_uri,
-                                  event_processor_class=MockEventProcessor,
-                                  update_processor_class=MockUpdateProcessor,
-                                  feature_store=store))
+def make_client(store=InMemoryFeatureStore()):
+    return LDClient(
+        config=Config(
+            sdk_key='SDK_KEY',
+            base_uri=unreachable_uri,
+            events_uri=unreachable_uri,
+            stream_uri=unreachable_uri,
+            event_processor_class=MockEventProcessor,
+            update_processor_class=MockUpdateProcessor,
+            feature_store=store,
+        )
+    )
 
 
 def make_offline_client():
-    return LDClient(config=Config(sdk_key="secret",
-                                  offline=True,
-                                  base_uri=unreachable_uri,
-                                  events_uri=unreachable_uri,
-                                  stream_uri=unreachable_uri))
+    return LDClient(config=Config(sdk_key="secret", offline=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
 
 
 def make_ldd_client():
-    return LDClient(config=Config(sdk_key="secret",
-                                  use_ldd=True,
-                                  base_uri=unreachable_uri,
-                                  events_uri=unreachable_uri,
-                                  stream_uri=unreachable_uri))
+    return LDClient(config=Config(sdk_key="secret", use_ldd=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
 
 
 def get_first_event(c):
@@ -94,29 +82,29 @@ def test_toggle_offline():
 
 
 def test_defaults():
-    config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
+    config = Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, offline=True)
     with LDClient(config=config) as client:
         assert "bar" == client.variation('foo', user, default=None)
 
 
 def test_defaults_and_online():
     expected = "bar"
-    my_client = LDClient(config=Config("SDK_KEY",
-                                       base_uri="http://localhost:3000",
-                                       defaults={"foo": expected},
-                                       event_processor_class=MockEventProcessor,
-                                       update_processor_class=MockUpdateProcessor,
-                                       feature_store=InMemoryFeatureStore()))
+    my_client = LDClient(
+        config=Config(
+            "SDK_KEY",
+            base_uri="http://localhost:3000",
+            defaults={"foo": expected},
+            event_processor_class=MockEventProcessor,
+            update_processor_class=MockUpdateProcessor,
+            feature_store=InMemoryFeatureStore(),
+        )
+    )
     actual = my_client.variation('foo', user, default="originalDefault")
     assert actual == expected
 
 
 def test_defaults_and_online_no_default():
-    my_client = LDClient(config=Config("SDK_KEY",
-                                       base_uri="http://localhost:3000",
-                                       defaults={"foo": "bar"},
-                                       event_processor_class=MockEventProcessor,
-                                       update_processor_class=MockUpdateProcessor))
+    my_client = LDClient(config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor))
     assert "jim" == my_client.variation('baz', user, default="jim")
 
 
@@ -136,16 +124,14 @@ def test_secure_mode_hash():
 
 dependency_ordering_test_data = {
     FEATURES: {
-        "a": { "key": "a", "prerequisites": [ { "key": "b" }, { "key": "c" } ] },
-        "b": { "key": "b", "prerequisites": [ { "key": "c" }, { "key": "e" } ] },
-        "c": { "key": "c" },
-        "d": { "key": "d" },
-        "e": { "key": "e" },
-        "f": { "key": "f" }
+        "a": {"key": "a", "prerequisites": [{"key": "b"}, {"key": "c"}]},
+        "b": {"key": "b", "prerequisites": [{"key": "c"}, {"key": "e"}]},
+        "c": {"key": "c"},
+        "d": {"key": "d"},
+        "e": {"key": "e"},
+        "f": {"key": "f"},
     },
-    SEGMENTS: {
-        "o": { "key": "o" }
-    }
+    SEGMENTS: {"o": {"key": "o"}},
 }
 
 
@@ -163,8 +149,7 @@ class DependencyOrderingDataUpdateProcessor(UpdateProcessor):
 
 def test_store_data_set_ordering():
     store = CapturingFeatureStore()
-    config = Config(sdk_key = 'SDK_KEY', send_events=False, feature_store=store,
-                    update_processor_class=DependencyOrderingDataUpdateProcessor)
+    config = Config(sdk_key='SDK_KEY', send_events=False, feature_store=store, update_processor_class=DependencyOrderingDataUpdateProcessor)
     LDClient(config=config)
 
     data = store.received_data
@@ -186,5 +171,4 @@ def test_store_data_set_ordering():
             prereq_index = flags_list.index(prereq_item)
             if prereq_index > item_index:
                 all_keys = (f["key"] for f in flags_list)
-                raise Exception("%s depends on %s, but %s was listed first; keys in order are [%s]" %
-                    (item["key"], prereq["key"], item["key"], ", ".join(all_keys)))
+                raise Exception("%s depends on %s, but %s was listed first; keys in order are [%s]" % (item["key"], prereq["key"], item["key"], ", ".join(all_keys)))

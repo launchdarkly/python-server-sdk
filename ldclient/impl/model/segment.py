@@ -8,14 +8,14 @@ from ldclient.impl.model.entity import *
 class SegmentTarget:
     __slots__ = ['_context_kind', '_values']
 
-    def __init__(self, data: dict, logger = None):
+    def __init__(self, data: dict, logger=None):
         self._context_kind = opt_str(data, 'contextKind')
         self._values = set(req_str_list(data, 'values'))
-    
+
     @property
     def context_kind(self) -> Optional[str]:
         return self._context_kind
-    
+
     @property
     def values(self) -> Set[str]:
         return self._values
@@ -41,16 +41,28 @@ class SegmentRule:
     @property
     def rollout_context_kind(self) -> Optional[str]:
         return self._rollout_context_kind
-    
+
     @property
     def weight(self) -> Optional[int]:
         return self._weight
 
 
 class Segment(ModelEntity):
-    __slots__ = ['_data', '_key', '_version', '_deleted', '_included', '_excluded',
-        '_included_contexts', '_excluded_contexts', '_rules', '_salt', '_unbounded',
-        '_unbounded_context_kind', '_generation']
+    __slots__ = [
+        '_data',
+        '_key',
+        '_version',
+        '_deleted',
+        '_included',
+        '_excluded',
+        '_included_contexts',
+        '_excluded_contexts',
+        '_rules',
+        '_salt',
+        '_unbounded',
+        '_unbounded_context_kind',
+        '_generation',
+    ]
 
     def __init__(self, data: dict):
         super().__init__(data)
@@ -72,11 +84,11 @@ class Segment(ModelEntity):
         self._unbounded = opt_bool(data, 'unbounded')
         self._unbounded_context_kind = opt_str(data, 'unboundedContextKind')
         self._generation = opt_int(data, 'generation')
-    
+
     @property
     def key(self) -> str:
         return self._key
-    
+
     @property
     def version(self) -> int:
         return self._version
@@ -84,11 +96,11 @@ class Segment(ModelEntity):
     @property
     def deleted(self) -> bool:
         return self._deleted
-    
+
     @property
     def included(self) -> Set[str]:
         return self._included
-    
+
     @property
     def excluded(self) -> Set[str]:
         return self._excluded
@@ -100,19 +112,19 @@ class Segment(ModelEntity):
     @property
     def excluded_contexts(self) -> List[SegmentTarget]:
         return self._excluded_contexts
-    
+
     @property
     def rules(self) -> List[Any]:
         return self._rules
-    
+
     @property
     def salt(self) -> str:
         return self._salt
-    
+
     @property
     def unbounded(self) -> bool:
         return self._unbounded
-    
+
     @property
     def unbounded_context_kind(self) -> Optional[str]:
         return self._unbounded_context_kind

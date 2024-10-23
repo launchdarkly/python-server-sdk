@@ -26,11 +26,7 @@ class TestAttributeRef:
         assert a.depth == 1
         assert a[0] == input
 
-    @pytest.mark.parametrize("input,unescaped", [
-        ("/name", "name"),
-        ("/0", "0"),
-        ("/name~1with~1slashes~0and~0tildes", "name/with/slashes~and~tildes")
-        ])
+    @pytest.mark.parametrize("input,unescaped", [("/name", "name"), ("/0", "0"), ("/name~1with~1slashes~0and~0tildes", "name/with/slashes~and~tildes")])
     def test_ref_simple_with_leading_slash(self, input: str, unescaped: str):
         a = AttributeRef.from_path(input)
         assert a.valid is True
@@ -38,8 +34,7 @@ class TestAttributeRef:
         assert a.depth == 1
         assert a[0] == unescaped
 
-    @pytest.mark.parametrize("input", ["name", "name/with/slashes",
-                                       "name~0~1with-what-looks-like-escape-sequences"])
+    @pytest.mark.parametrize("input", ["name", "name/with/slashes", "name~0~1with-what-looks-like-escape-sequences"])
     def test_literal(self, input: str):
         a = AttributeRef.from_literal(input)
         assert a.valid is True

@@ -16,7 +16,7 @@ class FixedThreadPool:
         self._event = Event()
         self._job_queue = queue.Queue()
         for i in range(0, size):
-            thread = Thread(target = self._run_worker)
+            thread = Thread(target=self._run_worker)
             thread.name = "%s.%d" % (name, i + 1)
             thread.daemon = True
             thread.start()
@@ -25,6 +25,7 @@ class FixedThreadPool:
     Schedules a job for execution if there is an available worker thread, and returns
     true if successful; returns false if all threads are busy.
     """
+
     def execute(self, jobFn):
         with self._lock:
             if self._busy_count >= self._size:
@@ -36,6 +37,7 @@ class FixedThreadPool:
     """
     Waits until all currently busy worker threads have completed their jobs.
     """
+
     def wait(self):
         while True:
             with self._lock:
@@ -47,13 +49,14 @@ class FixedThreadPool:
     """
     Tells all the worker threads to terminate once all active jobs have completed.
     """
+
     def stop(self):
         for i in range(0, self._size):
             self._job_queue.put('stop')
 
     def _run_worker(self):
         while True:
-            item = self._job_queue.get(block = True)
+            item = self._job_queue.get(block=True)
             if item == 'stop':
                 return
             try:

@@ -73,24 +73,11 @@ class EventOutputFormatter:
             out['context'] = self._process_context(e.original_input.context, False)
             return out
         elif isinstance(e, EventInputIdentify):
-            return {
-                'kind': 'identify',
-                'creationDate': e.timestamp,
-                'context': self._process_context(e.context, False)
-            }
+            return {'kind': 'identify', 'creationDate': e.timestamp, 'context': self._process_context(e.context, False)}
         elif isinstance(e, IndexEvent):
-            return {
-                'kind': 'index',
-                'creationDate': e.timestamp,
-                'context': self._process_context(e.context, False)
-            }
+            return {'kind': 'index', 'creationDate': e.timestamp, 'context': self._process_context(e.context, False)}
         elif isinstance(e, EventInputCustom):
-            out = {
-                'kind': 'custom',
-                'creationDate': e.timestamp,
-                'key': e.key,
-                'contextKeys': self._context_keys(e.context)
-            }
+            out = {'kind': 'custom', 'creationDate': e.timestamp, 'key': e.key, 'contextKeys': self._context_keys(e.context)}
             if e.data is not None:
                 out['data'] = e.data
             if e.metric_value is not None:
@@ -102,10 +89,7 @@ class EventOutputFormatter:
                 'creationDate': e.timestamp,
                 'operation': e.operation.value,
                 'contextKeys': self._context_keys(e.context),
-                'evaluation': {
-                    'key': e.key,
-                    'value': e.detail.value
-                }
+                'evaluation': {'key': e.key, 'value': e.detail.value},
             }
 
             if e.flag is not None:
@@ -123,18 +107,10 @@ class EventOutputFormatter:
             measurements: List[Dict] = []
 
             if len(e.invoked) > 0:
-                measurements.append(
-                    {
-                        "key": "invoked",
-                        "values": {origin.value: True for origin in e.invoked}
-                    }
-                )
+                measurements.append({"key": "invoked", "values": {origin.value: True for origin in e.invoked}})
 
             if e.consistent is not None:
-                measurement = {
-                    "key": "consistent",
-                    "value": e.consistent
-                }
+                measurement = {"key": "consistent", "value": e.consistent}
 
                 if e.consistent_ratio is not None and e.consistent_ratio != 1:
                     measurement["samplingRatio"] = e.consistent_ratio
@@ -142,20 +118,10 @@ class EventOutputFormatter:
                 measurements.append(measurement)
 
             if len(e.latencies) > 0:
-                measurements.append(
-                    {
-                        "key": "latency_ms",
-                        "values": {o.value: timedelta_millis(d) for o, d in e.latencies.items()}
-                    }
-                )
+                measurements.append({"key": "latency_ms", "values": {o.value: timedelta_millis(d) for o, d in e.latencies.items()}})
 
             if len(e.errors) > 0:
-                measurements.append(
-                    {
-                        "key": "error",
-                        "values": {origin.value: True for origin in e.errors}
-                    }
-                )
+                measurements.append({"key": "error", "values": {origin.value: True for origin in e.errors}})
 
             if len(measurements):
                 out["measurements"] = measurements
@@ -174,10 +140,7 @@ class EventOutputFormatter:
             counters = []  # type: List[Dict[str, Any]]
             for ckey, cval in flag_data.counters.items():
                 variation, version = ckey
-                counter = {
-                    'count': cval.count,
-                    'value': cval.value
-                }
+                counter = {'count': cval.count, 'value': cval.value}
                 if variation is not None:
                     counter['variation'] = variation
                 if version is None:
@@ -187,12 +150,7 @@ class EventOutputFormatter:
                 counters.append(counter)
             flag_data_out['counters'] = counters
             flags_out[key] = flag_data_out
-        return {
-            'kind': 'summary',
-            'startDate': summary.start_date,
-            'endDate': summary.end_date,
-            'features': flags_out
-        }
+        return {'kind': 'summary', 'startDate': summary.start_date, 'endDate': summary.end_date, 'features': flags_out}
 
     def _process_context(self, context: Context, redact_anonymous: bool):
         if redact_anonymous:
@@ -209,13 +167,7 @@ class EventOutputFormatter:
         return out
 
     def _base_eval_props(self, e: EventInputEvaluation, kind: str) -> dict:
-        out = {
-            'kind': kind,
-            'creationDate': e.timestamp,
-            'key': e.key,
-            'value': e.value,
-            'default': e.default_value
-        }
+        out = {'kind': kind, 'creationDate': e.timestamp, 'key': e.key, 'value': e.value, 'default': e.default_value}
         if e.flag is not None:
             out['version'] = e.flag.version
         if e.variation is not None:
@@ -240,9 +192,7 @@ class EventPayloadSendTask:
             output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
             resp = self._do_send(output_events)
         except Exception as e:
-            log.warning(
-                'Unhandled exception in event processor. Analytics events were not processed.',
-                exc_info=True)
+            log.warning('Unhandled exception in event processor. Analytics events were not processed.', exc_info=True)
 
     def _do_send(self, output_events):
         # noinspection PyBroadException
@@ -250,20 +200,12 @@ class EventPayloadSendTask:
             json_body = json.dumps(output_events, separators=(',', ':'))
             log.debug('Sending events payload: ' + json_body)
             payload_id = str(uuid.uuid4())
-            r = _post_events_with_retry(
-                self._http,
-                self._config,
-                self._config.events_uri,
-                payload_id,
-                json_body,
-                "%d events" % len(self._payload.events)
-            )
+            r = _post_events_with_retry(self._http, self._config, self._config.events_uri, payload_id, json_body, "%d events" % len(self._payload.events))
             if r:
                 self._response_fn(r)
             return r
         except Exception as e:
-            log.warning(
-                'Unhandled exception in event processor. Analytics events were not processed. [%s]', e)
+            log.warning('Unhandled exception in event processor. Analytics events were not processed. [%s]', e)
 
 
 class DiagnosticEventSendTask:
@@ -277,17 +219,9 @@ class DiagnosticEventSendTask:
         try:
             json_body = json.dumps(self._event_body)
             log.debug('Sending diagnostic event: ' + json_body)
-            _post_events_with_retry(
-                self._http,
-                self._config,
-                self._config.events_base_uri + '/diagnostic',
-                None,
-                json_body,
-                "diagnostic event"
-            )
+            _post_events_with_retry(self._http, self._config, self._config.events_base_uri + '/diagnostic', None, json_body, "diagnostic event")
         except Exception as e:
-            log.warning(
-                'Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
+            log.warning('Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
 
 
 FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
@@ -332,7 +266,7 @@ class EventDispatcher:
         self._inbox = inbox
         self._config = config
         self._http = _http_factory(config).create_pool_manager(1, config.events_uri) if http_client is None else http_client
-        self._close_http = (http_client is None)  # so we know whether to close it later
+        self._close_http = http_client is None  # so we know whether to close it later
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
         self._context_keys = SimpleLRUCache(config.context_keys_capacity)
@@ -346,9 +280,7 @@ class EventDispatcher:
         self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
         self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.events.diag_flush")
         if self._diagnostic_accumulator is not None:
-            init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date,
-                                                self._diagnostic_accumulator.diagnostic_id,
-                                                config)
+            init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date, self._diagnostic_accumulator.diagnostic_id, config)
             task = DiagnosticEventSendTask(self._http, self._config, init_event)
             self._diagnostic_flush_workers.execute(task.run)
 
@@ -460,8 +392,7 @@ class EventDispatcher:
         if self._diagnostic_accumulator:
             self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
         if len(payload.events) > 0 or not payload.summary.is_empty():
-            task = EventPayloadSendTask(self._http, self._config, self._formatter, payload,
-                self._handle_response)
+            task = EventPayloadSendTask(self._http, self._config, self._formatter, payload, self._handle_response)
             if self._flush_workers.execute(task.run):
                 # The events have been handed off to a flush worker; clear them from our buffer.
                 self._outbox.clear()
@@ -509,8 +440,7 @@ class DefaultEventProcessor(EventProcessor):
         self._flush_timer.start()
         self._contexts_flush_timer.start()
         if diagnostic_accumulator is not None:
-            self._diagnostic_event_timer = RepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval,
-                                                         config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer = RepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval, config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None
@@ -572,14 +502,7 @@ class DefaultEventProcessor(EventProcessor):
         self.stop()
 
 
-def _post_events_with_retry(
-    http_client,
-    config,
-    uri,
-    payload_id,
-    body,
-    events_description
-):
+def _post_events_with_retry(http_client, config, uri, payload_id, body, events_description):
     hdrs = _headers(config)
     hdrs['Content-Type'] = 'application/json'
     if config.enable_event_compression:
@@ -594,14 +517,7 @@ def _post_events_with_retry(
     while True:
         next_action_message = "will retry" if can_retry else "some events were dropped"
         try:
-            r = http_client.request(
-                'POST',
-                uri,
-                headers=hdrs,
-                body=data,
-                timeout=urllib3.Timeout(connect=config.http.connect_timeout, read=config.http.read_timeout),
-                retries=0
-            )
+            r = http_client.request('POST', uri, headers=hdrs, body=data, timeout=urllib3.Timeout(connect=config.http.connect_timeout, read=config.http.read_timeout), retries=0)
             if r.status < 300:
                 return r
             recoverable = check_if_error_is_recoverable_and_log(context, r.status, None, next_action_message)

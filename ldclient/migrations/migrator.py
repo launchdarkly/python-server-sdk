@@ -18,6 +18,7 @@ class Migrator:
     A migrator is the interface through which migration support is executed. A
     migrator is configured through the :class:`MigratorBuilder`.
     """
+
     __metaclass__ = ABCMeta
 
     @abstractmethod
@@ -50,14 +51,7 @@ class MigratorImpl(Migrator):
     """
 
     def __init__(
-        self,
-        sampler: Sampler,
-        client: LDClient,
-        read_execution_order: ExecutionOrder,
-        read_config: MigrationConfig,
-        write_config: MigrationConfig,
-        measure_latency: bool,
-        measure_errors: bool
+        self, sampler: Sampler, client: LDClient, read_execution_order: ExecutionOrder, read_config: MigrationConfig, write_config: MigrationConfig, measure_latency: bool, measure_errors: bool
     ):
         self.__sampler = sampler
         self.__client = client
@@ -293,15 +287,7 @@ class Executor:
     built-in migration measurements.
     """
 
-    def __init__(
-        self,
-        origin: Origin,
-        fn: MigratorFn,
-        tracker: OpTracker,
-        measure_latency: bool,
-        measure_errors: bool,
-        payload: Any
-    ):
+    def __init__(self, origin: Origin, fn: MigratorFn, tracker: OpTracker, measure_latency: bool, measure_errors: bool, payload: Any):
         self.__origin = origin
         self.__fn = fn
         self.__tracker = tracker

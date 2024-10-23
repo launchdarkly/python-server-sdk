@@ -13,37 +13,19 @@ def _segment_matches_context(segment: Segment, context: Context) -> bool:
     return result.detail.value
 
 
-def verify_rollout(
-    eval_context: Context,
-    match_context: Context,
-    expected_bucket_value: int,
-    segment_key: str,
-    salt: str,
-    bucket_by: Optional[str],
-    rollout_context_kind: Optional[str]
-):
-    segment_should_match = SegmentBuilder(segment_key) \
-        .salt(salt) \
-        .rules(
-            SegmentRuleBuilder() \
-                .clauses(make_clause_matching_context(match_context)) \
-                .weight(expected_bucket_value + 1) \
-                .bucket_by(bucket_by) \
-                .rollout_context_kind(rollout_context_kind) \
-                .build()
-        ) \
+def verify_rollout(eval_context: Context, match_context: Context, expected_bucket_value: int, segment_key: str, salt: str, bucket_by: Optional[str], rollout_context_kind: Optional[str]):
+    segment_should_match = (
+        SegmentBuilder(segment_key)
+        .salt(salt)
+        .rules(SegmentRuleBuilder().clauses(make_clause_matching_context(match_context)).weight(expected_bucket_value + 1).bucket_by(bucket_by).rollout_context_kind(rollout_context_kind).build())
         .build()
-    segment_should_not_match = SegmentBuilder(segment_key) \
-        .salt(salt) \
-        .rules(
-            SegmentRuleBuilder() \
-                .clauses(make_clause_matching_context(match_context)) \
-                .weight(expected_bucket_value) \
-                .bucket_by(bucket_by) \
-                .rollout_context_kind(rollout_context_kind) \
-                .build()
-        ) \
+    )
+    segment_should_not_match = (
+        SegmentBuilder(segment_key)
+        .salt(salt)
+        .rules(SegmentRuleBuilder().clauses(make_clause_matching_context(match_context)).weight(expected_bucket_value).bucket_by(bucket_by).rollout_context_kind(rollout_context_kind).build())
         .build()
+    )
     assert _segment_matches_context(segment_should_match, eval_context) is True
     assert _segment_matches_context(segment_should_not_match, eval_context) is False
 
@@ -56,9 +38,7 @@ def test_explicit_include_user():
 
 def test_explicit_exclude_user():
     user = Context.create('foo')
-    segment = SegmentBuilder('test').excluded(user.key) \
-        .rules(make_segment_rule_matching_context(user)) \
-        .build()
+    segment = SegmentBuilder('test').excluded(user.key).rules(make_segment_rule_matching_context(user)).build()
     assert _segment_matches_context(segment, user) is False
 
 
@@ -82,13 +62,7 @@ def test_excluded_key_for_context_kind():
     c1 = Context.create('key1', 'kind1')
     c2 = Context.create('key2', 'kind2')
     multi = Context.create_multi(c1, c2)
-    segment = SegmentBuilder('test') \
-        .excluded_contexts('kind1', 'key1') \
-        .rules(
-            make_segment_rule_matching_context(c1),
-            make_segment_rule_matching_context(c2)
-        ) \
-        .build()
+    segment = SegmentBuilder('test').excluded_contexts('kind1', 'key1').rules(make_segment_rule_matching_context(c1), make_segment_rule_matching_context(c2)).build()
     assert _segment_matches_context(segment, c1) is False
     assert _segment_matches_context(segment, c2) is True
     assert _segment_matches_context(segment, multi) is False
@@ -96,41 +70,25 @@ def test_excluded_key_for_context_kind():
 
 def test_matching_rule_with_no_weight():
     context = Context.create('foo')
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().clauses(make_clause_matching_context(context)).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().clauses(make_clause_matching_context(context)).build()).build()
     assert _segment_matches_context(segment, context) is True
 
 
 def test_matching_rule_with_none_weight():
     context = Context.create('foo')
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().weight(None).clauses(make_clause_matching_context(context)).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().weight(None).clauses(make_clause_matching_context(context)).build()).build()
     assert _segment_matches_context(segment, context) is True
 
 
 def test_matching_rule_with_full_rollout():
     context = Context.create('foo')
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().weight(100000).clauses(make_clause_matching_context(context)).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().weight(100000).clauses(make_clause_matching_context(context)).build()).build()
     assert _segment_matches_context(segment, context) is True
 
 
 def test_matching_rule_with_zero_rollout():
     context = Context.create('foo')
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().weight(0).clauses(make_clause_matching_context(context)).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().weight(0).clauses(make_clause_matching_context(context)).build()).build()
     assert _segment_matches_context(segment, context) is False
 
 
@@ -149,27 +107,13 @@ def test_rollout_uses_context_kind():
 
 def test_matching_rule_with_multiple_clauses():
     context = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().clauses(
-                make_clause(None, 'email', 'in', 'test@example.com'),
-                make_clause(None, 'name', 'in', 'bob')
-            ).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().clauses(make_clause(None, 'email', 'in', 'test@example.com'), make_clause(None, 'name', 'in', 'bob')).build()).build()
     assert _segment_matches_context(segment, context) is True
 
 
 def test_non_matching_rule_with_multiple_clauses():
     context = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
-    segment = SegmentBuilder('test') \
-        .rules(
-            SegmentRuleBuilder().clauses(
-                make_clause(None, 'email', 'in', 'test@example.com'),
-                make_clause(None, 'name', 'in', 'bill')
-            ).build()
-        ) \
-        .build()
+    segment = SegmentBuilder('test').rules(SegmentRuleBuilder().clauses(make_clause(None, 'email', 'in', 'test@example.com'), make_clause(None, 'name', 'in', 'bill')).build()).build()
     assert _segment_matches_context(segment, context) is False
 
 
@@ -178,15 +122,7 @@ def test_segment_cycle_detection(depth: int):
     segment_keys = list("segmentkey%d" % i for i in range(depth))
     segments = []
     for i in range(depth):
-        segments.append(
-            SegmentBuilder(segment_keys[i]) \
-                .rules(
-                    SegmentRuleBuilder().clauses(
-                        make_clause_matching_segment_key(segment_keys[(i + 1) % depth])
-                    )
-                    .build()
-                )
-                .build())
+        segments.append(SegmentBuilder(segment_keys[i]).rules(SegmentRuleBuilder().clauses(make_clause_matching_segment_key(segment_keys[(i + 1) % depth])).build()).build())
     evaluator_builder = EvaluatorBuilder()
     for s in segments:
         evaluator_builder.with_segment(s)

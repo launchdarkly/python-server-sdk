@@ -23,13 +23,7 @@ class AttributeRef:
 
     _ERR_EMPTY = 'attribute reference cannot be empty'
 
-    def __init__(
-        self,
-        raw: str,
-        single_component: Optional[str],
-        components: Optional[List[str]],
-        error: Optional[str]
-    ):
+    def __init__(self, raw: str, single_component: Optional[str], components: Optional[List[str]], error: Optional[str]):
         self._raw = raw
         self._single_component = single_component
         self._components = components

@@ -19,7 +19,7 @@ def test_set_sdk_key_before_init():
             try:
                 stream_server.for_path('/all', stream_handler)
 
-                ldclient.set_config(Config(sdk_key, stream_uri = stream_server.uri, send_events = False))
+                ldclient.set_config(Config(sdk_key, stream_uri=stream_server.uri, send_events=False))
                 wait_until(ldclient.get().is_initialized, timeout=10)
 
                 r = stream_server.await_request()
@@ -36,7 +36,7 @@ def test_set_sdk_key_after_init():
             try:
                 stream_server.for_path('/all', BasicResponse(401))
 
-                config = Config(other_key, stream_uri = stream_server.uri, send_events = False)
+                config = Config(other_key, stream_uri=stream_server.uri, send_events=False)
                 ldclient.set_config(config)
                 assert ldclient.get().is_initialized() is False
 
@@ -64,7 +64,7 @@ def test_set_config():
                 ldclient.set_config(Config(sdk_key, offline=True))
                 assert ldclient.get().is_offline() is True
 
-                ldclient.set_config(Config(sdk_key, stream_uri = stream_server.uri, send_events = False))
+                ldclient.set_config(Config(sdk_key, stream_uri=stream_server.uri, send_events=False))
                 assert ldclient.get().is_offline() is False
                 wait_until(ldclient.get().is_initialized, timeout=10)
 

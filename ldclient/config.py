@@ -34,12 +34,8 @@ class BigSegmentsConfig:
             store = Redis.new_big_segment_store(url='redis://localhost:6379')
             config = Config(big_segments=BigSegmentsConfig(store = store))
     """
-    def __init__(self,
-                 store: Optional[BigSegmentStore] = None,
-                 context_cache_size: int=1000,
-                 context_cache_time: float=5,
-                 status_poll_interval: float=5,
-                 stale_after: float=120):
+
+    def __init__(self, store: Optional[BigSegmentStore] = None, context_cache_size: int = 1000, context_cache_time: float = 5, status_poll_interval: float = 5, stale_after: float = 120):
         """
         :param store: the implementation of :class:`ldclient.interfaces.BigSegmentStore` that will
             be used to query the Big Segments database
@@ -87,13 +83,16 @@ class HTTPConfig:
     If you need to set these, construct an ``HTTPConfig`` instance and pass it as the ``http`` parameter when
     you construct the main :class:`Config` for the SDK client.
     """
-    def __init__(self,
-                 connect_timeout: float=10,
-                 read_timeout: float=15,
-                 http_proxy: Optional[str]=None,
-                 ca_certs: Optional[str]=None,
-                 cert_file: Optional[str]=None,
-                 disable_ssl_verification: bool=False):
+
+    def __init__(
+        self,
+        connect_timeout: float = 10,
+        read_timeout: float = 15,
+        http_proxy: Optional[str] = None,
+        ca_certs: Optional[str] = None,
+        cert_file: Optional[str] = None,
+        disable_ssl_verification: bool = False,
+    ):
         """
         :param connect_timeout: The connect timeout for network connections in seconds.
         :param read_timeout: The read timeout for network connections in seconds.
@@ -148,38 +147,41 @@ class Config:
     To use these options, create an instance of ``Config`` and pass it to either :func:`ldclient.set_config()`
     if you are using the singleton client, or the :class:`ldclient.client.LDClient` constructor otherwise.
     """
-    def __init__(self,
-                 sdk_key: str,
-                 base_uri: str='https://app.launchdarkly.com',
-                 events_uri: str='https://events.launchdarkly.com',
-                 events_max_pending: int=10000,
-                 flush_interval: float=5,
-                 stream_uri: str='https://stream.launchdarkly.com',
-                 stream: bool=True,
-                 initial_reconnect_delay: float=1,
-                 defaults: dict={},
-                 send_events: Optional[bool]=None,
-                 update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]]=None,
-                 poll_interval: float=30,
-                 use_ldd: bool=False,
-                 feature_store: Optional[FeatureStore]=None,
-                 feature_requester_class=None,
-                 event_processor_class: Optional[Callable[['Config'], EventProcessor]]=None,
-                 private_attributes: Set[str]=set(),
-                 all_attributes_private: bool=False,
-                 offline: bool=False,
-                 context_keys_capacity: int=1000,
-                 context_keys_flush_interval: float=300,
-                 diagnostic_opt_out: bool=False,
-                 diagnostic_recording_interval: int=900,
-                 wrapper_name: Optional[str]=None,
-                 wrapper_version: Optional[str]=None,
-                 http: HTTPConfig=HTTPConfig(),
-                 big_segments: Optional[BigSegmentsConfig]=None,
-                 application: Optional[dict]=None,
-                 hooks: Optional[List[Hook]]=None,
-                 enable_event_compression: bool=False,
-                 omit_anonymous_contexts: bool=False):
+
+    def __init__(
+        self,
+        sdk_key: str,
+        base_uri: str = 'https://app.launchdarkly.com',
+        events_uri: str = 'https://events.launchdarkly.com',
+        events_max_pending: int = 10000,
+        flush_interval: float = 5,
+        stream_uri: str = 'https://stream.launchdarkly.com',
+        stream: bool = True,
+        initial_reconnect_delay: float = 1,
+        defaults: dict = {},
+        send_events: Optional[bool] = None,
+        update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]] = None,
+        poll_interval: float = 30,
+        use_ldd: bool = False,
+        feature_store: Optional[FeatureStore] = None,
+        feature_requester_class=None,
+        event_processor_class: Optional[Callable[['Config'], EventProcessor]] = None,
+        private_attributes: Set[str] = set(),
+        all_attributes_private: bool = False,
+        offline: bool = False,
+        context_keys_capacity: int = 1000,
+        context_keys_flush_interval: float = 300,
+        diagnostic_opt_out: bool = False,
+        diagnostic_recording_interval: int = 900,
+        wrapper_name: Optional[str] = None,
+        wrapper_version: Optional[str] = None,
+        http: HTTPConfig = HTTPConfig(),
+        big_segments: Optional[BigSegmentsConfig] = None,
+        application: Optional[dict] = None,
+        hooks: Optional[List[Hook]] = None,
+        enable_event_compression: bool = False,
+        omit_anonymous_contexts: bool = False,
+    ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
         :param base_uri: The base URL for the LaunchDarkly server. Most users should use the default
@@ -289,33 +291,35 @@ class Config:
 
         :param new_sdk_key: the new SDK key
         """
-        return Config(sdk_key=new_sdk_key,
-                      base_uri=self.__base_uri,
-                      events_uri=self.__events_uri,
-                      events_max_pending=self.__events_max_pending,
-                      flush_interval=self.__flush_interval,
-                      stream_uri=self.__stream_uri,
-                      stream=self.__stream,
-                      initial_reconnect_delay=self.__initial_reconnect_delay,
-                      defaults=self.__defaults,
-                      send_events=self.__send_events,
-                      update_processor_class=self.__update_processor_class,
-                      poll_interval=self.__poll_interval,
-                      use_ldd=self.__use_ldd,
-                      feature_store=self.__feature_store,
-                      feature_requester_class=self.__feature_requester_class,
-                      event_processor_class=self.__event_processor_class,
-                      private_attributes=self.__private_attributes,
-                      all_attributes_private=self.__all_attributes_private,
-                      offline=self.__offline,
-                      context_keys_capacity=self.__context_keys_capacity,
-                      context_keys_flush_interval=self.__context_keys_flush_interval,
-                      diagnostic_opt_out=self.__diagnostic_opt_out,
-                      diagnostic_recording_interval=self.__diagnostic_recording_interval,
-                      wrapper_name=self.__wrapper_name,
-                      wrapper_version=self.__wrapper_version,
-                      http=self.__http,
-                      big_segments=self.__big_segments)
+        return Config(
+            sdk_key=new_sdk_key,
+            base_uri=self.__base_uri,
+            events_uri=self.__events_uri,
+            events_max_pending=self.__events_max_pending,
+            flush_interval=self.__flush_interval,
+            stream_uri=self.__stream_uri,
+            stream=self.__stream,
+            initial_reconnect_delay=self.__initial_reconnect_delay,
+            defaults=self.__defaults,
+            send_events=self.__send_events,
+            update_processor_class=self.__update_processor_class,
+            poll_interval=self.__poll_interval,
+            use_ldd=self.__use_ldd,
+            feature_store=self.__feature_store,
+            feature_requester_class=self.__feature_requester_class,
+            event_processor_class=self.__event_processor_class,
+            private_attributes=self.__private_attributes,
+            all_attributes_private=self.__all_attributes_private,
+            offline=self.__offline,
+            context_keys_capacity=self.__context_keys_capacity,
+            context_keys_flush_interval=self.__context_keys_flush_interval,
+            diagnostic_opt_out=self.__diagnostic_opt_out,
+            diagnostic_recording_interval=self.__diagnostic_recording_interval,
+            wrapper_name=self.__wrapper_name,
+            wrapper_version=self.__wrapper_version,
+            http=self.__http,
+            big_segments=self.__big_segments,
+        )
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -365,6 +369,7 @@ class Config:
     @property
     def initial_reconnect_delay(self) -> float:
         return self.__initial_reconnect_delay
+
     @property
     def poll_interval(self) -> float:
         return self.__poll_interval
@@ -495,5 +500,6 @@ class Config:
     def _validate(self):
         if self.offline is False and self.sdk_key is None or self.sdk_key == '':
             log.warning("Missing or blank sdk_key.")
+
 
 __all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']

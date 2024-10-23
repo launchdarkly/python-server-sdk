@@ -9,11 +9,7 @@ from queue import Queue
 
 
 def test_big_segment_store_status_unavailable():
-    config=Config(
-        sdk_key='SDK_KEY',
-        event_processor_class=MockEventProcessor,
-        update_processor_class=MockUpdateProcessor
-    )
+    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
     client = LDClient(config)
     assert client.big_segment_store_status_provider.status.available == False
 
@@ -21,12 +17,7 @@ def test_big_segment_store_status_unavailable():
 def test_big_segment_store_status_updates():
     segstore = MockBigSegmentStore()
     segstore.setup_metadata_always_up_to_date()
-    config=Config(
-        sdk_key='SDK_KEY',
-        big_segments=BigSegmentsConfig(store=segstore, status_poll_interval=0.01),
-        event_processor_class=MockEventProcessor,
-        update_processor_class=MockUpdateProcessor
-    )
+    config = Config(sdk_key='SDK_KEY', big_segments=BigSegmentsConfig(store=segstore, status_poll_interval=0.01), event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
     statuses = Queue()
 
     with LDClient(config) as client:
@@ -51,11 +42,7 @@ def test_big_segment_store_status_updates():
 
 
 def test_data_source_status_default():
-    config=Config(
-        sdk_key='SDK_KEY',
-        event_processor_class=MockEventProcessor,
-        update_processor_class=MockUpdateProcessor
-    )
+    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
     client = LDClient(config)
     assert client.data_source_status_provider.status.state == DataSourceState.INITIALIZING
 

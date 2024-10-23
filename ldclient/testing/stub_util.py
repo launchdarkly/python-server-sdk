@@ -11,15 +11,15 @@ def item_as_json(item):
     return item.to_json_dict() if isinstance(item, ModelEntity) else item
 
 
-def make_items_map(items = []):
+def make_items_map(items=[]):
     ret = {}
     for item in items:
         ret[item['key']] = item_as_json(item)
     return ret
 
 
-def make_put_event(flags = [], segments = []):
-    data = { "data": { "flags": make_items_map(flags), "segments": make_items_map(segments) } }
+def make_put_event(flags=[], segments=[]):
+    data = {"data": {"flags": make_items_map(flags), "segments": make_items_map(segments)}}
     return 'event:put\ndata: %s\n\n' % json.dumps(data)
 
 
@@ -29,25 +29,25 @@ def make_invalid_put_event():
 
 def make_patch_event(kind, item):
     path = '%s%s' % (kind.stream_api_path, item['key'])
-    data = { "path": path, "data": item_as_json(item) }
+    data = {"path": path, "data": item_as_json(item)}
     return 'event:patch\ndata: %s\n\n' % json.dumps(data)
 
 
 def make_delete_event(kind, key, version):
     path = '%s%s' % (kind.stream_api_path, key)
-    data = { "path": path, "version": version }
+    data = {"path": path, "version": version}
     return 'event:delete\ndata: %s\n\n' % json.dumps(data)
 
 
-def stream_content(event = None):
-    stream = ChunkedResponse({ 'Content-Type': 'text/event-stream' })
+def stream_content(event=None):
+    stream = ChunkedResponse({'Content-Type': 'text/event-stream'})
     if event:
         stream.push(event)
     return stream
 
 
-def poll_content(flags = [], segments = []):
-    data = { "flags": make_items_map(flags), "segments": make_items_map(segments) }
+def poll_content(flags=[], segments=[]):
+    data = {"flags": make_items_map(flags), "segments": make_items_map(segments)}
     return JsonResponse(data)
 
 

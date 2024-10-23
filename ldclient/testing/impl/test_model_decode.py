@@ -8,21 +8,13 @@ from ldclient.testing.builders import *
 
 
 def test_flag_targets_are_stored_as_sets():
-    flag = FlagBuilder("key") \
-        .target(0, "a", "b") \
-        .context_target("kind1", 0, "c", "d") \
-        .build()
+    flag = FlagBuilder("key").target(0, "a", "b").context_target("kind1", 0, "c", "d").build()
     assert flag.targets[0].values == {"a", "b"}
     assert flag.context_targets[0].values == {"c", "d"}
 
 
 def test_segment_targets_are_stored_as_sets():
-    segment = SegmentBuilder("key") \
-        .included("a", "b") \
-        .excluded("c", "d") \
-        .included_contexts("kind1", "e", "f") \
-        .excluded_contexts("kind2", "g", "h") \
-        .build()
+    segment = SegmentBuilder("key").included("a", "b").excluded("c", "d").included_contexts("kind1", "e", "f").excluded_contexts("kind2", "g", "h").build()
     assert segment.included == {"a", "b"}
     assert segment.excluded == {"c", "d"}
     assert segment.included_contexts[0].values == {"e", "f"}

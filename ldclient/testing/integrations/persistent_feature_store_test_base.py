@@ -47,12 +47,7 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
     def tester_class(self):
         pass
 
-    @pytest.fixture(params=[
-        (False, False),
-        (True, False),
-        (False, True),
-        (True, True)
-    ])
+    @pytest.fixture(params=[(False, False), (True, False), (False, True), (True, True)])
     def tester(self, request):
         specify_prefix, use_caching = request.param
         instance = self.tester_class()
@@ -75,17 +70,17 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
         tester_b.prefix = "b"
         tester_b.clear_data(tester_b.prefix)
 
-        flag_a1 = { 'key': 'flagA1', 'version': 1 }
-        flag_a2 = { 'key': 'flagA2', 'version': 1 }
-        flag_b1 = { 'key': 'flagB1', 'version': 1 }
-        flag_b2 = { 'key': 'flagB2', 'version': 1 }
+        flag_a1 = {'key': 'flagA1', 'version': 1}
+        flag_a2 = {'key': 'flagA2', 'version': 1}
+        flag_b1 = {'key': 'flagB1', 'version': 1}
+        flag_b2 = {'key': 'flagB2', 'version': 1}
 
         with StoreTestScope(tester_a.create_feature_store()) as store_a:
             with StoreTestScope(tester_b.create_feature_store()) as store_b:
-                store_a.init({ FEATURES: { 'flagA1': flag_a1 } })
+                store_a.init({FEATURES: {'flagA1': flag_a1}})
                 store_a.upsert(FEATURES, flag_a2)
 
-                store_b.init({ FEATURES: { 'flagB1': flag_b1 } })
+                store_b.init({FEATURES: {'flagB1': flag_b1}})
                 store_b.upsert(FEATURES, flag_b2)
 
                 item = store_a.get(FEATURES, 'flagA1', lambda x: x)
@@ -93,11 +88,11 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
                 item = store_a.get(FEATURES, 'flagB1', lambda x: x)
                 assert item is None
                 items = store_a.all(FEATURES, lambda x: x)
-                assert items == { 'flagA1': FEATURES.decode(flag_a1), 'flagA2': FEATURES.decode(flag_a2) }
+                assert items == {'flagA1': FEATURES.decode(flag_a1), 'flagA2': FEATURES.decode(flag_a2)}
 
                 item = store_b.get(FEATURES, 'flagB1', lambda x: x)
                 assert item == FEATURES.decode(flag_b1)
                 item = store_b.get(FEATURES, 'flagA1', lambda x: x)
                 assert item is None
                 items = store_b.all(FEATURES, lambda x: x)
-                assert items == { 'flagB1': FEATURES.decode(flag_b1), 'flagB2': FEATURES.decode(flag_b2) }
+                assert items == {'flagB1': FEATURES.decode(flag_b1), 'flagB2': FEATURES.decode(flag_b2)}

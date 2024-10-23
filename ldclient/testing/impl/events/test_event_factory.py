@@ -9,17 +9,11 @@ _user = Context.create('x')
 
 
 def make_basic_flag_with_rules(kind, should_track_events):
-    rule_builder = FlagRuleBuilder().rollout({
-        'variations': [
-            { 'variation': 0, 'weight': 50000 },
-            { 'variation': 1, 'weight': 50000 }
-        ]
-    })
+    rule_builder = FlagRuleBuilder().rollout({'variations': [{'variation': 0, 'weight': 50000}, {'variation': 1, 'weight': 50000}]})
     if kind == 'rulematch':
         rule_builder.track_events(should_track_events)
 
-    flag_builder = FlagBuilder('feature').on(True).fallthrough_variation(0).variations(False, True) \
-        .rules(rule_builder.build())
+    flag_builder = FlagBuilder('feature').on(True).fallthrough_variation(0).variations(False, True).rules(rule_builder.build())
     if kind == 'fallthrough':
         flag_builder.track_events_fallthrough(should_track_events)
     return flag_builder.build()

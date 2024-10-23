@@ -35,7 +35,7 @@ def test_request_properties():
 
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -54,8 +54,7 @@ def test_sends_wrapper_header():
 
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri,
-                            wrapper_name = 'Flask', wrapper_version = '0.1.0')
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, wrapper_name='Flask', wrapper_version='0.1.0')
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -70,8 +69,7 @@ def test_sends_wrapper_header_without_version():
 
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri,
-                            wrapper_name = 'Flask')
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, wrapper_name='Flask')
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -86,8 +84,7 @@ def test_sends_tag_header():
 
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri,
-                            application = {"id": "my-id", "version": "my-version"})
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, application={"id": "my-id", "version": "my-version"})
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -103,8 +100,8 @@ def test_receives_put_event():
     segment = SegmentBuilder('segkey').version(1).build()
 
     with start_server() as server:
-        with stream_content(make_put_event([ flag ], [ segment ])) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
+        with stream_content(make_put_event([flag], [segment])) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -124,8 +121,8 @@ def test_receives_patch_events():
     segmentv2 = SegmentBuilder('segkey').version(2).build()
 
     with start_server() as server:
-        with stream_content(make_put_event([ flagv1 ], [ segmentv1 ])) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
+        with stream_content(make_put_event([flagv1], [segmentv1])) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -149,8 +146,8 @@ def test_receives_delete_events():
     segmentv1 = SegmentBuilder('segkey').version(1).build()
 
     with start_server() as server:
-        with stream_content(make_put_event([ flagv1 ], [ segmentv1 ])) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
+        with stream_content(make_put_event([flagv1], [segmentv1])) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -174,9 +171,9 @@ def test_reconnects_if_stream_is_broken():
     flagv2 = FlagBuilder('flagkey').version(2).build()
 
     with start_server() as server:
-        with stream_content(make_put_event([ flagv1 ])) as stream1:
-            with stream_content(make_put_event([ flagv2 ])) as stream2:
-                config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+        with stream_content(make_put_event([flagv1])) as stream1:
+            with stream_content(make_put_event([flagv2])) as stream2:
+                config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
                 server.for_path('/all', SequentialHandler(stream1, stream2))
 
                 with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -198,7 +195,7 @@ def test_retries_on_network_error():
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
             two_errors_then_success = SequentialHandler(error_handler, error_handler, stream)
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -209,7 +206,7 @@ def test_retries_on_network_error():
                 server.await_request
 
 
-@pytest.mark.parametrize("status", [ 400, 408, 429, 500, 503 ])
+@pytest.mark.parametrize("status", [400, 408, 429, 500, 503])
 def test_recoverable_http_error(status):
     error_handler = BasicResponse(status)
     store = InMemoryFeatureStore()
@@ -217,7 +214,7 @@ def test_recoverable_http_error(status):
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
             two_errors_then_success = SequentialHandler(error_handler, error_handler, stream)
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', two_errors_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -227,7 +224,7 @@ def test_recoverable_http_error(status):
                 server.should_have_requests(3)
 
 
-@pytest.mark.parametrize("status", [ 401, 403, 404 ])
+@pytest.mark.parametrize("status", [401, 403, 404])
 def test_unrecoverable_http_error(status):
     error_handler = BasicResponse(status)
     store = InMemoryFeatureStore()
@@ -235,7 +232,7 @@ def test_unrecoverable_http_error(status):
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
             error_then_success = SequentialHandler(error_handler, stream)
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', error_then_success)
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
@@ -262,6 +259,7 @@ def test_http_proxy(monkeypatch):
                     # for the stream connection to work correctly - we can only detect the request.
                     ready.wait(start_wait)
                     assert sp.initialized()
+
     do_proxy_tests(_stream_processor_proxy_test, 'GET', monkeypatch)
 
 
@@ -270,7 +268,7 @@ def test_records_diagnostic_on_stream_init_success():
     ready = Event()
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
             diag_accum = _DiagnosticAccumulator(1)
 
@@ -289,7 +287,7 @@ def test_records_diagnostic_on_stream_init_failure():
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
             error_then_success = SequentialHandler(BasicResponse(503), stream)
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', error_then_success)
             diag_accum = _DiagnosticAccumulator(1)
 
@@ -303,7 +301,7 @@ def test_records_diagnostic_on_stream_init_failure():
                 assert recorded_inits[1]['failed'] is False
 
 
-@pytest.mark.parametrize("status", [ 400, 408, 429, 500, 503 ])
+@pytest.mark.parametrize("status", [400, 408, 429, 500, 503])
 def test_status_includes_http_code(status):
     error_handler = BasicResponse(status)
     store = InMemoryFeatureStore()
@@ -311,7 +309,7 @@ def test_status_includes_http_code(status):
     with start_server() as server:
         with stream_content(make_put_event()) as stream:
             two_errors_then_success = SequentialHandler(error_handler, error_handler, stream)
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
 
             spy = SpyListener()
             listeners = Listeners()
@@ -346,7 +344,7 @@ def test_invalid_json_triggers_listener():
     ready = Event()
     with start_server() as server:
         with stream_content(make_put_event()) as valid_stream, stream_content(make_invalid_put_event()) as invalid_stream:
-            config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
 
             statuses: List[DataSourceStatus] = []
             listeners = Listeners()
@@ -355,6 +353,7 @@ def test_invalid_json_triggers_listener():
                 if len(statuses) == 0:
                     invalid_stream.close()
                 statuses.append(s)
+
             listeners.add(listener)
 
             config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
@@ -380,7 +379,7 @@ def test_failure_transitions_from_valid():
     ready = Event()
     error_handler = BasicResponse(401)
     with start_server() as server:
-        config = Config(sdk_key = 'sdk-key', stream_uri = server.uri, initial_reconnect_delay = brief_delay)
+        config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
 
         spy = SpyListener()
         listeners = Listeners()

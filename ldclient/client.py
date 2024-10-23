@@ -173,7 +173,7 @@ class LDClient:
     Client instances are thread-safe.
     """
 
-    def __init__(self, config: Config, start_wait: float=5):
+    def __init__(self, config: Config, start_wait: float = 5):
         """Constructs a new LDClient instance.
 
         :param config: optional custom configuration
@@ -210,10 +210,7 @@ class LDClient:
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(store, FEATURES, key),
-            lambda key: _get_store_item(store, SEGMENTS, key),
-            lambda key: big_segment_store_manager.get_user_membership(key),
-            log
+            lambda key: _get_store_item(store, FEATURES, key), lambda key: _get_store_item(store, SEGMENTS, key), lambda key: big_segment_store_manager.get_user_membership(key), log
         )
 
         if self._config.offline:
@@ -239,8 +236,7 @@ class LDClient:
         if self._update_processor.initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
-            log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. "
-                     "Feature Flags may not yet be available.")
+            log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:
@@ -276,8 +272,7 @@ class LDClient:
         return PollingUpdateProcessor(config, feature_requester, store, ready)
 
     def get_sdk_key(self) -> Optional[str]:
-        """Returns the configured SDK key.
-        """
+        """Returns the configured SDK key."""
         return self._config.sdk_key
 
     def close(self):
@@ -320,8 +315,7 @@ class LDClient:
 
         self._send_event(event)
 
-    def track(self, event_name: str, context: Context, data: Optional[Any]=None,
-              metric_value: Optional[AnyNum]=None):
+    def track(self, event_name: str, context: Context, data: Optional[Any] = None, metric_value: Optional[AnyNum] = None):
         """Tracks that an application-defined event occurred.
 
         This method creates a "custom" analytics event containing the specified event name (key)
@@ -340,8 +334,7 @@ class LDClient:
         if not context.valid:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
-            self._send_event(self._event_factory_default.new_custom_event(event_name,
-                                                                          context, data, metric_value))
+            self._send_event(self._event_factory_default.new_custom_event(event_name, context, data, metric_value))
 
     def identify(self, context: Context):
         """Reports details about an evaluation context.
@@ -363,8 +356,7 @@ class LDClient:
             self._send_event(self._event_factory_default.new_identify_event(context))
 
     def is_offline(self) -> bool:
-        """Returns true if the client is in offline mode.
-        """
+        """Returns true if the client is in offline mode."""
         return self._config.offline
 
     def is_initialized(self) -> bool:
@@ -398,6 +390,7 @@ class LDClient:
           available from LaunchDarkly
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
+
         def evaluate():
             detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
             return _EvaluationWithHookResult(evaluation_detail=detail)
@@ -418,6 +411,7 @@ class LDClient:
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
           flag value and evaluation reason
         """
+
         def evaluate():
             detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
             return _EvaluationWithHookResult(evaluation_detail=detail)
@@ -643,10 +637,7 @@ class LDClient:
         return evaluation_result
 
     def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[dict]:
-        return [
-            self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {}))
-            for hook in hooks
-        ]
+        return [self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {})) for hook in hooks]
 
     def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
         return [

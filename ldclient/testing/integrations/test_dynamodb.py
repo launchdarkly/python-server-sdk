@@ -12,6 +12,7 @@ import time
 have_dynamodb = False
 try:
     import boto3
+
     have_dynamodb = True
 except ImportError:
     pass
@@ -21,8 +22,7 @@ pytestmark = pytest.mark.skipif(not have_dynamodb, reason="skipping DynamoDB tes
 
 @pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
 def dynamodb_defaults_to_available():
-    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name,
-        prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
+    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
     assert dynamodb.is_monitoring_enabled() is True
     assert dynamodb.is_available() is True
 
@@ -31,8 +31,7 @@ def dynamodb_defaults_to_available():
 def dynamodb_detects_nonexistent_store():
     options = DynamoDBTestHelper.options
     options['endpoint_url'] = 'http://i-mean-what-are-the-odds'
-    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name,
-        prefix=prefix, caching=caching, dynamodb_opts=options)
+    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=options)
     assert dynamodb.is_monitoring_enabled() is True
     assert dynamodb.is_available() is False
 
@@ -40,12 +39,7 @@ def dynamodb_detects_nonexistent_store():
 class DynamoDBTestHelper:
     table_name = 'LD_DYNAMODB_TEST_TABLE'
     table_created = False
-    options = {
-        'aws_access_key_id': 'key', # not used by local DynamoDB, but still required
-        'aws_secret_access_key': 'secret',
-        'endpoint_url': 'http://localhost:8000',
-        'region_name': 'us-east-1'
-    }
+    options = {'aws_access_key_id': 'key', 'aws_secret_access_key': 'secret', 'endpoint_url': 'http://localhost:8000', 'region_name': 'us-east-1'}  # not used by local DynamoDB, but still required
 
     @staticmethod
     def make_client():
@@ -58,14 +52,11 @@ class DynamoDBTestHelper:
             'TableName': DynamoDBTestHelper.table_name,
             'ConsistentRead': True,
             'ProjectionExpression': '#namespace, #key',
-            'ExpressionAttributeNames': {
-                '#namespace': _DynamoDBFeatureStoreCore.PARTITION_KEY,
-                '#key': _DynamoDBFeatureStoreCore.SORT_KEY
-            }
+            'ExpressionAttributeNames': {'#namespace': _DynamoDBFeatureStoreCore.PARTITION_KEY, '#key': _DynamoDBFeatureStoreCore.SORT_KEY},
         }
         for resp in client.get_paginator('scan').paginate(**req):
             for item in resp['Items']:
-                delete_requests.append({ 'DeleteRequest': { 'Key': item } })
+                delete_requests.append({'DeleteRequest': {'Key': item}})
         _DynamoDBHelpers.batch_write_requests(client, DynamoDBTestHelper.table_name, delete_requests)
 
     @staticmethod
@@ -86,25 +77,10 @@ class DynamoDBTestHelper:
                     'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
                     'KeyType': 'HASH',
                 },
-                {
-                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
-                    'KeyType': 'RANGE'
-                }
+                {'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY, 'KeyType': 'RANGE'},
             ],
-            'AttributeDefinitions': [
-                {
-                    'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY,
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY,
-                    'AttributeType': 'S'
-                }
-            ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 1,
-                'WriteCapacityUnits': 1
-            }
+            'AttributeDefinitions': [{'AttributeName': _DynamoDBFeatureStoreCore.PARTITION_KEY, 'AttributeType': 'S'}, {'AttributeName': _DynamoDBFeatureStoreCore.SORT_KEY, 'AttributeType': 'S'}],
+            'ProvisionedThroughput': {'ReadCapacityUnits': 1, 'WriteCapacityUnits': 1},
         }
         client.create_table(**req)
         while True:
@@ -121,8 +97,7 @@ class DynamoDBFeatureStoreTester(PersistentFeatureStoreTester):
         DynamoDBTestHelper.ensure_table_created()
 
     def create_persistent_feature_store(self, prefix, caching) -> FeatureStore:
-        return DynamoDB.new_feature_store(DynamoDBTestHelper.table_name,
-            prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
+        return DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
 
     def clear_data(self, prefix):
         DynamoDBTestHelper.clear_data_for_prefix(prefix)
@@ -134,8 +109,7 @@ class DynamoDBBigSegmentTester(BigSegmentStoreTester):
         DynamoDBTestHelper.ensure_table_created()
 
     def create_big_segment_store(self, prefix) -> BigSegmentStore:
-        return DynamoDB.new_big_segment_store(DynamoDBTestHelper.table_name,
-            prefix=prefix, dynamodb_opts=DynamoDBTestHelper.options)
+        return DynamoDB.new_big_segment_store(DynamoDBTestHelper.table_name, prefix=prefix, dynamodb_opts=DynamoDBTestHelper.options)
 
     def clear_data(self, prefix):
         DynamoDBTestHelper.clear_data_for_prefix(prefix)
@@ -147,31 +121,23 @@ class DynamoDBBigSegmentTester(BigSegmentStoreTester):
         client.put_item(
             TableName=DynamoDBTestHelper.table_name,
             Item={
-                _DynamoDBBigSegmentStore.PARTITION_KEY: { "S": key },
-                _DynamoDBBigSegmentStore.SORT_KEY: { "S": key },
-                _DynamoDBBigSegmentStore.ATTR_SYNC_TIME: {
-                    "N": "" if metadata.last_up_to_date is None else str(metadata.last_up_to_date)
-                }
-            }
+                _DynamoDBBigSegmentStore.PARTITION_KEY: {"S": key},
+                _DynamoDBBigSegmentStore.SORT_KEY: {"S": key},
+                _DynamoDBBigSegmentStore.ATTR_SYNC_TIME: {"N": "" if metadata.last_up_to_date is None else str(metadata.last_up_to_date)},
+            },
         )
 
     def set_segments(self, prefix: str, user_hash: str, includes: List[str], excludes: List[str]):
         client = DynamoDBTestHelper.make_client()
         actual_prefix = prefix + ":" if prefix else ""
-        sets = {
-            _DynamoDBBigSegmentStore.ATTR_INCLUDED: includes,
-            _DynamoDBBigSegmentStore.ATTR_EXCLUDED: excludes
-        }
+        sets = {_DynamoDBBigSegmentStore.ATTR_INCLUDED: includes, _DynamoDBBigSegmentStore.ATTR_EXCLUDED: excludes}
         for attr_name, values in sets.items():
             if len(values) > 0:
                 client.update_item(
                     TableName=DynamoDBTestHelper.table_name,
-                    Key={
-                        _DynamoDBBigSegmentStore.PARTITION_KEY: { "S": actual_prefix + _DynamoDBBigSegmentStore.KEY_USER_DATA },
-                        _DynamoDBBigSegmentStore.SORT_KEY: { "S": user_hash }
-                    },
-                    UpdateExpression= "ADD %s :value" % attr_name,
-                    ExpressionAttributeValues={ ":value": { "SS": values } }
+                    Key={_DynamoDBBigSegmentStore.PARTITION_KEY: {"S": actual_prefix + _DynamoDBBigSegmentStore.KEY_USER_DATA}, _DynamoDBBigSegmentStore.SORT_KEY: {"S": user_hash}},
+                    UpdateExpression="ADD %s :value" % attr_name,
+                    ExpressionAttributeValues={":value": {"SS": values}},
                 )
 
 

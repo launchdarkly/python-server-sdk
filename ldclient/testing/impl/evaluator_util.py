@@ -20,11 +20,7 @@ class EvaluatorBuilder:
         self.__big_segments_status = BigSegmentsStatus.HEALTHY
 
     def build(self) -> Evaluator:
-        return Evaluator(
-            self._get_flag,
-            self._get_segment,
-            self._get_big_segments_membership
-        )
+        return Evaluator(self._get_flag, self._get_segment, self._get_big_segments_membership)
 
     def with_flag(self, flag: FeatureFlag) -> 'EvaluatorBuilder':
         self.__flags[flag.key] = flag
@@ -70,6 +66,7 @@ class EvaluatorBuilder:
         if key not in self.__big_segments:
             raise Exception("test made unexpected request for big segments for context key '%s'" % key)
         return self.__big_segments[key], self.__big_segments_status
+
 
 basic_evaluator = EvaluatorBuilder().build()
 

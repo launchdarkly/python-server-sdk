@@ -61,7 +61,7 @@ def test_flag_returns_error_if_fallthrough_has_rollout_with_no_variations():
 
 
 def test_flag_matches_user_from_rules():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 0}
+    rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 0}
     flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(True, 0, {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'id'})
@@ -69,7 +69,7 @@ def test_flag_matches_user_from_rules():
 
 
 def test_flag_returns_error_if_rule_variation_is_too_high():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 999}
+    rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 999}
     flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
@@ -77,7 +77,7 @@ def test_flag_returns_error_if_rule_variation_is_too_high():
 
 
 def test_flag_returns_error_if_rule_variation_is_negative():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': -1}
+    rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': -1}
     flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
@@ -85,7 +85,7 @@ def test_flag_returns_error_if_rule_variation_is_negative():
 
 
 def test_flag_returns_error_if_rule_has_no_variation_or_rollout():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}]}
+    rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}]}
     flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
@@ -93,8 +93,7 @@ def test_flag_returns_error_if_rule_has_no_variation_or_rollout():
 
 
 def test_flag_returns_error_if_rule_has_rollout_with_no_variations():
-    rule = { 'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}],
-        'rollout': {'variations': []} }
+    rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'rollout': {'variations': []}}
     flag = make_boolean_flag_with_rules(rule)
     user = Context.create('userkey')
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})

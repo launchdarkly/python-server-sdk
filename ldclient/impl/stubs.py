@@ -1,4 +1,3 @@
-
 from ldclient.interfaces import EventProcessor, UpdateProcessor
 
 
@@ -25,15 +24,15 @@ class NullEventProcessor(EventProcessor):
 class NullUpdateProcessor(UpdateProcessor):
     def __init__(self, config, store, ready):
         self._ready = ready
-    
+
     def start(self):
         self._ready.set()
-    
+
     def stop(self):
         pass
-    
+
     def is_alive(self):
         return False
-    
+
     def initialized(self):
         return True

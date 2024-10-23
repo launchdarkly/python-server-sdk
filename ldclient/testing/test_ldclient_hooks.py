@@ -126,7 +126,7 @@ def test_exceptions_do_not_affect_data_passing_order():
     # NOTE: These are reversed since the push happens in the after_evaluation
     # (when hooks are reversed)
     assert calls[0] == "third hook"
-    assert calls[1] ==  {}
+    assert calls[1] == {}
     assert calls[2] == "first hook"
 
 

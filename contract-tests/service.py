@@ -14,30 +14,24 @@ default_port = 8000
 
 
 # logging configuration
-dictConfig({
-    'version': 1,
-    'formatters': {
-        'default': {
-            'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
-        }
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'default'
-        }
-    },
-    'root': {
-        'level': 'INFO',
-        'handlers': ['console']
-    },
-    'loggers': {
-        'ldclient': {
-            'level': 'INFO', # change to 'DEBUG' to enable SDK debug logging
+dictConfig(
+    {
+        'version': 1,
+        'formatters': {
+            'default': {
+                'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
+            }
         },
-        'werkzeug': { 'level': 'ERROR' } # disable irrelevant Flask app logging
+        'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'default'}},
+        'root': {'level': 'INFO', 'handlers': ['console']},
+        'loggers': {
+            'ldclient': {
+                'level': 'INFO',  # change to 'DEBUG' to enable SDK debug logging
+            },
+            'werkzeug': {'level': 'ERROR'},  # disable irrelevant Flask app logging
+        },
     }
-})
+)
 
 app = Flask(__name__)
 app.logger.removeHandler(default_handler)
@@ -79,7 +73,7 @@ def status():
             'anonymous-redaction',
             'evaluation-hooks',
             'omit-anonymous-contexts',
-            'client-prereq-events'
+            'client-prereq-events',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
@@ -166,6 +160,7 @@ def delete_client(id):
 
     client.close()
     return '', 202
+
 
 if __name__ == "__main__":
     port = default_port

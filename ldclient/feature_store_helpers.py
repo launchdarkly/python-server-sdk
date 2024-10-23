@@ -26,6 +26,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     that would otherwise be repeated in every feature store implementation. This makes it easier to create
     new database integrations by implementing only the database-specific logic.
     """
+
     __INITED_CACHE_KEY__ = "$inited"
 
     def __init__(self, core: FeatureStoreCore, cache_config: CacheConfig):
@@ -51,8 +52,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         return self._core.is_available() if self.__has_available_method else False  # type: ignore
 
     def init(self, all_encoded_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        """
-        """
+        """ """
         self._core.init_internal(all_encoded_data)  # currently FeatureStoreCore expects to receive dicts
         if self._cache is not None:
             self._cache.clear()
@@ -60,15 +60,14 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
                 decoded_items = {}  # we don't want to cache dicts, we want to cache FeatureFlags/Segments
                 for key, item in items.items():
                     decoded_item = kind.decode(item)
-                    self._cache[self._item_cache_key(kind, key)] = [decoded_item] # note array wrapper
+                    self._cache[self._item_cache_key(kind, key)] = [decoded_item]  # note array wrapper
                     if not _is_deleted(decoded_item):
                         decoded_items[key] = decoded_item
                 self._cache[self._all_cache_key(kind)] = decoded_items
         self._inited = True
 
     def get(self, kind, key, callback=lambda x: x):
-        """
-        """
+        """ """
         if self._cache is not None:
             cache_key = self._item_cache_key(kind, key)
             cached_item = self._cache.get(cache_key)
@@ -83,8 +82,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         return callback(None if _is_deleted(item) else item)
 
     def all(self, kind, callback=lambda x: x):
-        """
-        """
+        """ """
         if self._cache is not None:
             cache_key = self._all_cache_key(kind)
             cached_items = self._cache.get(cache_key)
@@ -101,14 +99,12 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         return callback(items)
 
     def delete(self, kind, key, version):
-        """
-        """
-        deleted_item = { "key": key, "version": version, "deleted": True }
+        """ """
+        deleted_item = {"key": key, "version": version, "deleted": True}
         self.upsert(kind, deleted_item)
 
     def upsert(self, kind, encoded_item):
-        """
-        """
+        """ """
         encoded_item = _ensure_encoded(kind, encoded_item)
         new_state = self._core.upsert_internal(kind, encoded_item)
         new_decoded_item = kind.decode(new_state)
@@ -118,8 +114,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
 
     @property
     def initialized(self) -> bool:
-        """
-        """
+        """ """
         if self._inited:
             return True
         if self._cache is None:

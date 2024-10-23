@@ -3,6 +3,7 @@ import json
 have_consul = False
 try:
     import consul
+
     have_consul = True
 except ImportError:
     pass

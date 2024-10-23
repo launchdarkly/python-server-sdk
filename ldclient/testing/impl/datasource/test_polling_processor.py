@@ -42,14 +42,7 @@ def setup_processor(config):
 def test_successful_request_puts_feature_data_in_store():
     flag = FlagBuilder('flagkey').build()
     segment = SegmentBuilder('segkey').build()
-    mock_requester.all_data = {
-        FEATURES: {
-            "flagkey": flag.to_json_dict()
-        },
-        SEGMENTS: {
-            "segkey": segment.to_json_dict()
-        }
-    }
+    mock_requester.all_data = {FEATURES: {"flagkey": flag.to_json_dict()}, SEGMENTS: {"segkey": segment.to_json_dict()}}
 
     spy = SpyListener()
     listeners = Listeners()
@@ -66,6 +59,7 @@ def test_successful_request_puts_feature_data_in_store():
     assert len(spy.statuses) == 1
     assert spy.statuses[0].state == DataSourceState.VALID
     assert spy.statuses[0].error is None
+
 
 # Note that we have to mock Config.poll_interval because Config won't let you set a value less than 30 seconds
 

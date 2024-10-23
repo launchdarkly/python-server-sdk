@@ -21,9 +21,7 @@ def _application_header_value(application: dict) -> str:
 
 
 def _base_headers(config):
-    headers = {'Authorization': config.sdk_key or '',
-               'User-Agent': 'PythonClient/' + VERSION
-               }
+    headers = {'Authorization': config.sdk_key or '', 'User-Agent': 'PythonClient/' + VERSION}
 
     app_value = _application_header_value(config.application)
     if app_value:
@@ -46,10 +44,7 @@ class HTTPFactory:
     def __init__(self, base_headers, http_config, override_read_timeout=None):
         self.__base_headers = base_headers
         self.__http_config = http_config
-        self.__timeout = urllib3.Timeout(
-            connect=http_config.connect_timeout,
-            read=http_config.read_timeout if override_read_timeout is None else override_read_timeout
-        )
+        self.__timeout = urllib3.Timeout(connect=http_config.connect_timeout, read=http_config.read_timeout if override_read_timeout is None else override_read_timeout)
 
     @property
     def base_headers(self):
@@ -74,11 +69,7 @@ class HTTPFactory:
             ca_certs = self.__http_config.ca_certs or certifi.where()
 
         if proxy_url is None:
-            return urllib3.PoolManager(
-                num_pools=num_pools,
-                cert_reqs=cert_reqs,
-                ca_certs=ca_certs
-            )
+            return urllib3.PoolManager(num_pools=num_pools, cert_reqs=cert_reqs, ca_certs=ca_certs)
         else:
             # Get proxy authentication, if provided
             url = urllib3.util.parse_url(proxy_url)
@@ -86,13 +77,7 @@ class HTTPFactory:
             if url.auth is not None:
                 proxy_headers = urllib3.util.make_headers(proxy_basic_auth=url.auth)
             # Create a proxied connection
-            return urllib3.ProxyManager(
-                proxy_url,
-                num_pools=num_pools,
-                cert_reqs=cert_reqs,
-                ca_certs=ca_certs,
-                proxy_headers=proxy_headers
-            )
+            return urllib3.ProxyManager(proxy_url, num_pools=num_pools, cert_reqs=cert_reqs, ca_certs=ca_certs, proxy_headers=proxy_headers)
 
 
 def _get_proxy_url(target_base_uri):

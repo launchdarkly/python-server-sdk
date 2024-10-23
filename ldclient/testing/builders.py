@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, List ,Optional
+from typing import Any, List, Optional
 
 from ldclient.context import Context
 from ldclient.impl.model import *
@@ -27,19 +27,9 @@ class BaseBuilder:
 
 class FlagBuilder(BaseBuilder):
     def __init__(self, key):
-        super().__init__({
-            'key': key,
-            'version': 1,
-            'on': False,
-            'variations': [],
-            'offVariation': None,
-            'fallthrough': {},
-            'prerequisites': [],
-            'targets': [],
-            'contextTargets': [],
-            'rules': [],
-            'salt': ''
-        })
+        super().__init__(
+            {'key': key, 'version': 1, 'on': False, 'variations': [], 'offVariation': None, 'fallthrough': {}, 'prerequisites': [], 'targets': [], 'contextTargets': [], 'rules': [], 'salt': ''}
+        )
 
     def build(self):
         return FeatureFlag(self.data.copy())
@@ -72,8 +62,7 @@ class FlagBuilder(BaseBuilder):
         return self._append('targets', {'variation': variation, 'values': list(keys)})
 
     def context_target(self, context_kind: str, variation: int, *keys: str) -> FlagBuilder:
-        return self._append('contextTargets',
-            {'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
+        return self._append('contextTargets', {'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
 
     def rules(self, *rules: dict) -> FlagBuilder:
         return self._append_all('rules', list(rules))
@@ -130,17 +119,7 @@ class FlagRuleBuilder(BaseBuilder):
 
 class SegmentBuilder(BaseBuilder):
     def __init__(self, key):
-        super().__init__({
-            'key': key,
-            'version': 1,
-            'included': [],
-            'excluded': [],
-            'includedContexts': [],
-            'excludedContexts': [],
-            'rules': [],
-            'unbounded': False,
-            'salt': ''
-        })
+        super().__init__({'key': key, 'version': 1, 'included': [], 'excluded': [], 'includedContexts': [], 'excludedContexts': [], 'rules': [], 'unbounded': False, 'salt': ''})
 
     def build(self):
         return Segment(self.data.copy())

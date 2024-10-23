@@ -72,7 +72,6 @@ class DefaultTestProcessor(DefaultEventProcessor):
         pytest.param(Operation.READ, Stage.LIVE, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
@@ -100,7 +99,6 @@ def test_migration_op_event_is_queued_without_flag(operation: Operation, default
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD, Origin.NEW}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD, Origin.NEW}, id="write shadow"),
@@ -128,7 +126,6 @@ def test_migration_op_event_is_queued_with_invoked(operation: Operation, default
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD}, id="write shadow"),
@@ -156,7 +153,6 @@ def test_migration_op_event_is_queued_with_errors(operation: Operation, default_
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD: 100, Origin.NEW: 100}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW: 100}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW: 100}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD: 100}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD: 100, Origin.NEW: 100}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD: 100, Origin.NEW: 100}, id="write shadow"),
@@ -168,7 +164,9 @@ def test_migration_op_event_is_queued_with_errors(operation: Operation, default_
 def test_migration_op_event_is_queued_with_latencies(operation: Operation, default_stage: Stage, latencies: Dict[Origin, float]):
     with DefaultTestProcessor() as ep:
         delta_latencies = {origin: timedelta(milliseconds=ms) for origin, ms in latencies.items()}
-        e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies)
+        e = MigrationOpEvent(
+            timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies
+        )
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -178,7 +176,20 @@ def test_migration_op_event_is_queued_with_latencies(operation: Operation, defau
 
 def test_migration_op_event_is_disabled_with_sampling_ratio():
     with DefaultTestProcessor() as ep:
-        e = MigrationOpEvent(timestamp, context, flag_with_0_sampling_ratio.key, flag_with_0_sampling_ratio, Operation.READ, Stage.OFF, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
+        e = MigrationOpEvent(
+            timestamp,
+            context,
+            flag_with_0_sampling_ratio.key,
+            flag_with_0_sampling_ratio,
+            Operation.READ,
+            Stage.OFF,
+            EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}),
+            {Origin.OLD},
+            None,
+            None,
+            set(),
+            {},
+        )
         ep.send_event(e)
 
         # NOTE: Have to send an identify event; otherwise, we will timeout waiting on no events.
@@ -199,7 +210,6 @@ def test_migration_op_event_is_disabled_with_sampling_ratio():
         pytest.param(Operation.READ, Stage.LIVE, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
@@ -230,7 +240,7 @@ def test_identify_event_is_queued():
 
 
 def test_context_is_filtered_in_identify_event():
-    with DefaultTestProcessor(all_attributes_private = True) as ep:
+    with DefaultTestProcessor(all_attributes_private=True) as ep:
         formatter = EventContextFormatter(True, [])
         e = EventInputIdentify(timestamp, context)
         ep.send_event(e)
@@ -333,7 +343,7 @@ def test_exclude_can_keep_feature_event_from_summary():
 
 
 def test_context_is_filtered_in_index_event():
-    with DefaultTestProcessor(all_attributes_private = True) as ep:
+    with DefaultTestProcessor(all_attributes_private=True) as ep:
         formatter = EventContextFormatter(True, [])
         e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
@@ -346,7 +356,7 @@ def test_context_is_filtered_in_index_event():
 
 
 def test_two_events_for_same_context_only_produce_one_index_event():
-    with DefaultTestProcessor(context_keys_flush_interval = 300) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval=300) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
@@ -361,7 +371,7 @@ def test_two_events_for_same_context_only_produce_one_index_event():
 
 
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
-    with DefaultTestProcessor(context_keys_flush_interval = 0.1) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval=0.1) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
@@ -510,22 +520,14 @@ def test_nontracked_events_are_summarized():
         assert se['startDate'] == earlier_time
         assert se['endDate'] == later_time
         assert se['features'] == {
-            'flagkey1': {
-                'contextKinds': ['user'],
-                'default': 'default1',
-                'counters': [ { 'version': 11, 'variation': 1, 'value': 'value1', 'count': 1 } ]
-            },
-            'flagkey2': {
-                'contextKinds': ['user'],
-                'default': 'default2',
-                'counters': [ { 'version': 22, 'variation': 2, 'value': 'value2', 'count': 1 } ]
-            }
+            'flagkey1': {'contextKinds': ['user'], 'default': 'default1', 'counters': [{'version': 11, 'variation': 1, 'value': 'value1', 'count': 1}]},
+            'flagkey2': {'contextKinds': ['user'], 'default': 'default2', 'counters': [{'version': 22, 'variation': 2, 'value': 'value2', 'count': 1}]},
         }
 
 
 def test_custom_event_is_queued_with_user():
     with DefaultTestProcessor() as ep:
-        e = EventInputCustom(timestamp, context, 'eventkey', { 'thing': 'stuff '}, 1.5)
+        e = EventInputCustom(timestamp, context, 'eventkey', {'thing': 'stuff '}, 1.5)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -542,7 +544,7 @@ def test_nothing_is_sent_if_there_are_no_events():
 
 
 def test_sdk_key_is_sent():
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -560,7 +562,7 @@ def test_wrapper_header_not_sent_when_not_set():
 
 
 def test_wrapper_header_sent_when_set():
-    with DefaultTestProcessor(wrapper_name = "Flask", wrapper_version = "0.0.1") as ep:
+    with DefaultTestProcessor(wrapper_name="Flask", wrapper_version="0.0.1") as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -569,7 +571,7 @@ def test_wrapper_header_sent_when_set():
 
 
 def test_wrapper_header_sent_without_version():
-    with DefaultTestProcessor(wrapper_name = "Flask") as ep:
+    with DefaultTestProcessor(wrapper_name="Flask") as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -587,7 +589,7 @@ def test_event_schema_set_on_event_send():
 
 
 def test_sdk_key_is_sent_on_diagnostic_request():
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY', diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
@@ -663,12 +665,13 @@ def test_will_still_send_after_500_error():
 
 def test_does_not_block_on_full_inbox():
     config = Config("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
-    ep_inbox_holder = [ None ]
+    ep_inbox_holder = [None]
     ep_inbox = None
 
     def dispatcher_factory(inbox, config, http, diag):
         ep_inbox_holder[0] = inbox  # it's an array because otherwise it's hard for a closure to modify a variable
         return None  # the dispatcher object itself doesn't matter, we only manipulate the inbox
+
     def event_consumer():
         while True:
             message = ep_inbox.get(block=True)
@@ -698,11 +701,12 @@ def test_http_proxy(monkeypatch):
             ep.send_event(EventInputIdentify(timestamp, context))
             ep.flush()
             ep._wait_until_inactive()
+
     do_proxy_tests(_event_processor_proxy_test, 'POST', monkeypatch)
 
 
 def verify_unrecoverable_http_error(status):
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         mock_http.set_response_status(status)
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
@@ -716,7 +720,7 @@ def verify_unrecoverable_http_error(status):
 
 
 def verify_recoverable_http_error(status):
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         mock_http.set_response_status(status)
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
@@ -730,7 +734,7 @@ def verify_recoverable_http_error(status):
 
 
 def test_event_payload_id_is_sent():
-    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+    with DefaultEventProcessor(Config(sdk_key='SDK_KEY'), mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -742,7 +746,7 @@ def test_event_payload_id_is_sent():
 
 
 def test_event_payload_id_changes_between_requests():
-    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+    with DefaultEventProcessor(Config(sdk_key='SDK_KEY'), mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()

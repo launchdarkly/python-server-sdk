@@ -7,6 +7,7 @@ from typing import Any, Optional, Dict, Set, cast
 have_redis = False
 try:
     import redis
+
     have_redis = True
 except ImportError:
     pass

@@ -22,7 +22,7 @@ class MockBigSegmentStore(BigSegmentStore):
         self.__get_metadata = callback
 
     def setup_metadata_always_up_to_date(self):
-        self.setup_metadata(lambda: BigSegmentStoreMetadata(time.time()*1000))
+        self.setup_metadata(lambda: BigSegmentStoreMetadata(time.time() * 1000))
 
     def setup_metadata_always_stale(self):
         self.setup_metadata(lambda: BigSegmentStoreMetadata(0))

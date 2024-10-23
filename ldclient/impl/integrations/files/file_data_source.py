@@ -7,6 +7,7 @@ from typing import Optional
 have_yaml = False
 try:
     import yaml
+
     have_yaml = True
 except ImportError:
     pass
@@ -16,6 +17,7 @@ try:
     import watchdog
     import watchdog.events
     import watchdog.observers
+
     have_watchdog = True
 except ImportError:
     pass
@@ -39,7 +41,7 @@ class _FileDataSource(UpdateProcessor):
         self._inited = False
         self._paths = paths
         if isinstance(self._paths, str):
-            self._paths = [ self._paths ]
+            self._paths = [self._paths]
         self._auto_update = auto_update
         self._auto_updater = None
         self._poll_interval = poll_interval
@@ -80,7 +82,7 @@ class _FileDataSource(UpdateProcessor):
         return self._inited
 
     def _load_all(self):
-        all_data = { FEATURES: {}, SEGMENTS: {} }
+        all_data = {FEATURES: {}, SEGMENTS: {}}
         for path in self._paths:
             try:
                 self._load_file(path, all_data)
@@ -88,10 +90,7 @@ class _FileDataSource(UpdateProcessor):
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
                 if self._data_source_update_sink is not None:
-                    self._data_source_update_sink.update_status(
-                        DataSourceState.INTERRUPTED,
-                        DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time, str(e))
-                    )
+                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time, str(e)))
                 return
         try:
             self._sink_or_store().init(all_data)
@@ -102,10 +101,7 @@ class _FileDataSource(UpdateProcessor):
             log.error('Unable to store data: %s' % repr(e))
             traceback.print_exc()
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(
-                    DataSourceState.INTERRUPTED,
-                    DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e))
-                )
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e)))
 
     def _load_file(self, path, all_data):
         content = None
@@ -135,15 +131,7 @@ class _FileDataSource(UpdateProcessor):
             raise Exception('In %s, key "%s" was used more than once' % (kind.namespace, key))
 
     def _make_flag_with_value(self, key, value):
-        return {
-            'key': key,
-            'version': 1,
-            'on': True,
-            'fallthrough': {
-                'variation': 0
-            },
-            'variations': [ value ]
-        }
+        return {'key': key, 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': [value]}
 
     def _start_auto_updater(self):
         resolved_paths = []

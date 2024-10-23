@@ -50,6 +50,7 @@ def test_task_can_be_stopped_from_within_the_task():
         if counter >= 2:
             task.stop()
             stopped.set()
+
     task = RepeatingTask("ldclient.testing.task-runner", 0.01, 0, do_task)
     try:
         task.start()

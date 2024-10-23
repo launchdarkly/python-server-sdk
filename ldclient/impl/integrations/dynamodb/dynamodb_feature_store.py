@@ -3,6 +3,7 @@ import json
 have_dynamodb = False
 try:
     import boto3
+
     have_dynamodb = True
 except ImportError:
     pass
@@ -73,7 +74,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         for kind, items in all_data.items():
             for key, item in items.items():
                 encoded_item = self._marshal_item(kind, item)
-                requests.append({ 'PutRequest': { 'Item': encoded_item } })
+                requests.append({'PutRequest': {'Item': encoded_item}})
                 combined_key = (self._namespace_for_kind(kind), key)
                 unused_old_keys.discard(combined_key)
                 num_items = num_items + 1
@@ -81,10 +82,10 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         # Now delete any previously existing items whose keys were not in the current data
         for combined_key in unused_old_keys:
             if combined_key[0] != inited_key:
-                requests.append({ 'DeleteRequest': { 'Key': self._make_keys(combined_key[0], combined_key[1]) } })
+                requests.append({'DeleteRequest': {'Key': self._make_keys(combined_key[0], combined_key[1])}})
 
         # Now set the special key that we check in initialized_internal()
-        requests.append({ 'PutRequest': { 'Item': self._make_keys(inited_key, inited_key) } })
+        requests.append({'PutRequest': {'Item': self._make_keys(inited_key, inited_key)}})
 
         _DynamoDBHelpers.batch_write_requests(self._client, self._table_name, requests)
         log.info('Initialized table %s with %d items', self._table_name, num_items)
@@ -109,14 +110,8 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
                 'TableName': self._table_name,
                 'Item': encoded_item,
                 'ConditionExpression': 'attribute_not_exists(#namespace) or attribute_not_exists(#key) or :version > #version',
-                'ExpressionAttributeNames': {
-                    '#namespace': self.PARTITION_KEY,
-                    '#key': self.SORT_KEY,
-                    '#version': self.VERSION_ATTRIBUTE
-                },
-                'ExpressionAttributeValues': {
-                    ':version': { 'N': str(item['version']) }
-                }
+                'ExpressionAttributeNames': {'#namespace': self.PARTITION_KEY, '#key': self.SORT_KEY, '#version': self.VERSION_ATTRIBUTE},
+                'ExpressionAttributeValues': {':version': {'N': str(item['version'])}},
             }
             self._client.put_item(**req)
         except self._client.exceptions.ConditionalCheckFailedException:
@@ -142,37 +137,24 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         return self._prefixed_namespace('$inited')
 
     def _make_keys(self, namespace, key):
-        return {
-            self.PARTITION_KEY: { 'S': namespace },
-            self.SORT_KEY: { 'S': key }
-        }
+        return {self.PARTITION_KEY: {'S': namespace}, self.SORT_KEY: {'S': key}}
 
     def _make_query_for_kind(self, kind):
         return {
             'TableName': self._table_name,
             'ConsistentRead': True,
-            'KeyConditions': {
-                self.PARTITION_KEY: {
-                    'AttributeValueList': [
-                        {  'S': self._namespace_for_kind(kind) }
-                    ],
-                    'ComparisonOperator': 'EQ'
-                }
-            }
+            'KeyConditions': {self.PARTITION_KEY: {'AttributeValueList': [{'S': self._namespace_for_kind(kind)}], 'ComparisonOperator': 'EQ'}},
         }
 
     def _get_item_by_keys(self, namespace, key):
-        return self._client.get_item(TableName=self._table_name, Key=self._make_keys(namespace,  key))
+        return self._client.get_item(TableName=self._table_name, Key=self._make_keys(namespace, key))
 
     def _read_existing_keys(self, kinds):
         keys = set()
         for kind in kinds:
             req = self._make_query_for_kind(kind)
             req['ProjectionExpression'] = '#namespace, #key'
-            req['ExpressionAttributeNames'] = {
-                '#namespace': self.PARTITION_KEY,
-                '#key': self.SORT_KEY
-            }
+            req['ExpressionAttributeNames'] = {'#namespace': self.PARTITION_KEY, '#key': self.SORT_KEY}
             paginator = self._client.get_paginator('query')
             for resp in paginator.paginate(**req):
                 for item in resp['Items']:
@@ -184,8 +166,8 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
     def _marshal_item(self, kind, item):
         json_str = json.dumps(item)
         ret = self._make_keys(self._namespace_for_kind(kind), item['key'])
-        ret[self.VERSION_ATTRIBUTE] = { 'N': str(item['version']) }
-        ret[self.ITEM_JSON_ATTRIBUTE] = { 'S': json_str }
+        ret[self.VERSION_ATTRIBUTE] = {'N': str(item['version'])}
+        ret[self.ITEM_JSON_ATTRIBUTE] = {'S': json_str}
         return ret
 
     def _unmarshal_item(self, item):
@@ -199,5 +181,5 @@ class _DynamoDBHelpers:
     @staticmethod
     def batch_write_requests(client, table_name, requests):
         batch_size = 25
-        for batch in (requests[i:i+batch_size] for i in range(0, len(requests), batch_size)):
-            client.batch_write_item(RequestItems={ table_name: batch })
+        for batch in (requests[i : i + batch_size] for i in range(0, len(requests), batch_size)):
+            client.batch_write_item(RequestItems={table_name: batch})
