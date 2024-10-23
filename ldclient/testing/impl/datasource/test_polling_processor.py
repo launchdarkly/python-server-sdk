@@ -27,14 +27,17 @@ def setup_function():
     store = InMemoryFeatureStore()
     ready = threading.Event()
 
+
 def teardown_function():
     if pp is not None:
         pp.stop()
+
 
 def setup_processor(config):
     global pp
     pp = PollingUpdateProcessor(config, mock_requester, store, ready)
     pp.start()
+
 
 def test_successful_request_puts_feature_data_in_store():
     flag = FlagBuilder('flagkey').build()
@@ -66,6 +69,7 @@ def test_successful_request_puts_feature_data_in_store():
 
 # Note that we have to mock Config.poll_interval because Config won't let you set a value less than 30 seconds
 
+
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
 def test_general_connection_error_does_not_cause_immediate_failure(ignore_mock):
     mock_requester.exception = Exception("bad")
@@ -74,23 +78,30 @@ def test_general_connection_error_does_not_cause_immediate_failure(ignore_mock):
     assert not pp.initialized()
     assert mock_requester.request_count >= 2
 
+
 def test_http_401_error_causes_immediate_failure():
     verify_unrecoverable_http_error(401)
+
 
 def test_http_403_error_causes_immediate_failure():
     verify_unrecoverable_http_error(401)
 
+
 def test_http_408_error_does_not_cause_immediate_failure():
     verify_recoverable_http_error(408)
+
 
 def test_http_429_error_does_not_cause_immediate_failure():
     verify_recoverable_http_error(429)
 
+
 def test_http_500_error_does_not_cause_immediate_failure():
     verify_recoverable_http_error(500)
 
+
 def test_http_503_error_does_not_cause_immediate_failure():
     verify_recoverable_http_error(503)
+
 
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
 def verify_unrecoverable_http_error(http_status_code, ignore_mock):
@@ -112,6 +123,7 @@ def verify_unrecoverable_http_error(http_status_code, ignore_mock):
     assert spy.statuses[0].state == DataSourceState.OFF
     assert spy.statuses[0].error.kind == DataSourceErrorKind.ERROR_RESPONSE
     assert spy.statuses[0].error.status_code == http_status_code
+
 
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.1)
 def verify_recoverable_http_error(http_status_code, ignore_mock):

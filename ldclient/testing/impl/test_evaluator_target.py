@@ -8,18 +8,22 @@ MATCH_VAR_1 = 1
 MATCH_VAR_2 = 2
 VARIATIONS = ['fallthrough', 'match1', 'match2']
 
+
 def assert_match_clause(clause: dict, context: Context, should_match: bool):
     assert_match(basic_evaluator, make_boolean_flag_with_clauses(clause), context, should_match)
+
 
 def base_flag_builder() -> FlagBuilder:
     return FlagBuilder('feature').on(True).variations(*VARIATIONS) \
         .fallthrough_variation(FALLTHROUGH_VAR).off_variation(FALLTHROUGH_VAR)
+
 
 def expect_match(flag: FeatureFlag, context: Context, variation: int):
     result = basic_evaluator.evaluate(flag, context, event_factory)
     assert result.detail.variation_index == variation
     assert result.detail.value == VARIATIONS[variation]
     assert result.detail.reason == {'kind': 'TARGET_MATCH'}
+
 
 def expect_fallthrough(flag: FeatureFlag, context: Context):
     result = basic_evaluator.evaluate(flag, context, event_factory)

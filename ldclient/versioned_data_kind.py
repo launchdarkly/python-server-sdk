@@ -14,6 +14,7 @@ from ldclient.impl.model import FeatureFlag, ModelEntity, Segment
 from collections import namedtuple
 from typing import Any, Callable, Iterable, Optional
 
+
 # Note that VersionedDataKind without the extra attributes is no longer used in the SDK,
 # but it's preserved here for backward compatibility just in case someone else used it
 class VersionedDataKind:
@@ -43,6 +44,7 @@ class VersionedDataKind:
 
     def encode(self, item: Any) -> dict:
         return item.to_json_dict() if isinstance(item, ModelEntity) else item
+
 
 class VersionedDataKindWithOrdering(VersionedDataKind):
     def __init__(self, namespace: str, request_api_path: str, stream_api_path: str,

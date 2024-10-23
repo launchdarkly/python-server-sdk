@@ -6,6 +6,7 @@ from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.events.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
 
+
 def test_create_diagnostic_id():
     test_config = Config(sdk_key = "SDK_KEY", http=HTTPConfig())
     diag_id = create_diagnostic_id(test_config)
@@ -14,6 +15,7 @@ def test_create_diagnostic_id():
     # Will throw if invalid UUID4
     uuid.UUID('urn:uuid:' + uid)
     assert diag_id['sdkKeySuffix'] == 'DK_KEY'
+
 
 def test_create_diagnostic_init():
     test_config = Config(sdk_key = "SDK_KEY", wrapper_name='django', wrapper_version = '5.1.1')
@@ -38,6 +40,7 @@ def test_create_diagnostic_init():
     # Verify converts to json without failure
     json.dumps(diag_init)
 
+
 def test_create_diagnostic_config_defaults():
     test_config = Config("SDK_KEY")
     diag_config = _create_diagnostic_config_object(test_config)
@@ -59,6 +62,7 @@ def test_create_diagnostic_config_defaults():
     assert diag_config['userKeysFlushIntervalMillis'] == 300000
     assert diag_config['diagnosticRecordingIntervalMillis'] == 900000
     assert diag_config['dataStoreType'] == 'memory'
+
 
 def test_create_diagnostic_config_custom():
     test_store = CachingStoreWrapper(_TestStoreForDiagnostics(), CacheConfig.default())
@@ -87,9 +91,11 @@ def test_create_diagnostic_config_custom():
     assert diag_config['diagnosticRecordingIntervalMillis'] == 60000
     assert diag_config['dataStoreType'] == 'MyFavoriteStore'
 
+
 class _TestStoreForDiagnostics:
     def describe_configuration(self, config):
         return 'MyFavoriteStore'
+
 
 def test_diagnostic_accumulator():
     test_config = Config(sdk_key = "SDK_KEY")

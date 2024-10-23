@@ -15,6 +15,7 @@ from ldclient.interfaces import BigSegmentStore
 
 from typing import Any, Dict, List, Mapping, Optional
 
+
 class Consul:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
     """
@@ -201,6 +202,7 @@ class Redis:
         """
 
         return _RedisBigSegmentStore(url, prefix, redis_opts)
+
 
 class Files:
     """Provides factory methods for integrations with filesystem data.

@@ -7,12 +7,14 @@ import time
 import queue
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+
 def get_available_port():
     s = socket.socket(socket.AF_INET, type = socket.SOCK_STREAM)
     s.bind(('localhost', 0))
     _, port = s.getsockname()
     s.close()
     return port
+
 
 def poll_until_started(port):
     deadline = time.time() + 1
@@ -28,17 +30,20 @@ def poll_until_started(port):
         time.sleep(0.05)
     raise Exception("test server on port %d was not reachable" % port)
 
+
 def start_server():
     sw = MockServerWrapper(get_available_port(), False)
     sw.start()
     poll_until_started(sw.port)
     return sw
 
+
 def start_secure_server():
     sw = MockServerWrapper(get_available_port(), True)
     sw.start()
     poll_until_started(sw.port)
     return sw
+
 
 class MockServerWrapper(Thread):
     def __init__(self, port, secure):
@@ -92,6 +97,7 @@ class MockServerWrapper(Thread):
     def __exit__(self, type, value, traceback):
         self.close()
 
+
 class MockServerRequestHandler(BaseHTTPRequestHandler):
     def do_CONNECT(self):
         self._do_request()
@@ -111,6 +117,7 @@ class MockServerRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+
 class MockServerRequest:
     def __init__(self, request):
         self.method = request.command
@@ -124,6 +131,7 @@ class MockServerRequest:
 
     def __str__(self):
         return "%s %s" % (self.method, self.path)
+
 
 class BasicResponse:
     def __init__(self, status, body = None, headers = None):
@@ -143,11 +151,13 @@ class BasicResponse:
         if self.body:
             request.wfile.write(self.body.encode('UTF-8'))
 
+
 class JsonResponse(BasicResponse):
     def __init__(self, data, headers = None):
         h = headers or {}
         h.update({ 'Content-Type': 'application/json' })
         BasicResponse.__init__(self, 200, json.dumps(data or {}), h)
+
 
 class ChunkedResponse:
     def __init__(self, headers = None):
@@ -184,9 +194,11 @@ class ChunkedResponse:
     def __exit__(self, type, value, traceback):
         self.close()
 
+
 class CauseNetworkError:
     def write(self, request):
         raise Exception('intentional error')
+
 
 class SequentialHandler:
     def __init__(self, *argv):

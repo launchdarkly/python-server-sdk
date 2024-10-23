@@ -2,6 +2,7 @@ from ldclient.impl.model.entity import ModelEntity
 
 import json
 
+
 class ModelEncoder(json.JSONEncoder):
     """
     A JSON encoder customized to serialize our data model types correctly. We should

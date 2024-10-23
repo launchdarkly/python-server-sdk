@@ -12,6 +12,7 @@ import pytest
 # database integrations, see testing.integrations.persistent_feature_store_test_base which extends
 # them with additional tests.
 
+
 class FeatureStoreTester:
     @abstractmethod
     def create_feature_store(self) -> FeatureStore:

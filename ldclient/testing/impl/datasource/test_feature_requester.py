@@ -5,6 +5,7 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 from ldclient.testing.http_util import start_server, BasicResponse, JsonResponse
 from ldclient.testing.proxy_test_util import do_proxy_tests
 
+
 def test_get_all_data_returns_data():
     with start_server() as server:
         config = Config(sdk_key = 'sdk-key', base_uri = server.uri)
@@ -18,6 +19,7 @@ def test_get_all_data_returns_data():
 
         result = fr.get_all_data()
         assert result == expected_data
+
 
 def test_get_all_data_sends_headers():
     with start_server() as server:
@@ -35,6 +37,7 @@ def test_get_all_data_sends_headers():
         assert req.headers.get('X-LaunchDarkly-Wrapper') is None
         assert req.headers.get('X-LaunchDarkly-Tags') is None
 
+
 def test_get_all_data_sends_wrapper_header():
     with start_server() as server:
         config = Config(sdk_key = 'sdk-key', base_uri = server.uri,
@@ -47,6 +50,7 @@ def test_get_all_data_sends_wrapper_header():
         fr.get_all_data()
         req = server.require_request()
         assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
+
 
 def test_get_all_data_sends_wrapper_header_without_version():
     with start_server() as server:
@@ -61,6 +65,7 @@ def test_get_all_data_sends_wrapper_header_without_version():
         req = server.require_request()
         assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
 
+
 def test_get_all_data_sends_tags_header():
     with start_server() as server:
         config = Config(sdk_key = 'sdk-key', base_uri = server.uri,
@@ -73,6 +78,7 @@ def test_get_all_data_sends_tags_header():
         fr.get_all_data()
         req = server.require_request()
         assert req.headers.get('X-LaunchDarkly-Tags') == 'application-id/my-id application-version/my-version'
+
 
 def test_get_all_data_can_use_cached_data():
     with start_server() as server:
@@ -113,6 +119,7 @@ def test_get_all_data_can_use_cached_data():
         assert result == expected_data2
         req = server.require_request()
         assert req.headers['If-None-Match'] == etag2
+
 
 def test_http_proxy(monkeypatch):
     def _feature_requester_proxy_test(server, config, secure):

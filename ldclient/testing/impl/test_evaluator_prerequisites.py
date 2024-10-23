@@ -16,6 +16,7 @@ def test_flag_returns_off_variation_if_prerequisite_not_found():
     detail = EvaluationDetail('b', 1, {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': 'badfeature'})
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, None)
 
+
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
     flag = FlagBuilder('feature0').on(True).off_variation(1).variations('a', 'b', 'c').fallthrough_variation(1) \
         .prerequisite('feature1', 1).build()
@@ -30,6 +31,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_off():
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
+
 def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     flag = FlagBuilder('feature0').on(True).off_variation(1).variations('a', 'b', 'c').fallthrough_variation(1) \
         .prerequisite('feature1', 1).build()
@@ -43,6 +45,7 @@ def test_flag_returns_off_variation_and_event_if_prerequisite_is_not_met():
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
 
+
 def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_rules():
     flag = FlagBuilder('feature0').on(True).off_variation(1).variations('a', 'b', 'c').fallthrough_variation(0) \
         .prerequisite('feature1', 1).build()
@@ -55,6 +58,7 @@ def test_flag_returns_fallthrough_and_event_if_prereq_is_met_and_there_are_no_ru
         EventInputEvaluation(0, user, flag1.key, flag1, 1, 'e', None, None, flag, False)
     ]
     assert_eval_result(evaluator.evaluate(flag, user, event_factory), detail, events_should_be)
+
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4])
 def test_prerequisite_cycle_detection(depth: int):

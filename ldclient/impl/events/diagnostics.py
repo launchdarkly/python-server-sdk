@@ -6,6 +6,7 @@ import platform
 from ldclient.config import Config
 from ldclient.version import VERSION
 
+
 class _DiagnosticAccumulator:
     def __init__(self, diagnostic_id):
         self.diagnostic_id = diagnostic_id
@@ -41,9 +42,11 @@ class _DiagnosticAccumulator:
         self.data_since_date = current_time
         return periodic_event
 
+
 def create_diagnostic_id(config):
     return {'diagnosticId': str(uuid.uuid4()),
             'sdkKeySuffix': '' if not config.sdk_key else config.sdk_key[-6:]}
+
 
 def create_diagnostic_init(creation_date, diagnostic_id, config):
     base_object = _diagnostic_base_fields('diagnostic-init', creation_date, diagnostic_id)
@@ -52,10 +55,12 @@ def create_diagnostic_init(creation_date, diagnostic_id, config):
                         'platform': _create_diagnostic_platform_object()})
     return base_object
 
+
 def _diagnostic_base_fields(kind, creation_date, diagnostic_id):
     return {'kind': kind,
             'creationDate': creation_date,
             'id': diagnostic_id}
+
 
 def _create_diagnostic_config_object(config):
     default_config = Config("SDK_KEY")
@@ -76,11 +81,13 @@ def _create_diagnostic_config_object(config):
             'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
             'dataStoreType': _get_component_type_name(config.feature_store, config, 'memory')}
 
+
 def _create_diagnostic_sdk_object(config):
     return {'name': 'python-server-sdk',
             'version': VERSION,
             'wrapperName': config.wrapper_name,
             'wrapperVersion': config.wrapper_version}
+
 
 def _create_diagnostic_platform_object():
     return {'name': 'python',
@@ -90,12 +97,14 @@ def _create_diagnostic_platform_object():
             'pythonVersion': platform.python_version(),
             'pythonImplementation': platform.python_implementation()}
 
+
 def _get_component_type_name(component, config, default_name):
     if component is not None:
         if callable(getattr(component, 'describe_configuration', None)):
             return component.describe_configuration(config)
         return "custom"
     return default_name
+
 
 def _normalize_os_name(name):
     if name == 'Darwin':

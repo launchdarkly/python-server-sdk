@@ -292,6 +292,7 @@ def test_can_retrieve_flag_from_store():
 
     client.close()
 
+
 def test_updates_to_flags_are_reflected_in_store():
     td = TestData.data_source()
 
@@ -305,6 +306,7 @@ def test_updates_to_flags_are_reflected_in_store():
 
     client.close()
 
+
 def test_updates_after_client_close_have_no_affect():
     td = TestData.data_source()
 
@@ -317,6 +319,7 @@ def test_updates_after_client_close_have_no_affect():
     td.update(td.flag('some-flag'))
 
     assert store.get(FEATURES, 'some-flag') == None
+
 
 def test_can_handle_multiple_clients():
     td = TestData.data_source()
@@ -379,6 +382,7 @@ def test_flag_evaluation_with_client():
     assert eval2.value == False
     assert eval2.variation_index == 1
     assert eval2.reason['kind'] == 'FALLTHROUGH'
+
 
 def test_flag_can_evaluate_all_flags():
     td = TestData.data_source()

@@ -71,6 +71,7 @@ class Evaluator:
     that is provided in the constructor. It also produces feature events as appropriate for any referenced prerequisite
     flags, but does not send them.
     """
+
     def __init__(
         self,
         get_flag: Callable[[str], Optional[FeatureFlag]],
@@ -342,11 +343,13 @@ def _get_variation(flag: FeatureFlag, variation: int, reason: dict) -> Evaluatio
         return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
     return EvaluationDetail(vars[variation], variation, reason)
 
+
 def _get_off_value(flag: FeatureFlag, reason: dict) -> EvaluationDetail:
     off_var = flag.off_variation
     if off_var is None:
         return EvaluationDetail(None, None, reason)
     return _get_variation(flag, off_var, reason)
+
 
 def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollout, context: Context, reason: dict) -> EvaluationDetail:
     index, inExperiment = _variation_index_for_context(flag, vr, context)
@@ -355,6 +358,7 @@ def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollou
     if inExperiment:
         reason['inExperiment'] = inExperiment
     return _get_variation(flag, index, reason)
+
 
 def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, context: Context) -> Tuple[Optional[int], bool]:
     var = vr.variation
@@ -396,6 +400,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
     is_experiment_partition = is_experiment and not variations[-1].untracked
     return variations[-1].variation, is_experiment_partition
 
+
 def _bucket_context(
     seed: Optional[int],
     context: Context,
@@ -423,6 +428,7 @@ def _bucket_context(
     result = hash_val / __LONG_SCALE__
     return result
 
+
 def _bucketable_string_value(u_value) -> Optional[str]:
     if isinstance(u_value, bool):
         return None
@@ -431,11 +437,13 @@ def _bucketable_string_value(u_value) -> Optional[str]:
 
     return None
 
+
 def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Set[str]) -> bool:
     if keys is None or len(keys) == 0:
         return False
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
     return match_context is not None and match_context.key in keys
+
 
 def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
     if attr is None:
@@ -455,6 +463,7 @@ def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
         i += 1
     return value
 
+
 def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
     op_fn = operators.ops.get(clause.op)
     if op_fn is None:
@@ -466,6 +475,7 @@ def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
             return True
     return False
 
+
 def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
     # If attribute is "kind", then we treat operator and values as a match expression against a list
     # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
@@ -476,8 +486,10 @@ def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
             return True
     return False
 
+
 def _maybe_negate(clause: Clause, val: bool) -> bool:
     return not val if clause.negate else val
+
 
 def _make_big_segment_ref(segment: Segment) -> str:
     # The format of Big Segment references is independent of what store implementation is being
@@ -485,8 +497,10 @@ def _make_big_segment_ref(segment: Segment) -> str:
     # the data model. The Relay Proxy will use the same format when writing to the store.
     return "%s.g%d" % (segment.key, segment.generation or 0)
 
+
 def _target_match_result(flag: FeatureFlag, var: int) -> EvaluationDetail:
     return _get_variation(flag, var, {'kind': 'TARGET_MATCH'})
+
 
 def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}

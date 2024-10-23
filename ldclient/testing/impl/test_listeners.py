@@ -2,9 +2,11 @@ from ldclient.impl.listeners import Listeners
 
 from queue import Queue
 
+
 def test_notify_with_no_listeners_does_not_throw_exception():
     l = Listeners()
     l.notify("hi")
+
 
 def test_notify_calls_listeners():
     q1 = Queue()
@@ -17,6 +19,7 @@ def test_notify_calls_listeners():
     assert q2.get() == "hi"
     assert q1.empty() == True
     assert q2.empty() == True
+
 
 def test_remove_listener():
     q1 = Queue()
@@ -32,6 +35,7 @@ def test_remove_listener():
     assert q1.empty() == True
     assert q2.get() == "hi"
     assert q2.empty() == True
+
 
 def test_exception_from_listener_is_caught_and_other_listeners_are_still_called():
     def fail(v):

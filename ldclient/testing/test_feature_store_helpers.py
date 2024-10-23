@@ -9,8 +9,10 @@ from ldclient.versioned_data_kind import VersionedDataKind
 THINGS = VersionedDataKind(namespace = "things", request_api_path = "", stream_api_path = "")
 WRONG_THINGS = VersionedDataKind(namespace = "wrong", request_api_path = "", stream_api_path = "")
 
+
 def make_wrapper(core, cached):
     return CachingStoreWrapper(core, CacheConfig(expiration=30) if cached else CacheConfig.disabled())
+
 
 class MockCore:
     def __init__(self):
@@ -18,22 +20,22 @@ class MockCore:
         self.inited = False
         self.inited_query_count = 0
         self.error = None
-    
+
     def init_internal(self, all_data):
         self._maybe_throw()
         self.data = {}
         for kind, items in all_data.items():
             self.data[kind] = items.copy()
-    
+
     def get_internal(self, kind, key):
         self._maybe_throw()
         items = self.data.get(kind)
         return None if items is None else items.get(key)
-    
+
     def get_all_internal(self, kind):
         self._maybe_throw()
         return self.data.get(kind)
-    
+
     def upsert_internal(self, kind, item):
         self._maybe_throw()
         key = item.get('key')
@@ -46,7 +48,7 @@ class MockCore:
             items[key] = item
             return item
         return old_item
-    
+
     def initialized_internal(self):
         self._maybe_throw()
         self.inited_query_count = self.inited_query_count + 1
@@ -55,21 +57,23 @@ class MockCore:
     def _maybe_throw(self):
         if self.error is not None:
             raise self.error
-        
+
     def force_set(self, kind, item):
         items = self.data.get(kind)
         if items is None:
             items = {}
             self.data[kind] = items
         items[item.get('key')] = item
-    
+
     def force_remove(self, kind, key):
         items = self.data.get(kind)
         if items is not None:
             items.pop(key, None)
 
+
 class CustomError(Exception):
     pass
+
 
 class TestCachingStoreWrapper:
     @pytest.mark.parametrize("available", [False, True])
@@ -147,7 +151,7 @@ class TestCachingStoreWrapper:
         wrapper.init({ THINGS: { item1["key"]: item1, item2["key"]: item2 } })
         core.force_remove(THINGS, item1["key"])
         assert wrapper.get(THINGS, item1["key"]) == item1
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_can_throw_exception(self, cached):
         core = MockCore()
@@ -190,7 +194,7 @@ class TestCachingStoreWrapper:
         wrapper = make_wrapper(core, cached)
 
         assert wrapper.all(WRONG_THINGS) == {}
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_iwith_lambda(self, cached):
         core = MockCore()
@@ -265,7 +269,7 @@ class TestCachingStoreWrapper:
         itemv3 = { "key": key, "version": 3 }
         core.force_set(THINGS, itemv3)  # bypasses cache so we can verify that itemv2 is in the cache
         assert wrapper.get(THINGS, key) == itemv2
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_upsert_can_throw_exception(self, cached):
         core = MockCore()

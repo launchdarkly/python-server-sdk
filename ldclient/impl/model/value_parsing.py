@@ -60,6 +60,7 @@ def parse_time(input: Any) -> Optional[float]:
 
     return None
 
+
 def parse_semver(input: Any) -> Optional[VersionInfo]:
     if not isinstance(input, str):
         return None
@@ -78,6 +79,7 @@ def parse_semver(input: Any) -> Optional[VersionInfo]:
                 return input
             except ValueError as e:
                 return None
+
 
 def _add_zero_version_component(input):
     m = re.search("^([0-9.]*)(.*)", input)

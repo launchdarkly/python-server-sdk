@@ -37,9 +37,11 @@ def setup_function():
     global mock_http
     mock_http = MockHttp()
 
+
 def teardown_function():
     if ep is not None:
         ep.stop()
+
 
 def make_context_keys(context: Context) -> dict:
     ret = {}  # type: Dict[str, str]
@@ -226,6 +228,7 @@ def test_identify_event_is_queued():
         assert len(output) == 1
         check_identify_event(output[0], e)
 
+
 def test_context_is_filtered_in_identify_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
         formatter = EventContextFormatter(True, [])
@@ -328,6 +331,7 @@ def test_exclude_can_keep_feature_event_from_summary():
         check_index_event(output[0], e)
         check_feature_event(output[1], e)
 
+
 def test_context_is_filtered_in_index_event():
     with DefaultTestProcessor(all_attributes_private = True) as ep:
         formatter = EventContextFormatter(True, [])
@@ -339,6 +343,7 @@ def test_context_is_filtered_in_index_event():
         check_index_event(output[0], e, formatter.format_context(context))
         check_feature_event(output[1], e, formatter.format_context(context))
         check_summary_event(output[2])
+
 
 def test_two_events_for_same_context_only_produce_one_index_event():
     with DefaultTestProcessor(context_keys_flush_interval = 300) as ep:
@@ -353,6 +358,7 @@ def test_two_events_for_same_context_only_produce_one_index_event():
         check_feature_event(output[1], e0)
         check_feature_event(output[2], e1)
         check_summary_event(output[3])
+
 
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
     with DefaultTestProcessor(context_keys_flush_interval = 0.1) as ep:
@@ -370,6 +376,7 @@ def test_new_index_event_is_added_if_context_cache_has_been_cleared():
         check_feature_event(output[3], e1)
         check_summary_event(output[4])
 
+
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     with DefaultTestProcessor() as ep:
         future_time = now() + 100000
@@ -382,6 +389,7 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
         check_index_event(output[0], e)
         check_debug_event(output[1], e)
         check_summary_event(output[2])
+
 
 def test_event_can_be_both_tracked_and_debugged():
     with DefaultTestProcessor() as ep:
@@ -435,6 +443,7 @@ def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_befo
         check_debug_event(output[1], e)
         check_summary_event(output[2])
 
+
 def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_server_time():
     with DefaultTestProcessor() as ep:
         # Pick a server time that is somewhat behind the client time
@@ -458,6 +467,7 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
         check_index_event(output[0], e)
         check_summary_event(output[1])
 
+
 def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_client_time():
     with DefaultTestProcessor() as ep:
         # Pick a server time that is somewhat ahead of the client time
@@ -480,6 +490,7 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
         assert len(output) == 2
         check_index_event(output[0], e)
         check_summary_event(output[1])
+
 
 def test_nontracked_events_are_summarized():
     with DefaultTestProcessor() as ep:
@@ -511,6 +522,7 @@ def test_nontracked_events_are_summarized():
             }
         }
 
+
 def test_custom_event_is_queued_with_user():
     with DefaultTestProcessor() as ep:
         e = EventInputCustom(timestamp, context, 'eventkey', { 'thing': 'stuff '}, 1.5)
@@ -521,11 +533,13 @@ def test_custom_event_is_queued_with_user():
         check_index_event(output[0], e)
         check_custom_event(output[1], e)
 
+
 def test_nothing_is_sent_if_there_are_no_events():
     with DefaultTestProcessor() as ep:
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is None
+
 
 def test_sdk_key_is_sent():
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
@@ -535,6 +549,7 @@ def test_sdk_key_is_sent():
 
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
+
 def test_wrapper_header_not_sent_when_not_set():
     with DefaultTestProcessor() as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
@@ -542,6 +557,7 @@ def test_wrapper_header_not_sent_when_not_set():
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') is None
+
 
 def test_wrapper_header_sent_when_set():
     with DefaultTestProcessor(wrapper_name = "Flask", wrapper_version = "0.0.1") as ep:
@@ -551,6 +567,7 @@ def test_wrapper_header_sent_when_set():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask/0.0.1"
 
+
 def test_wrapper_header_sent_without_version():
     with DefaultTestProcessor(wrapper_name = "Flask") as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
@@ -558,6 +575,7 @@ def test_wrapper_header_sent_without_version():
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
+
 
 def test_event_schema_set_on_event_send():
     with DefaultTestProcessor() as ep:
@@ -567,15 +585,18 @@ def test_event_schema_set_on_event_send():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') == "4"
 
+
 def test_sdk_key_is_sent_on_diagnostic_request():
     with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
 
+
 def test_event_schema_not_set_on_diagnostic_send():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
         assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') is None
+
 
 def test_init_diagnostic_event_sent():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -583,6 +604,7 @@ def test_init_diagnostic_event_sent():
         # Fields are tested in test_diagnostics.py
         assert len(diag_init) == 6
         assert diag_init['kind'] == 'diagnostic-init'
+
 
 def test_periodic_diagnostic_includes_events_in_batch():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -598,6 +620,7 @@ def test_periodic_diagnostic_includes_events_in_batch():
         assert diag_event['kind'] == 'diagnostic'
         assert diag_event['eventsInLastBatch'] == 1
         assert diag_event['deduplicatedUsers'] == 0
+
 
 def test_periodic_diagnostic_includes_deduplicated_users():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -617,20 +640,26 @@ def test_periodic_diagnostic_includes_deduplicated_users():
         assert diag_event['eventsInLastBatch'] == 3
         assert diag_event['deduplicatedUsers'] == 1
 
+
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)
+
 
 def test_no_more_payloads_are_sent_after_403_error():
     verify_unrecoverable_http_error(403)
 
+
 def test_will_still_send_after_408_error():
     verify_recoverable_http_error(408)
+
 
 def test_will_still_send_after_429_error():
     verify_recoverable_http_error(429)
 
+
 def test_will_still_send_after_500_error():
     verify_recoverable_http_error(500)
+
 
 def test_does_not_block_on_full_inbox():
     config = Config("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
@@ -662,6 +691,7 @@ def test_does_not_block_on_full_inbox():
         assert message1.param == event1
         assert had_no_more
 
+
 def test_http_proxy(monkeypatch):
     def _event_processor_proxy_test(server, config, secure):
         with DefaultEventProcessor(config) as ep:
@@ -669,6 +699,7 @@ def test_http_proxy(monkeypatch):
             ep.flush()
             ep._wait_until_inactive()
     do_proxy_tests(_event_processor_proxy_test, 'POST', monkeypatch)
+
 
 def verify_unrecoverable_http_error(status):
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
@@ -683,6 +714,7 @@ def verify_unrecoverable_http_error(status):
         ep._wait_until_inactive()
         assert mock_http.request_data is None
 
+
 def verify_recoverable_http_error(status):
     with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
         mock_http.set_response_status(status)
@@ -696,6 +728,7 @@ def verify_recoverable_http_error(status):
         ep._wait_until_inactive()
         assert mock_http.request_data is not None
 
+
 def test_event_payload_id_is_sent():
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
@@ -706,6 +739,7 @@ def test_event_payload_id_is_sent():
         assert headerVal is not None
         # Throws on invalid UUID
         uuid.UUID(headerVal)
+
 
 def test_event_payload_id_changes_between_requests():
     with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
@@ -721,6 +755,7 @@ def test_event_payload_id_changes_between_requests():
         secondPayloadId = mock_http.recorded_requests[1][0].get('X-LaunchDarkly-Payload-ID')
         assert firstPayloadId != secondPayloadId
 
+
 def flush_and_get_events(ep):
     ep.flush()
     ep._wait_until_inactive()
@@ -729,15 +764,18 @@ def flush_and_get_events(ep):
     else:
         return json.loads(mock_http.request_data)
 
+
 def check_identify_event(data, source: EventInput, context_json: Optional[dict] = None):
     assert data['kind'] == 'identify'
     assert data['creationDate'] == source.timestamp
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
 
+
 def check_index_event(data, source: EventInput, context_json: Optional[dict] = None):
     assert data['kind'] == 'index'
     assert data['creationDate'] == source.timestamp
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
+
 
 def check_feature_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'feature'
@@ -811,6 +849,7 @@ def check_debug_event(data, source: EventInputEvaluation, context_json: Optional
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
 
+
 def check_custom_event(data, source: EventInputCustom):
     assert data['kind'] == 'custom'
     assert data['creationDate'] == source.timestamp
@@ -819,8 +858,10 @@ def check_custom_event(data, source: EventInputCustom):
     assert data['contextKeys'] == make_context_keys(source.context)
     assert data.get('metricValue') == source.metric_value
 
+
 def check_summary_event(data):
     assert data['kind'] == 'summary'
+
 
 def now():
     return int(time.time() * 1000)

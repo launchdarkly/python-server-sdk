@@ -11,6 +11,7 @@ sdk_key = 'sdk-key'
 user = Context.from_dict({ 'key': 'userkey', 'kind': 'user' })
 always_true_flag = { 'key': 'flagkey', 'version': 1, 'on': False, 'offVariation': 1, 'variations': [ False, True ] }
 
+
 def test_client_starts_in_streaming_mode():
     with start_server() as stream_server:
         with stream_content(make_put_event([ always_true_flag ])) as stream_handler:
@@ -24,6 +25,7 @@ def test_client_starts_in_streaming_mode():
                 r = stream_server.await_request()
                 assert r.headers['Authorization'] == sdk_key
 
+
 def test_client_fails_to_start_in_streaming_mode_with_401_error():
     with start_server() as stream_server:
         stream_server.for_path('/all', BasicResponse(401))
@@ -32,6 +34,7 @@ def test_client_fails_to_start_in_streaming_mode_with_401_error():
         with LDClient(config = config) as client:
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) == False
+
 
 def test_client_retries_connection_in_streaming_mode_with_non_fatal_error():
     with start_server() as stream_server:
@@ -47,6 +50,7 @@ def test_client_retries_connection_in_streaming_mode_with_non_fatal_error():
                 r = stream_server.await_request()
                 assert r.headers['Authorization'] == sdk_key
 
+
 def test_client_starts_in_polling_mode():
     with start_server() as poll_server:
         poll_server.for_path('/sdk/latest-all', poll_content([ always_true_flag ]))
@@ -59,6 +63,7 @@ def test_client_starts_in_polling_mode():
             r = poll_server.await_request()
             assert r.headers['Authorization'] == sdk_key
 
+
 def test_client_fails_to_start_in_polling_mode_with_401_error():
     with start_server() as poll_server:
         poll_server.for_path('/sdk/latest-all', BasicResponse(401))
@@ -67,6 +72,7 @@ def test_client_fails_to_start_in_polling_mode_with_401_error():
         with LDClient(config = config) as client:
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) == False
+
 
 def test_client_sends_event_without_diagnostics():
     with start_server() as poll_server:
@@ -87,6 +93,7 @@ def test_client_sends_event_without_diagnostics():
                 assert len(data) == 1
                 assert data[0]['kind'] == 'identify'
 
+
 def test_client_sends_diagnostics():
     with start_server() as poll_server:
         with start_server() as events_server:
@@ -102,6 +109,7 @@ def test_client_sends_diagnostics():
                 data = json.loads(r.body)
                 assert data['kind'] == 'diagnostic-init'
 
+
 def test_cannot_connect_with_selfsigned_cert_by_default():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
@@ -113,6 +121,7 @@ def test_cannot_connect_with_selfsigned_cert_by_default():
         )
         with LDClient(config = config, start_wait = 1.5) as client:
             assert not client.is_initialized()
+
 
 def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
     with start_secure_server() as server:
@@ -127,6 +136,7 @@ def test_can_connect_with_selfsigned_cert_if_ssl_verify_is_false():
         with LDClient(config = config) as client:
             assert client.is_initialized()
 
+
 def test_can_connect_with_selfsigned_cert_if_disable_ssl_verification_is_true():
     with start_secure_server() as server:
         server.for_path('/sdk/latest-all', poll_content())
@@ -139,6 +149,7 @@ def test_can_connect_with_selfsigned_cert_if_disable_ssl_verification_is_true():
         )
         with LDClient(config = config) as client:
             assert client.is_initialized()
+
 
 def test_can_connect_with_selfsigned_cert_by_setting_ca_certs():
     with start_secure_server() as server:

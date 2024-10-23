@@ -27,6 +27,7 @@ anonymous_user = Context.from_dict({
     u'anonymous': True
 })
 
+
 def make_client(store = InMemoryFeatureStore()):
     return LDClient(config=Config(sdk_key = 'SDK_KEY',
                                   base_uri=unreachable_uri,
@@ -146,6 +147,7 @@ dependency_ordering_test_data = {
         "o": { "key": "o" }
     }
 }
+
 
 class DependencyOrderingDataUpdateProcessor(UpdateProcessor):
     def __init__(self, config, store, ready):

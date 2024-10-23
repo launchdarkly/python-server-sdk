@@ -3,16 +3,17 @@ from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 import time
 from typing import Callable
 
+
 class MockBigSegmentStore(BigSegmentStore):
     def __init__(self):
         self.__get_metadata = lambda: BigSegmentStoreMetadata(time.time())
         self.__memberships = {}
         self.__membership_queries = []
         self.setup_metadata_always_up_to_date()
-    
+
     def get_metadata(self) -> BigSegmentStoreMetadata:
         return self.__get_metadata()
-    
+
     def get_membership(self, user_hash: str) -> dict:
         self.__membership_queries.append(user_hash)
         return self.__memberships.get(user_hash, None)
@@ -22,13 +23,13 @@ class MockBigSegmentStore(BigSegmentStore):
 
     def setup_metadata_always_up_to_date(self):
         self.setup_metadata(lambda: BigSegmentStoreMetadata(time.time()*1000))
-    
+
     def setup_metadata_always_stale(self):
         self.setup_metadata(lambda: BigSegmentStoreMetadata(0))
-    
+
     def setup_metadata_none(self):
         self.setup_metadata(lambda: None)
-    
+
     def setup_metadata_error(self):
         self.setup_metadata(self.__fail)
 

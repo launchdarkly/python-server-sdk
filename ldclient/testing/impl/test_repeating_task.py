@@ -14,6 +14,7 @@ def test_task_does_not_start_when_created():
     finally:
         task.stop()
 
+
 def test_task_executes_until_stopped():
     queue = Queue()
     task = RepeatingTask("ldclient.testing.enqueue-time", 0.1, 0, lambda: queue.put(time.time()))
@@ -37,10 +38,12 @@ def test_task_executes_until_stopped():
             no_more_items = True
     assert no_more_items == True
 
+
 def test_task_can_be_stopped_from_within_the_task():
     counter = 0
     stopped = Event()
     task = None
+
     def do_task():
         nonlocal counter
         counter += 1

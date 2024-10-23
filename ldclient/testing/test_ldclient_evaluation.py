@@ -32,6 +32,7 @@ flag2 = {
     'debugEventsUntilDate': 1000
 }
 
+
 class ErroringFeatureStore(FeatureStore):
     def get(self, kind, key, callback=lambda x: x):
         raise NotImplementedError()
@@ -52,6 +53,7 @@ class ErroringFeatureStore(FeatureStore):
     def initialized(self):
         return True
 
+
 def get_log_lines(caplog, level):
     loglines = caplog.records
     if callable(loglines):
@@ -67,6 +69,7 @@ def test_variation_for_existing_feature():
     client = make_client(store)
     assert 'value' == client.variation('feature.key', user, default='default')
 
+
 def test_variation_passes_context_to_evaluator():
     c = Context.create('userkey')
     feature =  FlagBuilder('feature.key').on(True).variations('wrong', 'right').target(1, 'userkey').build()
@@ -75,10 +78,12 @@ def test_variation_passes_context_to_evaluator():
     client = make_client(store)
     assert 'right' == client.variation('feature.key', c, default='default')
 
+
 def test_variation_for_unknown_feature():
     store = InMemoryFeatureStore()
     client = make_client(store)
     assert 'default' == client.variation('feature.key', user, default='default')
+
 
 def test_variation_when_user_has_no_key():
     feature = build_off_flag_with_value('feature.key', 'value').build()
@@ -86,6 +91,7 @@ def test_variation_when_user_has_no_key():
     store.init({FEATURES: {'feature.key': feature}})
     client = make_client(store)
     assert 'default' == client.variation('feature.key', Context.from_dict({}), default='default')
+
 
 def test_variation_for_invalid_context():
     c = Context.create('')
@@ -95,12 +101,14 @@ def test_variation_for_invalid_context():
     client = make_client(store)
     assert 'default' == client.variation('feature.key', c, default='default')
 
+
 def test_variation_for_flag_that_evaluates_to_none():
     empty_flag = FlagBuilder('feature.key').on(False).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {'feature.key': empty_flag}})
     client = make_client(store)
     assert 'default' == client.variation('feature.key', user, default='default')
+
 
 def test_variation_detail_for_existing_feature():
     feature = build_off_flag_with_value('feature.key', 'value').build()
@@ -110,11 +118,13 @@ def test_variation_detail_for_existing_feature():
     expected = EvaluationDetail('value', 0, {'kind': 'OFF'})
     assert expected == client.variation_detail('feature.key', user, default='default')
 
+
 def test_variation_detail_for_unknown_feature():
     store = InMemoryFeatureStore()
     client = make_client(store)
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'FLAG_NOT_FOUND'})
     assert expected == client.variation_detail('feature.key', user, default='default')
+
 
 def test_variation_detail_when_user_has_no_key():
     feature = build_off_flag_with_value('feature.key', 'value').build()
@@ -123,6 +133,7 @@ def test_variation_detail_when_user_has_no_key():
     client = make_client(store)
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
     assert expected == client.variation_detail('feature.key', Context.from_dict({}), default='default')
+
 
 def test_variation_detail_for_flag_that_evaluates_to_none():
     empty_flag = FlagBuilder('feature.key').on(False).build()
@@ -134,12 +145,14 @@ def test_variation_detail_for_flag_that_evaluates_to_none():
     assert expected == actual
     assert actual.is_default_value() == True
 
+
 def test_variation_when_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     assert client.variation('feature.key', Context.from_dict({ "key": "user", "kind": "user" }), default='default') == 'default'
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
+
 
 def test_variation_detail_when_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
@@ -150,6 +163,7 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     assert actual.is_default_value() == True
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == [ 'Unexpected error while retrieving feature flag "feature.key": NotImplementedError()' ]
+
 
 def test_flag_using_big_segment():
     segment = SegmentBuilder('segkey').unbounded(True).generation(1).build()
@@ -171,12 +185,14 @@ def test_flag_using_big_segment():
         assert detail.value == True
         assert detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
+
 def test_all_flags_returns_values():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
     result = client.all_flags_state(user).to_values_map()
     assert result == { 'key1': 'value1', 'key2': 'value2' }
+
 
 def test_all_flags_returns_none_if_user_has_no_key():
     store = InMemoryFeatureStore()
@@ -185,12 +201,14 @@ def test_all_flags_returns_none_if_user_has_no_key():
     result = client.all_flags_state(Context.from_dict({}))
     assert not result.valid
 
+
 def test_all_flags_returns_none_if_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()
     client = make_client(store)
     assert not client.all_flags_state(Context.from_dict({ "key": "user", "kind": "user" })).valid
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == [ 'Unable to read flags for all_flag_state: NotImplementedError()' ]
+
 
 def test_all_flags_state_returns_state():
     store = InMemoryFeatureStore()
@@ -324,6 +342,7 @@ def test_all_flags_state_returns_state_with_reasons():
         '$valid': True
     }
 
+
 def test_all_flags_state_can_be_filtered_for_client_side_flags():
     flag1 = {
         'key': 'server-side-1',
@@ -371,6 +390,7 @@ def test_all_flags_state_can_be_filtered_for_client_side_flags():
     assert state.valid
     values = state.to_values_map()
     assert values == { 'client-side-1': 'value1', 'client-side-2': 'value2' }
+
 
 def test_all_flags_state_can_omit_details_for_untracked_flags():
     future_time = (time.time() * 1000) + 100000
@@ -429,12 +449,14 @@ def test_all_flags_state_can_omit_details_for_untracked_flags():
         '$valid': True
     }
 
+
 def test_all_flags_state_returns_empty_state_if_user_has_no_key():
     store = InMemoryFeatureStore()
     store.init({ FEATURES: { 'key1': flag1, 'key2': flag2 } })
     client = make_client(store)
     state = client.all_flags_state(Context.from_dict({}))
     assert state.valid == False
+
 
 def test_all_flags_returns_empty_state_if_feature_store_throws_error(caplog):
     store = ErroringFeatureStore()

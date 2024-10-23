@@ -9,11 +9,13 @@ from ldclient.impl.rwlock import ReadWriteLock
 TRUE_VARIATION_INDEX = 0
 FALSE_VARIATION_INDEX = 1
 
+
 def _variation_for_boolean(variation):
     if variation:
         return TRUE_VARIATION_INDEX
     else:
         return FALSE_VARIATION_INDEX
+
 
 class TestData:
     """A mechanism for providing dynamically updatable feature flag state in a
@@ -139,6 +141,7 @@ class TestData:
             self._instances.remove(instance)
         finally:
             self._lock.unlock()
+
 
 class FlagBuilder:
     """A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_data.TestData`.

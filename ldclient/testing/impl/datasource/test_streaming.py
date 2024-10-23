@@ -28,6 +28,7 @@ brief_delay = 0.001
 start_wait = 10
 update_wait = 3
 
+
 def test_request_properties():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -46,6 +47,7 @@ def test_request_properties():
                 assert req.headers.get('X-LaunchDarkly-Wrapper') is None
                 assert req.headers.get('X-LaunchDarkly-Tags') is None
 
+
 def test_sends_wrapper_header():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -60,6 +62,7 @@ def test_sends_wrapper_header():
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
+
 
 def test_sends_wrapper_header_without_version():
     store = InMemoryFeatureStore()
@@ -76,6 +79,7 @@ def test_sends_wrapper_header_without_version():
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
 
+
 def test_sends_tag_header():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -90,6 +94,7 @@ def test_sends_tag_header():
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Tags') == 'application-id/my-id application-version/my-version'
+
 
 def test_receives_put_event():
     store = InMemoryFeatureStore()
@@ -108,6 +113,7 @@ def test_receives_put_event():
                 assert sp.initialized()
                 expect_item(store, FEATURES, flag)
                 expect_item(store, SEGMENTS, segment)
+
 
 def test_receives_patch_events():
     store = InMemoryFeatureStore()
@@ -135,6 +141,7 @@ def test_receives_patch_events():
                 stream.push(make_patch_event(SEGMENTS, segmentv2))
                 expect_update(store, SEGMENTS, segmentv2)
 
+
 def test_receives_delete_events():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -159,6 +166,7 @@ def test_receives_delete_events():
                 stream.push(make_delete_event(SEGMENTS, segmentv1['key'], 2))
                 expect_delete(store, SEGMENTS, segmentv1['key'])
 
+
 def test_reconnects_if_stream_is_broken():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -182,6 +190,7 @@ def test_reconnects_if_stream_is_broken():
                     server.await_request
                     expect_update(store, FEATURES, flagv2)
 
+
 def test_retries_on_network_error():
     error_handler = CauseNetworkError()
     store = InMemoryFeatureStore()
@@ -198,6 +207,7 @@ def test_retries_on_network_error():
                 assert sp.initialized()
                 server.await_request
                 server.await_request
+
 
 @pytest.mark.parametrize("status", [ 400, 408, 429, 500, 503 ])
 def test_recoverable_http_error(status):
@@ -216,6 +226,7 @@ def test_recoverable_http_error(status):
                 assert sp.initialized()
                 server.should_have_requests(3)
 
+
 @pytest.mark.parametrize("status", [ 401, 403, 404 ])
 def test_unrecoverable_http_error(status):
     error_handler = BasicResponse(status)
@@ -232,6 +243,7 @@ def test_unrecoverable_http_error(status):
                 ready.wait(5)
                 assert not sp.initialized()
                 server.should_have_requests(1)
+
 
 def test_http_proxy(monkeypatch):
     def _stream_processor_proxy_test(server, config, secure):
@@ -252,6 +264,7 @@ def test_http_proxy(monkeypatch):
                     assert sp.initialized()
     do_proxy_tests(_stream_processor_proxy_test, 'GET', monkeypatch)
 
+
 def test_records_diagnostic_on_stream_init_success():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -268,6 +281,7 @@ def test_records_diagnostic_on_stream_init_success():
 
                 assert len(recorded_inits) == 1
                 assert recorded_inits[0]['failed'] is False
+
 
 def test_records_diagnostic_on_stream_init_failure():
     store = InMemoryFeatureStore()
@@ -287,6 +301,8 @@ def test_records_diagnostic_on_stream_init_failure():
                 assert len(recorded_inits) == 2
                 assert recorded_inits[0]['failed'] is True
                 assert recorded_inits[1]['failed'] is False
+
+
 @pytest.mark.parametrize("status", [ 400, 408, 429, 500, 503 ])
 def test_status_includes_http_code(status):
     error_handler = BasicResponse(status)
@@ -358,6 +374,7 @@ def test_invalid_json_triggers_listener():
 
                 assert statuses[1].state == DataSourceState.VALID
 
+
 def test_failure_transitions_from_valid():
     store = InMemoryFeatureStore()
     ready = Event()
@@ -393,11 +410,14 @@ def test_failure_transitions_from_valid():
 def expect_item(store, kind, item):
     assert store.get(kind, item['key'], lambda x: x) == item
 
+
 def expect_update(store, kind, expected_item):
     await_item(store, kind, expected_item['key'], expected_item)
 
+
 def expect_delete(store, kind, key):
     await_item(store, kind, key, None)
+
 
 def await_item(store, kind, key, expected_item):
     deadline = time.time() + update_wait

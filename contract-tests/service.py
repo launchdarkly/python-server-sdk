@@ -56,6 +56,7 @@ def handle_exception(e):
     app.logger.exception(e)
     return str(e), 500
 
+
 @app.route('/', methods=['GET'])
 def status():
     body = {
@@ -83,10 +84,12 @@ def status():
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
 
+
 @app.route('/', methods=['DELETE'])
 def delete_stop_service():
     global_log.info("Test service has told us to exit")
     os._exit(0)
+
 
 @app.route('/', methods=['POST'])
 def post_create_client():
@@ -151,6 +154,7 @@ def post_client_command(id):
     if response is None:
         return '', 201
     return json.dumps(response), 200
+
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):

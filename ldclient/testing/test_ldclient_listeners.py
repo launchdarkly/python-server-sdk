@@ -17,6 +17,7 @@ def test_big_segment_store_status_unavailable():
     client = LDClient(config)
     assert client.big_segment_store_status_provider.status.available == False
 
+
 def test_big_segment_store_status_updates():
     segstore = MockBigSegmentStore()
     segstore.setup_metadata_always_up_to_date()

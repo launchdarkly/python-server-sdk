@@ -6,6 +6,7 @@ from ldclient.impl.model.attribute_ref import AttributeRef, req_attr_ref_with_op
 from ldclient.impl.model.entity import *
 from ldclient.impl.model.value_parsing import parse_regex, parse_semver, parse_time
 
+
 class ClausePreprocessedValue:
     __slots__ = ['_as_time', '_as_regex', '_as_semver']
 
@@ -13,15 +14,15 @@ class ClausePreprocessedValue:
         self._as_time = as_time
         self._as_regex = as_regex
         self._as_semver = as_semver
-    
+
     @property
     def as_time(self) -> Optional[float]:
         return self._as_time
-    
+
     @property
     def as_regex(self) -> Optional[Pattern]:
         return self._as_regex
-    
+
     @property
     def as_semver(self) -> Optional[VersionInfo]:
         return self._as_semver
@@ -36,7 +37,7 @@ def _preprocess_clause_values(op: str, values: List[Any]) -> Optional[List[Claus
         return list(ClausePreprocessedValue(as_semver=parse_semver(value)) for value in values)
     return None
 
-    
+
 class Clause:
     __slots__ = ['_context_kind', '_attribute', '_op', '_negate', '_values', '_values_preprocessed']
 
@@ -59,7 +60,7 @@ class Clause:
     @property
     def negate(self) -> bool:
         return self._negate
-    
+
     @property
     def op(self) -> str:
         return self._op

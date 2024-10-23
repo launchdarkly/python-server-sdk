@@ -12,6 +12,7 @@ def _segment_matches_context(segment: Segment, context: Context) -> bool:
     result = e.evaluate(flag, context, event_factory)
     return result.detail.value
 
+
 def verify_rollout(
     eval_context: Context,
     match_context: Context,
@@ -52,6 +53,7 @@ def test_explicit_include_user():
     segment = SegmentBuilder('test').included(user.key).build()
     assert _segment_matches_context(segment, user) is True
 
+
 def test_explicit_exclude_user():
     user = Context.create('foo')
     segment = SegmentBuilder('test').excluded(user.key) \
@@ -59,10 +61,12 @@ def test_explicit_exclude_user():
         .build()
     assert _segment_matches_context(segment, user) is False
 
+
 def test_explicit_include_has_precedence():
     user = Context.create('foo')
     segment = SegmentBuilder('test').included(user.key).excluded(user.key).build()
     assert _segment_matches_context(segment, user) is True
+
 
 def test_included_key_for_context_kind():
     c1 = Context.create('key1', 'kind1')
@@ -72,6 +76,7 @@ def test_included_key_for_context_kind():
     assert _segment_matches_context(segment, c1) is True
     assert _segment_matches_context(segment, c2) is False
     assert _segment_matches_context(segment, multi) is True
+
 
 def test_excluded_key_for_context_kind():
     c1 = Context.create('key1', 'kind1')
@@ -88,6 +93,7 @@ def test_excluded_key_for_context_kind():
     assert _segment_matches_context(segment, c2) is True
     assert _segment_matches_context(segment, multi) is False
 
+
 def test_matching_rule_with_no_weight():
     context = Context.create('foo')
     segment = SegmentBuilder('test') \
@@ -96,6 +102,7 @@ def test_matching_rule_with_no_weight():
         ) \
         .build()
     assert _segment_matches_context(segment, context) is True
+
 
 def test_matching_rule_with_none_weight():
     context = Context.create('foo')
@@ -106,6 +113,7 @@ def test_matching_rule_with_none_weight():
         .build()
     assert _segment_matches_context(segment, context) is True
 
+
 def test_matching_rule_with_full_rollout():
     context = Context.create('foo')
     segment = SegmentBuilder('test') \
@@ -114,6 +122,7 @@ def test_matching_rule_with_full_rollout():
         ) \
         .build()
     assert _segment_matches_context(segment, context) is True
+
 
 def test_matching_rule_with_zero_rollout():
     context = Context.create('foo')
@@ -124,9 +133,11 @@ def test_matching_rule_with_zero_rollout():
         .build()
     assert _segment_matches_context(segment, context) is False
 
+
 def test_rollout_calculation_can_bucket_by_key():
     context = Context.builder('userkey').name('Bob').build()
     verify_rollout(context, context, 12551, 'test', 'salt', None, None)
+
 
 def test_rollout_uses_context_kind():
     context1 = Context.create('key1', 'kind1')
@@ -134,6 +145,7 @@ def test_rollout_uses_context_kind():
     multi = Context.create_multi(context1, context2)
     expected_bucket_value = int(100000 * _bucket_context(None, context2, 'kind2', 'test', 'salt', None))
     verify_rollout(multi, context2, expected_bucket_value, 'test', 'salt', None, 'kind2')
+
 
 def test_matching_rule_with_multiple_clauses():
     context = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
@@ -147,6 +159,7 @@ def test_matching_rule_with_multiple_clauses():
         .build()
     assert _segment_matches_context(segment, context) is True
 
+
 def test_non_matching_rule_with_multiple_clauses():
     context = Context.builder('foo').name('bob').set('email', 'test@example.com').build()
     segment = SegmentBuilder('test') \
@@ -158,6 +171,7 @@ def test_non_matching_rule_with_multiple_clauses():
         ) \
         .build()
     assert _segment_matches_context(segment, context) is False
+
 
 @pytest.mark.parametrize("depth", [1, 2, 3, 4])
 def test_segment_cycle_detection(depth: int):

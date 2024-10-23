@@ -199,14 +199,18 @@ class SegmentRuleBuilder(BaseBuilder):
 def build_off_flag_with_value(key: str, value: Any) -> FlagBuilder:
     return FlagBuilder(key).version(100).on(False).variations(value).off_variation(0)
 
+
 def make_boolean_flag_matching_segment(segment: Segment) -> FeatureFlag:
     return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment.key))
+
 
 def make_boolean_flag_with_clauses(*clauses: dict) -> FeatureFlag:
     return make_boolean_flag_with_rules(FlagRuleBuilder().clauses(*clauses).variation(0).build())
 
+
 def make_boolean_flag_with_rules(*rules: dict) -> FeatureFlag:
     return FlagBuilder('flagkey').on(True).variations(True, False).fallthrough_variation(1).rules(*rules).build()
+
 
 def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -> dict:
     ret = {'attribute': attr, 'op': op, 'values': list(values)}
@@ -214,14 +218,18 @@ def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -
         ret['contextKind'] = context_kind
     return ret
 
+
 def make_clause_matching_context(context: Context) -> dict:
     return {'contextKind': context.kind, 'attribute': 'key', 'op': 'in', 'values': [context.key]}
+
 
 def make_clause_matching_segment_key(*segment_keys: str) -> dict:
     return {'attribute': '', 'op': 'segmentMatch', 'values': list(segment_keys)}
 
+
 def make_segment_rule_matching_context(context: Context) -> dict:
     return SegmentRuleBuilder().clauses(make_clause_matching_context(context)).build()
+
 
 def negate_clause(clause: dict) -> dict:
     c = clause.copy()

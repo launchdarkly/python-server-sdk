@@ -2,6 +2,7 @@ import json
 import time
 from typing import Any, Dict, Optional
 
+
 class EvaluationDetail:
     """
     The return type of :func:`ldclient.client.LDClient.variation_detail()`, combining the result of a

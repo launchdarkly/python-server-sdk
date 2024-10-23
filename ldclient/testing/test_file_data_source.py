@@ -101,14 +101,17 @@ def setup_function():
     store = InMemoryFeatureStore()
     ready = threading.Event()
 
+
 def teardown_function():
     if data_source is not None:
         data_source.stop()
+
 
 def make_data_source(config, **kwargs):
     global data_source
     data_source = Files.new_data_source(**kwargs)(config, store, ready)
     return data_source
+
 
 def make_temp_file(content):
     f, path = tempfile.mkstemp()
@@ -116,9 +119,11 @@ def make_temp_file(content):
     os.close(f)
     return path
 
+
 def replace_file(path, content):
     with open(path, 'w') as f:
         f.write(content)
+
 
 def test_does_not_load_data_prior_to_start():
     path = make_temp_file('{"flagValues":{"key":"value"}}')
@@ -129,6 +134,7 @@ def test_does_not_load_data_prior_to_start():
         assert store.initialized is False
     finally:
         os.remove(path)
+
 
 def test_loads_flags_on_start_from_json():
     path = make_temp_file(all_properties_json)
@@ -150,6 +156,7 @@ def test_loads_flags_on_start_from_json():
     finally:
         os.remove(path)
 
+
 def test_handles_invalid_format_correctly():
     path = make_temp_file('{"flagValues":{')
     spy = SpyListener()
@@ -169,6 +176,7 @@ def test_handles_invalid_format_correctly():
     finally:
         os.remove(path)
 
+
 def test_loads_flags_on_start_from_yaml():
     if not have_yaml:
         pytest.skip("skipping file source test with YAML because pyyaml isn't available")
@@ -181,6 +189,7 @@ def test_loads_flags_on_start_from_yaml():
     finally:
         os.remove(path)
 
+
 def test_sets_ready_event_and_initialized_on_successful_load():
     path = make_temp_file(all_properties_json)
     try:
@@ -191,12 +200,14 @@ def test_sets_ready_event_and_initialized_on_successful_load():
     finally:
         os.remove(path)
 
+
 def test_sets_ready_event_and_does_not_set_initialized_on_unsuccessful_load():
     bad_file_path = 'no-such-file'
     source = make_data_source(Config("SDK_KEY"), paths = bad_file_path)
     source.start()
     assert source.initialized() is False
     assert ready.is_set() is True
+
 
 def test_can_load_multiple_files():
     path1 = make_temp_file(flag_only_json)
@@ -210,6 +221,7 @@ def test_can_load_multiple_files():
         os.remove(path1)
         os.remove(path2)
 
+
 def test_does_not_allow_duplicate_keys():
     path1 = make_temp_file(flag_only_json)
     path2 = make_temp_file(flag_only_json)
@@ -220,6 +232,7 @@ def test_does_not_allow_duplicate_keys():
     finally:
         os.remove(path1)
         os.remove(path2)
+
 
 def test_does_not_reload_modified_file_if_auto_update_is_off():
     path = make_temp_file(flag_only_json)
@@ -233,6 +246,7 @@ def test_does_not_reload_modified_file_if_auto_update_is_off():
         assert len(store.all(SEGMENTS, lambda x: x)) == 0
     finally:
         os.remove(path)
+
 
 def do_auto_update_test(options):
     path = make_temp_file(flag_only_json)
@@ -252,11 +266,14 @@ def do_auto_update_test(options):
     finally:
         os.remove(path)
 
+
 def test_reloads_modified_file_if_auto_update_is_on():
     do_auto_update_test({ 'auto_update': True })
 
+
 def test_reloads_modified_file_in_polling_mode():
     do_auto_update_test({ 'auto_update': True, 'force_polling': True, 'poll_interval': 0.1 })
+
 
 def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
@@ -269,6 +286,7 @@ def test_evaluates_full_flag_with_client_as_expected():
         os.remove(path)
         if client is not None:
             client.close()
+
 
 def test_evaluates_simplified_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
@@ -284,9 +302,11 @@ def test_evaluates_simplified_flag_with_client_as_expected():
 
 unsafe_yaml_caused_method_to_be_called = False
 
+
 def arbitrary_method_called_from_yaml(x):
     global unsafe_yaml_caused_method_to_be_called
     unsafe_yaml_caused_method_to_be_called = True
+
 
 def test_does_not_allow_unsafe_yaml():
     if not have_yaml:

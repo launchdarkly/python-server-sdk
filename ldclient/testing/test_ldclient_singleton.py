@@ -11,6 +11,7 @@ sdk_key = 'sdk-key'
 # These are end-to-end tests like test_ldclient_end_to_end, but less detailed in terms of the client's
 # network behavior because what we're really testing is the singleton mechanism.
 
+
 def test_set_sdk_key_before_init():
     _reset_client()
     with start_server() as stream_server:
@@ -25,6 +26,7 @@ def test_set_sdk_key_before_init():
                 assert r.headers['Authorization'] == sdk_key
             finally:
                 _reset_client()
+
 
 def test_set_sdk_key_after_init():
     _reset_client()
@@ -50,6 +52,7 @@ def test_set_sdk_key_after_init():
                 assert r.headers['Authorization'] == sdk_key
             finally:
                 _reset_client()
+
 
 def test_set_config():
     _reset_client()

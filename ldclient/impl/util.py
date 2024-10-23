@@ -19,8 +19,6 @@ def timedelta_millis(delta: timedelta) -> float:
 
 log = logging.getLogger('ldclient.util')  # historical logger name
 
-import queue
-
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
@@ -32,11 +30,13 @@ __BASE_TYPES__ = (str, float, int, bool)
 
 _retryable_statuses = [400, 408, 429]
 
+
 def validate_application_info(application: dict, logger: logging.Logger) -> dict:
     return {
         "id": validate_application_value(application.get("id", ""), "id", logger),
         "version": validate_application_value(application.get("version", ""), "version", logger),
     }
+
 
 def validate_application_value(value: Any, name: str, logger: logging.Logger) -> str:
     if not isinstance(value, str):
@@ -52,10 +52,12 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
 
     return value
 
+
 def _headers(config):
     base_headers = _base_headers(config)
     base_headers.update({'Content-Type': "application/json"})
     return base_headers
+
 
 def check_uwsgi():
     if 'uwsgi' in sys.modules:
@@ -138,6 +140,7 @@ def stringify_attrs(attrdict, attrs):
                 newdict = attrdict.copy()
             newdict[attr] = str(val)
     return attrdict if newdict is None else newdict
+
 
 def redact_password(url: str) -> str:
     """

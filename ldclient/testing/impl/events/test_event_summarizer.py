@@ -23,6 +23,7 @@ def test_summarize_event_sets_start_and_end_dates():
 	assert data.start_date == 1000
 	assert data.end_date == 2000
 
+
 def test_summarize_event_increments_counters():
 	es = EventSummarizer()
 	event1 = EventInputEvaluation(1000, user, flag1.key, flag1, 1, 'value1', None, 'default1')

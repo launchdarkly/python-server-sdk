@@ -1,10 +1,12 @@
 from ldclient.context import Context
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 
+
 def test_simple_context():
     f = EventContextFormatter(False, [])
     c = Context.create('a')
     assert f.format_context(c) == {'kind': 'user', 'key': 'a'}
+
 
 def test_context_with_more_attributes():
     f = EventContextFormatter(False, [])
@@ -18,6 +20,7 @@ def test_context_with_more_attributes():
         'd': 2
     }
 
+
 def test_context_can_redact_anonymous_attributes():
     f = EventContextFormatter(False, [])
     c = Context.builder('a').name('b').anonymous(True).set('c', True).set('d', 2).build()
@@ -29,6 +32,7 @@ def test_context_can_redact_anonymous_attributes():
             'redactedAttributes': ['name', 'c', 'd']
         }
     }
+
 
 def test_multi_kind_context_can_redact_anonymous_attributes():
     f = EventContextFormatter(False, [])
@@ -53,6 +57,7 @@ def test_multi_kind_context_can_redact_anonymous_attributes():
         }
     }
 
+
 def test_multi_context():
     f = EventContextFormatter(False, [])
     c = Context.create_multi(
@@ -70,6 +75,7 @@ def test_multi_context():
         }
     }
 
+
 def test_all_private():
     f = EventContextFormatter(True, [])
     c = Context.builder('a').name('b').anonymous(True).set('c', True).set('d', 2).build()
@@ -79,6 +85,7 @@ def test_all_private():
         'anonymous': True,
         '_meta': {'redactedAttributes': ['name', 'c', 'd']}
     }
+
 
 def test_some_private_global():
     f = EventContextFormatter(False, ['name', 'd'])
@@ -91,6 +98,7 @@ def test_some_private_global():
         '_meta': {'redactedAttributes': ['name', 'd']}
     }
 
+
 def test_some_private_per_context():
     f = EventContextFormatter(False, ['name'])
     c = Context.builder('a').name('b').anonymous(True).set('c', True).set('d', 2).private('d').build()
@@ -101,6 +109,7 @@ def test_some_private_per_context():
         'c': True,
         '_meta': {'redactedAttributes': ['name', 'd']}
     }
+
 
 def test_private_property_in_object():
     f = EventContextFormatter(False, ['/b/prop1', '/c/prop2/sub1'])

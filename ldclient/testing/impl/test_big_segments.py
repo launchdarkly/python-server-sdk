@@ -23,6 +23,7 @@ def test_membership_query_uncached_result_healthy_status():
     finally:
         manager.stop()
 
+
 def test_membership_query_cached_result_healthy_status():
     expected_membership = { "key1": True, "key2": False }
     store = MockBigSegmentStore()
@@ -37,6 +38,7 @@ def test_membership_query_cached_result_healthy_status():
         manager.stop()
     assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
 
+
 def test_membership_query_can_cache_result_of_none():
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
@@ -49,6 +51,7 @@ def test_membership_query_can_cache_result_of_none():
     finally:
         manager.stop()
     assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
+
 
 def test_membership_query_cache_can_expire():
     expected_membership = { "key1": True, "key2": False }
@@ -65,6 +68,7 @@ def test_membership_query_cache_can_expire():
         manager.stop()
     assert store.membership_queries == [ user_hash, user_hash ]  # cache expired after 1st query
 
+
 def test_membership_query_stale_status():
     expected_membership = { "key1": True, "key2": False }
     store = MockBigSegmentStore()
@@ -77,6 +81,7 @@ def test_membership_query_stale_status():
     finally:
         manager.stop()
 
+
 def test_membership_query_stale_status_no_store_metadata():
     expected_membership = { "key1": True, "key2": False }
     store = MockBigSegmentStore()
@@ -88,6 +93,7 @@ def test_membership_query_stale_status_no_store_metadata():
         assert manager.get_user_membership(user_key) == expected_result
     finally:
         manager.stop()
+
 
 def test_membership_query_least_recent_context_evicted_from_cache():
     user_key_1, user_key_2, user_key_3 = 'userkey1', 'userkey2', 'userkey3'
@@ -126,6 +132,7 @@ def test_membership_query_least_recent_context_evicted_from_cache():
     finally:
         manager.stop()
 
+
 def test_status_polling_detects_store_unavailability():
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
@@ -150,6 +157,7 @@ def test_status_polling_detects_store_unavailability():
         assert status3.available == True
     finally:
         manager.stop()
+
 
 def test_status_polling_detects_stale_status():
     store = MockBigSegmentStore()

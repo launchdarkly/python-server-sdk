@@ -8,6 +8,7 @@ def assert_context_valid(c):
     assert c.valid is True
     assert c.error is None
 
+
 def assert_context_invalid(c):
     assert c.valid is False
     assert c.error is not None

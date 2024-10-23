@@ -1,5 +1,6 @@
 from collections import OrderedDict
 
+
 class SimpleLRUCache:
     """A dictionary-based cache that removes the oldest entries when its limit is exceeded.
     Values are only refreshed by writing, not by reading. Not thread-safe.

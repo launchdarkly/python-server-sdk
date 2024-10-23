@@ -13,10 +13,12 @@ from typing import Any, Dict, Optional, Union
 _INVALID_KIND_REGEX = re.compile('[^-a-zA-Z0-9._]')
 _USER_STRING_ATTRS = {'name', 'firstName', 'lastName', 'email', 'country', 'avatar', 'ip'}
 
+
 def _escape_key_for_fully_qualified_key(key: str) -> str:
     # When building a fully-qualified key, ':' and '%' are percent-escaped; we do not use a full
     # URL-encoding function because implementations of this are inconsistent across platforms.
     return key.replace('%', '%25').replace(':', '%3A')
+
 
 def _validate_kind(kind: str) -> Optional[str]:
     if kind == '':

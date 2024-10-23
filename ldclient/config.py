@@ -79,6 +79,7 @@ class BigSegmentsConfig:
     def stale_after(self) -> float:
         return self.__stale_after
 
+
 class HTTPConfig:
     """Advanced HTTP configuration options for the SDK client.
 
@@ -139,6 +140,7 @@ class HTTPConfig:
     @property
     def disable_ssl_verification(self) -> bool:
         return self.__disable_ssl_verification
+
 
 class Config:
     """Advanced configuration options for the SDK client.

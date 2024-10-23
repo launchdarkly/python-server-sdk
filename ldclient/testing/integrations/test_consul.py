@@ -38,6 +38,7 @@ class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
         for key in (keys or []):
             client.kv.delete(key)
 
+
 class TestConsulFeatureStore(PersistentFeatureStoreTestBase):
     @property
     def tester_class(self):

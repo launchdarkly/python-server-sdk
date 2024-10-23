@@ -9,11 +9,14 @@ from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStor
 from ldclient.versioned_data_kind import VersionedDataKind
 from ldclient.feature_store import CacheConfig
 
+
 def _ensure_encoded(kind, item):
     return item if isinstance(item, dict) else kind.encode(item)
 
+
 def _is_deleted(item):
     return item is not None and item.get('deleted') is True
+
 
 class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     """A partial implementation of :class:`ldclient.interfaces.FeatureStore`.
@@ -21,7 +24,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     This class delegates the basic functionality to an implementation of
     :class:`ldclient.interfaces.FeatureStoreCore` - while adding optional caching behavior and other logic
     that would otherwise be repeated in every feature store implementation. This makes it easier to create
-    new database integrations by implementing only the database-specific logic. 
+    new database integrations by implementing only the database-specific logic.
     """
     __INITED_CACHE_KEY__ = "$inited"
 
@@ -96,7 +99,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         if self._cache is not None:
             self._cache[cache_key] = items
         return callback(items)
-    
+
     def delete(self, kind, key, version):
         """
         """
@@ -134,7 +137,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
         if callable(getattr(self._core, 'describe_configuration', None)):
             return self._core.describe_configuration(config)
         return "custom"
-    
+
     @staticmethod
     def _item_cache_key(kind, key):
         return "{0}:{1}".format(kind.namespace, key)
@@ -142,7 +145,7 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
     @staticmethod
     def _all_cache_key(kind):
         return kind.namespace
-    
+
     @staticmethod
     def _items_if_not_deleted(items):
         results = {}
@@ -151,4 +154,3 @@ class CachingStoreWrapper(DiagnosticDescription, FeatureStore):
                 if not item.get('deleted', False):
                     results[key] = item
         return results
-    

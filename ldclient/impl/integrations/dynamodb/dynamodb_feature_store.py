@@ -40,6 +40,7 @@ from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStor
 # stored as a single item, this mechanism will not work for extremely large flags or segments.
 #
 
+
 class _DynamoDBFeatureStoreCore(FeatureStoreCore):
     PARTITION_KEY = 'namespace'
     SORT_KEY = 'key'

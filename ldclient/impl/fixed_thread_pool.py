@@ -3,10 +3,12 @@ import queue
 
 from ldclient.impl.util import log
 
-"""
-A simple fixed-size thread pool that rejects jobs when its limit is reached.
-"""
+
 class FixedThreadPool:
+    """
+    A simple fixed-size thread pool that rejects jobs when its limit is reached.
+    """
+
     def __init__(self, size, name):
         self._size = size
         self._lock = Lock()

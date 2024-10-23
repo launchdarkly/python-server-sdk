@@ -17,13 +17,16 @@ def test_big_segment_with_no_generation_is_not_matched():
     assert result.detail.value == False
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.NOT_CONFIGURED
 
+
 def test_big_segment_matched_with_include_for_default_kind():
     _test_matched_with_include(False, False)
     _test_matched_with_include(False, True)
 
+
 def test_big_segment_matched_with_include_for_non_default_kind():
     _test_matched_with_include(True, False)
     _test_matched_with_include(True, True)
+
 
 def _test_matched_with_include(non_default_kind: bool, multi_kind_context: bool):
     target_key = 'contextkey'
@@ -43,6 +46,7 @@ def _test_matched_with_include(non_default_kind: bool, multi_kind_context: bool)
     assert result.detail.value == True
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
+
 def test_big_segment_matched_with_rule():
     segment = SegmentBuilder('key').version(1) \
         .unbounded(True) \
@@ -57,6 +61,7 @@ def test_big_segment_matched_with_rule():
     assert result.detail.value == True
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
 
+
 def test_big_segment_unmatched_by_exclude_regardless_of_rule():
     segment = SegmentBuilder('key').version(1) \
         .unbounded(True) \
@@ -70,6 +75,7 @@ def test_big_segment_unmatched_by_exclude_regardless_of_rule():
     result = evaluator.evaluate(flag, basic_user, event_factory)
     assert result.detail.value == False
     assert result.detail.reason['bigSegmentsStatus'] == BigSegmentsStatus.HEALTHY
+
 
 def test_big_segment_status_is_returned_by_provider():
     segment = SegmentBuilder('key').version(1) \

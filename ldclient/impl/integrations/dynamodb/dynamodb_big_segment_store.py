@@ -1,4 +1,3 @@
-
 have_dynamodb = False
 try:
     import boto3
@@ -67,9 +66,9 @@ class _DynamoDBBigSegmentStore(BigSegmentStore):
     def stop(self):
         pass
 
+
 def _get_string_list(item: dict, attr_name: str) -> Optional[List[str]]:
     attr = item.get(attr_name)
     if attr is None:
         return None
     return attr.get('SS')
-   
