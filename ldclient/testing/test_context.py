@@ -9,6 +9,7 @@ def assert_context_valid(c):
     assert c.valid is True
     assert c.error is None
 
+
 def assert_context_invalid(c):
     assert c.valid is False
     assert c.error is not None
@@ -141,64 +142,53 @@ class TestContext:
         def _assert_contexts_from_factory_equal(fn):
             c1, c2 = fn(), fn()
             assert c1 == c2
+
         _assert_contexts_from_factory_equal(lambda: Context.create('a'))
         _assert_contexts_from_factory_equal(lambda: Context.create('a', 'kind1'))
         _assert_contexts_from_factory_equal(lambda: Context.builder('a').name('b').build())
         _assert_contexts_from_factory_equal(lambda: Context.builder('a').anonymous(True).build())
         _assert_contexts_from_factory_equal(lambda: Context.builder('a').set('b', True).set('c', 3).build())
-        assert Context.builder('a').set('b', True).set('c', 3).build() == \
-            Context.builder('a').set('c', 3).set('b', True).build()  # order doesn't matter
+        assert Context.builder('a').set('b', True).set('c', 3).build() == Context.builder('a').set('c', 3).set('b', True).build()  # order doesn't matter
 
         assert Context.create('a', 'kind1') != Context.create('b', 'kind1')
         assert Context.create('a', 'kind1') != Context.create('a', 'kind2')
         assert Context.builder('a').name('b').build() != Context.builder('a').name('c').build()
         assert Context.builder('a').anonymous(True).build() != Context.builder('a').build()
         assert Context.builder('a').set('b', True).build() != Context.builder('a').set('b', False).build()
-        assert Context.builder('a').set('b', True).build() != \
-            Context.builder('a').set('b', True).set('c', False).build()
+        assert Context.builder('a').set('b', True).build() != Context.builder('a').set('b', True).set('c', False).build()
 
-        _assert_contexts_from_factory_equal(lambda: \
-            Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')))
-        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) == \
-            Context.create_multi(Context.create('b', 'kind2'), Context.create('a', 'kind1'))  # order doesn't matter
+        _assert_contexts_from_factory_equal(lambda: Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')))
+        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) == Context.create_multi(
+            Context.create('b', 'kind2'), Context.create('a', 'kind1')
+        )  # order doesn't matter
 
-        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) != \
-            Context.create_multi(Context.create('a', 'kind1'), Context.create('c', 'kind2'))
-        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2'), Context.create('c', 'kind3')) != \
-            Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2'))
-        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) != \
-            Context.create('a', 'kind1')
+        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) != Context.create_multi(Context.create('a', 'kind1'), Context.create('c', 'kind2'))
+        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2'), Context.create('c', 'kind3')) != Context.create_multi(
+            Context.create('a', 'kind1'), Context.create('b', 'kind2')
+        )
+        assert Context.create_multi(Context.create('a', 'kind1'), Context.create('b', 'kind2')) != Context.create('a', 'kind1')
 
         _assert_contexts_from_factory_equal(lambda: Context.create('invalid', 'kind'))
         assert Context.create('invalid', 'kind') != Context.create_multi()  # different errors
 
     def test_json_encoding(self):
         assert Context.create('a', 'kind1').to_dict() == {'kind': 'kind1', 'key': 'a'}
-        assert Context.builder('a').kind('kind1').name('b').build().to_dict() == \
-            {'kind': 'kind1', 'key': 'a', 'name': 'b'}
-        assert Context.builder('a').kind('kind1').anonymous(True).build().to_dict() == \
-            {'kind': 'kind1', 'key': 'a', 'anonymous': True}
-        assert Context.builder('a').kind('kind1').set('b', True).set('c', 3).build().to_dict() == \
-            {'kind': 'kind1', 'key': 'a', 'b': True, 'c': 3}
-        assert Context.builder('a').kind('kind1').private('b').build().to_dict() == \
-            {'kind': 'kind1', 'key': 'a', '_meta': {'privateAttributes': ['b']}}
+        assert Context.builder('a').kind('kind1').name('b').build().to_dict() == {'kind': 'kind1', 'key': 'a', 'name': 'b'}
+        assert Context.builder('a').kind('kind1').anonymous(True).build().to_dict() == {'kind': 'kind1', 'key': 'a', 'anonymous': True}
+        assert Context.builder('a').kind('kind1').set('b', True).set('c', 3).build().to_dict() == {'kind': 'kind1', 'key': 'a', 'b': True, 'c': 3}
+        assert Context.builder('a').kind('kind1').private('b').build().to_dict() == {'kind': 'kind1', 'key': 'a', '_meta': {'privateAttributes': ['b']}}
 
-        assert Context.create_multi(Context.create('key1', 'kind1'), Context.create('key2', 'kind2')).to_dict() == \
-            {'kind': 'multi', 'kind1': {'key': 'key1'}, 'kind2': {'key': 'key2'}}
+        assert Context.create_multi(Context.create('key1', 'kind1'), Context.create('key2', 'kind2')).to_dict() == {'kind': 'multi', 'kind1': {'key': 'key1'}, 'kind2': {'key': 'key2'}}
 
         assert json.loads(Context.create('a', 'kind1').to_json_string()) == {'kind': 'kind1', 'key': 'a'}
 
     def test_json_decoding(self):
         assert Context.from_dict({'kind': 'kind1', 'key': 'key1'}) == Context.create('key1', 'kind1')
-        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', 'name': 'a'}) == \
-            Context.builder('key1').kind('kind1').name('a').build()
-        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', 'anonymous': True}) == \
-            Context.builder('key1').kind('kind1').anonymous(True).build()
-        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', '_meta': {'privateAttributes': ['b']}}) == \
-            Context.builder('key1').kind('kind1').private('b').build()
+        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', 'name': 'a'}) == Context.builder('key1').kind('kind1').name('a').build()
+        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', 'anonymous': True}) == Context.builder('key1').kind('kind1').anonymous(True).build()
+        assert Context.from_dict({'kind': 'kind1', 'key': 'key1', '_meta': {'privateAttributes': ['b']}}) == Context.builder('key1').kind('kind1').private('b').build()
 
-        assert Context.from_dict({'kind': 'multi', 'kind1': {'key': 'key1'}, 'kind2': {'key': 'key2'}}) == \
-            Context.create_multi(Context.create('key1', 'kind1'), Context.create('key2', 'kind2'))
+        assert Context.from_dict({'kind': 'multi', 'kind1': {'key': 'key1'}, 'kind2': {'key': 'key2'}}) == Context.create_multi(Context.create('key1', 'kind1'), Context.create('key2', 'kind2'))
 
         assert_context_invalid(Context.from_dict({'kind': 'kind1'}))
         assert_context_invalid(Context.from_dict({'kind': 'kind1', 'key': 3}))

@@ -6,7 +6,7 @@ from ldclient.impl.model import *
 class MyTestEntity(ModelEntity):
     def __init__(self, value):
         self._value = value
-    
+
     def to_json_dict(self) -> dict:
         return {'magicValue': self._value}
 

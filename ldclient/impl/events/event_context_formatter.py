@@ -6,8 +6,7 @@ from ldclient.impl.model import AttributeRef
 
 class EventContextFormatter:
     IGNORE_ATTRS = frozenset(['key', 'custom', 'anonymous'])
-    ALLOWED_TOP_LEVEL_ATTRS = frozenset(['key', 'secondary', 'ip', 'country', 'email',
-        'firstName', 'lastName', 'avatar', 'name', 'anonymous', 'custom'])
+    ALLOWED_TOP_LEVEL_ATTRS = frozenset(['key', 'secondary', 'ip', 'country', 'email', 'firstName', 'lastName', 'avatar', 'name', 'anonymous', 'custom'])
 
     def __init__(self, all_attributes_private: bool, private_attributes: List[str]):
         self._all_attributes_private = all_attributes_private
@@ -85,8 +84,7 @@ class EventContextFormatter:
                 return True
         return False
 
-    def _redact_json_value(self, parent_path: Optional[List[str]], name: str, value: Any, all_private: List[AttributeRef],
-                           redacted: List[str]) -> Any:
+    def _redact_json_value(self, parent_path: Optional[List[str]], name: str, value: Any, all_private: List[AttributeRef], redacted: List[str]) -> Any:
         if not isinstance(value, dict) or len(value) == 0:
             return value
         ret = {}

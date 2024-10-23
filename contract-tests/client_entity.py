@@ -12,8 +12,7 @@ from ldclient.config import BigSegmentsConfig
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient import *
-from ldclient import (Context, ExecutionOrder, MigratorBuilder, MigratorFn,
-                      Operation, Stage)
+from ldclient import Context, ExecutionOrder, MigratorBuilder, MigratorFn, Operation, Stage
 
 
 class ClientEntity:
@@ -60,9 +59,7 @@ class ClientEntity:
 
         if config.get("bigSegments") is not None:
             big_params = config["bigSegments"]
-            big_config = {
-                "store": BigSegmentStoreFixture(big_params["callbackUri"])
-            }
+            big_config = {"store": BigSegmentStoreFixture(big_params["callbackUri"])}
             if big_params.get("userCacheSize") is not None:
                 big_config["context_cache_size"] = big_params["userCacheSize"]
             _set_optional_time_prop(big_params, "userCacheTimeMs", big_config, "context_cache_time")
@@ -152,10 +149,7 @@ class ClientEntity:
 
     def get_big_segment_store_status(self) -> dict:
         status = self.client.big_segment_store_status_provider.status
-        return {
-            "available": status.available,
-            "stale": status.stale
-        }
+        return {"available": status.available, "stale": status.stale}
 
     def migration_variation(self, params: dict) -> dict:
         stage, _ = self.client.migration_variation(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]))

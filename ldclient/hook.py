@@ -38,6 +38,7 @@ class Hook:
     allows LaunchDarkly to expand the list of hook handlers without breaking
     customer integrations.
     """
+
     __metaclass__ = ABCMeta
 
     @abstractproperty

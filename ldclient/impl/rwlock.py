@@ -2,7 +2,7 @@ import threading
 
 
 class ReadWriteLock:
-    """ A lock object that allows many simultaneous "read locks", but
+    """A lock object that allows many simultaneous "read locks", but
     only one "write lock." """
 
     def __init__(self):
@@ -10,8 +10,8 @@ class ReadWriteLock:
         self._readers = 0
 
     def rlock(self):
-        """ Acquire a read lock. Blocks only if a thread has
-        acquired the write lock. """
+        """Acquire a read lock. Blocks only if a thread has
+        acquired the write lock."""
         self._read_ready.acquire()
         try:
             self._readers += 1
@@ -19,7 +19,7 @@ class ReadWriteLock:
             self._read_ready.release()
 
     def runlock(self):
-        """ Release a read lock. """
+        """Release a read lock."""
         self._read_ready.acquire()
         try:
             self._readers -= 1
@@ -29,12 +29,12 @@ class ReadWriteLock:
             self._read_ready.release()
 
     def lock(self):
-        """ Acquire a write lock. Blocks until there are no
-        acquired read or write locks. """
+        """Acquire a write lock. Blocks until there are no
+        acquired read or write locks."""
         self._read_ready.acquire()
         while self._readers > 0:
             self._read_ready.wait()
 
     def unlock(self):
-        """ Release a write lock. """
+        """Release a write lock."""
         self._read_ready.release()

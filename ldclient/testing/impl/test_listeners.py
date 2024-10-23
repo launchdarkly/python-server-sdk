@@ -7,6 +7,7 @@ def test_notify_with_no_listeners_does_not_throw_exception():
     l = Listeners()
     l.notify("hi")
 
+
 def test_notify_calls_listeners():
     q1 = Queue()
     q2 = Queue()
@@ -19,6 +20,7 @@ def test_notify_calls_listeners():
     assert q1.empty() == True
     assert q2.empty() == True
 
+
 def test_remove_listener():
     q1 = Queue()
     q2 = Queue()
@@ -28,15 +30,17 @@ def test_remove_listener():
     l.add(p1)
     l.add(p2)
     l.remove(p1)
-    l.remove(lambda v: print(v)) # removing nonexistent listener does not throw exception
+    l.remove(lambda v: print(v))  # removing nonexistent listener does not throw exception
     l.notify("hi")
     assert q1.empty() == True
     assert q2.get() == "hi"
     assert q2.empty() == True
 
+
 def test_exception_from_listener_is_caught_and_other_listeners_are_still_called():
     def fail(v):
         raise Exception("deliberate error")
+
     q = Queue()
     l = Listeners()
     l.add(fail)

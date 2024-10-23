@@ -12,6 +12,7 @@ from ldclient.versioned_data_kind import FEATURES
 # database integrations, see testing.integrations.persistent_feature_store_test_base which extends
 # them with additional tests.
 
+
 class FeatureStoreTester:
     @abstractmethod
     def create_feature_store(self) -> FeatureStore:
@@ -42,6 +43,7 @@ class StoreTestScope:
 # - Tests in this class use "with self.store(tester)" or "with self.inited_store(tester)" to
 #   create an instance of the store and ensure that it is torn down afterward.
 
+
 class FeatureStoreTestBase:
     @abstractmethod
     def all_testers(self):
@@ -52,12 +54,14 @@ class FeatureStoreTestBase:
 
     def inited_store(self, tester):
         scope = StoreTestScope(tester.create_feature_store())
-        scope.store.init({
-            FEATURES: {
-                'foo': self.make_feature('foo', 10).to_json_dict(),
-                'bar': self.make_feature('bar', 10).to_json_dict(),
+        scope.store.init(
+            {
+                FEATURES: {
+                    'foo': self.make_feature('foo', 10).to_json_dict(),
+                    'bar': self.make_feature('bar', 10).to_json_dict(),
+                }
             }
-        })
+        )
         return scope
 
     @staticmethod

@@ -7,11 +7,13 @@ from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.versioned_data_kind import VersionedDataKind
 
-THINGS = VersionedDataKind(namespace = "things", request_api_path = "", stream_api_path = "")
-WRONG_THINGS = VersionedDataKind(namespace = "wrong", request_api_path = "", stream_api_path = "")
+THINGS = VersionedDataKind(namespace="things", request_api_path="", stream_api_path="")
+WRONG_THINGS = VersionedDataKind(namespace="wrong", request_api_path="", stream_api_path="")
+
 
 def make_wrapper(core, cached):
     return CachingStoreWrapper(core, CacheConfig(expiration=30) if cached else CacheConfig.disabled())
+
 
 class MockCore:
     def __init__(self):
@@ -19,22 +21,22 @@ class MockCore:
         self.inited = False
         self.inited_query_count = 0
         self.error = None
-    
+
     def init_internal(self, all_data):
         self._maybe_throw()
         self.data = {}
         for kind, items in all_data.items():
             self.data[kind] = items.copy()
-    
+
     def get_internal(self, kind, key):
         self._maybe_throw()
         items = self.data.get(kind)
         return None if items is None else items.get(key)
-    
+
     def get_all_internal(self, kind):
         self._maybe_throw()
         return self.data.get(kind)
-    
+
     def upsert_internal(self, kind, item):
         self._maybe_throw()
         key = item.get('key')
@@ -47,7 +49,7 @@ class MockCore:
             items[key] = item
             return item
         return old_item
-    
+
     def initialized_internal(self):
         self._maybe_throw()
         self.inited_query_count = self.inited_query_count + 1
@@ -56,21 +58,23 @@ class MockCore:
     def _maybe_throw(self):
         if self.error is not None:
             raise self.error
-        
+
     def force_set(self, kind, item):
         items = self.data.get(kind)
         if items is None:
             items = {}
             self.data[kind] = items
         items[item.get('key')] = item
-    
+
     def force_remove(self, kind, key):
         items = self.data.get(kind)
         if items is not None:
             items.pop(key, None)
 
+
 class CustomError(Exception):
     pass
+
 
 class TestCachingStoreWrapper:
     @pytest.mark.parametrize("available", [False, True])
@@ -93,8 +97,8 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         key = "flag"
-        itemv1 = { "key": key, "version": 1 }
-        itemv2 = { "key": key, "version": 2 }
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
 
         core.force_set(THINGS, itemv1)
         assert wrapper.get(THINGS, key) == itemv1
@@ -107,11 +111,11 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         key = "flag"
-        itemv1 = { "key": key, "version": 1, "deleted": True }
-        itemv2 = { "key": key, "version": 2 }
+        itemv1 = {"key": key, "version": 1, "deleted": True}
+        itemv2 = {"key": key, "version": 2}
 
         core.force_set(THINGS, itemv1)
-        assert wrapper.get(THINGS, key) is None   # item is filtered out because deleted is true
+        assert wrapper.get(THINGS, key) is None  # item is filtered out because deleted is true
 
         core.force_set(THINGS, itemv2)
         assert wrapper.get(THINGS, key) == (None if cached else itemv2)  # if cached, we will not see the new underlying value yet
@@ -120,8 +124,8 @@ class TestCachingStoreWrapper:
     def test_get_missing_item(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
-        key =  "flag"
-        item = { "key": key, "version": 1 }
+        key = "flag"
+        item = {"key": key, "version": 1}
 
         assert wrapper.get(THINGS, key) is None
 
@@ -133,8 +137,8 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         key = "flag"
-        item = { "key": key, "version": 1 }
-        modified_item = { "key": key, "version": 99 }
+        item = {"key": key, "version": 1}
+        modified_item = {"key": key, "version": 99}
 
         core.force_set(THINGS, item)
         assert wrapper.get(THINGS, key, lambda x: modified_item) == modified_item
@@ -142,13 +146,13 @@ class TestCachingStoreWrapper:
     def test_cached_get_uses_values_from_init(self):
         core = MockCore()
         wrapper = make_wrapper(core, True)
-        item1 = { "key": "flag1", "version": 1 }
-        item2 = { "key": "flag2", "version": 1 }
+        item1 = {"key": "flag1", "version": 1}
+        item2 = {"key": "flag2", "version": 1}
 
-        wrapper.init({ THINGS: { item1["key"]: item1, item2["key"]: item2 } })
+        wrapper.init({THINGS: {item1["key"]: item1, item2["key"]: item2}})
         core.force_remove(THINGS, item1["key"])
         assert wrapper.get(THINGS, item1["key"]) == item1
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_can_throw_exception(self, cached):
         core = MockCore()
@@ -161,29 +165,29 @@ class TestCachingStoreWrapper:
     def test_get_all(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
-        item1 = { "key": "flag1", "version": 1 }
-        item2 = { "key": "flag2", "version": 1 }
+        item1 = {"key": "flag1", "version": 1}
+        item2 = {"key": "flag2", "version": 1}
 
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
-        assert wrapper.all(THINGS) == { item1["key"]: item1, item2["key"]: item2 }
+        assert wrapper.all(THINGS) == {item1["key"]: item1, item2["key"]: item2}
 
         core.force_remove(THINGS, item2["key"])
         if cached:
-            assert wrapper.all(THINGS) == { item1["key"]: item1, item2["key"]: item2 }
+            assert wrapper.all(THINGS) == {item1["key"]: item1, item2["key"]: item2}
         else:
-            assert wrapper.all(THINGS) == { item1["key"]: item1 }
+            assert wrapper.all(THINGS) == {item1["key"]: item1}
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_removes_deleted_items(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
-        item1 = { "key": "flag1", "version": 1 }
-        item2 = { "key": "flag2", "version": 1, "deleted": True }
+        item1 = {"key": "flag1", "version": 1}
+        item2 = {"key": "flag2", "version": 1, "deleted": True}
 
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
-        assert wrapper.all(THINGS) == { item1["key"]: item1 }
+        assert wrapper.all(THINGS) == {item1["key"]: item1}
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_changes_None_to_empty_dict(self, cached):
@@ -191,28 +195,26 @@ class TestCachingStoreWrapper:
         wrapper = make_wrapper(core, cached)
 
         assert wrapper.all(WRONG_THINGS) == {}
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_iwith_lambda(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
-        extra = { "extra": True }
-        item1 = { "key": "flag1", "version": 1 }
-        item2 = { "key": "flag2", "version": 1 }
+        extra = {"extra": True}
+        item1 = {"key": "flag1", "version": 1}
+        item2 = {"key": "flag2", "version": 1}
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
-        assert wrapper.all(THINGS, lambda x: dict(x, **extra)) == {
-            item1["key"]: item1, item2["key"]: item2, "extra": True
-        }
+        assert wrapper.all(THINGS, lambda x: dict(x, **extra)) == {item1["key"]: item1, item2["key"]: item2, "extra": True}
 
     def test_cached_get_all_uses_values_from_init(self):
         core = MockCore()
         wrapper = make_wrapper(core, True)
-        item1 = { "key": "flag1", "version": 1 }
-        item2 = { "key": "flag2", "version": 1 }
-        both = { item1["key"]: item1, item2["key"]: item2 }
+        item1 = {"key": "flag1", "version": 1}
+        item2 = {"key": "flag2", "version": 1}
+        both = {item1["key"]: item1, item2["key"]: item2}
 
-        wrapper.init({ THINGS: both })
+        wrapper.init({THINGS: both})
         core.force_remove(THINGS, item1["key"])
         assert wrapper.all(THINGS) == both
 
@@ -229,8 +231,8 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         key = "flag"
-        itemv1 = { "key": key, "version": 1 }
-        itemv2 = { "key": key, "version": 2 }
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
 
         wrapper.upsert(THINGS, itemv1)
         assert core.data[THINGS][key] == itemv1
@@ -241,7 +243,7 @@ class TestCachingStoreWrapper:
         # if we have a cache, verify that the new item is now cached by writing a different value
         # to the underlying data - Get should still return the cached item
         if cached:
-            itemv3 = { "key": key, "version": 3 }
+            itemv3 = {"key": key, "version": 3}
             core.force_set(THINGS, itemv3)
 
         assert wrapper.get(THINGS, key) == itemv2
@@ -254,8 +256,8 @@ class TestCachingStoreWrapper:
         core = MockCore()
         wrapper = make_wrapper(core, True)
         key = "flag"
-        itemv1 = { "key": key, "version": 1 }
-        itemv2 = { "key": key, "version": 2 }
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
 
         wrapper.upsert(THINGS, itemv2)
         assert core.data[THINGS][key] == itemv2
@@ -263,26 +265,26 @@ class TestCachingStoreWrapper:
         wrapper.upsert(THINGS, itemv1)
         assert core.data[THINGS][key] == itemv2  # value in store remains the same
 
-        itemv3 = { "key": key, "version": 3 }
+        itemv3 = {"key": key, "version": 3}
         core.force_set(THINGS, itemv3)  # bypasses cache so we can verify that itemv2 is in the cache
         assert wrapper.get(THINGS, key) == itemv2
-    
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_upsert_can_throw_exception(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         core.error = CustomError()
         with pytest.raises(CustomError):
-            wrapper.upsert(THINGS, { "key": "x", "version": 1 })
+            wrapper.upsert(THINGS, {"key": "x", "version": 1})
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_delete(self, cached):
         core = MockCore()
         wrapper = make_wrapper(core, cached)
         key = "flag"
-        itemv1 = { "key": key, "version": 1 }
-        itemv2 = { "key": key, "version": 2, "deleted": True }
-        itemv3 = { "key": key, "version": 3 }
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2, "deleted": True}
+        itemv3 = {"key": key, "version": 3}
 
         core.force_set(THINGS, itemv1)
         assert wrapper.get(THINGS, key) == itemv1

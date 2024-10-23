@@ -16,15 +16,12 @@ from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class CacheConfig:
-    """Encapsulates caching parameters for feature store implementations that support local caching.
-    """
+    """Encapsulates caching parameters for feature store implementations that support local caching."""
 
     DEFAULT_EXPIRATION = 15.0
     DEFAULT_CAPACITY = 1000
 
-    def __init__(self,
-                 expiration: float = DEFAULT_EXPIRATION,
-                 capacity: int = DEFAULT_CAPACITY):
+    def __init__(self, expiration: float = DEFAULT_EXPIRATION, capacity: int = DEFAULT_CAPACITY):
         """Constructs an instance of CacheConfig.
 
         :param expiration: the cache TTL, in seconds. Items will be evicted from the cache after
@@ -44,36 +41,30 @@ class CacheConfig:
 
     @staticmethod
     def disabled() -> 'CacheConfig':
-        """Returns an instance of CacheConfig specifying that caching should be disabled.
-        """
-        return CacheConfig(expiration = 0)
+        """Returns an instance of CacheConfig specifying that caching should be disabled."""
+        return CacheConfig(expiration=0)
 
     @property
     def enabled(self) -> bool:
-        """Returns True if caching is enabled in this configuration.
-        """
+        """Returns True if caching is enabled in this configuration."""
         return self._expiration > 0
 
     @property
     def expiration(self) -> float:
-        """Returns the configured cache TTL, in seconds.
-        """
+        """Returns the configured cache TTL, in seconds."""
         return self._expiration
 
     @property
     def capacity(self) -> int:
-        """Returns the configured maximum number of cacheable items.
-        """
+        """Returns the configured maximum number of cacheable items."""
         return self._capacity
 
 
 class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
-    """The default feature store implementation, which holds all data in a thread-safe data structure in memory.
-    """
+    """The default feature store implementation, which holds all data in a thread-safe data structure in memory."""
 
     def __init__(self):
-        """Constructs an instance of InMemoryFeatureStore.
-        """
+        """Constructs an instance of InMemoryFeatureStore."""
         self._lock = ReadWriteLock()
         self._initialized = False
         self._items = defaultdict(dict)
@@ -84,9 +75,8 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     def is_available(self) -> bool:
         return True
 
-    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any]=lambda x: x) -> Any:
-        """
-        """
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        """ """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -102,8 +92,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             self._lock.runlock()
 
     def all(self, kind, callback):
-        """
-        """
+        """ """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -112,8 +101,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             self._lock.runlock()
 
     def init(self, all_data):
-        """
-        """
+        """ """
         all_decoded = {}
         for kind, items in all_data.items():
             items_decoded = {}
@@ -132,8 +120,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
 
     # noinspection PyShadowingNames
     def delete(self, kind, key: str, version: int):
-        """
-        """
+        """ """
         try:
             self._lock.rlock()
             itemsOfKind = self._items[kind]
@@ -145,8 +132,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             self._lock.runlock()
 
     def upsert(self, kind, item):
-        """
-        """
+        """ """
         decoded_item = kind.decode(item)
         key = item['key']
         try:
@@ -161,8 +147,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
 
     @property
     def initialized(self) -> bool:
-        """
-        """
+        """ """
         try:
             self._lock.rlock()
             return self._initialized
@@ -178,19 +163,22 @@ class _FeatureStoreDataSetSorter:
     Implements a dependency graph ordering for data to be stored in a feature store. We must use this
     on every data set that will be passed to the feature store's init() method.
     """
+
     @staticmethod
     def sort_all_collections(all_data):
-        """ Returns a copy of the input data that has the following guarantees: the iteration order of the outer
+        """Returns a copy of the input data that has the following guarantees: the iteration order of the outer
         dictionary will be in ascending order by the VersionDataKind's :priority property (if any), and for each
         data kind that has a "get_dependency_keys" function, the inner dictionary will have an iteration order
         where B is before A if A has a dependency on B.
         """
         outer_hash = OrderedDict()
         kinds = list(all_data.keys())
+
         def priority_order(kind):
             if hasattr(kind, 'priority'):
                 return kind.priority
             return len(kind.namespace)  # use arbitrary order if there's no priority
+
         kinds.sort(key=priority_order)
         for kind in kinds:
             items = all_data[kind]

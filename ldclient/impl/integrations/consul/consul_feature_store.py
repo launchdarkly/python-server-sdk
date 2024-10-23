@@ -3,6 +3,7 @@ import json
 have_consul = False
 try:
     import consul
+
     have_consul = True
 except ImportError:
     pass
@@ -10,14 +11,13 @@ except ImportError:
 from ldclient import log
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import (DiagnosticDescription, FeatureStore,
-                                 FeatureStoreCore)
+from ldclient.interfaces import DiagnosticDescription, FeatureStore, FeatureStoreCore
 
-# 
+#
 # Internal implementation of the Consul feature store.
-# 
+#
 # Implementation notes:
-# 
+#
 # * Feature flags, segments, and any other kind of entity the LaunchDarkly client may wish
 # to store, are stored as individual items with the key "{prefix}/features/{flag-key}",
 # "{prefix}/segments/{segment-key}", etc.
@@ -32,7 +32,8 @@ from ldclient.interfaces import (DiagnosticDescription, FeatureStore,
 # deleting new data from another process, but that would be the case anyway if the Init
 # happened to execute later than the Upsert; we are relying on the fact that normally the
 # process that did the Init will also receive the new data shortly and do its own Upsert.
-# 
+#
+
 
 class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
     def __init__(self, host, port, prefix, consul_opts):
@@ -75,7 +76,7 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         # Now delete any previously existing items whose keys were not in the current data
         for key in unused_old_keys:
             self._client.kv.delete(key)
-        
+
         # Now set the special key that we check in initialized_internal()
         self._client.kv.put(inited_key, "")
 
@@ -121,11 +122,11 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def initialized_internal(self):
         index, resp = self._client.kv.get(self._inited_key())
-        return (resp is not None)
+        return resp is not None
 
     def describe_configuration(self, config):
         return 'Consul'
-    
+
     def _kind_key(self, kind):
         return self._prefix + kind.namespace
 

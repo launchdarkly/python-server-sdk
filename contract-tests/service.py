@@ -13,30 +13,24 @@ default_port = 8000
 
 
 # logging configuration
-dictConfig({
-    'version': 1,
-    'formatters': {
-        'default': {
-            'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
-        }
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'default'
-        }
-    },
-    'root': {
-        'level': 'INFO',
-        'handlers': ['console']
-    },
-    'loggers': {
-        'ldclient': {
-            'level': 'INFO', # change to 'DEBUG' to enable SDK debug logging
+dictConfig(
+    {
+        'version': 1,
+        'formatters': {
+            'default': {
+                'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
+            }
         },
-        'werkzeug': { 'level': 'ERROR' } # disable irrelevant Flask app logging
+        'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'default'}},
+        'root': {'level': 'INFO', 'handlers': ['console']},
+        'loggers': {
+            'ldclient': {
+                'level': 'INFO',  # change to 'DEBUG' to enable SDK debug logging
+            },
+            'werkzeug': {'level': 'ERROR'},  # disable irrelevant Flask app logging
+        },
     }
-})
+)
 
 app = Flask(__name__)
 app.logger.removeHandler(default_handler)
@@ -54,6 +48,7 @@ def handle_exception(e):
 
     app.logger.exception(e)
     return str(e), 500
+
 
 @app.route('/', methods=['GET'])
 def status():
@@ -77,15 +72,17 @@ def status():
             'anonymous-redaction',
             'evaluation-hooks',
             'omit-anonymous-contexts',
-            'client-prereq-events'
+            'client-prereq-events',
         ]
     }
     return (json.dumps(body), 200, {'Content-type': 'application/json'})
+
 
 @app.route('/', methods=['DELETE'])
 def delete_stop_service():
     global_log.info("Test service has told us to exit")
     os._exit(0)
+
 
 @app.route('/', methods=['POST'])
 def post_create_client():
@@ -151,6 +148,7 @@ def post_client_command(id):
         return ('', 201)
     return (json.dumps(response), 200)
 
+
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
     global clients
@@ -161,6 +159,7 @@ def delete_client(id):
 
     client.close()
     return ('', 202)
+
 
 if __name__ == "__main__":
     port = default_port

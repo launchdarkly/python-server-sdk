@@ -4,11 +4,7 @@ from typing import Callable, Mapping, Optional, Set
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, DataSourceStatus,
-                                 DataSourceStatusProvider,
-                                 DataSourceUpdateSink, FeatureStore,
-                                 FlagChange)
+from ldclient.interfaces import DataSourceErrorInfo, DataSourceErrorKind, DataSourceState, DataSourceStatus, DataSourceStatusProvider, DataSourceUpdateSink, FeatureStore, FlagChange
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
@@ -20,11 +16,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         self.__tracker = DependencyTracker()
 
         self.__lock = ReadWriteLock()
-        self.__status = DataSourceStatus(
-            DataSourceState.INITIALIZING,
-            time.time(),
-            None
-        )
+        self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
 
     @property
     def status(self) -> DataSourceStatus:
@@ -52,9 +44,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         if old_data is None:
             return
 
-        self.__send_change_events(
-            self.__compute_changed_items_for_full_data_set(old_data, all_data)
-        )
+        self.__send_change_events(self.__compute_changed_items_for_full_data_set(old_data, all_data))
 
     def upsert(self, kind: VersionedDataKind, item: dict):
         self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
@@ -81,11 +71,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
             if new_state == old_status.state and new_error is None:
                 return
 
-            self.__status = DataSourceStatus(
-                new_state,
-                self.__status.since if new_state == self.__status.state else time.time(),
-                self.__status.error if new_error is None else new_error
-            )
+            self.__status = DataSourceStatus(new_state, self.__status.since if new_state == self.__status.state else time.time(), self.__status.error if new_error is None else new_error)
 
             status_to_broadcast = self.__status
         finally:
@@ -98,12 +84,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         try:
             fn()
         except Exception as e:
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.STORE_ERROR,
-                0,
-                time.time(),
-                str(e)
-            )
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
             self.update_status(DataSourceState.INTERRUPTED, error_info)
             raise
 

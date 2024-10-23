@@ -6,15 +6,12 @@ from typing import Optional
 
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault
-from ld_eventsource.config import (ConnectStrategy, ErrorStrategy,
-                                   RetryDelayStrategy)
+from ld_eventsource.config import ConnectStrategy, ErrorStrategy, RetryDelayStrategy
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.impl.http import HTTPFactory, _http_factory
-from ldclient.impl.util import (http_error_message, is_http_error_recoverable,
-                                log)
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, UpdateProcessor)
+from ldclient.impl.util import http_error_message, is_http_error_recoverable, log
+from ldclient.interfaces import DataSourceErrorInfo, DataSourceErrorKind, DataSourceState, UpdateProcessor
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
@@ -63,17 +60,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     self._sse.interrupt()
 
                     if self._data_source_update_sink is not None:
-                        error_info = DataSourceErrorInfo(
-                            DataSourceErrorKind.UNKNOWN,
-                            0,
-                            time.time(),
-                            str(e)
-                        )
+                        error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
 
-                        self._data_source_update_sink.update_status(
-                            DataSourceState.INTERRUPTED,
-                            error_info
-                        )
+                        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
                 if message_ok:
                     self._record_stream_init(False)
@@ -104,24 +93,16 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _create_sse_client(self) -> SSEClient:
         # We don't want the stream to use the same read timeout as the rest of the SDK.
         http_factory = _http_factory(self._config)
-        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config,
-                                          override_read_timeout=stream_read_timeout)
+        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
         return SSEClient(
             connect=ConnectStrategy.http(
-                url=self._uri,
-                headers=http_factory.base_headers,
-                pool=stream_http_factory.create_pool_manager(1, self._uri),
-                urllib3_request_options={"timeout": stream_http_factory.timeout}
+                url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
             initial_retry_delay=self._config.initial_reconnect_delay,
-            retry_delay_strategy=RetryDelayStrategy.default(
-                max_delay=MAX_RETRY_DELAY,
-                backoff_multiplier=2,
-                jitter_multiplier=JITTER_RATIO
-            ),
+            retry_delay_strategy=RetryDelayStrategy.default(max_delay=MAX_RETRY_DELAY, backoff_multiplier=2, jitter_multiplier=JITTER_RATIO),
             retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
-            logger=log
+            logger=log,
         )
 
     def stop(self):
@@ -134,10 +115,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         if self._data_source_update_sink is None:
             return
 
-        self._data_source_update_sink.update_status(
-            DataSourceState.OFF,
-            error
-        )
+        self._data_source_update_sink.update_status(DataSourceState.OFF, error)
 
     def _sink_or_store(self):
         if self._data_source_update_sink is None:
@@ -152,12 +130,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _process_message(self, store, msg: Event) -> bool:
         if msg.event == 'put':
             all_data = json.loads(msg.data)
-            init_data = {
-                FEATURES: all_data['data']['flags'],
-                SEGMENTS: all_data['data']['segments']
-            }
-            log.debug("Received put event with %d flags and %d segments",
-                      len(init_data[FEATURES]), len(init_data[SEGMENTS]))
+            init_data = {FEATURES: all_data['data']['flags'], SEGMENTS: all_data['data']['segments']}
+            log.debug("Received put event with %d flags and %d segments", len(init_data[FEATURES]), len(init_data[SEGMENTS]))
             store.init(init_data)
             return True
         elif msg.event == 'patch':
@@ -191,32 +165,19 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             return False  # don't retry if we've been deliberately stopped
 
         if isinstance(error, json.decoder.JSONDecodeError):
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.INVALID_DATA,
-                0,
-                time.time(),
-                str(error)
-            )
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time(), str(error))
 
             log.error("Unexpected error on stream connection: %s, will retry" % error)
             self._record_stream_init(True)
             self._connection_attempt_start_time = None
 
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(
-                    DataSourceState.INTERRUPTED,
-                    error_info
-                )
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
         elif isinstance(error, HTTPStatusError):
             self._record_stream_init(True)
             self._connection_attempt_start_time = None
 
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.ERROR_RESPONSE,
-                error.status,
-                time.time(),
-                str(error)
-            )
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.ERROR_RESPONSE, error.status, time.time(), str(error))
 
             http_error_message_result = http_error_message(error.status, "stream connection")
             if not is_http_error_recoverable(error.status):
@@ -229,20 +190,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 log.warning(http_error_message_result)
 
                 if self._data_source_update_sink is not None:
-                    self._data_source_update_sink.update_status(
-                        DataSourceState.INTERRUPTED,
-                        error_info
-                    )
+                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
         else:
             log.warning("Unexpected error on stream connection: %s, will retry" % error)
             self._record_stream_init(True)
             self._connection_attempt_start_time = None
 
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(
-                    DataSourceState.INTERRUPTED,
-                    DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error))
-                )
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error)))
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
         self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
         return True
@@ -251,7 +206,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def _parse_path(path: str):
         for kind in [FEATURES, SEGMENTS]:
             if path.startswith(kind.stream_api_path):
-                return ParsedPath(kind = kind, key = path[len(kind.stream_api_path):])
+                return ParsedPath(kind=kind, key=path[len(kind.stream_api_path) :])
         return None
 
     # magic methods for "with" statement (used in testing)

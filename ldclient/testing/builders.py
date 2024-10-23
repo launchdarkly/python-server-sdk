@@ -28,19 +28,9 @@ class BaseBuilder:
 
 class FlagBuilder(BaseBuilder):
     def __init__(self, key):
-        super().__init__({
-            'key': key,
-            'version': 1,
-            'on': False,
-            'variations': [],
-            'offVariation': None,
-            'fallthrough': {},
-            'prerequisites': [],
-            'targets': [],
-            'contextTargets': [],
-            'rules': [],
-            'salt': ''
-        })
+        super().__init__(
+            {'key': key, 'version': 1, 'on': False, 'variations': [], 'offVariation': None, 'fallthrough': {}, 'prerequisites': [], 'targets': [], 'contextTargets': [], 'rules': [], 'salt': ''}
+        )
 
     def build(self):
         return FeatureFlag(self.data.copy())
@@ -73,8 +63,7 @@ class FlagBuilder(BaseBuilder):
         return self._append('targets', {'variation': variation, 'values': list(keys)})
 
     def context_target(self, context_kind: str, variation: int, *keys: str) -> FlagBuilder:
-        return self._append('contextTargets',
-            {'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
+        return self._append('contextTargets', {'contextKind': context_kind, 'variation': variation, 'values': list(keys)})
 
     def rules(self, *rules: dict) -> FlagBuilder:
         return self._append_all('rules', list(rules))
@@ -131,17 +120,7 @@ class FlagRuleBuilder(BaseBuilder):
 
 class SegmentBuilder(BaseBuilder):
     def __init__(self, key):
-        super().__init__({
-            'key': key,
-            'version': 1,
-            'included': [],
-            'excluded': [],
-            'includedContexts': [],
-            'excludedContexts': [],
-            'rules': [],
-            'unbounded': False,
-            'salt': ''
-        })
+        super().__init__({'key': key, 'version': 1, 'included': [], 'excluded': [], 'includedContexts': [], 'excludedContexts': [], 'rules': [], 'unbounded': False, 'salt': ''})
 
     def build(self):
         return Segment(self.data.copy())
@@ -200,14 +179,18 @@ class SegmentRuleBuilder(BaseBuilder):
 def build_off_flag_with_value(key: str, value: Any) -> FlagBuilder:
     return FlagBuilder(key).version(100).on(False).variations(value).off_variation(0)
 
+
 def make_boolean_flag_matching_segment(segment: Segment) -> FeatureFlag:
     return make_boolean_flag_with_clauses(make_clause_matching_segment_key(segment.key))
+
 
 def make_boolean_flag_with_clauses(*clauses: dict) -> FeatureFlag:
     return make_boolean_flag_with_rules(FlagRuleBuilder().clauses(*clauses).variation(0).build())
 
+
 def make_boolean_flag_with_rules(*rules: dict) -> FeatureFlag:
     return FlagBuilder('flagkey').on(True).variations(True, False).fallthrough_variation(1).rules(*rules).build()
+
 
 def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -> dict:
     ret = {'attribute': attr, 'op': op, 'values': list(values)}
@@ -215,14 +198,18 @@ def make_clause(context_kind: Optional[str], attr: str, op: str, *values: Any) -
         ret['contextKind'] = context_kind
     return ret
 
+
 def make_clause_matching_context(context: Context) -> dict:
     return {'contextKind': context.kind, 'attribute': 'key', 'op': 'in', 'values': [context.key]}
+
 
 def make_clause_matching_segment_key(*segment_keys: str) -> dict:
     return {'attribute': '', 'op': 'segmentMatch', 'values': list(segment_keys)}
 
+
 def make_segment_rule_matching_context(context: Context) -> dict:
     return SegmentRuleBuilder().clauses(make_clause_matching_context(context)).build()
+
 
 def negate_clause(clause: dict) -> dict:
     c = clause.copy()

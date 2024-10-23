@@ -5,8 +5,7 @@ from typing import Any, Callable, Optional
 from semver import VersionInfo
 
 from ldclient.impl.model.clause import ClausePreprocessedValue
-from ldclient.impl.model.value_parsing import (is_number, parse_semver,
-                                               parse_time)
+from ldclient.impl.model.value_parsing import is_number, parse_semver, parse_time
 
 
 def _string_operator(context_value: Any, clause_value: Any, fn: Callable[[str, str], bool]) -> bool:
@@ -17,8 +16,7 @@ def _numeric_operator(context_value: Any, clause_value: Any, fn: Callable[[float
     return is_number(context_value) and is_number(clause_value) and fn(float(context_value), float(clause_value))
 
 
-def _time_operator(clause_preprocessed: Optional[ClausePreprocessedValue],
-        context_value: Any, fn: Callable[[float, float], bool]) -> bool:
+def _time_operator(clause_preprocessed: Optional[ClausePreprocessedValue], context_value: Any, fn: Callable[[float, float], bool]) -> bool:
     clause_time = None if clause_preprocessed is None else clause_preprocessed.as_time
     if clause_time is None:
         return False
@@ -26,8 +24,7 @@ def _time_operator(clause_preprocessed: Optional[ClausePreprocessedValue],
     return context_time is not None and fn(context_time, clause_time)
 
 
-def _semver_operator(clause_preprocessed: Optional[ClausePreprocessedValue],
-        context_value: Any, fn: Callable[[VersionInfo, VersionInfo], bool]) -> bool:
+def _semver_operator(clause_preprocessed: Optional[ClausePreprocessedValue], context_value: Any, fn: Callable[[VersionInfo, VersionInfo], bool]) -> bool:
     clause_ver = None if clause_preprocessed is None else clause_preprocessed.as_semver
     if clause_ver is None:
         return False
@@ -108,7 +105,7 @@ ops = {
     "after": _after,
     "semVerEqual": _semver_equal,
     "semVerLessThan": _semver_less_than,
-    "semVerGreaterThan": _semver_greater_than
+    "semVerGreaterThan": _semver_greater_than,
 }
 
 

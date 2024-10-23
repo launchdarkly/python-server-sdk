@@ -23,6 +23,7 @@ def success(payload) -> Result:
 
 def raises_exception(msg) -> MigratorFn:
     """Quick helper to generate a migration fn that is going to raise an exception"""
+
     def inner(payload):
         raise Exception(msg)
 
@@ -365,7 +366,6 @@ class TestTrackingConsistency:
             # SHADOW and LIVE are the only two stages that run both origins for read.
             pytest.param(Stage.SHADOW, "value", "value", True, id="shadow matches"),
             pytest.param(Stage.LIVE, "value", "value", True, id="live matches"),
-
             pytest.param(Stage.SHADOW, "old", "new", False, id="shadow does not match"),
             pytest.param(Stage.LIVE, "old", "new", False, id="live does not match"),
         ],
@@ -390,7 +390,6 @@ class TestTrackingConsistency:
             # SHADOW and LIVE are the only two stages that run both origins for read.
             pytest.param(Stage.SHADOW, "value", "value", True, id="shadow matches"),
             pytest.param(Stage.LIVE, "value", "value", True, id="live matches"),
-
             pytest.param(Stage.SHADOW, "old", "new", False, id="shadow does not match"),
             pytest.param(Stage.LIVE, "old", "new", False, id="live does not match"),
         ],

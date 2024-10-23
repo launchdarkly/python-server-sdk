@@ -10,13 +10,10 @@ import pytest
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.events.diagnostics import (_DiagnosticAccumulator,
-                                              create_diagnostic_id)
+from ldclient.impl.events.diagnostics import _DiagnosticAccumulator, create_diagnostic_id
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_processor import DefaultEventProcessor
-from ldclient.impl.events.types import (EventInput, EventInputCustom,
-                                        EventInputEvaluation,
-                                        EventInputIdentify)
+from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.util import timedelta_millis
 from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.migrations.types import Operation, Origin, Stage
@@ -39,9 +36,11 @@ def setup_function():
     global mock_http
     mock_http = MockHttp()
 
+
 def teardown_function():
     if ep is not None:
         ep.stop()
+
 
 def make_context_keys(context: Context) -> dict:
     ret = {}  # type: Dict[str, str]
@@ -72,7 +71,6 @@ class DefaultTestProcessor(DefaultEventProcessor):
         pytest.param(Operation.READ, Stage.LIVE, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
@@ -100,7 +98,6 @@ def test_migration_op_event_is_queued_without_flag(operation: Operation, default
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD, Origin.NEW}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD, Origin.NEW}, id="write shadow"),
@@ -128,7 +125,6 @@ def test_migration_op_event_is_queued_with_invoked(operation: Operation, default
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD, Origin.NEW}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD}, id="write shadow"),
@@ -156,7 +152,6 @@ def test_migration_op_event_is_queued_with_errors(operation: Operation, default_
         pytest.param(Operation.READ, Stage.LIVE, {Origin.OLD: 100, Origin.NEW: 100}, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, {Origin.NEW: 100}, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, {Origin.NEW: 100}, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, {Origin.OLD: 100}, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, {Origin.OLD: 100, Origin.NEW: 100}, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, {Origin.OLD: 100, Origin.NEW: 100}, id="write shadow"),
@@ -168,7 +163,9 @@ def test_migration_op_event_is_queued_with_errors(operation: Operation, default_
 def test_migration_op_event_is_queued_with_latencies(operation: Operation, default_stage: Stage, latencies: Dict[Origin, float]):
     with DefaultTestProcessor() as ep:
         delta_latencies = {origin: timedelta(milliseconds=ms) for origin, ms in latencies.items()}
-        e = MigrationOpEvent(timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies)
+        e = MigrationOpEvent(
+            timestamp, context, flag.key, flag, operation, default_stage, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD, Origin.NEW}, None, None, set(), delta_latencies
+        )
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -178,7 +175,20 @@ def test_migration_op_event_is_queued_with_latencies(operation: Operation, defau
 
 def test_migration_op_event_is_disabled_with_sampling_ratio():
     with DefaultTestProcessor() as ep:
-        e = MigrationOpEvent(timestamp, context, flag_with_0_sampling_ratio.key, flag_with_0_sampling_ratio, Operation.READ, Stage.OFF, EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}), {Origin.OLD}, None, None, set(), {})
+        e = MigrationOpEvent(
+            timestamp,
+            context,
+            flag_with_0_sampling_ratio.key,
+            flag_with_0_sampling_ratio,
+            Operation.READ,
+            Stage.OFF,
+            EvaluationDetail('off', 0, {'kind': 'FALLTHROUGH'}),
+            {Origin.OLD},
+            None,
+            None,
+            set(),
+            {},
+        )
         ep.send_event(e)
 
         # NOTE: Have to send an identify event; otherwise, we will timeout waiting on no events.
@@ -199,7 +209,6 @@ def test_migration_op_event_is_disabled_with_sampling_ratio():
         pytest.param(Operation.READ, Stage.LIVE, id="read live"),
         pytest.param(Operation.READ, Stage.RAMPDOWN, id="read rampdown"),
         pytest.param(Operation.READ, Stage.COMPLETE, id="read complete"),
-
         pytest.param(Operation.WRITE, Stage.OFF, id="write off"),
         pytest.param(Operation.WRITE, Stage.DUALWRITE, id="write dualwrite"),
         pytest.param(Operation.WRITE, Stage.SHADOW, id="write shadow"),
@@ -228,8 +237,9 @@ def test_identify_event_is_queued():
         assert len(output) == 1
         check_identify_event(output[0], e)
 
+
 def test_context_is_filtered_in_identify_event():
-    with DefaultTestProcessor(all_attributes_private = True) as ep:
+    with DefaultTestProcessor(all_attributes_private=True) as ep:
         formatter = EventContextFormatter(True, [])
         e = EventInputIdentify(timestamp, context)
         ep.send_event(e)
@@ -330,8 +340,9 @@ def test_exclude_can_keep_feature_event_from_summary():
         check_index_event(output[0], e)
         check_feature_event(output[1], e)
 
+
 def test_context_is_filtered_in_index_event():
-    with DefaultTestProcessor(all_attributes_private = True) as ep:
+    with DefaultTestProcessor(all_attributes_private=True) as ep:
         formatter = EventContextFormatter(True, [])
         e = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True)
         ep.send_event(e)
@@ -342,8 +353,9 @@ def test_context_is_filtered_in_index_event():
         check_feature_event(output[1], e, formatter.format_context(context))
         check_summary_event(output[2])
 
+
 def test_two_events_for_same_context_only_produce_one_index_event():
-    with DefaultTestProcessor(context_keys_flush_interval = 300) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval=300) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
@@ -356,8 +368,9 @@ def test_two_events_for_same_context_only_produce_one_index_event():
         check_feature_event(output[2], e1)
         check_summary_event(output[3])
 
+
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
-    with DefaultTestProcessor(context_keys_flush_interval = 0.1) as ep:
+    with DefaultTestProcessor(context_keys_flush_interval=0.1) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
         e1 = EventInputEvaluation(timestamp, context, flag.key, flag, 2, 'value2', None, 'default', None, True)
         ep.send_event(e0)
@@ -372,6 +385,7 @@ def test_new_index_event_is_added_if_context_cache_has_been_cleared():
         check_feature_event(output[3], e1)
         check_summary_event(output[4])
 
+
 def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
     with DefaultTestProcessor() as ep:
         future_time = now() + 100000
@@ -384,6 +398,7 @@ def test_event_kind_is_debug_if_flag_is_temporarily_in_debug_mode():
         check_index_event(output[0], e)
         check_debug_event(output[1], e)
         check_summary_event(output[2])
+
 
 def test_event_can_be_both_tracked_and_debugged():
     with DefaultTestProcessor() as ep:
@@ -437,6 +452,7 @@ def test_debug_mode_does_not_expire_if_both_client_time_and_server_time_are_befo
         check_debug_event(output[1], e)
         check_summary_event(output[2])
 
+
 def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_server_time():
     with DefaultTestProcessor() as ep:
         # Pick a server time that is somewhat behind the client time
@@ -459,6 +475,7 @@ def test_debug_mode_expires_based_on_client_time_if_client_time_is_later_than_se
         assert len(output) == 2
         check_index_event(output[0], e)
         check_summary_event(output[1])
+
 
 def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_client_time():
     with DefaultTestProcessor() as ep:
@@ -483,6 +500,7 @@ def test_debug_mode_expires_based_on_server_time_if_server_time_is_later_than_cl
         check_index_event(output[0], e)
         check_summary_event(output[1])
 
+
 def test_nontracked_events_are_summarized():
     with DefaultTestProcessor() as ep:
         flag1 = FlagBuilder('flagkey1').version(11).build()
@@ -501,21 +519,14 @@ def test_nontracked_events_are_summarized():
         assert se['startDate'] == earlier_time
         assert se['endDate'] == later_time
         assert se['features'] == {
-            'flagkey1': {
-                'contextKinds': ['user'],
-                'default': 'default1',
-                'counters': [ { 'version': 11, 'variation': 1, 'value': 'value1', 'count': 1 } ]
-            },
-            'flagkey2': {
-                'contextKinds': ['user'],
-                'default': 'default2',
-                'counters': [ { 'version': 22, 'variation': 2, 'value': 'value2', 'count': 1 } ]
-            }
+            'flagkey1': {'contextKinds': ['user'], 'default': 'default1', 'counters': [{'version': 11, 'variation': 1, 'value': 'value1', 'count': 1}]},
+            'flagkey2': {'contextKinds': ['user'], 'default': 'default2', 'counters': [{'version': 22, 'variation': 2, 'value': 'value2', 'count': 1}]},
         }
+
 
 def test_custom_event_is_queued_with_user():
     with DefaultTestProcessor() as ep:
-        e = EventInputCustom(timestamp, context, 'eventkey', { 'thing': 'stuff '}, 1.5)
+        e = EventInputCustom(timestamp, context, 'eventkey', {'thing': 'stuff '}, 1.5)
         ep.send_event(e)
 
         output = flush_and_get_events(ep)
@@ -523,19 +534,22 @@ def test_custom_event_is_queued_with_user():
         check_index_event(output[0], e)
         check_custom_event(output[1], e)
 
+
 def test_nothing_is_sent_if_there_are_no_events():
     with DefaultTestProcessor() as ep:
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is None
 
+
 def test_sdk_key_is_sent():
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
+
 
 def test_wrapper_header_not_sent_when_not_set():
     with DefaultTestProcessor() as ep:
@@ -545,21 +559,24 @@ def test_wrapper_header_not_sent_when_not_set():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') is None
 
+
 def test_wrapper_header_sent_when_set():
-    with DefaultTestProcessor(wrapper_name = "Flask", wrapper_version = "0.0.1") as ep:
+    with DefaultTestProcessor(wrapper_name="Flask", wrapper_version="0.0.1") as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask/0.0.1"
 
+
 def test_wrapper_header_sent_without_version():
-    with DefaultTestProcessor(wrapper_name = "Flask") as ep:
+    with DefaultTestProcessor(wrapper_name="Flask") as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask"
+
 
 def test_event_schema_set_on_event_send():
     with DefaultTestProcessor() as ep:
@@ -569,15 +586,18 @@ def test_event_schema_set_on_event_send():
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') == "4"
 
+
 def test_sdk_key_is_sent_on_diagnostic_request():
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY', diagnostic_opt_out=False) as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY', diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
         assert mock_http.request_headers.get('Authorization') == 'SDK_KEY'
+
 
 def test_event_schema_not_set_on_diagnostic_send():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
         ep._wait_until_inactive()
         assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') is None
+
 
 def test_init_diagnostic_event_sent():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -585,6 +605,7 @@ def test_init_diagnostic_event_sent():
         # Fields are tested in test_diagnostics.py
         assert len(diag_init) == 6
         assert diag_init['kind'] == 'diagnostic-init'
+
 
 def test_periodic_diagnostic_includes_events_in_batch():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -600,6 +621,7 @@ def test_periodic_diagnostic_includes_events_in_batch():
         assert diag_event['kind'] == 'diagnostic'
         assert diag_event['eventsInLastBatch'] == 1
         assert diag_event['deduplicatedUsers'] == 0
+
 
 def test_periodic_diagnostic_includes_deduplicated_users():
     with DefaultTestProcessor(diagnostic_opt_out=False) as ep:
@@ -619,29 +641,36 @@ def test_periodic_diagnostic_includes_deduplicated_users():
         assert diag_event['eventsInLastBatch'] == 3
         assert diag_event['deduplicatedUsers'] == 1
 
+
 def test_no_more_payloads_are_sent_after_401_error():
     verify_unrecoverable_http_error(401)
+
 
 def test_no_more_payloads_are_sent_after_403_error():
     verify_unrecoverable_http_error(403)
 
+
 def test_will_still_send_after_408_error():
     verify_recoverable_http_error(408)
+
 
 def test_will_still_send_after_429_error():
     verify_recoverable_http_error(429)
 
+
 def test_will_still_send_after_500_error():
     verify_recoverable_http_error(500)
 
+
 def test_does_not_block_on_full_inbox():
     config = Config("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
-    ep_inbox_holder = [ None ]
+    ep_inbox_holder = [None]
     ep_inbox = None
 
     def dispatcher_factory(inbox, config, http, diag):
         ep_inbox_holder[0] = inbox  # it's an array because otherwise it's hard for a closure to modify a variable
         return None  # the dispatcher object itself doesn't matter, we only manipulate the inbox
+
     def event_consumer():
         while True:
             message = ep_inbox.get(block=True)
@@ -664,16 +693,19 @@ def test_does_not_block_on_full_inbox():
         assert message1.param == event1
         assert had_no_more
 
+
 def test_http_proxy(monkeypatch):
     def _event_processor_proxy_test(server, config, secure):
         with DefaultEventProcessor(config) as ep:
             ep.send_event(EventInputIdentify(timestamp, context))
             ep.flush()
             ep._wait_until_inactive()
+
     do_proxy_tests(_event_processor_proxy_test, 'POST', monkeypatch)
 
+
 def verify_unrecoverable_http_error(status):
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         mock_http.set_response_status(status)
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
@@ -685,8 +717,9 @@ def verify_unrecoverable_http_error(status):
         ep._wait_until_inactive()
         assert mock_http.request_data is None
 
+
 def verify_recoverable_http_error(status):
-    with DefaultTestProcessor(sdk_key = 'SDK_KEY') as ep:
+    with DefaultTestProcessor(sdk_key='SDK_KEY') as ep:
         mock_http.set_response_status(status)
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
@@ -698,8 +731,9 @@ def verify_recoverable_http_error(status):
         ep._wait_until_inactive()
         assert mock_http.request_data is not None
 
+
 def test_event_payload_id_is_sent():
-    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+    with DefaultEventProcessor(Config(sdk_key='SDK_KEY'), mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -709,8 +743,9 @@ def test_event_payload_id_is_sent():
         # Throws on invalid UUID
         uuid.UUID(headerVal)
 
+
 def test_event_payload_id_changes_between_requests():
-    with DefaultEventProcessor(Config(sdk_key = 'SDK_KEY'), mock_http) as ep:
+    with DefaultEventProcessor(Config(sdk_key='SDK_KEY'), mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         ep._wait_until_inactive()
@@ -723,6 +758,7 @@ def test_event_payload_id_changes_between_requests():
         secondPayloadId = mock_http.recorded_requests[1][0].get('X-LaunchDarkly-Payload-ID')
         assert firstPayloadId != secondPayloadId
 
+
 def flush_and_get_events(ep):
     ep.flush()
     ep._wait_until_inactive()
@@ -731,15 +767,18 @@ def flush_and_get_events(ep):
     else:
         return json.loads(mock_http.request_data)
 
+
 def check_identify_event(data, source: EventInput, context_json: Optional[dict] = None):
     assert data['kind'] == 'identify'
     assert data['creationDate'] == source.timestamp
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
 
+
 def check_index_event(data, source: EventInput, context_json: Optional[dict] = None):
     assert data['kind'] == 'index'
     assert data['creationDate'] == source.timestamp
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
+
 
 def check_feature_event(data, source: EventInputEvaluation, context_json: Optional[dict] = None):
     assert data['kind'] == 'feature'
@@ -813,6 +852,7 @@ def check_debug_event(data, source: EventInputEvaluation, context_json: Optional
     assert data['context'] == (source.context.to_dict() if context_json is None else context_json)
     assert data.get('prereq_of') == None if source.prereq_of is None else source.prereq_of.key
 
+
 def check_custom_event(data, source: EventInputCustom):
     assert data['kind'] == 'custom'
     assert data['creationDate'] == source.timestamp
@@ -821,8 +861,10 @@ def check_custom_event(data, source: EventInputCustom):
     assert data['contextKeys'] == make_context_keys(source.context)
     assert data.get('metricValue') == source.metric_value
 
+
 def check_summary_event(data):
     assert data['kind'] == 'summary'
+
 
 def now():
     return int(time.time() * 1000)

@@ -2,17 +2,13 @@ from ldclient.client import Config, Context, LDClient
 from ldclient.evaluation import EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.events.event_processor import DefaultEventProcessor
-from ldclient.impl.events.types import (EventInputCustom, EventInputEvaluation,
-                                        EventInputIdentify)
+from ldclient.impl.events.types import EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.stubs import NullEventProcessor
 from ldclient.migrations import Operation, OpTracker, Origin, Stage
 from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import MockUpdateProcessor
-from ldclient.testing.test_ldclient import (context, make_client,
-                                            make_ldd_client,
-                                            make_offline_client,
-                                            unreachable_uri, user)
+from ldclient.testing.test_ldclient import context, make_client, make_ldd_client, make_offline_client, unreachable_uri, user
 from ldclient.versioned_data_kind import FEATURES
 
 
@@ -34,8 +30,7 @@ def test_client_has_null_event_processor_if_offline():
 
 
 def test_client_has_null_event_processor_if_send_events_off():
-    config = Config(sdk_key="secret", base_uri=unreachable_uri,
-                    update_processor_class = MockUpdateProcessor, send_events=False)
+    config = Config(sdk_key="secret", base_uri=unreachable_uri, update_processor_class=MockUpdateProcessor, send_events=False)
     with LDClient(config=config) as client:
         assert isinstance(client._event_processor, NullEventProcessor)
 
@@ -63,7 +58,7 @@ def test_identify_with_user_dict():
 
 def test_identify_no_user_key():
     with make_client() as client:
-        client.identify(Context.from_dict({ 'kind': 'user', 'name': 'nokey' }))
+        client.identify(Context.from_dict({'kind': 'user', 'name': 'nokey'}))
         assert count_events(client) == 0
 
 
@@ -98,8 +93,7 @@ def test_does_not_send_bad_event():
 
     with make_client() as client:
         client.track_migration_op(tracker)
-        client.identify(context) # Emit this to ensure events are working
-
+        client.identify(context)  # Emit this to ensure events are working
 
         # This is only identify if the op tracker fails to build
         e = get_first_event(client)
@@ -164,14 +158,16 @@ def test_event_for_existing_feature():
         assert 'value' == client.variation(feature.key, context, default='default')
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
-        assert (e.key == feature.key and
-            e.flag == feature and
-            e.context == context and
-            e.value == 'value' and
-            e.variation == 0 and
-            e.reason is None and
-            e.default_value == 'default' and
-            e.track_events is True)
+        assert (
+            e.key == feature.key
+            and e.flag == feature
+            and e.context == context
+            and e.value == 'value'
+            and e.variation == 0
+            and e.reason is None
+            and e.default_value == 'default'
+            and e.track_events is True
+        )
 
 
 def test_event_for_existing_feature_with_reason():
@@ -182,88 +178,89 @@ def test_event_for_existing_feature_with_reason():
         assert 'value' == client.variation_detail(feature.key, context, default='default').value
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
-        assert (e.key == feature.key and
-            e.flag == feature and
-            e.context == context and
-            e.value == 'value' and
-            e.variation == 0 and
-            e.reason == {'kind': 'OFF'} and
-            e.default_value == 'default' and
-            e.track_events is True)
+        assert (
+            e.key == feature.key
+            and e.flag == feature
+            and e.context == context
+            and e.value == 'value'
+            and e.variation == 0
+            and e.reason == {'kind': 'OFF'}
+            and e.default_value == 'default'
+            and e.track_events is True
+        )
 
 
 def test_event_for_existing_feature_with_tracked_rule():
-    feature = FlagBuilder('feature.key').version(100).on(True).variations('value') \
-        .rules(
-            FlagRuleBuilder().variation(0).id('rule_id').track_events(True) \
-                .clauses(make_clause(None, 'key', 'in', user['key'])) \
-                .build()
-        ) \
+    feature = (
+        FlagBuilder('feature.key')
+        .version(100)
+        .on(True)
+        .variations('value')
+        .rules(FlagRuleBuilder().variation(0).id('rule_id').track_events(True).clauses(make_clause(None, 'key', 'in', user['key'])).build())
         .build()
+    )
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
     assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
-    assert (e.key == feature.key and
-        e.flag == feature and
-        e.context == context and
-        e.value == 'value' and
-        e.variation == 0 and
-        e.reason == { 'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'rule_id' } and
-        e.default_value == 'default' and
-        e.track_events is True)
+    assert (
+        e.key == feature.key
+        and e.flag == feature
+        and e.context == context
+        and e.value == 'value'
+        and e.variation == 0
+        and e.reason == {'kind': 'RULE_MATCH', 'ruleIndex': 0, 'ruleId': 'rule_id'}
+        and e.default_value == 'default'
+        and e.track_events is True
+    )
 
 
 def test_event_for_existing_feature_with_untracked_rule():
-    feature = FlagBuilder('feature.key').version(100).on(True).variations('value') \
-        .rules(
-            FlagRuleBuilder().variation(0).id('rule_id') \
-                .clauses(make_clause(None, 'key', 'in', user['key'])) \
-                .build()
-        ) \
-        .build()
+    feature = (
+        FlagBuilder('feature.key').version(100).on(True).variations('value').rules(FlagRuleBuilder().variation(0).id('rule_id').clauses(make_clause(None, 'key', 'in', user['key'])).build()).build()
+    )
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
     assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
-    assert (e.key == feature.key and
-        e.flag == feature and
-        e.context == context and
-        e.value == 'value' and
-        e.variation == 0 and
-        e.reason is None and
-        e.default_value == 'default' and
-        e.track_events is False)
+    assert (
+        e.key == feature.key
+        and e.flag == feature
+        and e.context == context
+        and e.value == 'value'
+        and e.variation == 0
+        and e.reason is None
+        and e.default_value == 'default'
+        and e.track_events is False
+    )
 
 
 def test_event_for_existing_feature_with_tracked_fallthrough():
-    feature = FlagBuilder('feature.key').version(100).on(True).variations('value') \
-        .fallthrough_variation(0).track_events_fallthrough(True) \
-        .build()
+    feature = FlagBuilder('feature.key').version(100).on(True).variations('value').fallthrough_variation(0).track_events_fallthrough(True).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
     assert 'value' == client.variation(feature.key, context, default='default')
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
-    assert (e.key == feature.key and
-        e.flag == feature and
-        e.context == context and
-        e.value == 'value' and
-        e.variation == 0 and
-        e.reason == { 'kind': 'FALLTHROUGH' } and
-        e.default_value == 'default' and
-        e.track_events is True)
+    assert (
+        e.key == feature.key
+        and e.flag == feature
+        and e.context == context
+        and e.value == 'value'
+        and e.variation == 0
+        and e.reason == {'kind': 'FALLTHROUGH'}
+        and e.default_value == 'default'
+        and e.track_events is True
+    )
 
 
 def test_event_for_existing_feature_with_untracked_fallthrough():
-    feature = FlagBuilder('feature.key').version(100).on(True).variations('value') \
-        .fallthrough_variation(0) \
-        .build()
+    feature = FlagBuilder('feature.key').version(100).on(True).variations('value').fallthrough_variation(0).build()
     store = InMemoryFeatureStore()
     store.init({FEATURES: {feature.key: feature.to_json_dict()}})
     client = make_client(store)
@@ -271,14 +268,16 @@ def test_event_for_existing_feature_with_untracked_fallthrough():
     assert 'value' == detail.value
     e = get_first_event(client)
     assert isinstance(e, EventInputEvaluation)
-    assert (e.key == feature.key and
-        e.flag == feature and
-        e.context == context and
-        e.value == 'value' and
-        e.variation == 0 and
-        e.reason == { 'kind': 'FALLTHROUGH' } and
-        e.default_value == 'default' and
-        e.track_events is False)
+    assert (
+        e.key == feature.key
+        and e.flag == feature
+        and e.context == context
+        and e.value == 'value'
+        and e.variation == 0
+        and e.reason == {'kind': 'FALLTHROUGH'}
+        and e.default_value == 'default'
+        and e.track_events is False
+    )
 
 
 def test_event_for_unknown_feature():
@@ -288,14 +287,16 @@ def test_event_for_unknown_feature():
         assert 'default' == client.variation('feature.key', context, default='default')
         e = get_first_event(client)
         assert isinstance(e, EventInputEvaluation)
-        assert (e.key == 'feature.key' and
-            e.flag is None and
-            e.context == context and
-            e.value == 'default' and
-            e.variation is None and
-            e.reason is None and
-            e.default_value == 'default' and
-            e.track_events is False)
+        assert (
+            e.key == 'feature.key'
+            and e.flag is None
+            and e.context == context
+            and e.value == 'default'
+            and e.variation is None
+            and e.reason is None
+            and e.default_value == 'default'
+            and e.track_events is False
+        )
 
 
 def test_no_event_for_existing_feature_with_invalid_context():

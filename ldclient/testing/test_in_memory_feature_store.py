@@ -2,8 +2,7 @@ import pytest
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.interfaces import FeatureStore
-from ldclient.testing.feature_store_test_base import (FeatureStoreTestBase,
-                                                      FeatureStoreTester)
+from ldclient.testing.feature_store_test_base import FeatureStoreTestBase, FeatureStoreTester
 
 
 def test_in_memory_status_checks():

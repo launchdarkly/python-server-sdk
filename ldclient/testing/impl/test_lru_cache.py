@@ -10,6 +10,7 @@ def test_retains_values_up_to_capacity():
     assert lru.put("b", True) == True
     assert lru.put("c", True) == True
 
+
 def test_discards_oldest_value_on_overflow():
     lru = SimpleLRUCache(2)
     assert lru.put("a", True) == False
@@ -18,6 +19,7 @@ def test_discards_oldest_value_on_overflow():
     assert lru.get("a") is None
     assert lru.get("b") == True
     assert lru.get("c") == True
+
 
 def test_value_becomes_new_on_replace():
     lru = SimpleLRUCache(2)

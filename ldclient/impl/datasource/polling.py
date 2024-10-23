@@ -1,6 +1,7 @@
 """
 Default implementation of the polling component.
 """
+
 # currently excluded from documentation - see docs/README.md
 
 import time
@@ -9,13 +10,8 @@ from typing import Optional
 
 from ldclient.config import Config
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import (UnsuccessfulResponseException,
-                                http_error_message, is_http_error_recoverable,
-                                log)
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, DataSourceUpdateSink,
-                                 FeatureRequester, FeatureStore,
-                                 UpdateProcessor)
+from ldclient.impl.util import UnsuccessfulResponseException, http_error_message, is_http_error_recoverable, log
+from ldclient.interfaces import DataSourceErrorInfo, DataSourceErrorKind, DataSourceState, DataSourceUpdateSink, FeatureRequester, FeatureStore, UpdateProcessor
 
 
 class PollingUpdateProcessor(UpdateProcessor):
@@ -44,10 +40,7 @@ class PollingUpdateProcessor(UpdateProcessor):
         if self._data_source_update_sink is None:
             return
 
-        self._data_source_update_sink.update_status(
-            DataSourceState.OFF,
-            error
-        )
+        self._data_source_update_sink.update_status(DataSourceState.OFF, error)
 
     def _sink_or_store(self):
         """
@@ -77,12 +70,7 @@ class PollingUpdateProcessor(UpdateProcessor):
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.VALID, None)
         except UnsuccessfulResponseException as e:
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.ERROR_RESPONSE,
-                e.status,
-                time.time(),
-                str(e)
-            )
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.ERROR_RESPONSE, e.status, time.time(), str(e))
 
             http_error_message_result = http_error_message(e.status, "polling request")
             if not is_http_error_recoverable(e.status):
@@ -93,16 +81,9 @@ class PollingUpdateProcessor(UpdateProcessor):
                 log.warning(http_error_message_result)
 
                 if self._data_source_update_sink is not None:
-                    self._data_source_update_sink.update_status(
-                        DataSourceState.INTERRUPTED,
-                        error_info
-                    )
+                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
         except Exception as e:
-            log.exception(
-                'Error: Exception encountered when updating flags. %s' % e)
+            log.exception('Error: Exception encountered when updating flags. %s' % e)
 
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(
-                    DataSourceState.INTERRUPTED,
-                    DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e))
-                )
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e)))

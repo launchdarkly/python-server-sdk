@@ -24,9 +24,24 @@ class MigrationOpEvent(EventInput):
     This event should not be constructed directly; rather, it should be built
     through :class:`ldclient.migrations.OpTracker()`.
     """
+
     __slots__ = ['key', 'flag', 'operation', 'default_stage', 'detail', 'invoked', 'consistent', 'consistent_ratio', 'errors', 'latencies']
 
-    def __init__(self, timestamp: int, context: Context, key: str, flag: Optional[FeatureFlag], operation: Operation, default_stage: Stage, detail: EvaluationDetail, invoked: Set[Origin], consistent: Optional[bool], consistent_ratio: Optional[int], errors: Set[Origin], latencies: Dict[Origin, timedelta]):
+    def __init__(
+        self,
+        timestamp: int,
+        context: Context,
+        key: str,
+        flag: Optional[FeatureFlag],
+        operation: Operation,
+        default_stage: Stage,
+        detail: EvaluationDetail,
+        invoked: Set[Origin],
+        consistent: Optional[bool],
+        consistent_ratio: Optional[int],
+        errors: Set[Origin],
+        latencies: Dict[Origin, timedelta],
+    ):
         sampling_ratio = None if flag is None else flag.sampling_ratio
         super().__init__(timestamp, context, sampling_ratio)
 
@@ -70,14 +85,7 @@ class OpTracker:
     the returned tracker instance.
     """
 
-    def __init__(
-        self,
-        key: str,
-        flag: Optional[FeatureFlag],
-        context: Context,
-        detail: EvaluationDetail,
-        default_stage: Stage
-    ):
+    def __init__(self, key: str, flag: Optional[FeatureFlag], context: Context, detail: EvaluationDetail, default_stage: Stage):
         self.__key = key
         self.__flag = flag
         self.__context = context
@@ -215,7 +223,8 @@ class OpTracker:
                 self.__consistent,
                 None if self.__consistent is None else self.__consistent_ratio,
                 self.__errors.copy(),
-                self.__latencies.copy())
+                self.__latencies.copy(),
+            )
 
     def __check_invoked_consistency(self) -> Optional[str]:
         for origin in Origin:

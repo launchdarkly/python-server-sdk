@@ -7,6 +7,7 @@ from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 have_redis = False
 try:
     import redis
+
     have_redis = True
 except ImportError:
     pass

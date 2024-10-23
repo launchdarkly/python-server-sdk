@@ -14,8 +14,7 @@ log = logging.getLogger('ldclient.flag')
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "secondary", "ip", "country", "email",
-                "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = ["key", "secondary", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
 
 # EvalResult is used internally to hold the EvaluationDetail result of an evaluation along with
@@ -23,8 +22,7 @@ __BUILTINS__ = ["key", "secondary", "ip", "country", "email",
 # prerequisite evaluations, and the cached state of any Big Segments query that we may have
 # ended up having to do for the context.
 class EvalResult:
-    __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership',
-        'original_flag_key', 'prereq_stack', 'segment_stack', 'depth', 'prerequisites']
+    __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership', 'original_flag_key', 'prereq_stack', 'segment_stack', 'depth', 'prerequisites']
 
     def __init__(self):
         self.detail = None
@@ -71,12 +69,13 @@ class Evaluator:
     that is provided in the constructor. It also produces feature events as appropriate for any referenced prerequisite
     flags, but does not send them.
     """
+
     def __init__(
         self,
         get_flag: Callable[[str], Optional[FeatureFlag]],
         get_segment: Callable[[str], Optional[Segment]],
         get_big_segments_membership: Callable[[str], Tuple[Optional[dict], str]],
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         """
         :param get_flag: function provided by LDClient that takes a flag key and returns either the flag or None
@@ -120,8 +119,7 @@ class Evaluator:
         # Now walk through the rules to see if any match
         for index, rule in enumerate(flag.rules):
             if self._rule_matches_context(rule, context, state):
-                return _get_value_for_variation_or_rollout(flag, rule.variation_or_rollout, context,
-                    {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.id})
+                return _get_value_for_variation_or_rollout(flag, rule.variation_or_rollout, context, {'kind': 'RULE_MATCH', 'ruleIndex': index, 'ruleId': rule.id})
 
         # Walk through fallthrough and see if it matches
         return _get_value_for_variation_or_rollout(flag, flag.fallthrough, context, {'kind': 'FALLTHROUGH'})
@@ -145,10 +143,8 @@ class Evaluator:
 
             for prereq in flag.prerequisites:
                 prereq_key = prereq.key
-                if (prereq_key == state.original_flag_key or
-                    (state.prereq_stack is not None and prereq.key in state.prereq_stack)):
-                    raise EvaluationException(('prerequisite relationship to "%s" caused a circular reference;' +
-                        ' this is probably a temporary condition due to an incomplete update') % prereq_key)
+                if prereq_key == state.original_flag_key or (state.prereq_stack is not None and prereq.key in state.prereq_stack):
+                    raise EvaluationException(('prerequisite relationship to "%s" caused a circular reference;' + ' this is probably a temporary condition due to an incomplete update') % prereq_key)
 
                 prereq_flag = self.__get_flag(prereq_key)
                 state.record_prerequisite(prereq_key)
@@ -180,7 +176,7 @@ class Evaluator:
             # old-style data has only targets for users
             if len(user_targets) != 0:
                 user_context = context.get_individual_context(Context.DEFAULT_KIND)
-                if (user_context is None):
+                if user_context is None:
                     return None
                 key = user_context.key
                 for t in user_targets:
@@ -241,8 +237,7 @@ class Evaluator:
 
     def _segment_matches_context(self, segment: Segment, context: Context, state: EvalResult) -> bool:
         if state.segment_stack is not None and segment.key in state.segment_stack:
-            raise EvaluationException(('segment rule referencing segment "%s" caused a circular reference;' +
-                ' this is probably a temporary condition due to an incomplete update') % segment.key)
+            raise EvaluationException(('segment rule referencing segment "%s" caused a circular reference;' + ' this is probably a temporary condition due to an incomplete update') % segment.key)
         if segment.unbounded:
             return self._big_segment_match_context(segment, context, state)
         return self._simple_segment_match_context(segment, context, state, True)
@@ -336,17 +331,20 @@ class Evaluator:
 # The following functions are declared outside Evaluator because they do not depend on any
 # of Evaluator's state.
 
+
 def _get_variation(flag: FeatureFlag, variation: int, reason: dict) -> EvaluationDetail:
     vars = flag.variations
     if variation < 0 or variation >= len(vars):
         return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
     return EvaluationDetail(vars[variation], variation, reason)
 
+
 def _get_off_value(flag: FeatureFlag, reason: dict) -> EvaluationDetail:
     off_var = flag.off_variation
     if off_var is None:
         return EvaluationDetail(None, None, reason)
     return _get_variation(flag, off_var, reason)
+
 
 def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollout, context: Context, reason: dict) -> EvaluationDetail:
     index, inExperiment = _variation_index_for_context(flag, vr, context)
@@ -355,6 +353,7 @@ def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollou
     if inExperiment:
         reason['inExperiment'] = inExperiment
     return _get_variation(flag, index, reason)
+
 
 def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, context: Context) -> Tuple[Optional[int], bool]:
     var = vr.variation
@@ -369,14 +368,7 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
         return (None, False)
 
     bucket_by = None if rollout.is_experiment else rollout.bucket_by
-    bucket = _bucket_context(
-        rollout.seed,
-        context,
-        rollout.context_kind,
-        flag.key,
-        flag.salt,
-        bucket_by
-        )
+    bucket = _bucket_context(rollout.seed, context, rollout.context_kind, flag.key, flag.salt, bucket_by)
     is_experiment = rollout.is_experiment and bucket >= 0
     # _bucket_context returns a negative value if the context didn't exist, in which case we
     # still end up returning the first bucket, but we will force the "in experiment" state to be false.
@@ -396,14 +388,8 @@ def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, cont
     is_experiment_partition = is_experiment and not variations[-1].untracked
     return (variations[-1].variation, is_experiment_partition)
 
-def _bucket_context(
-    seed: Optional[int],
-    context: Context,
-    context_kind: Optional[str],
-    key: str,
-    salt: str,
-    bucket_by: Optional[AttributeRef]
-    ) -> float:
+
+def _bucket_context(seed: Optional[int], context: Context, context_kind: Optional[str], key: str, salt: str, bucket_by: Optional[AttributeRef]) -> float:
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
     if match_context is None:
         return -1
@@ -423,6 +409,7 @@ def _bucket_context(
     result = hash_val / __LONG_SCALE__
     return result
 
+
 def _bucketable_string_value(u_value) -> Optional[str]:
     if isinstance(u_value, bool):
         return None
@@ -431,11 +418,13 @@ def _bucketable_string_value(u_value) -> Optional[str]:
 
     return None
 
+
 def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Set[str]) -> bool:
     if keys is None or len(keys) == 0:
         return False
     match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
     return match_context is not None and match_context.key in keys
+
 
 def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
     if attr is None:
@@ -455,6 +444,7 @@ def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
         i += 1
     return value
 
+
 def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
     op_fn = operators.ops.get(clause.op)
     if op_fn is None:
@@ -466,6 +456,7 @@ def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
             return True
     return False
 
+
 def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
     # If attribute is "kind", then we treat operator and values as a match expression against a list
     # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
@@ -476,8 +467,10 @@ def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
             return True
     return False
 
+
 def _maybe_negate(clause: Clause, val: bool) -> bool:
     return not val if clause.negate else val
+
 
 def _make_big_segment_ref(segment: Segment) -> str:
     # The format of Big Segment references is independent of what store implementation is being
@@ -485,8 +478,10 @@ def _make_big_segment_ref(segment: Segment) -> str:
     # the data model. The Relay Proxy will use the same format when writing to the store.
     return "%s.g%d" % (segment.key, segment.generation or 0)
 
+
 def _target_match_result(flag: FeatureFlag, var: int) -> EvaluationDetail:
     return _get_variation(flag, var, {'kind': 'TARGET_MATCH'})
+
 
 def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}

@@ -23,19 +23,20 @@ import queue
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email",
-                "firstName", "lastName", "avatar", "name", "anonymous"]
+__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
 __BASE_TYPES__ = (str, float, int, bool)
 
 
 _retryable_statuses = [400, 408, 429]
 
+
 def validate_application_info(application: dict, logger: logging.Logger) -> dict:
     return {
         "id": validate_application_value(application.get("id", ""), "id", logger),
         "version": validate_application_value(application.get("version", ""), "version", logger),
     }
+
 
 def validate_application_value(value: Any, name: str, logger: logging.Logger) -> str:
     if not isinstance(value, str):
@@ -51,15 +52,18 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
 
     return value
 
+
 def _headers(config):
     base_headers = _base_headers(config)
     base_headers.update({'Content-Type': "application/json"})
     return base_headers
 
+
 def check_uwsgi():
     if 'uwsgi' in sys.modules:
         # noinspection PyPackageRequirements,PyUnresolvedReferences
         import uwsgi
+
         if not hasattr(uwsgi, 'opt'):
             # means that we are not running under uwsgi
             return
@@ -68,8 +72,10 @@ def check_uwsgi():
             return
         if uwsgi.opt.get('threads') is not None and int(uwsgi.opt.get('threads')) > 1:
             return
-        log.error("The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
-                    'To learn more, read https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi')
+        log.error(
+            "The LaunchDarkly client requires the 'enable-threads' or 'threads' option be passed to uWSGI. "
+            'To learn more, read https://docs.launchdarkly.com/sdk/server-side/python#configuring-uwsgi'
+        )
 
 
 class Event:
@@ -100,7 +106,7 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     if status >= 400 and status < 500:
-        return status in _retryable_statuses # all other 4xx besides these are unrecoverable
+        return status in _retryable_statuses  # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
 
 
@@ -108,12 +114,8 @@ def http_error_description(status):
     return "HTTP error %d%s" % (status, " (invalid SDK key)" if (status == 401 or status == 403) else "")
 
 
-def http_error_message(status, context, retryable_message = "will retry"):
-    return "Received %s for %s - %s" % (
-        http_error_description(status),
-        context,
-        retryable_message if is_http_error_recoverable(status) else "giving up permanently"
-        )
+def http_error_message(status, context, retryable_message="will retry"):
+    return "Received %s for %s - %s" % (http_error_description(status), context, retryable_message if is_http_error_recoverable(status) else "giving up permanently")
 
 
 def check_if_error_is_recoverable_and_log(error_context, status_code, error_desc, recoverable_message):
@@ -137,6 +139,7 @@ def stringify_attrs(attrdict, attrs):
                 newdict = attrdict.copy()
             newdict[attr] = str(val)
     return attrdict if newdict is None else newdict
+
 
 def redact_password(url: str) -> str:
     """

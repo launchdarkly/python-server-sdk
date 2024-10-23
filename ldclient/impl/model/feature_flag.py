@@ -80,9 +80,23 @@ class MigrationSettings:
 
 
 class FeatureFlag(ModelEntity):
-    __slots__ = ['_data', '_key', '_version', '_deleted', '_variations', '_on',
-        '_off_variation', '_fallthrough', '_prerequisites', '_targets', '_context_targets', '_rules',
-        '_salt', '_track_events', '_debug_events_until_date']
+    __slots__ = [
+        '_data',
+        '_key',
+        '_version',
+        '_deleted',
+        '_variations',
+        '_on',
+        '_off_variation',
+        '_fallthrough',
+        '_prerequisites',
+        '_targets',
+        '_context_targets',
+        '_rules',
+        '_salt',
+        '_track_events',
+        '_debug_events_until_date',
+    ]
 
     def __init__(self, data: dict):
         super().__init__(data)
