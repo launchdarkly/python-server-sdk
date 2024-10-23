@@ -58,6 +58,7 @@ jsonpickle = ">1.4.1"
 pytest-cov = ">=2.4.0"
 pytest-mypy = "==0.10.3"
 mypy = "==1.8.0"
+pycodestyle = "^2.12.1"
 
 
 [tool.poetry.group.contract-tests]
