@@ -1,9 +1,11 @@
-from ldclient.version import VERSION
-import certifi
 from os import environ
-import urllib3
-from urllib.parse import urlparse
 from typing import Tuple
+from urllib.parse import urlparse
+
+import certifi
+import urllib3
+
+from ldclient.version import VERSION
 
 
 def _application_header_value(application: dict) -> str:

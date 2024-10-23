@@ -2,7 +2,6 @@ from ldclient.client import Context
 from ldclient.testing.builders import *
 from ldclient.testing.impl.evaluator_util import *
 
-
 FALLTHROUGH_VAR = 0
 MATCH_VAR_1 = 1
 MATCH_VAR_2 = 2

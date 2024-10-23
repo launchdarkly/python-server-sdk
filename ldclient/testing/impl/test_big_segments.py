@@ -1,11 +1,12 @@
+import time
+from queue import Queue
+
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
-from ldclient.impl.big_segments import BigSegmentStoreManager, _hash_for_user_key
+from ldclient.impl.big_segments import (BigSegmentStoreManager,
+                                        _hash_for_user_key)
 from ldclient.interfaces import BigSegmentStoreMetadata
 from ldclient.testing.mock_components import MockBigSegmentStore
-
-from queue import Queue
-import time
 
 user_key = 'user-key'
 user_hash = _hash_for_user_key(user_key)

@@ -1,8 +1,8 @@
-from ldclient.impl.repeating_task import RepeatingTask
-
+import time
 from queue import Empty, Queue
 from threading import Event
-import time
+
+from ldclient.impl.repeating_task import RepeatingTask
 
 
 def test_task_does_not_start_when_created():

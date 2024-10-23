@@ -1,6 +1,8 @@
-import pytest
 import json
+
 import jsonpickle
+import pytest
+
 from ldclient.evaluation import FeatureFlagsState
 
 

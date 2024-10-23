@@ -1,11 +1,14 @@
 import json
 import os
-import traceback
 import time
+import traceback
 from typing import Optional
+
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
-from ldclient.interfaces import UpdateProcessor, DataSourceUpdateSink, DataSourceState, DataSourceErrorInfo, DataSourceErrorKind
+from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
+                                 DataSourceState, DataSourceUpdateSink,
+                                 UpdateProcessor)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 have_yaml = False

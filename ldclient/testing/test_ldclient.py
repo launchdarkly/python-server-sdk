@@ -1,15 +1,16 @@
-from ldclient.client import LDClient, Config, Context
+import pytest
+
+from ldclient.client import Config, Context, LDClient
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.stubs import NullUpdateProcessor
 from ldclient.interfaces import UpdateProcessor
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
-import pytest
 from ldclient.testing.builders import *
-from ldclient.testing.stub_util import CapturingFeatureStore, MockEventProcessor, MockUpdateProcessor
-
+from ldclient.testing.stub_util import (CapturingFeatureStore,
+                                        MockEventProcessor,
+                                        MockUpdateProcessor)
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 unreachable_uri = "http://fake"
 

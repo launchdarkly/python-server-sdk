@@ -1,14 +1,14 @@
 import json
 import logging
+
 import requests
+from big_segment_store_fixture import BigSegmentStoreFixture
 from hook import PostingHook
 
-from big_segment_store_fixture import BigSegmentStoreFixture
-
-from ldclient.config import BigSegmentsConfig
-
-from ldclient import Context, MigratorBuilder, ExecutionOrder, MigratorFn, Operation, Stage
 from ldclient import *
+from ldclient import (Context, ExecutionOrder, MigratorBuilder, MigratorFn,
+                      Operation, Stage)
+from ldclient.config import BigSegmentsConfig
 
 
 class ClientEntity:

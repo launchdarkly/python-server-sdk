@@ -1,7 +1,7 @@
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
-
 import time
 from typing import Callable
+
+from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 
 class MockBigSegmentStore(BigSegmentStore):

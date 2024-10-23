@@ -1,4 +1,5 @@
 import json
+
 from ldclient import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 

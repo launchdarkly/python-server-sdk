@@ -1,9 +1,9 @@
 from ldclient.context import Context
-from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummaryCounter, EventSummaryFlag
+from ldclient.impl.events.event_summarizer import (EventSummarizer,
+                                                   EventSummaryCounter,
+                                                   EventSummaryFlag)
 from ldclient.impl.events.types import *
-
 from ldclient.testing.builders import *
-
 
 user = Context.create('user1')
 flag1 = FlagBuilder('flag1').version(11).build()

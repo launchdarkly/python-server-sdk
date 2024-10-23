@@ -1,13 +1,12 @@
-import pytest
 from typing import Callable
 
-from ldclient.client import LDClient, Context
+import pytest
+
+from ldclient.client import Context, LDClient
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.integrations.test_data import FlagBuilder, TestData
 from ldclient.versioned_data_kind import FEATURES
-
-from ldclient.integrations.test_data import TestData, FlagBuilder
-
 
 # Test Data + Data Source
 

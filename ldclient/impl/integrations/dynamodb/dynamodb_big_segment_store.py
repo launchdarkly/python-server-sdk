@@ -1,5 +1,6 @@
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 from typing import List, Optional
+
+from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 have_dynamodb = False
 try:

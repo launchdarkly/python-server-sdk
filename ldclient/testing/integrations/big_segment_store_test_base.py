@@ -1,7 +1,8 @@
 from abc import abstractmethod, abstractproperty
 from os import environ
-import pytest
 from typing import List
+
+import pytest
 
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 

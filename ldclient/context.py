@@ -3,11 +3,11 @@ This submodule implements the SDK's evaluation context model.
 """
 
 from __future__ import annotations
-from collections.abc import Iterable
+
 import json
 import re
+from collections.abc import Iterable
 from typing import Any, Dict, Optional, Union
-
 
 _INVALID_KIND_REGEX = re.compile('[^-a-zA-Z0-9._]')
 _USER_STRING_ATTRS = {'name', 'firstName', 'lastName', 'email', 'country', 'avatar', 'ip'}

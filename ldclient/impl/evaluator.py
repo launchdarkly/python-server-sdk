@@ -1,12 +1,12 @@
+import hashlib
+import logging
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 from ldclient.context import Context
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.impl import operators
 from ldclient.impl.events.types import EventFactory, EventInputEvaluation
 from ldclient.impl.model import *
-
-import hashlib
-import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
 # the ldclient.evaluation module.

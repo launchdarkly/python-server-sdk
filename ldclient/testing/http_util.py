@@ -1,11 +1,11 @@
 import json
+import queue
 import socket
 import ssl
-from ssl import SSLContext, PROTOCOL_TLSv1_2
-from threading import Thread
 import time
-import queue
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from ssl import PROTOCOL_TLSv1_2, SSLContext
+from threading import Thread
 
 
 def get_available_port():

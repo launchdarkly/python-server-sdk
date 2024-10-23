@@ -1,7 +1,6 @@
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.types import EventFactory
-
 from ldclient.testing.builders import *
 
 _event_factory_default = EventFactory(False)

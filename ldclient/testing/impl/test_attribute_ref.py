@@ -1,6 +1,6 @@
-from ldclient.impl.model.attribute_ref import *
-
 import pytest
+
+from ldclient.impl.model.attribute_ref import *
 
 
 class TestAttributeRef:

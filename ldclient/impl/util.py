@@ -2,11 +2,11 @@ import logging
 import re
 import sys
 import time
-
-from typing import Any, Optional
-from ldclient.impl.http import _base_headers
-from urllib.parse import urlparse, urlunparse
 from datetime import timedelta
+from typing import Any, Optional
+from urllib.parse import urlparse, urlunparse
+
+from ldclient.impl.http import _base_headers
 
 
 def current_time_millis() -> int:

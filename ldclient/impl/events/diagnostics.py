@@ -1,7 +1,7 @@
+import platform
 import threading
 import time
 import uuid
-import platform
 
 from ldclient.config import Config
 from ldclient.version import VERSION

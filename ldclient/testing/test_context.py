@@ -1,7 +1,8 @@
-from ldclient.context import Context
-
 import json
+
 import pytest
+
+from ldclient.context import Context
 
 
 def assert_context_valid(c):

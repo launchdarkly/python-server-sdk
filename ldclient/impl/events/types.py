@@ -1,11 +1,11 @@
+import json
+from typing import Any, Callable, Optional
+
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
 from ldclient.impl import AnyNum
 from ldclient.impl.model import FeatureFlag
 from ldclient.impl.util import current_time_millis
-
-import json
-from typing import Any, Callable, Optional
 
 # These event types are not the event data that is sent to LaunchDarkly; they're the input
 # parameters that are passed to EventProcessor, which translates them into event data (for

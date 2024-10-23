@@ -1,5 +1,6 @@
-from ldclient.config import Config
 import pytest
+
+from ldclient.config import Config
 
 
 def test_copy_config():

@@ -59,6 +59,7 @@ pytest-cov = ">=2.4.0"
 pytest-mypy = "==0.10.3"
 mypy = "==1.8.0"
 pycodestyle = "^2.12.1"
+isort = "^5.13.2"
 
 
 [tool.poetry.group.contract-tests]

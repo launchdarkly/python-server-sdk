@@ -1,7 +1,8 @@
 import pytest
-from ldclient.client import LDClient, Config
+
 from ldclient import Result
-from ldclient.migrations import MigratorBuilder, Migrator, ExecutionOrder
+from ldclient.client import Config, LDClient
+from ldclient.migrations import ExecutionOrder, Migrator, MigratorBuilder
 
 
 def test_can_build_successfully():

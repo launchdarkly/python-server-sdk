@@ -1,5 +1,5 @@
-from ldclient.versioned_data_kind import FEATURES
 from ldclient.interfaces import UpdateProcessor
+from ldclient.versioned_data_kind import FEATURES
 
 # This is the internal component that's created when you initialize an SDK instance that is using
 # TestData. The TestData object manages the setup of the fake data, and it broadcasts the data

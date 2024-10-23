@@ -1,5 +1,5 @@
-from threading import Event, Lock, Thread
 import queue
+from threading import Event, Lock, Thread
 
 from ldclient.impl.util import log
 

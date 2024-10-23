@@ -1,6 +1,7 @@
-import pytest
 from time import sleep
 from unittest.mock import Mock
+
+import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper

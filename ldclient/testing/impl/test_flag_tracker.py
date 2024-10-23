@@ -1,7 +1,7 @@
 from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.testing.test_util import SpyListener
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import FlagChange
+from ldclient.testing.test_util import SpyListener
 
 
 def test_can_add_and_remove_listeners():

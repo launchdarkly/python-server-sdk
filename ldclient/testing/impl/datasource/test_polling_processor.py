@@ -1,5 +1,6 @@
 import threading
 import time
+
 import mock
 
 from ldclient.config import Config
@@ -8,12 +9,12 @@ from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.util import UnsuccessfulResponseException
-from ldclient.interfaces import DataSourceStatus, DataSourceState, DataSourceErrorKind
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
+from ldclient.interfaces import (DataSourceErrorKind, DataSourceState,
+                                 DataSourceStatus)
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import MockFeatureRequester, MockResponse
 from ldclient.testing.test_util import SpyListener
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 pp = None
 mock_requester = None

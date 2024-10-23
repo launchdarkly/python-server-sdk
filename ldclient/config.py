@@ -4,13 +4,14 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
-from typing import Optional, Callable, List, Set
 from threading import Event
+from typing import Callable, List, Optional, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
 from ldclient.impl.util import log, validate_application_info
-from ldclient.interfaces import BigSegmentStore, EventProcessor, FeatureStore, UpdateProcessor, DataSourceUpdateSink
+from ldclient.interfaces import (BigSegmentStore, DataSourceUpdateSink,
+                                 EventProcessor, FeatureStore, UpdateProcessor)
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'

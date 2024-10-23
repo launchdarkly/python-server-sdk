@@ -1,8 +1,9 @@
-from ldclient.hook import Hook, EvaluationSeriesContext
-from ldclient.evaluation import EvaluationDetail
-
 from typing import Optional
+
 import requests
+
+from ldclient.evaluation import EvaluationDetail
+from ldclient.hook import EvaluationSeriesContext, Hook
 
 
 class PostingHook(Hook):

@@ -1,9 +1,9 @@
+from typing import Dict, List, NamedTuple, Optional, Set, Union
+
+from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.model.segment import Segment
-from ldclient.impl.model.clause import Clause
-from ldclient.versioned_data_kind import VersionedDataKind, SEGMENTS, FEATURES
-
-from typing import Set, List, Dict, NamedTuple, Union, Optional
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
 class KindAndKey(NamedTuple):

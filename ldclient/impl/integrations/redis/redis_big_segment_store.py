@@ -1,8 +1,8 @@
-from ldclient import log
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
-from ldclient.impl.util import redact_password
+from typing import Any, Dict, Optional, Set, cast
 
-from typing import Any, Optional, Dict, Set, cast
+from ldclient import log
+from ldclient.impl.util import redact_password
+from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 have_redis = False
 try:

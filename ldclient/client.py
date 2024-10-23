@@ -2,40 +2,46 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-from typing import Optional, Any, Dict, Mapping, Tuple, Callable, List
-
-from .impl import AnyNum
-
 import hashlib
 import hmac
 import threading
 import traceback
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from ldclient.config import Config
 from ldclient.context import Context
-from ldclient.feature_store import _FeatureStoreDataSetSorter
-from ldclient.hook import Hook, EvaluationSeriesContext, _EvaluationWithHookResult
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
+from ldclient.feature_store import _FeatureStoreDataSetSorter
+from ldclient.hook import (EvaluationSeriesContext, Hook,
+                           _EvaluationWithHookResult)
 from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
+from ldclient.impl.datasource.status import (DataSourceStatusProviderImpl,
+                                             DataSourceUpdateSinkImpl)
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
-from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl, DataSourceStatusProviderImpl
-from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl, DataStoreStatusProviderImpl
+from ldclient.impl.datastore.status import (DataStoreStatusProviderImpl,
+                                            DataStoreUpdateSinkImpl)
 from ldclient.impl.evaluator import Evaluator, error_reason
-from ldclient.impl.events.diagnostics import create_diagnostic_id, _DiagnosticAccumulator
+from ldclient.impl.events.diagnostics import (_DiagnosticAccumulator,
+                                              create_diagnostic_id)
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
-from ldclient.impl.model.feature_flag import FeatureFlag
+from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.model.feature_flag import FeatureFlag
+from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
-from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, FeatureStore, FlagTracker, DataStoreUpdateSink, DataStoreStatus, DataStoreStatusProvider
+from ldclient.interfaces import (BigSegmentStoreStatusProvider,
+                                 DataSourceStatusProvider, DataStoreStatus,
+                                 DataStoreStatusProvider, DataStoreUpdateSink,
+                                 FeatureStore, FlagTracker)
+from ldclient.migrations import OpTracker, Stage
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
-from ldclient.migrations import Stage, OpTracker
-from ldclient.impl.flag_tracker import FlagTrackerImpl
+
+from .impl import AnyNum
 
 
 class _FeatureStoreClientWrapper(FeatureStore):

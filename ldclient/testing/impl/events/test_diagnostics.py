@@ -4,7 +4,10 @@ import uuid
 from ldclient.config import Config, HTTPConfig
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.events.diagnostics import create_diagnostic_id, create_diagnostic_init, _DiagnosticAccumulator, _create_diagnostic_config_object
+from ldclient.impl.events.diagnostics import (_create_diagnostic_config_object,
+                                              _DiagnosticAccumulator,
+                                              create_diagnostic_id,
+                                              create_diagnostic_init)
 
 
 def test_create_diagnostic_id():

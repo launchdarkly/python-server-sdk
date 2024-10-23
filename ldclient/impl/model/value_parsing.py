@@ -1,11 +1,11 @@
 import re
-from re import Pattern
-from semver import VersionInfo
-from datetime import tzinfo, timedelta, datetime, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from numbers import Number
+from re import Pattern
 from typing import Any, Optional
 
 import pyrfc3339
+from semver import VersionInfo
 
 _ZERO = timedelta(0)
 

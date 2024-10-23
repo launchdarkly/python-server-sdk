@@ -1,9 +1,9 @@
-from email.utils import formatdate
 import json
+from email.utils import formatdate
 
 from ldclient.impl.model import ModelEntity
-from ldclient.interfaces import EventProcessor, FeatureRequester, FeatureStore, UpdateProcessor
-
+from ldclient.interfaces import (EventProcessor, FeatureRequester,
+                                 FeatureStore, UpdateProcessor)
 from ldclient.testing.http_util import ChunkedResponse, JsonResponse
 
 

@@ -1,5 +1,4 @@
 import json
-
 from typing import Any, List, Optional, Union
 
 # This file provides support for our data model classes.

@@ -1,16 +1,19 @@
-from ldclient.client import LDClient, Config, Context
+from ldclient.client import Config, Context, LDClient
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.impl.events.types import EventInputCustom, EventInputEvaluation, EventInputIdentify
-from ldclient.migrations.tracker import MigrationOpEvent
+from ldclient.impl.events.event_processor import DefaultEventProcessor
+from ldclient.impl.events.types import (EventInputCustom, EventInputEvaluation,
+                                        EventInputIdentify)
 from ldclient.impl.stubs import NullEventProcessor
-from ldclient.versioned_data_kind import FEATURES
-from ldclient.migrations import OpTracker, Stage, Operation, Origin
-
+from ldclient.migrations import Operation, OpTracker, Origin, Stage
+from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import MockUpdateProcessor
-from ldclient.testing.test_ldclient import context, make_client, make_ldd_client, make_offline_client, unreachable_uri, user
+from ldclient.testing.test_ldclient import (context, make_client,
+                                            make_ldd_client,
+                                            make_offline_client,
+                                            unreachable_uri, user)
+from ldclient.versioned_data_kind import FEATURES
 
 
 def get_first_event(c):

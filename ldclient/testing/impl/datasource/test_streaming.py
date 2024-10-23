@@ -1,23 +1,28 @@
-import pytest
+import time
 from threading import Event
 from typing import List
-import time
+
+import pytest
 
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
 from ldclient.impl.listeners import Listeners
+from ldclient.interfaces import (DataSourceErrorKind, DataSourceState,
+                                 DataSourceStatus)
+from ldclient.testing.builders import *
+from ldclient.testing.http_util import (BasicResponse, CauseNetworkError,
+                                        SequentialHandler, start_server)
+from ldclient.testing.proxy_test_util import do_proxy_tests
+from ldclient.testing.stub_util import (make_delete_event,
+                                        make_invalid_put_event,
+                                        make_patch_event, make_put_event,
+                                        stream_content)
+from ldclient.testing.test_util import SpyListener
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-from ldclient.interfaces import DataSourceStatus, DataSourceState, DataSourceErrorKind
-from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
-
-from ldclient.testing.builders import *
-from ldclient.testing.http_util import start_server, BasicResponse, CauseNetworkError, SequentialHandler
-from ldclient.testing.proxy_test_util import do_proxy_tests
-from ldclient.testing.stub_util import make_delete_event, make_patch_event, make_put_event, make_invalid_put_event, stream_content
-from ldclient.testing.test_util import SpyListener
 
 brief_delay = 0.001
 

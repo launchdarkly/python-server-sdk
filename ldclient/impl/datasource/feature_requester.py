@@ -2,15 +2,15 @@
 Default implementation of feature flag polling requests.
 """
 
-from collections import namedtuple
 import json
+from collections import namedtuple
+
 import urllib3
 
 from ldclient.impl.http import _http_factory
 from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import FeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
 
 LATEST_ALL_URI = '/sdk/latest-all'
 

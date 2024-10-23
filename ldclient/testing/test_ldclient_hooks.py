@@ -1,10 +1,10 @@
-from ldclient.evaluation import EvaluationDetail
-from ldclient import LDClient, Config, Context
-from ldclient.hook import Hook, Metadata, EvaluationSeriesContext
-from ldclient.migrations import Stage
-from ldclient.integrations.test_data import TestData
-
 from typing import Callable
+
+from ldclient import Config, Context, LDClient
+from ldclient.evaluation import EvaluationDetail
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
+from ldclient.integrations.test_data import TestData
+from ldclient.migrations import Stage
 
 
 def record(label, log):

@@ -2,10 +2,10 @@ import json
 import os
 import sys
 from typing import Optional
+
 import urllib3
 
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
-
 
 http = urllib3.PoolManager()
 

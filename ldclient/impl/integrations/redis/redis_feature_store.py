@@ -1,9 +1,10 @@
 import json
+from typing import Any, Dict
+
 from ldclient import log
+from ldclient.impl.util import redact_password
 from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
-from ldclient.impl.util import redact_password
-from typing import Any, Dict
 
 have_redis = False
 try:

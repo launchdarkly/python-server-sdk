@@ -6,9 +6,9 @@ received from LaunchDarkly. This submodule does not include specific integration
 storage systems; those are in :class:`ldclient.integrations`.
 """
 
-from typing import Callable, Any
-
 from collections import OrderedDict, defaultdict
+from typing import Any, Callable
+
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 from ldclient.interfaces import DiagnosticDescription, FeatureStore

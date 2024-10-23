@@ -1,5 +1,6 @@
 import logging
 from pprint import pprint
+
 import ldclient
 from ldclient import Config
 

@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Set, Union, Dict
+from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.impl.model.clause import Clause
 from ldclient.impl.model.entity import *

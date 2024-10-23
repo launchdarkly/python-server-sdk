@@ -1,15 +1,16 @@
-from typing import Callable, Optional, Union, Set, Dict
 import time
 from datetime import timedelta
 from random import Random
-from ldclient.impl.sampler import Sampler
-from ldclient.evaluation import EvaluationDetail
-from ldclient.context import Context
-from ldclient.impl.model import FeatureFlag
 from threading import Lock
+from typing import Callable, Dict, Optional, Set, Union
+
+from ldclient.context import Context
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.events.types import EventInput
-from ldclient.migrations.types import Stage, Operation, Origin
+from ldclient.impl.model import FeatureFlag
+from ldclient.impl.sampler import Sampler
 from ldclient.impl.util import log
+from ldclient.migrations.types import Operation, Origin, Stage
 
 
 class MigrationOpEvent(EventInput):
