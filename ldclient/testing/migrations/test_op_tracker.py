@@ -1,9 +1,13 @@
-import pytest
 from datetime import timedelta
+
+import pytest
+
 from ldclient import Context
-from ldclient.migrations import OpTracker, Stage, Operation, Origin, MigrationOpEvent
 from ldclient.evaluation import EvaluationDetail
-from ldclient.testing.builders import build_off_flag_with_value, MigrationSettingsBuilder
+from ldclient.migrations import (MigrationOpEvent, Operation, OpTracker,
+                                 Origin, Stage)
+from ldclient.testing.builders import (MigrationSettingsBuilder,
+                                       build_off_flag_with_value)
 from ldclient.testing.test_ldclient import user
 
 
@@ -88,8 +92,7 @@ class TestBuilding:
             pytest.param(Origin.NEW, Origin.OLD, id="invoked new measured old"),
         ],
     )
-    def test_latency_invoked_mismatch(
-            self, bare_tracker: OpTracker, invoked: Origin, recorded: Origin):
+    def test_latency_invoked_mismatch(self, bare_tracker: OpTracker, invoked: Origin, recorded: Origin):
         bare_tracker.operation(Operation.WRITE)
         bare_tracker.invoked(invoked)
         bare_tracker.latency(recorded, timedelta(milliseconds=20))
@@ -105,8 +108,7 @@ class TestBuilding:
             pytest.param(Origin.NEW, Origin.OLD, id="invoked new measured old"),
         ],
     )
-    def test_error_invoked_mismatch(
-            self, bare_tracker: OpTracker, invoked: Origin, recorded: Origin):
+    def test_error_invoked_mismatch(self, bare_tracker: OpTracker, invoked: Origin, recorded: Origin):
         bare_tracker.operation(Operation.WRITE)
         bare_tracker.invoked(invoked)
         bare_tracker.error(recorded)
@@ -176,8 +178,7 @@ class TestTrackInvocations:
 
 class TestTrackConsistency:
     @pytest.mark.parametrize("consistent", [True, False])
-    def test_without_check_ratio(
-            self, tracker: OpTracker, consistent: bool):
+    def test_without_check_ratio(self, tracker: OpTracker, consistent: bool):
         tracker.consistent(lambda: consistent)
         event = tracker.build()
         assert isinstance(event, MigrationOpEvent)

@@ -1,5 +1,6 @@
-from typing import Callable, Optional, Any
 from enum import Enum
+from typing import Any, Callable, Optional
+
 from ldclient.impl.util import Result
 
 MigratorFn = Callable[[Optional[Any]], Result]

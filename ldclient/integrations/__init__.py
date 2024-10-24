@@ -3,31 +3,34 @@ This submodule contains factory/configuration methods for integrating the SDK wi
 other than LaunchDarkly.
 """
 
-from ldclient.feature_store import CacheConfig
-from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.integrations.consul.consul_feature_store import _ConsulFeatureStoreCore
-from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import _DynamoDBBigSegmentStore
-from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import _DynamoDBFeatureStoreCore
-from ldclient.impl.integrations.files.file_data_source import _FileDataSource
-from ldclient.impl.integrations.redis.redis_big_segment_store import _RedisBigSegmentStore
-from ldclient.impl.integrations.redis.redis_feature_store import _RedisFeatureStoreCore
-from ldclient.interfaces import BigSegmentStore
-
 from typing import Any, Dict, List, Mapping, Optional
 
+from ldclient.feature_store import CacheConfig
+from ldclient.feature_store_helpers import CachingStoreWrapper
+from ldclient.impl.integrations.consul.consul_feature_store import \
+    _ConsulFeatureStoreCore
+from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import \
+    _DynamoDBBigSegmentStore
+from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import \
+    _DynamoDBFeatureStoreCore
+from ldclient.impl.integrations.files.file_data_source import _FileDataSource
+from ldclient.impl.integrations.redis.redis_big_segment_store import \
+    _RedisBigSegmentStore
+from ldclient.impl.integrations.redis.redis_feature_store import \
+    _RedisFeatureStoreCore
+from ldclient.interfaces import BigSegmentStore
+
+
 class Consul:
-    """Provides factory methods for integrations between the LaunchDarkly SDK and Consul.
-    """
+    """Provides factory methods for integrations between the LaunchDarkly SDK and Consul."""
 
     """The key prefix that is used if you do not specify one."""
     DEFAULT_PREFIX = "launchdarkly"
 
     @staticmethod
-    def new_feature_store(host: Optional[str]=None,
-                          port: Optional[int]=None,
-                          prefix: Optional[str]=None,
-                          consul_opts: Optional[dict]=None,
-                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
+    def new_feature_store(
+        host: Optional[str] = None, port: Optional[int] = None, prefix: Optional[str] = None, consul_opts: Optional[dict] = None, caching: CacheConfig = CacheConfig.default()
+    ) -> CachingStoreWrapper:
         """Creates a Consul-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
@@ -55,14 +58,10 @@ class Consul:
 
 
 class DynamoDB:
-    """Provides factory methods for integrations between the LaunchDarkly SDK and DynamoDB.
-    """
+    """Provides factory methods for integrations between the LaunchDarkly SDK and DynamoDB."""
 
     @staticmethod
-    def new_feature_store(table_name: str,
-                          prefix: Optional[str]=None,
-                          dynamodb_opts: Mapping[str, Any]={},
-                          caching: CacheConfig=CacheConfig.default()) -> CachingStoreWrapper:
+    def new_feature_store(table_name: str, prefix: Optional[str] = None, dynamodb_opts: Mapping[str, Any] = {}, caching: CacheConfig = CacheConfig.default()) -> CachingStoreWrapper:
         """Creates a DynamoDB-backed implementation of :class:`ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
@@ -96,7 +95,7 @@ class DynamoDB:
         return CachingStoreWrapper(core, caching)
 
     @staticmethod
-    def new_big_segment_store(table_name: str, prefix: Optional[str]=None, dynamodb_opts: Mapping[str, Any]={}):
+    def new_big_segment_store(table_name: str, prefix: Optional[str] = None, dynamodb_opts: Mapping[str, Any] = {}):
         """
         Creates a DynamoDB-backed Big Segment store.
 
@@ -131,18 +130,16 @@ class DynamoDB:
 
 
 class Redis:
-    """Provides factory methods for integrations between the LaunchDarkly SDK and Redis.
-    """
+    """Provides factory methods for integrations between the LaunchDarkly SDK and Redis."""
+
     DEFAULT_URL = 'redis://localhost:6379/0'
     DEFAULT_PREFIX = 'launchdarkly'
     DEFAULT_MAX_CONNECTIONS = 16
 
     @staticmethod
-    def new_feature_store(url: str='redis://localhost:6379/0',
-                          prefix: str='launchdarkly',
-                          max_connections: int=16,
-                          caching: CacheConfig=CacheConfig.default(),
-                          redis_opts: Dict[str, Any] = {}) -> CachingStoreWrapper:
+    def new_feature_store(
+        url: str = 'redis://localhost:6379/0', prefix: str = 'launchdarkly', max_connections: int = 16, caching: CacheConfig = CacheConfig.default(), redis_opts: Dict[str, Any] = {}
+    ) -> CachingStoreWrapper:
         """
         Creates a Redis-backed implementation of :class:`~ldclient.interfaces.FeatureStore`.
         For more details about how and why you can use a persistent feature store, see the
@@ -173,10 +170,7 @@ class Redis:
         return wrapper
 
     @staticmethod
-    def new_big_segment_store(url: str='redis://localhost:6379/0',
-                              prefix: str='launchdarkly',
-                              max_connections: int=16,
-                              redis_opts: Dict[str, Any] = {}) -> BigSegmentStore:
+    def new_big_segment_store(url: str = 'redis://localhost:6379/0', prefix: str = 'launchdarkly', max_connections: int = 16, redis_opts: Dict[str, Any] = {}) -> BigSegmentStore:
         """
         Creates a Redis-backed Big Segment store.
 
@@ -202,15 +196,12 @@ class Redis:
 
         return _RedisBigSegmentStore(url, prefix, redis_opts)
 
+
 class Files:
-    """Provides factory methods for integrations with filesystem data.
-    """
+    """Provides factory methods for integrations with filesystem data."""
 
     @staticmethod
-    def new_data_source(paths: List[str],
-                        auto_update: bool=False,
-                        poll_interval: float=1,
-                        force_polling: bool=False) -> object:
+    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> object:
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
         actual LaunchDarkly connection.
@@ -251,4 +242,4 @@ class Files:
 
         :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property
         """
-        return lambda config, store, ready : _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)
+        return lambda config, store, ready: _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)

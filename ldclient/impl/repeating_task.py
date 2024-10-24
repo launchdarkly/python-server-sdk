@@ -1,8 +1,8 @@
-from ldclient.impl.util import log
-
-from threading import Event, Thread
 import time
+from threading import Event, Thread
 from typing import Callable
+
+from ldclient.impl.util import log
 
 
 class RepeatingTask:

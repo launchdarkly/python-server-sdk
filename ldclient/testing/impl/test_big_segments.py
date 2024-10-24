@@ -1,18 +1,19 @@
+import time
+from queue import Queue
+
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
-from ldclient.impl.big_segments import BigSegmentStoreManager, _hash_for_user_key
+from ldclient.impl.big_segments import (BigSegmentStoreManager,
+                                        _hash_for_user_key)
 from ldclient.interfaces import BigSegmentStoreMetadata
 from ldclient.testing.mock_components import MockBigSegmentStore
-
-from queue import Queue
-import time
 
 user_key = 'user-key'
 user_hash = _hash_for_user_key(user_key)
 
 
 def test_membership_query_uncached_result_healthy_status():
-    expected_membership = { "key1": True, "key2": False }
+    expected_membership = {"key1": True, "key2": False}
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
     store.setup_membership(user_hash, expected_membership)
@@ -23,8 +24,9 @@ def test_membership_query_uncached_result_healthy_status():
     finally:
         manager.stop()
 
+
 def test_membership_query_cached_result_healthy_status():
-    expected_membership = { "key1": True, "key2": False }
+    expected_membership = {"key1": True, "key2": False}
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
     store.setup_membership(user_hash, expected_membership)
@@ -35,7 +37,8 @@ def test_membership_query_cached_result_healthy_status():
         assert manager.get_user_membership(user_key) == expected_result
     finally:
         manager.stop()
-    assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
+    assert store.membership_queries == [user_hash]  # only 1 query done rather than 2, due to caching
+
 
 def test_membership_query_can_cache_result_of_none():
     store = MockBigSegmentStore()
@@ -48,10 +51,11 @@ def test_membership_query_can_cache_result_of_none():
         assert manager.get_user_membership(user_key) == expected_result
     finally:
         manager.stop()
-    assert store.membership_queries == [ user_hash ]  # only 1 query done rather than 2, due to caching
+    assert store.membership_queries == [user_hash]  # only 1 query done rather than 2, due to caching
+
 
 def test_membership_query_cache_can_expire():
-    expected_membership = { "key1": True, "key2": False }
+    expected_membership = {"key1": True, "key2": False}
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
     store.setup_membership(user_hash, expected_membership)
@@ -63,10 +67,11 @@ def test_membership_query_cache_can_expire():
         assert manager.get_user_membership(user_key) == expected_result
     finally:
         manager.stop()
-    assert store.membership_queries == [ user_hash, user_hash ]  # cache expired after 1st query
+    assert store.membership_queries == [user_hash, user_hash]  # cache expired after 1st query
+
 
 def test_membership_query_stale_status():
-    expected_membership = { "key1": True, "key2": False }
+    expected_membership = {"key1": True, "key2": False}
     store = MockBigSegmentStore()
     store.setup_metadata_always_stale()
     store.setup_membership(user_hash, expected_membership)
@@ -77,8 +82,9 @@ def test_membership_query_stale_status():
     finally:
         manager.stop()
 
+
 def test_membership_query_stale_status_no_store_metadata():
-    expected_membership = { "key1": True, "key2": False }
+    expected_membership = {"key1": True, "key2": False}
     store = MockBigSegmentStore()
     store.setup_metadata_none()
     store.setup_membership(user_hash, expected_membership)
@@ -89,11 +95,11 @@ def test_membership_query_stale_status_no_store_metadata():
     finally:
         manager.stop()
 
+
 def test_membership_query_least_recent_context_evicted_from_cache():
     user_key_1, user_key_2, user_key_3 = 'userkey1', 'userkey2', 'userkey3'
-    user_hash_1, user_hash_2, user_hash_3 = _hash_for_user_key(user_key_1), \
-        _hash_for_user_key(user_key_2), _hash_for_user_key(user_key_3)
-    membership_1, membership_2, membership_3 = { 'seg1': True }, { 'seg2': True }, { 'seg3': True }
+    user_hash_1, user_hash_2, user_hash_3 = _hash_for_user_key(user_key_1), _hash_for_user_key(user_key_2), _hash_for_user_key(user_key_3)
+    membership_1, membership_2, membership_3 = {'seg1': True}, {'seg2': True}, {'seg3': True}
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
     store.setup_membership(user_hash_1, membership_1)
@@ -126,6 +132,7 @@ def test_membership_query_least_recent_context_evicted_from_cache():
     finally:
         manager.stop()
 
+
 def test_status_polling_detects_store_unavailability():
     store = MockBigSegmentStore()
     store.setup_metadata_always_up_to_date()
@@ -137,19 +144,20 @@ def test_status_polling_detects_store_unavailability():
         manager.status_provider.add_listener(lambda status: statuses.put(status))
 
         status1 = manager.status_provider.status
-        assert status1.available == True
+        assert status1.available is True
 
         store.setup_metadata_error()
 
         status2 = statuses.get(True, 1.0)
-        assert status2.available == False
+        assert status2.available is False
 
         store.setup_metadata_always_up_to_date()
 
         status3 = statuses.get(True, 1.0)
-        assert status3.available == True
+        assert status3.available is True
     finally:
         manager.stop()
+
 
 def test_status_polling_detects_stale_status():
     store = MockBigSegmentStore()
@@ -162,16 +170,16 @@ def test_status_polling_detects_stale_status():
         manager.status_provider.add_listener(lambda status: statuses.put(status))
 
         status1 = manager.status_provider.status
-        assert status1.stale == False
+        assert status1.stale is False
 
         store.setup_metadata_always_stale()
 
         status2 = statuses.get(True, 1.0)
-        assert status2.stale == True
+        assert status2.stale is True
 
         store.setup_metadata_always_up_to_date()
 
         status3 = statuses.get(True, 1.0)
-        assert status3.stale == False
+        assert status3.stale is False
     finally:
         manager.stop()

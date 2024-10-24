@@ -1,11 +1,11 @@
 import re
-from re import Pattern
-from semver import VersionInfo
-from datetime import tzinfo, timedelta, datetime, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from numbers import Number
+from re import Pattern
 from typing import Any, Optional
 
 import pyrfc3339
+from semver import VersionInfo
 
 _ZERO = timedelta(0)
 
@@ -60,6 +60,7 @@ def parse_time(input: Any) -> Optional[float]:
 
     return None
 
+
 def parse_semver(input: Any) -> Optional[VersionInfo]:
     if not isinstance(input, str):
         return None
@@ -75,9 +76,9 @@ def parse_semver(input: Any) -> Optional[VersionInfo]:
             try:
                 input = _add_zero_version_component(input)
                 return VersionInfo.parse(input)
-                return input
             except ValueError as e:
                 return None
+
 
 def _add_zero_version_component(input):
     m = re.search("^([0-9.]*)(.*)", input)

@@ -2,12 +2,14 @@ import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.context import Context
-from ldclient.versioned_data_kind import FEATURES
-from ldclient.impl.integrations.test_data.test_data_source import _TestDataSource
+from ldclient.impl.integrations.test_data.test_data_source import \
+    _TestDataSource
 from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.versioned_data_kind import FEATURES
 
 TRUE_VARIATION_INDEX = 0
 FALSE_VARIATION_INDEX = 1
+
 
 def _variation_for_boolean(variation):
     if variation:
@@ -15,7 +17,8 @@ def _variation_for_boolean(variation):
     else:
         return FALSE_VARIATION_INDEX
 
-class TestData():
+
+class TestData:
     """A mechanism for providing dynamically updatable feature flag state in a
     simplified form to an SDK client in test scenarios.
 
@@ -131,7 +134,7 @@ class TestData():
         return self
 
     def _make_init_data(self) -> dict:
-        return { FEATURES: copy.copy(self._current_flags) }
+        return {FEATURES: copy.copy(self._current_flags)}
 
     def _closed_instance(self, instance):
         try:
@@ -140,15 +143,16 @@ class TestData():
         finally:
             self._lock.unlock()
 
-class FlagBuilder():
+
+class FlagBuilder:
     """A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_data.TestData`.
 
     :see: :meth:`ldclient.integrations.test_data.TestData.flag()`
     :see: :meth:`ldclient.integrations.test_data.TestData.update()`
     """
+
     def __init__(self, key: str):
-        """:param str key: The name of the flag
-        """
+        """:param str key: The name of the flag"""
         self._key = key
         self._on = True
         self._variations = []  # type: List[Any]
@@ -212,7 +216,7 @@ class FlagBuilder():
             self._fallthrough_variation = variation
             return self
 
-    def off_variation(self, variation: Union[bool, int]) -> 'FlagBuilder' :
+    def off_variation(self, variation: Union[bool, int]) -> 'FlagBuilder':
         """Specifies the fallthrough variation. This is the variation that is returned
         whenever targeting is off.
 
@@ -245,14 +249,10 @@ class FlagBuilder():
         if self._is_boolean_flag():
             return self
         else:
-            return (self.variations(True, False)
-                .fallthrough_variation(TRUE_VARIATION_INDEX)
-                .off_variation(FALSE_VARIATION_INDEX))
+            return self.variations(True, False).fallthrough_variation(TRUE_VARIATION_INDEX).off_variation(FALSE_VARIATION_INDEX)
 
     def _is_boolean_flag(self):
-        return (len(self._variations) == 2
-            and self._variations[TRUE_VARIATION_INDEX] == True
-            and self._variations[FALSE_VARIATION_INDEX] == False)
+        return len(self._variations) == 2 and self._variations[TRUE_VARIATION_INDEX] is True and self._variations[FALSE_VARIATION_INDEX] is False
 
     def variations(self, *variations) -> 'FlagBuilder':
         """Changes the allowable variation values for the flag.
@@ -352,7 +352,7 @@ class FlagBuilder():
             self._targets[context_kind] = targets
 
         for idx, var in enumerate(self._variations):
-            if (idx == variation):
+            if idx == variation:
                 # If there is no set at the current variation, set it to be empty
                 target_for_variation = targets.get(idx)
                 if target_for_variation is None:
@@ -478,40 +478,20 @@ class FlagBuilder():
         :param version: the version number of the rule
         :return: the dictionary representation of the flag
         """
-        base_flag_object = {
-            'key': self._key,
-            'version': version,
-            'on': self._on,
-            'variations': self._variations,
-            'prerequisites': [],
-            'salt': ''
-        }
+        base_flag_object = {'key': self._key, 'version': version, 'on': self._on, 'variations': self._variations, 'prerequisites': [], 'salt': ''}
 
         base_flag_object['offVariation'] = self._off_variation
-        base_flag_object['fallthrough'] = {
-                'variation': self._fallthrough_variation
-            }
+        base_flag_object['fallthrough'] = {'variation': self._fallthrough_variation}
 
         targets = []
         context_targets = []
         for target_context_kind, target_variations in self._targets.items():
             for var_index, target_keys in target_variations.items():
                 if target_context_kind == Context.DEFAULT_KIND:
-                    targets.append({
-                        'variation': var_index,
-                        'values': sorted(list(target_keys))  # sorting just for test determinacy
-                    })
-                    context_targets.append({
-                        'contextKind': target_context_kind,
-                        'variation': var_index,
-                        'values': []
-                    })
+                    targets.append({'variation': var_index, 'values': sorted(list(target_keys))})  # sorting just for test determinacy
+                    context_targets.append({'contextKind': target_context_kind, 'variation': var_index, 'values': []})
                 else:
-                    context_targets.append({
-                        'contextKind': target_context_kind,
-                        'variation': var_index,
-                        'values': sorted(list(target_keys))  # sorting just for test determinacy
-                    })
+                    context_targets.append({'contextKind': target_context_kind, 'variation': var_index, 'values': sorted(list(target_keys))})  # sorting just for test determinacy
         base_flag_object['targets'] = targets
         base_flag_object['contextTargets'] = context_targets
 
@@ -523,7 +503,7 @@ class FlagBuilder():
         return base_flag_object
 
 
-class FlagRuleBuilder():
+class FlagRuleBuilder:
     """
     A builder for feature flag rules to be used with :class:`ldclient.integrations.test_data.FlagBuilder`.
 
@@ -540,6 +520,7 @@ class FlagRuleBuilder():
     Finally, call :meth:`ldclient.integrations.test_data.FlagRuleBuilder.then_return()`
     to finish defining the rule.
     """
+
     def __init__(self, flag_builder: FlagBuilder):
         self._flag_builder = flag_builder
         self._clauses = []  # type: List[dict]
@@ -583,13 +564,7 @@ class FlagRuleBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
-        self._clauses.append({
-                'contextKind': context_kind,
-                'attribute': attribute,
-                'op': 'in',
-                'values': list(values),
-                'negate': False
-            })
+        self._clauses.append({'contextKind': context_kind, 'attribute': attribute, 'op': 'in', 'values': list(values), 'negate': False})
         return self
 
     def and_not_match(self, attribute: str, *values) -> 'FlagRuleBuilder':
@@ -630,13 +605,7 @@ class FlagRuleBuilder():
         :param values: values to compare to
         :return: the flag rule builder
         """
-        self._clauses.append({
-                'contextKind': context_kind,
-                'attribute': attribute,
-                'op': 'in',
-                'values': list(values),
-                'negate': True
-            })
+        self._clauses.append({'contextKind': context_kind, 'attribute': attribute, 'op': 'in', 'values': list(values), 'negate': True})
         return self
 
     def then_return(self, variation: Union[bool, int]) -> 'FlagBuilder':
@@ -666,8 +635,4 @@ class FlagRuleBuilder():
         :param id: the rule id
         :return: the dictionary representation of the rule
         """
-        return {
-            'id': 'rule' + id,
-            'variation': self._variation,
-            'clauses': self._clauses
-        }
+        return {'id': 'rule' + id, 'variation': self._variation, 'clauses': self._clauses}

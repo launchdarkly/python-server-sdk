@@ -2,15 +2,15 @@
 Default implementation of feature flag polling requests.
 """
 
-from collections import namedtuple
 import json
+from collections import namedtuple
+
 import urllib3
 
 from ldclient.impl.http import _http_factory
 from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import FeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
 
 LATEST_ALL_URI = '/sdk/latest-all'
 
@@ -32,10 +32,7 @@ class FeatureRequesterImpl(FeatureRequester):
         hdrs['Accept-Encoding'] = 'gzip'
         if cache_entry is not None:
             hdrs['If-None-Match'] = cache_entry.etag
-        r = self._http.request('GET', uri,
-                               headers=hdrs,
-                               timeout=urllib3.Timeout(connect=self._config.http.connect_timeout, read=self._config.http.read_timeout),
-                               retries=1)
+        r = self._http.request('GET', uri, headers=hdrs, timeout=urllib3.Timeout(connect=self._config.http.connect_timeout, read=self._config.http.read_timeout), retries=1)
         throw_if_unsuccessful_response(r)
         if r.status == 304 and cache_entry is not None:
             data = cache_entry.data
@@ -47,10 +44,6 @@ class FeatureRequesterImpl(FeatureRequester):
             from_cache = False
             if etag is not None:
                 self._cache[uri] = CacheEntry(data=data, etag=etag)
-        log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]",
-            uri, r.status, from_cache, etag)
+        log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]", uri, r.status, from_cache, etag)
 
-        return {
-            FEATURES: data['flags'],
-            SEGMENTS: data['segments']
-        }
+        return {FEATURES: data['flags'], SEGMENTS: data['segments']}

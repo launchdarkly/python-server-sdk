@@ -1,10 +1,10 @@
-from unittest.mock import Mock
-from typing import Callable, List
 from threading import Event
+from typing import Callable, List
+from unittest.mock import Mock
 
 from ldclient.client import _FeatureStoreClientWrapper
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl
+from ldclient.impl.listeners import Listeners
 
 
 class CallbackListener:

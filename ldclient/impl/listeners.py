@@ -1,7 +1,7 @@
-from ldclient.impl.util import log
-
 from threading import RLock
 from typing import Any, Callable
+
+from ldclient.impl.util import log
 
 
 class Listeners:

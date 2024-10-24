@@ -1,17 +1,19 @@
-from ldclient.impl.integrations.redis.redis_big_segment_store import _RedisBigSegmentStore
-from ldclient.integrations import Redis
-from ldclient.versioned_data_kind import FEATURES
+import json
 
+import pytest
+
+from ldclient.impl.integrations.redis.redis_big_segment_store import \
+    _RedisBigSegmentStore
+from ldclient.integrations import Redis
 from ldclient.testing.integrations.big_segment_store_test_base import *
 from ldclient.testing.integrations.persistent_feature_store_test_base import *
 from ldclient.testing.test_util import skip_database_tests
-
-import pytest
-import json
+from ldclient.versioned_data_kind import FEATURES
 
 have_redis = False
 try:
     import redis
+
     have_redis = True
 except ImportError:
     pass
@@ -61,8 +63,7 @@ class RedisBigSegmentStoreTester(BigSegmentStoreTester):
 
     def set_metadata(self, prefix: str, metadata: BigSegmentStoreMetadata):
         r = RedisTestHelper.make_client()
-        r.set((prefix or Redis.DEFAULT_PREFIX) + _RedisBigSegmentStore.KEY_LAST_UP_TO_DATE,
-            "" if metadata.last_up_to_date is None else str(metadata.last_up_to_date))
+        r.set((prefix or Redis.DEFAULT_PREFIX) + _RedisBigSegmentStore.KEY_LAST_UP_TO_DATE, "" if metadata.last_up_to_date is None else str(metadata.last_up_to_date))
 
     def set_segments(self, prefix: str, user_hash: str, includes: List[str], excludes: List[str]):
         r = RedisTestHelper.make_client()
@@ -81,16 +82,18 @@ class TestRedisFeatureStore(PersistentFeatureStoreTestBase):
     def test_upsert_race_condition_against_external_client_with_higher_version(self):
         other_client = RedisTestHelper.make_client()
         store = Redis.new_feature_store()
-        store.init({ FEATURES: {} })
+        store.init({FEATURES: {}})
 
         other_version = {u'key': u'flagkey', u'version': 2}
+
         def hook(base_key, key):
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
+
         store._core.test_update_hook = hook
 
-        feature = { u'key': 'flagkey', u'version': 1 }
+        feature = {u'key': 'flagkey', u'version': 1}
 
         store.upsert(FEATURES, feature)
         result = store.get(FEATURES, 'flagkey', lambda x: x)
@@ -99,16 +102,18 @@ class TestRedisFeatureStore(PersistentFeatureStoreTestBase):
     def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = RedisTestHelper.make_client()
         store = Redis.new_feature_store()
-        store.init({ FEATURES: {} })
+        store.init({FEATURES: {}})
 
         other_version = {u'key': u'flagkey', u'version': 2}
+
         def hook(base_key, key):
             if other_version['version'] <= 4:
                 other_client.hset(base_key, key, json.dumps(other_version))
                 other_version['version'] = other_version['version'] + 1
+
         store._core.test_update_hook = hook
 
-        feature = { u'key': 'flagkey', u'version': 5 }
+        feature = {u'key': 'flagkey', u'version': 5}
 
         store.upsert(FEATURES, feature)
         result = store.get(FEATURES, 'flagkey', lambda x: x)

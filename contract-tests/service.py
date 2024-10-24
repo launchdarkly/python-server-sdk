@@ -1,43 +1,40 @@
-from client_entity import ClientEntity
-
 import json
 import logging
 import os
 import sys
+from logging.config import dictConfig
+
+from client_entity import ClientEntity
 from flask import Flask, request
 from flask.logging import default_handler
-from logging.config import dictConfig
 from werkzeug.exceptions import HTTPException
+
+# Import ldclient from parent directory
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 
 default_port = 8000
 
 
 # logging configuration
-dictConfig({
-    'version': 1,
-    'formatters': {
-        'default': {
-            'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
-        }
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'default'
-        }
-    },
-    'root': {
-        'level': 'INFO',
-        'handlers': ['console']
-    },
-    'loggers': {
-        'ldclient': {
-            'level': 'INFO', # change to 'DEBUG' to enable SDK debug logging
+dictConfig(
+    {
+        'version': 1,
+        'formatters': {
+            'default': {
+                'format': '[%(asctime)s] [%(name)s] %(levelname)s: %(message)s',
+            }
         },
-        'werkzeug': { 'level': 'ERROR' } # disable irrelevant Flask app logging
+        'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'default'}},
+        'root': {'level': 'INFO', 'handlers': ['console']},
+        'loggers': {
+            'ldclient': {
+                'level': 'INFO',  # change to 'DEBUG' to enable SDK debug logging
+            },
+            'werkzeug': {'level': 'ERROR'},  # disable irrelevant Flask app logging
+        },
     }
-})
+)
 
 app = Flask(__name__)
 app.logger.removeHandler(default_handler)
@@ -55,6 +52,7 @@ def handle_exception(e):
 
     app.logger.exception(e)
     return str(e), 500
+
 
 @app.route('/', methods=['GET'])
 def status():
@@ -78,15 +76,17 @@ def status():
             'anonymous-redaction',
             'evaluation-hooks',
             'omit-anonymous-contexts',
-            'client-prereq-events'
+            'client-prereq-events',
         ]
     }
-    return (json.dumps(body), 200, {'Content-type': 'application/json'})
+    return json.dumps(body), 200, {'Content-type': 'application/json'}
+
 
 @app.route('/', methods=['DELETE'])
 def delete_stop_service():
     global_log.info("Test service has told us to exit")
     os._exit(0)
+
 
 @app.route('/', methods=['POST'])
 def post_create_client():
@@ -102,10 +102,10 @@ def post_create_client():
 
     if client.is_initializing() is False and options['configuration'].get('initCanFail', False) is False:
         client.close()
-        return ("Failed to initialize", 500)
+        return "Failed to initialize", 500
 
     clients[client_id] = client
-    return ('', 201, {'Location': resource_url})
+    return '', 201, {'Location': resource_url}
 
 
 @app.route('/clients/<id>', methods=['POST'])
@@ -116,7 +116,7 @@ def post_client_command(id):
 
     client = clients[id]
     if client is None:
-        return ('', 404)
+        return '', 404
 
     command = params.get('command')
     sub_params = params.get(command)
@@ -146,11 +146,12 @@ def post_client_command(id):
     elif command == "migrationOperation":
         response = client.migration_operation(sub_params)
     else:
-        return ('', 400)
+        return '', 400
 
     if response is None:
-        return ('', 201)
-    return (json.dumps(response), 200)
+        return '', 201
+    return json.dumps(response), 200
+
 
 @app.route('/clients/<id>', methods=['DELETE'])
 def delete_client(id):
@@ -158,10 +159,11 @@ def delete_client(id):
 
     client = clients[id]
     if client is None:
-        return ('', 404)
+        return '', 404
 
     client.close()
-    return ('', 202)
+    return '', 202
+
 
 if __name__ == "__main__":
     port = default_port

@@ -11,30 +11,14 @@ def do_proxy_tests(action, action_method, monkeypatch):
     # We'll test each permutation of use_env_vars, secure, and use_auth, except that if secure is
     # true then we'll only test with use_auth=false because we don't have a way to test proxy
     # authorization over HTTPS (even though we believe it works).
-    for (use_env_vars, secure, use_auth) in [
-        (False, False, False),
-        (False, False, True),
-        (False, True, False),
-        (True, False, False),
-        (True, False, True),
-        (True, True, False)
-    ]:
-        test_desc = "%s, %s, %s" % (
-            "using env vars" if use_env_vars else "using Config",
-            "secure" if secure else "insecure",
-            "with auth" if use_auth else "no auth")
+    for use_env_vars, secure, use_auth in [(False, False, False), (False, False, True), (False, True, False), (True, False, False), (True, False, True), (True, True, False)]:
+        test_desc = "%s, %s, %s" % ("using env vars" if use_env_vars else "using Config", "secure" if secure else "insecure", "with auth" if use_auth else "no auth")
         with start_server() as server:
             proxy_uri = server.uri.replace('http://', 'http://user:pass@') if use_auth else server.uri
             target_uri = 'https://not-real' if secure else 'http://not-real'
             if use_env_vars:
                 monkeypatch.setenv('https_proxy' if secure else 'http_proxy', proxy_uri)
-            config = Config(
-                sdk_key='sdk_key',
-                base_uri=target_uri,
-                events_uri=target_uri,
-                stream_uri=target_uri,
-                http=HTTPConfig(http_proxy=proxy_uri),
-                diagnostic_opt_out=True)
+            config = Config(sdk_key='sdk_key', base_uri=target_uri, events_uri=target_uri, stream_uri=target_uri, http=HTTPConfig(http_proxy=proxy_uri), diagnostic_opt_out=True)
             try:
                 action(server, config, secure)
             except Exception:

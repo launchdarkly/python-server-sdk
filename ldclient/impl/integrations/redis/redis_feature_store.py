@@ -1,18 +1,18 @@
 import json
+from typing import Any, Dict
+
+from ldclient import log
+from ldclient.impl.util import redact_password
+from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
+from ldclient.versioned_data_kind import FEATURES
 
 have_redis = False
 try:
     import redis
+
     have_redis = True
 except ImportError:
     pass
-
-from ldclient import log
-from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
-from ldclient.versioned_data_kind import FEATURES
-from ldclient.impl.util import redact_password
-
-from typing import Any, Dict
 
 
 class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
@@ -36,7 +36,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def init_internal(self, all_data):
         pipe = redis.Redis(connection_pool=self._pool).pipeline()
-        
+
         all_count = 0
 
         for kind, items in all_data.items():
@@ -85,9 +85,14 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             if self.test_update_hook is not None:
                 self.test_update_hook(base_key, key)
             if old and old['version'] >= item['version']:
-                log.debug('RedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
+                log.debug(
+                    'RedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
                     'delete' if item.get('deleted') else 'update',
-                    key, old['version'], item['version'], kind.namespace)
+                    key,
+                    old['version'],
+                    item['version'],
+                    kind.namespace,
+                )
                 pipeline.unwatch()
                 return old
             else:
@@ -108,7 +113,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def describe_configuration(self, config):
         return 'Redis'
-    
+
     def _before_update_transaction(self, base_key, key):
         # exposed for testing
         pass

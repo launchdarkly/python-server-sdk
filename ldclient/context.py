@@ -3,20 +3,21 @@ This submodule implements the SDK's evaluation context model.
 """
 
 from __future__ import annotations
-from collections.abc import Iterable
+
 import json
 import re
-import warnings
+from collections.abc import Iterable
 from typing import Any, Dict, Optional, Union
-
 
 _INVALID_KIND_REGEX = re.compile('[^-a-zA-Z0-9._]')
 _USER_STRING_ATTRS = {'name', 'firstName', 'lastName', 'email', 'country', 'avatar', 'ip'}
+
 
 def _escape_key_for_fully_qualified_key(key: str) -> str:
     # When building a fully-qualified key, ':' and '%' are percent-escaped; we do not use a full
     # URL-encoding function because implementations of this are inconsistent across platforms.
     return key.replace('%', '%25').replace(':', '%3A')
+
 
 def _validate_kind(kind: str) -> Optional[str]:
     if kind == '':
@@ -63,8 +64,8 @@ class Context:
         private_attributes: Optional[list[str]] = None,
         multi_contexts: Optional[list[Context]] = None,
         allow_empty_key: bool = False,
-        error: Optional[str] = None
-        ):
+        error: Optional[str] = None,
+    ):
         """
         Constructs an instance, setting all properties. Avoid using this constructor directly.
 
@@ -127,8 +128,7 @@ class Context:
         self.__attributes = attributes
         self.__private = private_attributes
         self.__multi = None
-        self.__full_key = key if kind == Context.DEFAULT_KIND else \
-            '%s:%s' % (kind, _escape_key_for_fully_qualified_key(key))
+        self.__full_key = key if kind == Context.DEFAULT_KIND else '%s:%s' % (kind, _escape_key_for_fully_qualified_key(key))
         self.__error = None
 
     @classmethod
@@ -642,9 +642,15 @@ class Context:
         """
         if not isinstance(other, Context):
             return False
-        if self.__kind != other.__kind or self.__key != other.__key or self.__name != other.__name or \
-            self.__anonymous != other.__anonymous or self.__attributes != other.__attributes or \
-            self.__private != other.__private or self.__error != other.__error:
+        if (
+            self.__kind != other.__kind
+            or self.__key != other.__key
+            or self.__name != other.__name
+            or self.__anonymous != other.__anonymous
+            or self.__attributes != other.__attributes
+            or self.__private != other.__private
+            or self.__error != other.__error
+        ):
             return False
         # Note that it's OK to compare __attributes because Python does a deep-equality check for dicts,
         # and it's OK to compare __private_attributes because we have canonicalized them by sorting.
@@ -700,6 +706,7 @@ class ContextBuilder:
 
     :param key: the context key
     """
+
     def __init__(self, key: str, copy_from: Optional[Context] = None):
         self.__key = key
         if copy_from is None:
@@ -735,10 +742,9 @@ class ContextBuilder:
 
         :return: a new :class:`ldclient.Context`
         """
-        self.__copy_on_write_attrs = (self.__attributes is not None)
-        self.__copy_on_write_private = (self.__private is not None)
-        return Context(self.__kind, self.__key, self.__name, self.__anonymous, self.__attributes, self.__private,
-            None, self.__allow_empty_key)
+        self.__copy_on_write_attrs = self.__attributes is not None
+        self.__copy_on_write_private = self.__private is not None
+        return Context(self.__kind, self.__key, self.__name, self.__anonymous, self.__attributes, self.__private, None, self.__allow_empty_key)
 
     def key(self, key: str) -> ContextBuilder:
         """
@@ -945,6 +951,7 @@ class ContextMultiBuilder:
             .add(Context.new("my-org-key", "organization")) \
             .build
     """
+
     def __init__(self):
         self.__contexts = []  # type: list[Context]
         self.__copy_on_write = False

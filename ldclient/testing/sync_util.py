@@ -9,7 +9,6 @@ def wait_until(condition, timeout=5):
         if result:
             return result
         elif time.time() > end_time:
-            raise Exception("Timeout waiting for {0}".format(
-                condition.__name__))  # pragma: no cover
+            raise Exception("Timeout waiting for {0}".format(condition.__name__))  # pragma: no cover
         else:
-            time.sleep(.1)
+            time.sleep(0.1)

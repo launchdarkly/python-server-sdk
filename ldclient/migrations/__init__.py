@@ -7,9 +7,7 @@ __all__ = [
     'MigratorBuilder',
     'MigratorCompareFn',
     'MigratorFn',
-
     'OpTracker',
-
     'ExecutionOrder',
     'MigrationConfig',
     'Operation',

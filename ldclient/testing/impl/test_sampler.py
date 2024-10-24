@@ -1,4 +1,5 @@
 from random import Random
+
 from ldclient.impl.sampler import Sampler
 
 

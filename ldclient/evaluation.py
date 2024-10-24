@@ -2,14 +2,15 @@ import json
 import time
 from typing import Any, Dict, Optional
 
+
 class EvaluationDetail:
     """
     The return type of :func:`ldclient.client.LDClient.variation_detail()`, combining the result of a
     flag evaluation with information about how it was calculated.
     """
+
     def __init__(self, value: object, variation_index: Optional[int], reason: dict):
-        """Constructs an instance.
-        """
+        """Constructs an instance."""
         self.__value = value
         self.__variation_index = variation_index
         self.__reason = reason
@@ -84,6 +85,7 @@ class BigSegmentsStatus:
     Indicates that the Big Segment query involved in the flag evaluation was successful, and
     the segment state is considered up to date.
     """
+
     HEALTHY = "HEALTHY"
 
     """
@@ -113,9 +115,10 @@ class FeatureFlagsState:
     appropriate data structure for bootstrapping the LaunchDarkly JavaScript client. See the
     JavaScript SDK Reference Guide on `Bootstrapping <https://docs.launchdarkly.com/sdk/features/bootstrapping#javascript>`_.
     """
+
     def __init__(self, valid: bool):
-        self.__flag_values = {} # type: Dict[str, Any]
-        self.__flag_metadata = {} # type: Dict[str, Any]
+        self.__flag_values = {}  # type: Dict[str, Any]
+        self.__flag_metadata = {}  # type: Dict[str, Any]
         self.__valid = valid
 
     # Used internally to build the state map
@@ -160,7 +163,6 @@ class FeatureFlagsState:
         """
         return self.__valid
 
-
     def get_flag_value(self, key: str) -> object:
         """Returns the value of an individual feature flag at the time the state was recorded.
 
@@ -199,11 +201,9 @@ class FeatureFlagsState:
         return ret
 
     def to_json_string(self) -> str:
-        """Same as to_json_dict, but serializes the JSON structure into a string.
-        """
+        """Same as to_json_dict, but serializes the JSON structure into a string."""
         return json.dumps(self.to_json_dict())
 
     def __getstate__(self) -> dict:
-        """Equivalent to to_json_dict() - used if you are serializing the object with jsonpickle.
-        """
+        """Equivalent to to_json_dict() - used if you are serializing the object with jsonpickle."""
         return self.to_json_dict()

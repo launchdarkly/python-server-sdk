@@ -1,27 +1,26 @@
-import pytest
+from typing import Callable, Dict
+
 import mock
+import pytest
 
-from typing import Dict, Callable
-
-from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.interfaces import DataSourceState, DataSourceErrorKind
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
+from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.testing.builders import (FlagBuilder, FlagRuleBuilder,
+                                       SegmentBuilder, SegmentRuleBuilder,
+                                       make_clause)
 from ldclient.testing.test_util import SpyListener
-from ldclient.testing.builders import FlagBuilder, FlagRuleBuilder, make_clause, SegmentBuilder, SegmentRuleBuilder
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 @pytest.fixture
 def basic_data() -> Dict:
     flag1 = FlagBuilder('flag1').version(1).on(False).build()
     flag2 = FlagBuilder('flag2').version(1).on(False).build()
-    flag3 = FlagBuilder('flag3').version(1).rules(
-        FlagRuleBuilder().variation(0).id('rule_id').track_events(True).clauses(
-            make_clause('user', 'segmentMatch', 'segmentMatch', 'segment2')
-        ).build()
-    ).build()
+    flag3 = (
+        FlagBuilder('flag3').version(1).rules(FlagRuleBuilder().variation(0).id('rule_id').track_events(True).clauses(make_clause('user', 'segmentMatch', 'segmentMatch', 'segment2')).build()).build()
+    )
     segment1 = SegmentBuilder('segment1').version(1).build()
     segment2 = SegmentBuilder('segment2').version(1).build()
 
@@ -45,17 +44,11 @@ def prereq_data() -> Dict:
     flag3 = FlagBuilder('flag3').version(1).on(False).build()
     flag4 = FlagBuilder('flag4').version(1).on(False).build()
     flag5 = FlagBuilder('flag5').version(1).on(False).build()
-    flag6 = FlagBuilder('flag6').version(1).rules(
-        FlagRuleBuilder().variation(0).id('rule_id').track_events(True).clauses(
-            make_clause('user', 'segmentMatch', 'segmentMatch', 'segment2')
-        ).build()
-    ).build()
+    flag6 = (
+        FlagBuilder('flag6').version(1).rules(FlagRuleBuilder().variation(0).id('rule_id').track_events(True).clauses(make_clause('user', 'segmentMatch', 'segmentMatch', 'segment2')).build()).build()
+    )
     segment1 = SegmentBuilder('segment1').version(1).build()
-    segment2 = SegmentBuilder('segment2').version(1).rules(
-        SegmentRuleBuilder().clauses(
-            make_clause('user', 'segmentMatch', 'segmentMatch', 'segment1')
-        ).build()
-    ).build()
+    segment2 = SegmentBuilder('segment2').version(1).rules(SegmentRuleBuilder().clauses(make_clause('user', 'segmentMatch', 'segmentMatch', 'segment1')).build()).build()
 
     return {
         FEATURES: {
@@ -125,12 +118,14 @@ def test_is_called_once_per_flag_during_init(basic_data):
 
     spy = SpyListener()
     flag_change_listener.add(spy)
-    sink.init({
-        FEATURES: {
-            flag1.key: flag1,
-            flag4.key: flag4,
+    sink.init(
+        {
+            FEATURES: {
+                flag1.key: flag1,
+                flag4.key: flag4,
+            }
         }
-    })
+    )
 
     assert len(spy.statuses) == 4
     keys = set(s.key for s in spy.statuses)  # No guaranteed order

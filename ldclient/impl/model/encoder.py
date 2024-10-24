@@ -1,6 +1,7 @@
+import json
+
 from ldclient.impl.model.entity import ModelEntity
 
-import json
 
 class ModelEncoder(json.JSONEncoder):
     """
@@ -9,7 +10,7 @@ class ModelEncoder(json.JSONEncoder):
     """
 
     def __init__(self):
-        super().__init__(separators=(',',':'))
+        super().__init__(separators=(',', ':'))
 
     def default(self, obj):
         if isinstance(obj, ModelEntity):

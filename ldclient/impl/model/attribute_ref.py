@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import re
 from typing import List, Optional
 
@@ -7,6 +8,7 @@ def req_attr_ref_with_opt_context_kind(attr_ref_str: str, context_kind: Optional
     if context_kind is None or context_kind == '':
         return AttributeRef.from_literal(attr_ref_str)
     return AttributeRef.from_path(attr_ref_str)
+
 
 def opt_attr_ref_with_opt_context_kind(attr_ref_str: Optional[str], context_kind: Optional[str]) -> Optional[AttributeRef]:
     if attr_ref_str is None or attr_ref_str == '':
@@ -22,13 +24,7 @@ class AttributeRef:
 
     _ERR_EMPTY = 'attribute reference cannot be empty'
 
-    def __init__(
-        self,
-        raw: str,
-        single_component: Optional[str],
-        components: Optional[List[str]],
-        error: Optional[str]
-    ):
+    def __init__(self, raw: str, single_component: Optional[str], components: Optional[List[str]], error: Optional[str]):
         self._raw = raw
         self._single_component = single_component
         self._components = components
@@ -41,11 +37,11 @@ class AttributeRef:
     @property
     def error(self) -> Optional[str]:
         return self._error
-    
+
     @property
     def path(self) -> str:
         return self._raw
-    
+
     @property
     def depth(self) -> int:
         if self._error is not None:
@@ -53,7 +49,7 @@ class AttributeRef:
         if self._components is not None:
             return len(self._components)
         return 1
-    
+
     def __getitem__(self, index) -> Optional[str]:
         if self._error is not None:
             return None

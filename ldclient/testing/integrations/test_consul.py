@@ -1,12 +1,13 @@
-from ldclient.integrations import Consul
+import pytest
 
+from ldclient.integrations import Consul
 from ldclient.testing.integrations.persistent_feature_store_test_base import *
 from ldclient.testing.test_util import skip_database_tests
-import pytest
 
 have_consul = False
 try:
     import consul
+
     have_consul = True
 except ImportError:
     pass
@@ -35,8 +36,9 @@ class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
     def clear_data(self, prefix):
         client = consul.Consul()
         index, keys = client.kv.get((prefix or Consul.DEFAULT_PREFIX) + "/", recurse=True, keys=True)
-        for key in (keys or []):
+        for key in keys or []:
             client.kv.delete(key)
+
 
 class TestConsulFeatureStore(PersistentFeatureStoreTestBase):
     @property

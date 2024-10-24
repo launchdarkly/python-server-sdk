@@ -1,11 +1,11 @@
+from typing import Any, Optional, Tuple, Union
+
 from ldclient import Context
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.evaluator import Evaluator, _make_big_segment_ref
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
 from ldclient.testing.builders import *
-
-from typing import Any, Optional, Tuple, Union
 
 basic_user = Context.create('user-key')
 fake_timestamp = 0
@@ -20,11 +20,7 @@ class EvaluatorBuilder:
         self.__big_segments_status = BigSegmentsStatus.HEALTHY
 
     def build(self) -> Evaluator:
-        return Evaluator(
-            self._get_flag,
-            self._get_segment,
-            self._get_big_segments_membership
-        )
+        return Evaluator(self._get_flag, self._get_segment, self._get_big_segments_membership)
 
     def with_flag(self, flag: FeatureFlag) -> 'EvaluatorBuilder':
         self.__flags[flag.key] = flag
@@ -69,7 +65,8 @@ class EvaluatorBuilder:
     def _get_big_segments_membership(self, key: str) -> Tuple[Optional[dict], str]:
         if key not in self.__big_segments:
             raise Exception("test made unexpected request for big segments for context key '%s'" % key)
-        return (self.__big_segments[key], self.__big_segments_status)
+        return self.__big_segments[key], self.__big_segments_status
+
 
 basic_evaluator = EvaluatorBuilder().build()
 
