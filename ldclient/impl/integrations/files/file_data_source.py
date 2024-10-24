@@ -24,9 +24,7 @@ except ImportError:
 
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, DataSourceUpdateSink,
-                                 UpdateProcessor)
+from ldclient.interfaces import DataSourceErrorInfo, DataSourceErrorKind, DataSourceState, DataSourceUpdateSink, UpdateProcessor
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 

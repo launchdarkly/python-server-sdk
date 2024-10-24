@@ -2,8 +2,7 @@ import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.context import Context
-from ldclient.impl.integrations.test_data.test_data_source import \
-    _TestDataSource
+from ldclient.impl.integrations.test_data.test_data_source import _TestDataSource
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.versioned_data_kind import FEATURES
 

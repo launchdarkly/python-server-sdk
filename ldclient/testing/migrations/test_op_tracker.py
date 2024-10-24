@@ -4,10 +4,8 @@ import pytest
 
 from ldclient import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.migrations import (MigrationOpEvent, Operation, OpTracker,
-                                 Origin, Stage)
-from ldclient.testing.builders import (MigrationSettingsBuilder,
-                                       build_off_flag_with_value)
+from ldclient.migrations import MigrationOpEvent, Operation, OpTracker, Origin, Stage
+from ldclient.testing.builders import MigrationSettingsBuilder, build_off_flag_with_value
 from ldclient.testing.test_ldclient import user
 
 

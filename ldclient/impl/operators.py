@@ -5,8 +5,7 @@ from typing import Any, Callable, Optional
 from semver import VersionInfo
 
 from ldclient.impl.model.clause import ClausePreprocessedValue
-from ldclient.impl.model.value_parsing import (is_number, parse_semver,
-                                               parse_time)
+from ldclient.impl.model.value_parsing import is_number, parse_semver, parse_time
 
 
 def _string_operator(context_value: Any, clause_value: Any, fn: Callable[[str, str], bool]) -> bool:

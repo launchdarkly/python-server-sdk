@@ -10,13 +10,10 @@ import pytest
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.impl.events.diagnostics import (_DiagnosticAccumulator,
-                                              create_diagnostic_id)
+from ldclient.impl.events.diagnostics import _DiagnosticAccumulator, create_diagnostic_id
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_processor import DefaultEventProcessor
-from ldclient.impl.events.types import (EventInput, EventInputCustom,
-                                        EventInputEvaluation,
-                                        EventInputIdentify)
+from ldclient.impl.events.types import EventInput, EventInputCustom, EventInputEvaluation, EventInputIdentify
 from ldclient.impl.util import timedelta_millis
 from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.migrations.types import Operation, Origin, Stage

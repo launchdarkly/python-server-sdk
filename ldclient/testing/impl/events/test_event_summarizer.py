@@ -1,7 +1,5 @@
 from ldclient.context import Context
-from ldclient.impl.events.event_summarizer import (EventSummarizer,
-                                                   EventSummaryCounter,
-                                                   EventSummaryFlag)
+from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummaryCounter, EventSummaryFlag
 from ldclient.impl.events.types import *
 from ldclient.testing.builders import *
 

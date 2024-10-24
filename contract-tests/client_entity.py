@@ -12,8 +12,7 @@ from ldclient.config import BigSegmentsConfig
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from ldclient import *
-from ldclient import (Context, ExecutionOrder, MigratorBuilder, MigratorFn,
-                      Operation, Stage)
+from ldclient import Context, ExecutionOrder, MigratorBuilder, MigratorFn, Operation, Stage
 
 
 class ClientEntity:

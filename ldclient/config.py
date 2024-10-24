@@ -10,8 +10,7 @@ from typing import Callable, List, Optional, Set
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
 from ldclient.impl.util import log, validate_application_info
-from ldclient.interfaces import (BigSegmentStore, DataSourceUpdateSink,
-                                 EventProcessor, FeatureStore, UpdateProcessor)
+from ldclient.interfaces import BigSegmentStore, DataSourceUpdateSink, EventProcessor, FeatureStore, UpdateProcessor
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
