@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 from ldclient.impl.sampler import Sampler
 from ldclient.impl.util import Result
 from ldclient.migrations.tracker import OpTracker
-from ldclient.migrations.types import ExecutionOrder, MigrationConfig, MigratorCompareFn, MigratorFn, Operation, OperationResult, Origin, Stage, WriteResult
+from ldclient.migrations.types import (ExecutionOrder, MigrationConfig,
+                                       MigratorCompareFn, MigratorFn,
+                                       Operation, OperationResult, Origin,
+                                       Stage, WriteResult)
 
 if TYPE_CHECKING:
     from ldclient import Context, LDClient

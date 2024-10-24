@@ -4,7 +4,11 @@ from typing import Callable, Mapping, Optional, Set
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.interfaces import DataSourceErrorInfo, DataSourceErrorKind, DataSourceState, DataSourceStatus, DataSourceStatusProvider, DataSourceUpdateSink, FeatureStore, FlagChange
+from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
+                                 DataSourceState, DataSourceStatus,
+                                 DataSourceStatusProvider,
+                                 DataSourceUpdateSink, FeatureStore,
+                                 FlagChange)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
