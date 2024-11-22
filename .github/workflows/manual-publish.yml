@@ -35,10 +35,11 @@ jobs:
       - uses: ./.github/actions/build
         id: build
 
-      - uses: ./.github/actions/publish
+      - name: Publish package distributions to PyPI
+        if: ${{ inputs.dry_run == false }}
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          token: ${{env.PYPI_AUTH_TOKEN}}
-          dry_run: ${{ inputs.dry_run }}
+          password: ${{env.PYPI_AUTH_TOKEN}}
 
   release-provenance:
     needs: [ 'build-publish' ]

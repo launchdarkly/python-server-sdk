@@ -47,11 +47,11 @@ jobs:
       - uses: ./.github/actions/build-docs
         if: ${{ steps.release.outputs.releases_created == 'true' }}
 
-      - uses: ./.github/actions/publish
+      - name: Publish package distributions to PyPI
         if: ${{ steps.release.outputs.releases_created == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          token: ${{env.PYPI_AUTH_TOKEN}}
-          dry_run: false
+          password: ${{env.PYPI_AUTH_TOKEN}}
 
   release-provenance:
     needs: [ 'release-package' ]
