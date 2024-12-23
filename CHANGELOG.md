@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.8.1](https://github.com/launchdarkly/python-server-sdk/compare/9.8.0...9.8.1) (2024-12-23)
+
+
+### Bug Fixes
+
+* Close SSE thread on shutdown ([#320](https://github.com/launchdarkly/python-server-sdk/issues/320)) ([2210658](https://github.com/launchdarkly/python-server-sdk/commit/22106589cb1886db6fc878e5701fdb7bc7e2537a))
+
 ## [9.8.0](https://github.com/launchdarkly/python-server-sdk/compare/9.7.2...9.8.0) (2024-10-16)
 
 
