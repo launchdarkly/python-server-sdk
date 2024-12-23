@@ -114,6 +114,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
+        if self._sse:
+            self._sse.close()
 
         if self._data_source_update_sink is None:
             return
