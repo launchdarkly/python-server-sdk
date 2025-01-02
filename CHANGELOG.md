@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.9.0](https://github.com/launchdarkly/python-server-sdk/compare/9.8.1...9.9.0) (2025-01-02)
+
+
+### Features
+
+* Add support for payload filtering ([#323](https://github.com/launchdarkly/python-server-sdk/issues/323)) ([1115afb](https://github.com/launchdarkly/python-server-sdk/commit/1115afb454ac6ca16e1ff44cc73aa4d683786188))
+
 ## [9.8.1](https://github.com/launchdarkly/python-server-sdk/compare/9.8.0...9.8.1) (2024-12-23)
 
 
