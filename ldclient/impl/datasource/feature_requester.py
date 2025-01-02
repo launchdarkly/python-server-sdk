@@ -4,6 +4,7 @@ Default implementation of feature flag polling requests.
 
 import json
 from collections import namedtuple
+from urllib import parse
 
 import urllib3
 
@@ -24,6 +25,8 @@ class FeatureRequesterImpl(FeatureRequester):
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
         self._poll_uri = config.base_uri + LATEST_ALL_URI
+        if config.payload_filter_key is not None:
+            self._poll_uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
 
     def get_all_data(self):
         uri = self._poll_uri

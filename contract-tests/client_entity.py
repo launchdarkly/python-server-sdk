@@ -27,12 +27,16 @@ class ClientEntity:
             streaming = config["streaming"]
             if streaming.get("baseUri") is not None:
                 opts["stream_uri"] = streaming["baseUri"]
+            if streaming.get("filter") is not None:
+                opts["payload_filter_key"] = streaming["filter"]
             _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
         else:
             opts['stream'] = False
             polling = config["polling"]
             if polling.get("baseUri") is not None:
                 opts["base_uri"] = polling["baseUri"]
+            if polling.get("filter") is not None:
+                opts["payload_filter_key"] = polling["filter"]
             _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
 
         if config.get("events") is not None:

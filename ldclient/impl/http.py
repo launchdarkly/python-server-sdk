@@ -1,5 +1,5 @@
 from os import environ
-from typing import Tuple
+from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 import certifi
