@@ -507,7 +507,6 @@ class Config:
         """
         return self.__payload_filter_key
 
-
     @property
     def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:
         """
