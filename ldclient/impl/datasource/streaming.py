@@ -3,6 +3,7 @@ import time
 from collections import namedtuple
 from threading import Thread
 from typing import Optional
+from urllib import parse
 
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault
@@ -35,6 +36,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         Thread.__init__(self, name="ldclient.datasource.streaming")
         self.daemon = True
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
+        if config.payload_filter_key is not None:
+            self._uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
         self._config = config
         self._data_source_update_sink = config.data_source_update_sink
         self._store = store

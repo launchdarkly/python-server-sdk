@@ -182,6 +182,7 @@ class Config:
         hooks: Optional[List[Hook]] = None,
         enable_event_compression: bool = False,
         omit_anonymous_contexts: bool = False,
+        payload_filter_key: Optional[str] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -250,6 +251,7 @@ class Config:
         :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
+        :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
         """
         self.__sdk_key = sdk_key
 
@@ -285,6 +287,7 @@ class Config:
         self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
+        self.__payload_filter_key = payload_filter_key
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
@@ -483,6 +486,27 @@ class Config:
         Determines whether or not anonymous contexts will be omitted from index and identify events.
         """
         return self.__omit_anonymous_contexts
+
+    @property
+    def payload_filter_key(self) -> Optional[str]:
+        """
+       LaunchDarkly Server SDKs historically downloaded all flag configuration
+       and segments for a particular environment during initialization.
+
+       For some customers, this is an unacceptably large amount of data, and
+       has contributed to performance issues within their products.
+
+       Filtered environments aim to solve this problem. By allowing customers
+       to specify subsets of an environment's flags using a filter key, SDKs
+       will initialize faster and use less memory.
+
+       This payload filter key only applies to the default streaming and
+       polling data sources. It will not affect TestData or FileData data
+       sources, nor will it be applied to any data source provided through the
+       {#data_source} config property.
+        """
+        return self.__payload_filter_key
+
 
     @property
     def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:

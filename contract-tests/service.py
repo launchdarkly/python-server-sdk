@@ -65,6 +65,7 @@ def status():
             'all-flags-details-only-for-tracked-flags',
             'big-segments',
             'context-type',
+            'filtering',
             'secure-mode-hash',
             'tags',
             'migrations',
