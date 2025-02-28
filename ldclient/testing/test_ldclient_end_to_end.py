@@ -15,6 +15,22 @@ user = Context.from_dict({'key': 'userkey', 'kind': 'user'})
 always_true_flag = {'key': 'flagkey', 'version': 1, 'on': False, 'offVariation': 1, 'variations': [False, True]}
 
 
+def test_config_ignores_initial_instance_id():
+    with start_server() as stream_server:
+        with stream_content(make_put_event([always_true_flag])) as stream_handler:
+            stream_server.for_path('/all', stream_handler)
+            config = Config(sdk_key=sdk_key, stream_uri=stream_server.uri, send_events=False)
+            config._instance_id = "Hey, I'm not supposed to modify this"
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+                assert client.variation(always_true_flag['key'], user, False) is True
+
+                r = stream_server.await_request()
+                assert r.headers['X-LaunchDarkly-Instance-Id'] == config._instance_id
+                assert r.headers['X-LaunchDarkly-Instance-Id'] != "Hey, I'm not supposed to modify this"
+
+
 def test_client_starts_in_streaming_mode():
     with start_server() as stream_server:
         with stream_content(make_put_event([always_true_flag])) as stream_handler:

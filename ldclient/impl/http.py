@@ -25,6 +25,9 @@ def _application_header_value(application: dict) -> str:
 def _base_headers(config):
     headers = {'Authorization': config.sdk_key or '', 'User-Agent': 'PythonClient/' + VERSION}
 
+    if config._instance_id is not None:
+        headers['X-LaunchDarkly-Instance-Id'] = config._instance_id
+
     app_value = _application_header_value(config.application)
     if app_value:
         headers['X-LaunchDarkly-Tags'] = app_value

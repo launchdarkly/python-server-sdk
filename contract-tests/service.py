@@ -74,6 +74,7 @@ def status():
             'event-sampling',
             'polling-gzip',
             'inline-context-all',
+            'instance-id',
             'anonymous-redaction',
             'evaluation-hooks',
             'omit-anonymous-contexts',

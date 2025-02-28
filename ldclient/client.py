@@ -7,6 +7,7 @@ import hmac
 import threading
 import traceback
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from uuid import uuid4
 
 from ldclient.config import Config
 from ldclient.context import Context
@@ -188,14 +189,42 @@ class LDClient:
         check_uwsgi()
 
         self._config = config
+        self._config._instance_id = str(uuid4())
         self._config._validate()
-
-        self.__hooks_lock = ReadWriteLock()
-        self.__hooks = config.hooks  # type: List[Hook]
 
         self._event_processor = None
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
+
+        self.__start_up(start_wait)
+
+    def postfork(self, start_wait: float = 5):
+        """
+        Re-initializes an existing client after a process fork.
+
+        The SDK relies on multiple background threads to operate correctly.
+        When a process forks, `these threads are not available to the child
+        <https://pythondev.readthedocs.io/fork.html#reinitialize-all-locks-after-fork>`.
+
+        As a result, the SDK will not function correctly in the child process
+        until it is re-initialized.
+
+        This method is effectively equivalent to instantiating a new client.
+        Future iterations of the SDK will provide increasingly efficient
+        re-initializing improvements.
+
+        Note that any configuration provided to the SDK will need to survive
+        the forking process independently. For this reason, it is recommended
+        that any listener or hook integrations be added postfork unless you are
+        certain it can survive the forking process.
+
+        :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
+        """
+        self.__start_up(start_wait)
+
+    def __start_up(self, start_wait: float):
+        self.__hooks_lock = ReadWriteLock()
+        self.__hooks = self._config.hooks  # type: List[Hook]
 
         data_store_listeners = Listeners()
         store_sink = DataStoreUpdateSinkImpl(data_store_listeners)
