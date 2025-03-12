@@ -798,7 +798,7 @@ def check_feature_event(data, source: EventInputEvaluation, context_json: Option
 def check_migration_op_event(data, source: MigrationOpEvent):
     assert data['kind'] == 'migration_op'
     assert data['creationDate'] == source.timestamp
-    assert data['contextKeys'] == make_context_keys(source.context)
+    assert data['context'] == source.context.to_dict()
     assert data['evaluation']['key'] == source.key
     assert data['evaluation']['value'] == source.detail.value
 
@@ -861,7 +861,7 @@ def check_custom_event(data, source: EventInputCustom):
     assert data['creationDate'] == source.timestamp
     assert data['key'] == source.key
     assert data['data'] == source.data
-    assert data['contextKeys'] == make_context_keys(source.context)
+    assert data['context'] == source.context.to_dict()
     assert data.get('metricValue') == source.metric_value
 
 
