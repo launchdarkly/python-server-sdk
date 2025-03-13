@@ -73,7 +73,7 @@ def status():
             'optional-event-gzip',
             'event-sampling',
             'polling-gzip',
-            'inline-context',
+            'inline-context-all',
             'anonymous-redaction',
             'evaluation-hooks',
             'omit-anonymous-contexts',

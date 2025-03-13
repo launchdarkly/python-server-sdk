@@ -82,7 +82,13 @@ class EventOutputFormatter:
         elif isinstance(e, IndexEvent):
             return {'kind': 'index', 'creationDate': e.timestamp, 'context': self._process_context(e.context, False)}
         elif isinstance(e, EventInputCustom):
-            out = {'kind': 'custom', 'creationDate': e.timestamp, 'key': e.key, 'contextKeys': self._context_keys(e.context)}
+            out = {
+                'kind': 'custom',
+                'creationDate': e.timestamp,
+                'key': e.key,
+                'context': self._process_context(e.context, True)
+            }
+
             if e.data is not None:
                 out['data'] = e.data
             if e.metric_value is not None:
@@ -93,7 +99,7 @@ class EventOutputFormatter:
                 'kind': 'migration_op',
                 'creationDate': e.timestamp,
                 'operation': e.operation.value,
-                'contextKeys': self._context_keys(e.context),
+                'context': self._process_context(e.context, True),
                 'evaluation': {'key': e.key, 'value': e.detail.value},
             }
 
