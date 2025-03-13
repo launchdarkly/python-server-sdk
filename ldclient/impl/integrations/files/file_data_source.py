@@ -88,7 +88,10 @@ class _FileDataSource(UpdateProcessor):
         for path in self._paths:
             try:
                 self._load_file(path, all_data)
-            except Exception as e:
+            except FileDataSourceEmpty:
+                log.warning('No flag data found in any file, continuing with current state')
+                return
+            except (Exception, FileNotFoundError) as e:
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
                 if self._data_source_update_sink is not None:
@@ -110,6 +113,10 @@ class _FileDataSource(UpdateProcessor):
         with open(path, 'r') as f:
             content = f.read()
         parsed = self._parse_content(content)
+
+        if parsed is None:
+            raise FileDataSourceEmpty()
+
         for key, flag in parsed.get('flags', {}).items():
             _sanitize_json_item(flag)
             self._add_item(all_data, FEATURES, flag)
@@ -155,6 +162,13 @@ class _FileDataSource(UpdateProcessor):
 
             class LDWatchdogHandler(watchdog.events.FileSystemEventHandler):
                 def on_any_event(self, event):
+                    if isinstance(event, watchdog.events.FileDeletedEvent):
+                        return
+
+                    if isinstance(event, watchdog.events.FileMovedEvent) and event.dest_path in watched_files:
+                        reloader()
+                        return
+
                     if event.src_path in watched_files:
                         reloader()
 
@@ -203,4 +217,9 @@ class _FileDataSource(UpdateProcessor):
                     ret[path] = os.path.getmtime(path)
                 except Exception:
                     ret[path] = None
+
             return ret
+
+
+class FileDataSourceEmpty(Exception):
+    pass
