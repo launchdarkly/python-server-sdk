@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.10.0](https://github.com/launchdarkly/python-server-sdk/compare/9.9.0...9.10.0) (2025-03-13)
+
+
+### Features
+
+* Inline context for custom and migration op events ([#327](https://github.com/launchdarkly/python-server-sdk/issues/327)) ([ecfd56c](https://github.com/launchdarkly/python-server-sdk/commit/ecfd56cc916c72095764349741a0396d295f932f))
+
 ## [9.9.0](https://github.com/launchdarkly/python-server-sdk/compare/9.8.1...9.9.0) (2025-01-03)
 
 
