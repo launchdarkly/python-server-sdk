@@ -50,7 +50,24 @@ def test_request_properties():
                 assert req.headers.get('Authorization') == 'sdk-key'
                 assert req.headers.get('User-Agent') == 'PythonClient/' + VERSION
                 assert req.headers.get('X-LaunchDarkly-Wrapper') is None
+                assert req.headers.get('X-LaunchDarkly-Instance-Id') is None
                 assert req.headers.get('X-LaunchDarkly-Tags') is None
+
+
+def test_sends_instance_id():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, wrapper_name='Flask', wrapper_version='0.1.0')
+            config._instance_id = 'my-instance-id'
+            server.for_path('/all', stream)
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                req = server.await_request()
+                assert req.headers.get('X-LaunchDarkly-Instance-Id') == 'my-instance-id'
 
 
 def test_sends_wrapper_header():

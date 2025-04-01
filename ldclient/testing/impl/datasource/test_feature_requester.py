@@ -37,6 +37,21 @@ def test_get_all_data_sends_headers():
         assert req.headers['Accept-Encoding'] == 'gzip'
         assert req.headers.get('X-LaunchDarkly-Wrapper') is None
         assert req.headers.get('X-LaunchDarkly-Tags') is None
+        assert req.headers.get('X-LaunchDarkly-Instance-Id') is None
+
+
+def test_sets_instance_id_header():
+    with start_server() as server:
+        config = Config(sdk_key='sdk-key', base_uri=server.uri)
+        config._instance_id = 'my-instance-id'
+        fr = FeatureRequesterImpl(config)
+
+        resp_data = {'flags': {}, 'segments': {}}
+        server.for_path('/sdk/latest-all', JsonResponse(resp_data))
+
+        fr.get_all_data()
+        req = server.require_request()
+        assert req.headers.get('X-LaunchDarkly-Instance-Id') == 'my-instance-id'
 
 
 def test_get_all_data_sends_wrapper_header():

@@ -60,7 +60,14 @@ class DefaultTestProcessor(DefaultEventProcessor):
             kwargs['diagnostic_opt_out'] = True
         if 'sdk_key' not in kwargs:
             kwargs['sdk_key'] = 'SDK_KEY'
+
+        instance_id = None
+        if 'instance_id' in kwargs:
+            instance_id = kwargs['instance_id']
+            del kwargs['instance_id']
+
         config = Config(**kwargs)
+        config._instance_id = instance_id
         diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
         DefaultEventProcessor.__init__(self, config, mock_http, diagnostic_accumulator=diagnostic_accumulator)
 
@@ -570,6 +577,24 @@ def test_wrapper_header_sent_when_set():
         ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') == "Flask/0.0.1"
+
+
+def test_instance_id_header_not_sent_when_not_set():
+    with DefaultTestProcessor() as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Wrapper') is None
+
+
+def test_instance_id_header_sent_when_set():
+    with DefaultTestProcessor(instance_id="my-instance-id") as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('X-LaunchDarkly-Instance-Id') == "my-instance-id"
 
 
 def test_wrapper_header_sent_without_version():

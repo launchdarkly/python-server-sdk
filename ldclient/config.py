@@ -289,6 +289,7 @@ class Config:
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self.__payload_filter_key = payload_filter_key
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
+        self._instance_id: Optional[str] = None
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
