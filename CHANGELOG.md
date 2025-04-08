@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.11.0](https://github.com/launchdarkly/python-server-sdk/compare/9.10.0...9.11.0) (2025-04-08)
+
+
+### Features
+
+* Add `postfork` method to re-initialize after forking ([#329](https://github.com/launchdarkly/python-server-sdk/issues/329)) ([581fcfb](https://github.com/launchdarkly/python-server-sdk/commit/581fcfb5d7df36219f5735e21097838c323c13da))
+
 ## [9.10.0](https://github.com/launchdarkly/python-server-sdk/compare/9.9.0...9.10.0) (2025-03-13)
 
 
