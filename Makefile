@@ -28,7 +28,7 @@ install:
 .PHONY: test
 test: #! Run unit tests
 test: install
-	@poetry run pytest $(PYTEST_FLAGS)
+	@poetry run pytest $(PYTEST_FLAGS) ldclient/testing/test_file_data_source.py
 
 .PHONY: lint
 lint: #! Run type analysis and linting checks
