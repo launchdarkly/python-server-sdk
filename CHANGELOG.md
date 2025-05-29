@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.11.1](https://github.com/launchdarkly/python-server-sdk/compare/9.11.0...9.11.1) (2025-05-29)
+
+
+### Bug Fixes
+
+* Raise minimum eventsource dep to v1.2.4 ([#333](https://github.com/launchdarkly/python-server-sdk/issues/333)) ([5270962](https://github.com/launchdarkly/python-server-sdk/commit/527096275c20668041436b770270375be397033b))
+
 ## [9.11.0](https://github.com/launchdarkly/python-server-sdk/compare/9.10.0...9.11.0) (2025-04-08)
 
 
