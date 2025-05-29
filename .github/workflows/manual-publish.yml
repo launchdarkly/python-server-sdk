@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Is this a dry run? If so no package will be published.'
+        description: "Is this a dry run? If so no package will be published."
         type: boolean
         required: true
 
@@ -21,16 +21,16 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.8
+          python-version: 3.9
 
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
-        name: 'Get PyPI token'
+        name: "Get PyPI token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
-          ssm_parameter_pairs: '/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN'
+          ssm_parameter_pairs: "/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN"
 
       - uses: ./.github/actions/build
         id: build
@@ -42,7 +42,7 @@ jobs:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
   release-provenance:
-    needs: [ 'build-publish' ]
+    needs: ["build-publish"]
     permissions:
       actions: read
       id-token: write
