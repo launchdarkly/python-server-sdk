@@ -2,13 +2,13 @@ name: Quality control checks
 
 on:
   push:
-    branches: [ main, 'feat/**' ]
+    branches: [main, "feat/**"]
     paths-ignore:
-      - '**.md' # Do not need to run CI for markdown changes.
+      - "**.md" # Do not need to run CI for markdown changes.
   pull_request:
-    branches: [ main, 'feat/**' ]
+    branches: [main, "feat/**"]
     paths-ignore:
-      - '**.md'
+      - "**.md"
 
 jobs:
   linux:
@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     services:
       redis:
@@ -77,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
