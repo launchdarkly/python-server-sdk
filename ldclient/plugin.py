@@ -33,8 +33,6 @@ class EnvironmentMetadata:
     sdk: SdkMetadata  #: Information about the SDK
     application: Optional[ApplicationMetadata] = None  #: Information about the application
     sdk_key: Optional[str] = None  #: The SDK key used to initialize the SDK
-    mobile_key: Optional[str] = None  #: The mobile key used to initialize the SDK
-    client_side_id: Optional[str] = None  #: The client-side ID used to initialize the SDK
 
 
 @dataclass
