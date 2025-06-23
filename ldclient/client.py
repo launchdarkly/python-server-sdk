@@ -40,10 +40,11 @@ from ldclient.interfaces import (BigSegmentStoreStatusProvider,
                                  DataStoreStatusProvider, DataStoreUpdateSink,
                                  FeatureStore, FlagTracker)
 from ldclient.migrations import OpTracker, Stage
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
-from ldclient.plugin import SdkMetadata, ApplicationMetadata, EnvironmentMetadata
+from ldclient.plugin import (ApplicationMetadata, EnvironmentMetadata,
+                             SdkMetadata)
 from ldclient.version import VERSION
-        
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
+
 from .impl import AnyNum
 
 
@@ -287,14 +288,14 @@ class LDClient:
             wrapper_name=self._config.wrapper_name,
             wrapper_version=self._config.wrapper_version
         )
-        
+
         application_metadata = None
         if self._config.application:
             application_metadata = ApplicationMetadata(
                 id=self._config.application.get('id'),
                 version=self._config.application.get('version'),
             )
-        
+
         return EnvironmentMetadata(
             sdk=sdk_metadata,
             application=application_metadata,

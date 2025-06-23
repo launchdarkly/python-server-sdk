@@ -95,4 +95,4 @@ class Plugin:
         :param metadata: Metadata about the environment in which the SDK is running
         :return: A list of hooks to be registered with the SDK
         """
-        return [] 
+        return []
