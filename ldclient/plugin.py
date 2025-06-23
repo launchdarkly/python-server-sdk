@@ -83,6 +83,7 @@ class Plugin:
         """
         pass
 
+    @abstractmethod
     def get_hooks(self, metadata: EnvironmentMetadata) -> List[Hook]:
         """
         Get a list of hooks that this plugin provides.
