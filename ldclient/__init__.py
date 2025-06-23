@@ -9,7 +9,6 @@ from ldclient.version import VERSION
 from .client import *
 from .context import *
 from .migrations import *
-from .plugin import *
 
 __version__ = VERSION
 
@@ -100,4 +99,4 @@ def _reset_client():
 __BASE_TYPES__ = (str, float, int, bool)
 
 
-__all__ = ['Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations', 'Plugin', 'PluginMetadata', 'EnvironmentMetadata', 'SdkMetadata', 'ApplicationMetadata']
+__all__ = ['Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations']
