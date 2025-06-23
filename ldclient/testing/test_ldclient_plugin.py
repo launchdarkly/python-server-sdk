@@ -86,7 +86,8 @@ class ConfigurableTestPlugin(Plugin):
         self.hooks_called = False
         self.hooks_metadata = None
     
-    def get_metadata(self) -> PluginMetadata:
+    @property
+    def metadata(self) -> PluginMetadata:
         return PluginMetadata(name=self._name)
     
     def register(self, client: Any, metadata: EnvironmentMetadata) -> None:

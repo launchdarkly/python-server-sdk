@@ -46,7 +46,8 @@ class ExamplePlugin(Plugin):
         self._client = None
         self._environment_metadata = None
     
-    def get_metadata(self) -> PluginMetadata:
+    @property
+    def metadata(self) -> PluginMetadata:
         """Get metadata about the plugin implementation."""
         return PluginMetadata(name=self._name)
     
@@ -64,7 +65,7 @@ class ExamplePlugin(Plugin):
         # Example: Log some information about the environment
         print(f"Example Plugin registered with SDK {metadata.sdk.name} version {metadata.sdk.version}")
         if metadata.application:
-            print(f"Application: {metadata.application.name} version {metadata.application.version}")
+            print(f"Application: {metadata.application.id} version {metadata.application.version}")
     
     def get_hooks(self, metadata: EnvironmentMetadata) -> List[Hook]:
         """
@@ -107,7 +108,7 @@ class TestPlugin(unittest.TestCase):
         plugin = ExamplePlugin("Test Example Plugin")
         
         # Test metadata
-        metadata = plugin.get_metadata()
+        metadata = plugin.metadata
         self.assertEqual(metadata.name, "Test Example Plugin")
         
         # Test hooks

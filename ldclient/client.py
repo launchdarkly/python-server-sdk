@@ -307,7 +307,7 @@ class LDClient:
             try:
                 hooks.extend(plugin.get_hooks(environment_metadata))
             except Exception as e:
-                log.error(f"Error getting hooks from plugin {plugin.get_metadata().name}: {e}")
+                log.error(f"Error getting hooks from plugin {plugin.metadata.name}: {e}")
         return hooks
 
     def __register_plugins(self, environment_metadata: EnvironmentMetadata):
@@ -315,7 +315,7 @@ class LDClient:
             try:
                 plugin.register(self, environment_metadata)
             except Exception as e:
-                log.error(f"Error registering plugin {plugin.get_metadata().name}: {e}")
+                log.error(f"Error registering plugin {plugin.metadata.name}: {e}")
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:

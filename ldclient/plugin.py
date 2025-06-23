@@ -61,8 +61,9 @@ class Plugin:
 
     __metaclass__ = ABCMeta
 
+    @property
     @abstractmethod
-    def get_metadata(self) -> PluginMetadata:
+    def metadata(self) -> PluginMetadata:
         """
         Get metadata about the plugin implementation.
 
