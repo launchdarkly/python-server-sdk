@@ -281,7 +281,7 @@ class LDClient:
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
 
-    def __get_environment_metadata(self):
+    def __get_environment_metadata(self) -> EnvironmentMetadata:
         sdk_metadata = SdkMetadata(
             name="python-server-sdk",
             version=VERSION,
