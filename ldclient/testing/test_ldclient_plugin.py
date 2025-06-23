@@ -194,14 +194,21 @@ class TestLDClientPlugin(unittest.TestCase):
         )
         
         # The hooks cannot be accessed, but the plugin will still get registered.
-        with LDClient(config=config) as client:
-            self.assertTrue(normal_plugin.registered)
-            self.assertTrue(error_plugin.registered)
+        with patch('ldclient.impl.util.log.error') as mock_log_error:
+            with LDClient(config=config) as client:
+                self.assertTrue(normal_plugin.registered)
+                self.assertTrue(error_plugin.registered)
 
-            client.variation("test-flag", Context.builder("user-key").build(), "default")
+                client.variation("test-flag", Context.builder("user-key").build(), "default")
 
-            self.assertTrue(normal_hook.before_called)
-            self.assertTrue(normal_hook.after_called)
+                self.assertTrue(normal_hook.before_called)
+                self.assertTrue(normal_hook.after_called)
+                
+                # Verify that the error was logged with the correct message
+                mock_log_error.assert_called_once()
+                error_call_args = mock_log_error.call_args[0]
+                self.assertIn("Error getting hooks from plugin Error Plugin", error_call_args[0])
+                self.assertIn("Get hooks error in Error Plugin", str(error_call_args))
     
     def test_plugin_error_handling_register(self):
         """Test that errors during plugin registration are handled gracefully."""
@@ -220,17 +227,24 @@ class TestLDClientPlugin(unittest.TestCase):
         )
         
         # Should not raise an exception
-        with LDClient(config=config) as client:
-            # Normal plugin should still be registered
-            self.assertTrue(normal_plugin.registered)
-            
-            # Error plugin should not be registered
-            self.assertFalse(error_plugin.registered)
+        with patch('ldclient.impl.util.log.error') as mock_log_error:
+            with LDClient(config=config) as client:
+                # Normal plugin should still be registered
+                self.assertTrue(normal_plugin.registered)
+                
+                # Error plugin should not be registered
+                self.assertFalse(error_plugin.registered)
 
-            client.variation("test-flag", Context.builder("user-key").build(), "default")
+                client.variation("test-flag", Context.builder("user-key").build(), "default")
 
-            self.assertTrue(normal_hook.before_called)
-            self.assertTrue(normal_hook.after_called)
+                self.assertTrue(normal_hook.before_called)
+                self.assertTrue(normal_hook.after_called)
+                
+                # Verify that the error was logged with the correct message
+                mock_log_error.assert_called_once()
+                error_call_args = mock_log_error.call_args[0]
+                self.assertIn("Error registering plugin Error Plugin", error_call_args[0])
+                self.assertIn("Registration error in Error Plugin", str(error_call_args))
     
     def test_plugin_with_existing_hooks(self):
         """Test that plugin hooks work alongside existing hooks and config hooks are called before plugin hooks."""
