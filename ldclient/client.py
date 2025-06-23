@@ -41,7 +41,9 @@ from ldclient.interfaces import (BigSegmentStoreStatusProvider,
                                  FeatureStore, FlagTracker)
 from ldclient.migrations import OpTracker, Stage
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
-
+from ldclient.plugin import SdkMetadata, ApplicationMetadata, EnvironmentMetadata
+from ldclient.version import VERSION
+        
 from .impl import AnyNum
 
 
@@ -223,8 +225,11 @@ class LDClient:
         self.__start_up(start_wait)
 
     def __start_up(self, start_wait: float):
+        environment_metadata = self.__get_environment_metadata()
+        plugin_hooks = self.__get_plugin_hooks(environment_metadata)
+
         self.__hooks_lock = ReadWriteLock()
-        self.__hooks = self._config.hooks  # type: List[Hook]
+        self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
         data_store_listeners = Listeners()
         store_sink = DataStoreUpdateSinkImpl(data_store_listeners)
@@ -256,6 +261,8 @@ class LDClient:
 
         diagnostic_accumulator = self._set_event_processor(self._config)
 
+        self.__register_plugins(environment_metadata)
+
         update_processor_ready = threading.Event()
         self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
         self._update_processor.start()
@@ -272,6 +279,43 @@ class LDClient:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
+
+    def __get_environment_metadata(self):
+        sdk_metadata = SdkMetadata(
+            name="python-server-sdk",
+            version=VERSION,
+            wrapper_name=self._config.wrapper_name,
+            wrapper_version=self._config.wrapper_version
+        )
+        
+        application_metadata = None
+        if self._config.application:
+            application_metadata = ApplicationMetadata(
+                id=self._config.application.get('id'),
+                version=self._config.application.get('version'),
+            )
+        
+        return EnvironmentMetadata(
+            sdk=sdk_metadata,
+            application=application_metadata,
+            sdk_key=self._config.sdk_key
+        )
+
+    def __get_plugin_hooks(self, environment_metadata: EnvironmentMetadata) -> List[Hook]:
+        hooks = []
+        for plugin in self._config.plugins:
+            try:
+                hooks.extend(plugin.get_hooks(environment_metadata))
+            except Exception as e:
+                log.error(f"Error getting hooks from plugin {plugin.get_metadata().name}: {e}")
+        return hooks
+
+    def __register_plugins(self, environment_metadata: EnvironmentMetadata):
+        for plugin in self._config.plugins:
+            try:
+                plugin.register(self, environment_metadata)
+            except Exception as e:
+                log.error(f"Error registering plugin {plugin.get_metadata().name}: {e}")
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:
