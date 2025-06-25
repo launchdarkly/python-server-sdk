@@ -28,6 +28,11 @@ install:
 .PHONY: test
 test: #! Run unit tests
 test: install
+	@LD_SKIP_DATABASE_TESTS=1 poetry run pytest $(PYTEST_FLAGS)
+
+.PHONY: test-all
+test-all: #! Run unit tests (including database integrations)
+test-all: install
 	@poetry run pytest $(PYTEST_FLAGS)
 
 .PHONY: lint
