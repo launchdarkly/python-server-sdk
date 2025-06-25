@@ -38,9 +38,9 @@ test-all: install
 .PHONY: lint
 lint: #! Run type analysis and linting checks
 lint: install
-	@poetry run mypy ldclient
-	@poetry run isort --check --atomic ldclient contract-tests
-	@poetry run pycodestyle ldclient contract-tests
+	poetry run mypy ldclient
+	poetry run isort --check --atomic ldclient contract-tests
+	poetry run pycodestyle ldclient contract-tests
 
 #
 # Documentation generation
