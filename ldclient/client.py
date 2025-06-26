@@ -308,7 +308,7 @@ class LDClient:
             try:
                 hooks.extend(plugin.get_hooks(environment_metadata))
             except Exception as e:
-                log.error(f"Error getting hooks from plugin {plugin.metadata.name}: {e}")
+                log.error("Error getting hooks from plugin %s: %s", plugin.metadata.name, e)
         return hooks
 
     def __register_plugins(self, environment_metadata: EnvironmentMetadata):
