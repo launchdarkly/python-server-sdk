@@ -2,6 +2,17 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.12.0](https://github.com/launchdarkly/python-server-sdk/compare/9.11.1...9.12.0) (2025-06-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* Drop support for Python 3.8 (eol 2024-10-07) ([#339](https://github.com/launchdarkly/python-server-sdk/issues/339))
+
+### Features
+
+* Drop support for Python 3.8 (eol 2024-10-07) ([#339](https://github.com/launchdarkly/python-server-sdk/issues/339)) ([0207665](https://github.com/launchdarkly/python-server-sdk/commit/02076650064d8a20f792c80cda3249a7aa7e336a))
+
 ## [9.11.1](https://github.com/launchdarkly/python-server-sdk/compare/9.11.0...9.11.1) (2025-05-29)
 
 
