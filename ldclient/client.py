@@ -316,7 +316,7 @@ class LDClient:
             try:
                 plugin.register(self, environment_metadata)
             except Exception as e:
-                log.error(f"Error registering plugin {plugin.metadata.name}: {e}")
+                log.error("Error registering plugin %s: %s", plugin.metadata.name, e)
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:

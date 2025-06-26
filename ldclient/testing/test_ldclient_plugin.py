@@ -201,9 +201,13 @@ class TestLDClientPlugin(unittest.TestCase):
 
                 # Verify that the error was logged with the correct message
                 mock_log_error.assert_called_once()
-                error_call_args = mock_log_error.call_args[0]
-                self.assertIn("Error getting hooks from plugin Error Plugin", error_call_args[0])
-                self.assertIn("Get hooks error in Error Plugin", str(error_call_args))
+                # Check the format string and arguments separately
+                format_string = mock_log_error.call_args[0][0]
+                format_args = mock_log_error.call_args[0][1:]
+                self.assertEqual(format_string, "Error getting hooks from plugin %s: %s")
+                self.assertEqual(len(format_args), 2)
+                self.assertEqual(format_args[0], "Error Plugin")
+                self.assertIn("Get hooks error in Error Plugin", str(format_args[1]))
 
     def test_plugin_error_handling_register(self):
         """Test that errors during plugin registration are handled gracefully."""
@@ -237,9 +241,13 @@ class TestLDClientPlugin(unittest.TestCase):
 
                 # Verify that the error was logged with the correct message
                 mock_log_error.assert_called_once()
-                error_call_args = mock_log_error.call_args[0]
-                self.assertIn("Error registering plugin Error Plugin", error_call_args[0])
-                self.assertIn("Registration error in Error Plugin", str(error_call_args))
+                # Check the format string and arguments separately
+                format_string = mock_log_error.call_args[0][0]
+                format_args = mock_log_error.call_args[0][1:]
+                self.assertEqual(format_string, "Error registering plugin %s: %s")
+                self.assertEqual(len(format_args), 2)
+                self.assertEqual(format_args[0], "Error Plugin")
+                self.assertIn("Registration error in Error Plugin", str(format_args[1]))
 
     def test_plugin_with_existing_hooks(self):
         """Test that plugin hooks work alongside existing hooks and config hooks are called before plugin hooks."""
