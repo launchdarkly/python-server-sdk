@@ -5,7 +5,7 @@ from typing import Any, List, Optional
 from ldclient.hook import Hook
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SdkMetadata:
     """
     Metadata about the SDK.
@@ -16,7 +16,7 @@ class SdkMetadata:
     wrapper_version: Optional[str] = None  #: The wrapper version if this SDK is a wrapper
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ApplicationMetadata:
     """
     Metadata about the application using the SDK.
@@ -25,17 +25,17 @@ class ApplicationMetadata:
     version: Optional[str] = None  #: The version of the application
 
 
-@dataclass
+@dataclass(kw_only=True)
 class EnvironmentMetadata:
     """
     Metadata about the environment in which the SDK is running.
     """
     sdk: SdkMetadata  #: Information about the SDK
     application: Optional[ApplicationMetadata] = None  #: Information about the application
-    sdk_key: Optional[str] = None  #: The SDK key used to initialize the SDK
+    sdk_key: str = None  #: The SDK key used to initialize the SDK
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PluginMetadata:
     """
     Metadata about a plugin implementation.
