@@ -32,7 +32,7 @@ class EnvironmentMetadata:
     """
     sdk: SdkMetadata  #: Information about the SDK
     application: Optional[ApplicationMetadata] = None  #: Information about the application
-    sdk_key: str = None  #: The SDK key used to initialize the SDK
+    sdk_key: str  #: The SDK key used to initialize the SDK
 
 
 @dataclass(kw_only=True)

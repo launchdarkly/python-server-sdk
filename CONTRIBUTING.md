@@ -16,11 +16,11 @@ We encourage pull requests and other contributions from the community. Before su
 
 This project is built using [poetry](https://python-poetry.org/). To learn more about the basics of working with this tool, read [Poetry's basic usage guide](https://python-poetry.org/docs/basic-usage/).
 
-To begin development, active the poetry shell and ensure your dependencies are installed.
+To begin development, ensure your dependencies are installed and (optionally) activate the virtualenv.
 
 ```
-poetry shell
 poetry install
+eval $(poetry env activate)
 ```
 
 This library defines several extra dependencies to optionally enhance the SDK's capabilities. Use the following commands to install one or more of the available extras.
