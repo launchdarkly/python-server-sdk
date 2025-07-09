@@ -1,9 +1,17 @@
+from __future__ import annotations
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
+from ldclient.context import Context
+from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.hook import Hook
+from ldclient.impl import AnyNum
+from ldclient.impl.evaluator import error_reason
+from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusProvider, DataStoreStatusProvider, FlagTracker
 
+if TYPE_CHECKING:
+    from ldclient.client import LDClient
 
 @dataclass(kw_only=True)
 class SdkMetadata:
@@ -70,7 +78,7 @@ class Plugin:
         return PluginMetadata(name='UNDEFINED')
 
     @abstractmethod
-    def register(self, client: Any, metadata: EnvironmentMetadata) -> None:
+    def register(self, client: LDClient, metadata: EnvironmentMetadata) -> None:
         """
         Register the plugin with the SDK client.
 

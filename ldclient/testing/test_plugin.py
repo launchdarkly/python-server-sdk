@@ -115,7 +115,7 @@ class TestPlugin(unittest.TestCase):
 
         # Test hooks
         sdk_metadata = SdkMetadata(name="test-sdk", version="1.0.0")
-        env_metadata = EnvironmentMetadata(sdk=sdk_metadata)
+        env_metadata = EnvironmentMetadata(sdk=sdk_metadata, sdk_key="test-key")
 
         hooks = plugin.get_hooks(env_metadata)
         self.assertEqual(len(hooks), 1)
