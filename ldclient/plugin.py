@@ -39,8 +39,8 @@ class EnvironmentMetadata:
     Metadata about the environment in which the SDK is running.
     """
     sdk: SdkMetadata  #: Information about the SDK
-    application: Optional[ApplicationMetadata] = None  #: Information about the application
     sdk_key: str  #: The SDK key used to initialize the SDK
+    application: Optional[ApplicationMetadata] = None  #: Information about the application
 
 
 @dataclass
