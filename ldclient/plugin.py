@@ -13,7 +13,7 @@ from ldclient.interfaces import BigSegmentStoreStatusProvider, DataSourceStatusP
 if TYPE_CHECKING:
     from ldclient.client import LDClient
 
-@dataclass(kw_only=True)
+@dataclass
 class SdkMetadata:
     """
     Metadata about the SDK.
@@ -24,7 +24,7 @@ class SdkMetadata:
     wrapper_version: Optional[str] = None  #: The wrapper version if this SDK is a wrapper
 
 
-@dataclass(kw_only=True)
+@dataclass
 class ApplicationMetadata:
     """
     Metadata about the application using the SDK.
@@ -33,7 +33,7 @@ class ApplicationMetadata:
     version: Optional[str] = None  #: The version of the application
 
 
-@dataclass(kw_only=True)
+@dataclass
 class EnvironmentMetadata:
     """
     Metadata about the environment in which the SDK is running.
@@ -43,7 +43,7 @@ class EnvironmentMetadata:
     sdk_key: str  #: The SDK key used to initialize the SDK
 
 
-@dataclass(kw_only=True)
+@dataclass
 class PluginMetadata:
     """
     Metadata about a plugin implementation.
