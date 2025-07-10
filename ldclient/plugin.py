@@ -16,6 +16,7 @@ from ldclient.interfaces import (BigSegmentStoreStatusProvider,
 if TYPE_CHECKING:
     from ldclient.client import LDClient
 
+
 @dataclass
 class SdkMetadata:
     """
