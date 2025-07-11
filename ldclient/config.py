@@ -12,6 +12,7 @@ from ldclient.hook import Hook
 from ldclient.impl.util import log, validate_application_info
 from ldclient.interfaces import (BigSegmentStore, DataSourceUpdateSink,
                                  EventProcessor, FeatureStore, UpdateProcessor)
+from ldclient.plugin import Plugin
 
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
@@ -180,6 +181,7 @@ class Config:
         big_segments: Optional[BigSegmentsConfig] = None,
         application: Optional[dict] = None,
         hooks: Optional[List[Hook]] = None,
+        plugins: Optional[List[Plugin]] = None,
         enable_event_compression: bool = False,
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
@@ -249,6 +251,7 @@ class Config:
           :class:`HTTPConfig`.
         :param application: Optional properties for setting application metadata. See :py:attr:`~application`
         :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
+        :param plugins: A list of plugins to be used with the SDK. Plugin support is currently experimental and subject to change.
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
@@ -285,6 +288,7 @@ class Config:
         self.__big_segments = BigSegmentsConfig() if not big_segments else big_segments
         self.__application = validate_application_info(application or {}, log)
         self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
+        self.__plugins = [plugin for plugin in plugins if isinstance(plugin, Plugin)] if plugins else []
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self.__payload_filter_key = payload_filter_key
@@ -476,6 +480,16 @@ class Config:
         `launchdarkly-server-sdk-otel`.
         """
         return self.__hooks
+
+    @property
+    def plugins(self) -> List[Plugin]:
+        """
+        Initial set of plugins for the client.
+
+        LaunchDarkly provides plugin packages, and most applications will
+        not need to implement their own plugins.
+        """
+        return self.__plugins
 
     @property
     def enable_event_compression(self) -> bool:
