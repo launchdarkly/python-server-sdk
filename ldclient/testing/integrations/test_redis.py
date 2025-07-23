@@ -2,8 +2,9 @@ import json
 
 import pytest
 
-from ldclient.impl.integrations.redis.redis_big_segment_store import \
+from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
+)
 from ldclient.integrations import Redis
 from ldclient.testing.integrations.big_segment_store_test_base import *
 from ldclient.testing.integrations.persistent_feature_store_test_base import *

@@ -5,8 +5,11 @@ from typing import TYPE_CHECKING, Callable
 
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.interfaces import (DataStoreStatus, DataStoreStatusProvider,
-                                 DataStoreUpdateSink)
+from ldclient.interfaces import (
+    DataStoreStatus,
+    DataStoreStatusProvider,
+    DataStoreUpdateSink
+)
 
 if TYPE_CHECKING:
     from ldclient.client import _FeatureStoreClientWrapper

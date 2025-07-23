@@ -7,9 +7,13 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
-from ldclient.testing.builders import (FlagBuilder, FlagRuleBuilder,
-                                       SegmentBuilder, SegmentRuleBuilder,
-                                       make_clause)
+from ldclient.testing.builders import (
+    FlagBuilder,
+    FlagRuleBuilder,
+    SegmentBuilder,
+    SegmentRuleBuilder,
+    make_clause
+)
 from ldclient.testing.test_util import SpyListener
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 

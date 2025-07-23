@@ -7,15 +7,25 @@ from urllib import parse
 
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault
-from ld_eventsource.config import (ConnectStrategy, ErrorStrategy,
-                                   RetryDelayStrategy)
+from ld_eventsource.config import (
+    ConnectStrategy,
+    ErrorStrategy,
+    RetryDelayStrategy
+)
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.impl.http import HTTPFactory, _http_factory
-from ldclient.impl.util import (http_error_message, is_http_error_recoverable,
-                                log)
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, UpdateProcessor)
+from ldclient.impl.util import (
+    http_error_message,
+    is_http_error_recoverable,
+    log
+)
+from ldclient.interfaces import (
+    DataSourceErrorInfo,
+    DataSourceErrorKind,
+    DataSourceState,
+    UpdateProcessor
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the

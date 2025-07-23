@@ -13,8 +13,11 @@ from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.integrations import Files
-from ldclient.interfaces import (DataSourceErrorKind, DataSourceState,
-                                 DataSourceStatus)
+from ldclient.interfaces import (
+    DataSourceErrorKind,
+    DataSourceState,
+    DataSourceStatus
+)
 from ldclient.testing.test_util import SpyListener
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 

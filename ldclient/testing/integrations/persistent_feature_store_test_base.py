@@ -4,9 +4,11 @@ import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.interfaces import FeatureStore
-from ldclient.testing.feature_store_test_base import (FeatureStoreTestBase,
-                                                      FeatureStoreTester,
-                                                      StoreTestScope)
+from ldclient.testing.feature_store_test_base import (
+    FeatureStoreTestBase,
+    FeatureStoreTester,
+    StoreTestScope
+)
 from ldclient.testing.test_util import skip_database_tests
 from ldclient.versioned_data_kind import FEATURES
 

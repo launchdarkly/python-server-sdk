@@ -6,8 +6,12 @@ from unittest.mock import patch
 from ldclient.client import LDClient
 from ldclient.config import Config
 from ldclient.context import Context
-from ldclient.hook import (EvaluationDetail, EvaluationSeriesContext, Hook,
-                           Metadata)
+from ldclient.hook import (
+    EvaluationDetail,
+    EvaluationSeriesContext,
+    Hook,
+    Metadata
+)
 from ldclient.plugin import EnvironmentMetadata, Plugin, PluginMetadata
 
 
