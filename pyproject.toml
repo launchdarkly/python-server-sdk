@@ -91,6 +91,9 @@ ignore_missing_imports = true
 install_types = true
 non_interactive = true
 
+[tool.isort]
+multi_line_output = 3
+
 
 [tool.pytest.ini_options]
 addopts = ["-ra"]

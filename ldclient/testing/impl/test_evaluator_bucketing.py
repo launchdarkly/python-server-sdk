@@ -3,8 +3,10 @@ import math
 import pytest
 
 from ldclient.client import Context
-from ldclient.impl.evaluator import (_bucket_context,
-                                     _variation_index_for_context)
+from ldclient.impl.evaluator import (
+    _bucket_context,
+    _variation_index_for_context
+)
 from ldclient.impl.model import *
 from ldclient.testing.builders import *
 from ldclient.testing.impl.evaluator_util import *

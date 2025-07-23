@@ -5,10 +5,17 @@ import pytest
 
 from ldclient.client import Context, LDClient
 from ldclient.config import Config, HTTPConfig
-from ldclient.testing.http_util import (BasicResponse, SequentialHandler,
-                                        start_secure_server, start_server)
-from ldclient.testing.stub_util import (make_put_event, poll_content,
-                                        stream_content)
+from ldclient.testing.http_util import (
+    BasicResponse,
+    SequentialHandler,
+    start_secure_server,
+    start_server
+)
+from ldclient.testing.stub_util import (
+    make_put_event,
+    poll_content,
+    stream_content
+)
 
 sdk_key = 'sdk-key'
 user = Context.from_dict({'key': 'userkey', 'kind': 'user'})

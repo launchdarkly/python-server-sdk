@@ -7,10 +7,19 @@ from typing import Any, List, Optional
 from unittest.mock import Mock
 
 from ldclient.config import Config
-from ldclient.hook import (EvaluationDetail, EvaluationSeriesContext, Hook,
-                           Metadata)
-from ldclient.plugin import (ApplicationMetadata, EnvironmentMetadata, Plugin,
-                             PluginMetadata, SdkMetadata)
+from ldclient.hook import (
+    EvaluationDetail,
+    EvaluationSeriesContext,
+    Hook,
+    Metadata
+)
+from ldclient.plugin import (
+    ApplicationMetadata,
+    EnvironmentMetadata,
+    Plugin,
+    PluginMetadata,
+    SdkMetadata
+)
 
 
 class ExampleHook(Hook):

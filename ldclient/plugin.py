@@ -9,9 +9,12 @@ from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.hook import Hook
 from ldclient.impl import AnyNum
 from ldclient.impl.evaluator import error_reason
-from ldclient.interfaces import (BigSegmentStoreStatusProvider,
-                                 DataSourceStatusProvider,
-                                 DataStoreStatusProvider, FlagTracker)
+from ldclient.interfaces import (
+    BigSegmentStoreStatusProvider,
+    DataSourceStatusProvider,
+    DataStoreStatusProvider,
+    FlagTracker
+)
 
 if TYPE_CHECKING:
     from ldclient.client import LDClient

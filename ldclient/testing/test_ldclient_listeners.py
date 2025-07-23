@@ -5,9 +5,12 @@ from ldclient.config import BigSegmentsConfig
 from ldclient.interfaces import DataSourceState
 from ldclient.testing.http_util import start_server
 from ldclient.testing.mock_components import MockBigSegmentStore
-from ldclient.testing.stub_util import (MockEventProcessor,
-                                        MockUpdateProcessor, make_put_event,
-                                        stream_content)
+from ldclient.testing.stub_util import (
+    MockEventProcessor,
+    MockUpdateProcessor,
+    make_put_event,
+    stream_content
+)
 
 
 def test_big_segment_store_status_unavailable():

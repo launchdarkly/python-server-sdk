@@ -7,8 +7,11 @@ from typing import Any, Dict, Mapping
 from expiringdict import ExpiringDict
 
 from ldclient.feature_store import CacheConfig
-from ldclient.interfaces import (DiagnosticDescription, FeatureStore,
-                                 FeatureStoreCore)
+from ldclient.interfaces import (
+    DiagnosticDescription,
+    FeatureStore,
+    FeatureStoreCore
+)
 from ldclient.versioned_data_kind import VersionedDataKind
 
 

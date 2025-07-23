@@ -10,13 +10,21 @@ from typing import Optional
 
 from ldclient.config import Config
 from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.util import (UnsuccessfulResponseException,
-                                http_error_message, is_http_error_recoverable,
-                                log)
-from ldclient.interfaces import (DataSourceErrorInfo, DataSourceErrorKind,
-                                 DataSourceState, DataSourceUpdateSink,
-                                 FeatureRequester, FeatureStore,
-                                 UpdateProcessor)
+from ldclient.impl.util import (
+    UnsuccessfulResponseException,
+    http_error_message,
+    is_http_error_recoverable,
+    log
+)
+from ldclient.interfaces import (
+    DataSourceErrorInfo,
+    DataSourceErrorKind,
+    DataSourceState,
+    DataSourceUpdateSink,
+    FeatureRequester,
+    FeatureStore,
+    UpdateProcessor
+)
 
 
 class PollingUpdateProcessor(UpdateProcessor):

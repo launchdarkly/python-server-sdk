@@ -7,17 +7,22 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.integrations.consul.consul_feature_store import \
+from ldclient.impl.integrations.consul.consul_feature_store import (
     _ConsulFeatureStoreCore
-from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import \
+)
+from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import (
     _DynamoDBBigSegmentStore
-from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import \
+)
+from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBFeatureStoreCore
+)
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
-from ldclient.impl.integrations.redis.redis_big_segment_store import \
+from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
-from ldclient.impl.integrations.redis.redis_feature_store import \
+)
+from ldclient.impl.integrations.redis.redis_feature_store import (
     _RedisFeatureStoreCore
+)
 from ldclient.interfaces import BigSegmentStore
 
 
