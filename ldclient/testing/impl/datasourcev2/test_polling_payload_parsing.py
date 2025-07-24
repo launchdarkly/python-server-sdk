@@ -1,6 +1,9 @@
 import json
 
-from ldclient.impl.datasourcev2.polling import IntentCode, polling_payload_to_changeset
+from ldclient.impl.datasourcev2.polling import (
+    IntentCode,
+    polling_payload_to_changeset
+)
 from ldclient.impl.datasystem.protocolv2 import ChangeType, ObjectKind
 from ldclient.impl.util import _Fail, _Success
 
