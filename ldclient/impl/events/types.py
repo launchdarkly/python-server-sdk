@@ -15,25 +15,44 @@ from ldclient.impl.util import current_time_millis
 
 
 class EventInput:
-    __slots__ = ['timestamp', 'context', 'sampling_ratio']
+    __slots__ = ["timestamp", "context", "sampling_ratio"]
 
-    def __init__(self, timestamp: int, context: Context, sampling_ratio: Optional[int] = None):
+    def __init__(
+        self, timestamp: int, context: Context, sampling_ratio: Optional[int] = None
+    ):
         self.timestamp = timestamp
         self.context = context
         self.sampling_ratio = sampling_ratio
 
     def __repr__(self) -> str:  # used only in test debugging
-        return "%s(%s)" % (self.__class__.__name__, json.dumps(self.to_debugging_dict()))
+        return "%s(%s)" % (
+            self.__class__.__name__,
+            json.dumps(self.to_debugging_dict()),
+        )
 
     def __eq__(self, other) -> bool:  # used only in tests
-        return isinstance(other, EventInput) and self.to_debugging_dict() == other.to_debugging_dict()
+        return (
+            isinstance(other, EventInput)
+            and self.to_debugging_dict() == other.to_debugging_dict()
+        )
 
     def to_debugging_dict(self) -> dict:
         return {}
 
 
 class EventInputEvaluation(EventInput):
-    __slots__ = ['key', 'flag', 'variation', 'value', 'reason', 'default_value', 'prereq_of', 'track_events', 'sampling_ratio', 'exclude_from_summaries']
+    __slots__ = [
+        "key",
+        "flag",
+        "variation",
+        "value",
+        "reason",
+        "default_value",
+        "prereq_of",
+        "track_events",
+        "sampling_ratio",
+        "exclude_from_summaries",
+    ]
 
     def __init__(
         self,
@@ -57,7 +76,9 @@ class EventInputEvaluation(EventInput):
         self.default_value = default_value
         self.prereq_of = prereq_of
         self.track_events = track_events
-        self.exclude_from_summaries = False if flag is None else flag.exclude_from_summaries
+        self.exclude_from_summaries = (
+            False if flag is None else flag.exclude_from_summaries
+        )
 
     def to_debugging_dict(self) -> dict:
         return {
@@ -86,16 +107,30 @@ class EventInputIdentify(EventInput):
 
 
 class EventInputCustom(EventInput):
-    __slots__ = ['key', 'data', 'metric_value']
+    __slots__ = ["key", "data", "metric_value"]
 
-    def __init__(self, timestamp: int, context: Context, key: str, data: Any = None, metric_value: Optional[AnyNum] = None):
+    def __init__(
+        self,
+        timestamp: int,
+        context: Context,
+        key: str,
+        data: Any = None,
+        metric_value: Optional[AnyNum] = None,
+    ):
         super().__init__(timestamp, context)
         self.key = key
         self.data = data
         self.metric_value = metric_value  # type: Optional[int|float|complex]
 
     def to_debugging_dict(self) -> dict:
-        return {"timestamp": self.timestamp, "context": self.context.to_dict(), "sampling_ratio": self.sampling_ratio, "key": self.key, "data": self.data, "metric_value": self.metric_value}
+        return {
+            "timestamp": self.timestamp,
+            "context": self.context.to_dict(),
+            "sampling_ratio": self.sampling_ratio,
+            "key": self.key,
+            "data": self.data,
+            "metric_value": self.metric_value,
+        }
 
 
 # Event constructors are centralized here to avoid mistakes and repetitive logic.
@@ -107,11 +142,20 @@ class EventInputCustom(EventInput):
 
 
 class EventFactory:
-    def __init__(self, with_reasons: bool, timestamp_fn: Callable[[], int] = current_time_millis):
+    def __init__(
+        self, with_reasons: bool, timestamp_fn: Callable[[], int] = current_time_millis
+    ):
         self._with_reasons = with_reasons
         self._timestamp_fn = timestamp_fn
 
-    def new_eval_event(self, flag: FeatureFlag, context: Context, detail: EvaluationDetail, default_value: Any, prereq_of_flag: Optional[FeatureFlag] = None) -> EventInputEvaluation:
+    def new_eval_event(
+        self,
+        flag: FeatureFlag,
+        context: Context,
+        detail: EvaluationDetail,
+        default_value: Any,
+        prereq_of_flag: Optional[FeatureFlag] = None,
+    ) -> EventInputEvaluation:
         add_experiment_data = self.is_experiment(flag, detail.reason)
         return EventInputEvaluation(
             self._timestamp_fn(),
@@ -126,28 +170,66 @@ class EventFactory:
             flag.track_events or add_experiment_data,
         )
 
-    def new_default_event(self, flag: FeatureFlag, context: Context, default_value: Any, reason: Optional[dict]) -> EventInputEvaluation:
-        return EventInputEvaluation(self._timestamp_fn(), context, flag.key, flag, None, default_value, reason if self._with_reasons else None, default_value, None, flag.track_events)
+    def new_default_event(
+        self,
+        flag: FeatureFlag,
+        context: Context,
+        default_value: Any,
+        reason: Optional[dict],
+    ) -> EventInputEvaluation:
+        return EventInputEvaluation(
+            self._timestamp_fn(),
+            context,
+            flag.key,
+            flag,
+            None,
+            default_value,
+            reason if self._with_reasons else None,
+            default_value,
+            None,
+            flag.track_events,
+        )
 
-    def new_unknown_flag_event(self, key: str, context: Context, default_value: Any, reason: Optional[dict]) -> EventInputEvaluation:
-        return EventInputEvaluation(self._timestamp_fn(), context, key, None, None, default_value, reason if self._with_reasons else None, default_value, None, False)
+    def new_unknown_flag_event(
+        self, key: str, context: Context, default_value: Any, reason: Optional[dict]
+    ) -> EventInputEvaluation:
+        return EventInputEvaluation(
+            self._timestamp_fn(),
+            context,
+            key,
+            None,
+            None,
+            default_value,
+            reason if self._with_reasons else None,
+            default_value,
+            None,
+            False,
+        )
 
     def new_identify_event(self, context: Context) -> EventInputIdentify:
         return EventInputIdentify(self._timestamp_fn(), context)
 
-    def new_custom_event(self, event_name: str, context: Context, data: Any, metric_value: Optional[AnyNum]) -> EventInputCustom:
-        return EventInputCustom(self._timestamp_fn(), context, event_name, data, metric_value)
+    def new_custom_event(
+        self,
+        event_name: str,
+        context: Context,
+        data: Any,
+        metric_value: Optional[AnyNum],
+    ) -> EventInputCustom:
+        return EventInputCustom(
+            self._timestamp_fn(), context, event_name, data, metric_value
+        )
 
     @staticmethod
     def is_experiment(flag: FeatureFlag, reason: Optional[dict]) -> bool:
         if reason is not None:
-            if reason.get('inExperiment'):
+            if reason.get("inExperiment"):
                 return True
-            kind = reason['kind']
-            if kind == 'RULE_MATCH':
-                index = reason['ruleIndex']
+            kind = reason["kind"]
+            if kind == "RULE_MATCH":
+                index = reason["ruleIndex"]
                 rules = flag.rules
                 return index >= 0 and index < len(rules) and rules[index].track_events
-            elif kind == 'FALLTHROUGH':
+            elif kind == "FALLTHROUGH":
                 return flag.track_events_fallthrough
         return False

@@ -2,8 +2,9 @@ import logging
 import re
 import sys
 import time
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any, Generic, Optional, TypeVar, Union
 from urllib.parse import urlparse, urlunparse
 
 from ldclient.impl.http import _base_headers
@@ -161,7 +162,7 @@ class Result:
 
     Results can either be considered a success or a failure.
 
-    In the event of success, the Result will contain an option, nullable value
+    In the event of success, the Result will contain an optional, nullable value
     to hold any success value back to the calling function.
 
     If the operation fails, the Result will contain an error describing the
@@ -220,12 +221,43 @@ class Result:
 
     @property
     def value(self) -> Optional[Any]:
+        """
+        Retrieve the value from this result, if it exists. If this result
+        represents failure, this will be None.
+        """
         return self.__value
 
     @property
     def error(self) -> Optional[str]:
+        """
+        Retrieve the error from this result, if it exists. If this result
+        represents success, this will be None.
+        """
         return self.__error
 
     @property
     def exception(self) -> Optional[Exception]:
+        """
+        Retrieve the exception from this result, if it exists. If this result
+        represents success, this will be None.
+        """
+
         return self.__exception
+
+
+T = TypeVar("T")
+E = TypeVar("E")
+
+
+@dataclass(frozen=True)
+class _Success(Generic[T]):
+    value: T
+
+
+@dataclass(frozen=True)
+class _Fail(Generic[E]):
+    error: E
+    exception: Optional[Exception] = None
+
+
+_Result = Union[_Success[T], _Fail[E]]
