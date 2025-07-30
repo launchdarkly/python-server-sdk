@@ -20,7 +20,7 @@ from ldclient.impl.datasystem.protocolv2 import (
     IntentCode,
     PutObject,
     Selector,
-    ServerIntent,
+    ServerIntent
 )
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
@@ -33,7 +33,7 @@ from ldclient.impl.util import (
     _Success,
     http_error_message,
     is_http_error_recoverable,
-    log,
+    log
 )
 
 POLLING_ENDPOINT = "/sdk/poll"
