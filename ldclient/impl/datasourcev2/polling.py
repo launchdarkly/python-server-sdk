@@ -231,7 +231,9 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
         if not isinstance(event, dict):
             return _Fail(error="Invalid payload: 'events' must be a list of objects")
 
-    for event in data["events"]:
+        if "event" not in event:
+            continue
+
         if event["event"] == EventName.SERVER_INTENT:
             try:
                 server_intent = ServerIntent.from_dict(event["data"])

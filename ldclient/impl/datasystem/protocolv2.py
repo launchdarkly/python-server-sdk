@@ -113,10 +113,17 @@ class Payload:
         """
         Create a Payload from a dictionary representation.
         """
+        intent_code = data.get("intentCode")
+
+        if intent_code is None or not isinstance(intent_code, str):
+            raise ValueError(
+                "Invalid data for Payload: 'intentCode' key is missing or not a string"
+            )
+
         return Payload(
             id=data.get("id", ""),
             target=data.get("target", 0),
-            code=IntentCode(data.get("intentCode")),
+            code=IntentCode(intent_code),
             reason=data.get("reason", ""),
         )
 
