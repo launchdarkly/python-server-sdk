@@ -212,13 +212,13 @@ class DeleteObject:
         Deserializes a DeleteObject from a JSON-compatible dictionary.
         """
         version = data.get("version")
-        kind = ObjectKind(data.get("kind"))
+        kind = data.get("kind")
         key = data.get("key")
 
         if version is None or kind is None or key is None:
             raise ValueError("Missing required fields in DeleteObject JSON.")
 
-        return DeleteObject(version=version, kind=kind, key=key)
+        return DeleteObject(version=version, kind=ObjectKind(kind), key=key)
 
 
 @dataclass(frozen=True)
@@ -261,14 +261,16 @@ class PutObject:
         Deserializes a PutObject from a JSON-compatible dictionary.
         """
         version = data.get("version")
-        kind = ObjectKind(data.get("kind"))
+        kind = data.get("kind")
         key = data.get("key")
         object_data = data.get("object")
 
         if version is None or kind is None or key is None or object_data is None:
             raise ValueError("Missing required fields in PutObject JSON.")
 
-        return PutObject(version=version, kind=kind, key=key, object=object_data)
+        return PutObject(
+            version=version, kind=ObjectKind(kind), key=key, object=object_data
+        )
 
 
 @dataclass(frozen=True)

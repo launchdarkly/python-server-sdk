@@ -20,7 +20,7 @@ from ldclient.impl.datasystem.protocolv2 import (
     IntentCode,
     PutObject,
     Selector,
-    ServerIntent
+    ServerIntent,
 )
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
@@ -33,7 +33,7 @@ from ldclient.impl.util import (
     _Success,
     http_error_message,
     is_http_error_recoverable,
-    log
+    log,
 )
 
 POLLING_ENDPOINT = "/sdk/poll"
@@ -162,11 +162,11 @@ class Urllib3PollingRequester:
         if selector is not None:
             query_params["selector"] = selector.state
 
+        uri = self._poll_uri
         if len(query_params) > 0:
             filter_query = parse.urlencode(query_params)
-            self._poll_uri += f"?{filter_query}"
+            uri += f"?{filter_query}"
 
-        uri = self._poll_uri
         hdrs = _headers(self._config)
         hdrs["Accept-Encoding"] = "gzip"
 
