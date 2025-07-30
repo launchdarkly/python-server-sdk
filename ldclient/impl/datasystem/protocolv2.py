@@ -281,6 +281,85 @@ class PutObject:
 
 
 @dataclass(frozen=True)
+class Goodbye:
+    """
+    Goodbye represents a goodbye event.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    reason: str
+    silent: bool
+    catastrophe: bool
+
+    def to_dict(self) -> dict:
+        """
+        Serializes the Goodbye to a JSON-compatible dictionary.
+        """
+        return {
+            "reason": self.reason,
+            "silent": self.silent,
+            "catastrophe": self.catastrophe,
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> "Goodbye":
+        """
+        Deserializes a Goodbye event from a JSON-compatible dictionary.
+        """
+        reason = data.get("reason")
+        silent = data.get("silent")
+        catastrophe = data.get("catastrophe")
+
+        if reason is None or silent is None or catastrophe is None:
+            raise ValueError("Missing required fields in Goodbye JSON.")
+
+        return Goodbye(reason=reason, silent=silent, catastrophe=catastrophe)
+
+
+@dataclass(frozen=True)
+class Error:
+    """
+    Error represents an error event.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    payload_id: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        """
+        Serializes the Error to a JSON-compatible dictionary.
+        """
+        return {
+            "payloadId": self.payload_id,
+            "reason": self.reason,
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> "Error":
+        """
+        Deserializes an Error from a JSON-compatible dictionary.
+        """
+        payload_id = data.get("payloadId")
+        reason = data.get("reason")
+
+        if payload_id is None or reason is None:
+            raise ValueError("Missing required fields in Error JSON.")
+
+        return Error(payload_id=payload_id, reason=reason)
+
+
+@dataclass(frozen=True)
 class Selector:
     """
     Selector represents a particular snapshot of data.
