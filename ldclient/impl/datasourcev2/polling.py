@@ -1,16 +1,16 @@
 """
-Default implementation of the polling synchronizer and initializer.
+This module contains the implementations of a polling synchronizer and
+initializer, along with any required supporting classes and protocols.
 """
 
 import json
-from abc import abstractmethod
 from collections import namedtuple
-from collections.abc import Mapping
-from typing import Optional, Protocol, Tuple
+from typing import Iterable, Optional
 from urllib import parse
 
 import urllib3
 
+from ldclient.impl.datasourcev2 import PollingRequester, PollingResult, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
     ChangeSet,
@@ -37,27 +37,6 @@ from ldclient.impl.util import (
 )
 
 POLLING_ENDPOINT = "/sdk/poll"
-
-PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
-
-
-class PollingRequester(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    PollingRequester allows PollingDataSource to delegate fetching data to
-    another component.
-
-    This is useful for testing the PollingDataSource without needing to set up
-    a test HTTP server.
-    """
-
-    @abstractmethod
-    def fetch(self, selector: Optional[Selector]) -> PollingResult:
-        """
-        Fetches the data for the given selector.
-        Returns a Result containing a tuple of ChangeSet and any request headers,
-        or an error if the data could not be retrieved.
-        """
-        raise NotImplementedError
 
 
 CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
