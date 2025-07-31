@@ -12,7 +12,7 @@ You have been warned.
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Optional, Protocol, Tuple
+from typing import Generator, Iterable, Mapping, Optional, Protocol, Tuple
 
 from ldclient.impl.datasystem.protocolv2 import ChangeSet, Selector
 from ldclient.impl.util import _Result
@@ -65,7 +65,7 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
     """
 
     @abstractmethod
-    def sync(self) -> Iterable[Update]:
+    def sync(self) -> Generator[Update, None, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error

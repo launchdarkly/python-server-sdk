@@ -6,16 +6,12 @@ with any required supporting classes and protocols.
 import json
 from abc import abstractmethod
 from time import time
-from typing import Callable, Iterable, Optional, Protocol, Tuple
+from typing import Callable, Generator, Iterable, Optional, Protocol, Tuple
 from urllib import parse
 
 from ld_eventsource import SSEClient as SSEClientImpl
 from ld_eventsource.actions import Action, Event, Fault
-from ld_eventsource.config import (
-    ConnectStrategy,
-    ErrorStrategy,
-    RetryDelayStrategy
-)
+from ld_eventsource.config import ConnectStrategy, ErrorStrategy, RetryDelayStrategy
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
@@ -29,18 +25,14 @@ from ldclient.impl.datasystem.protocolv2 import (
     IntentCode,
     PutObject,
     Selector,
-    ServerIntent
+    ServerIntent,
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
-from ldclient.impl.util import (
-    http_error_message,
-    is_http_error_recoverable,
-    log
-)
+from ldclient.impl.util import http_error_message, is_http_error_recoverable, log
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState
+    DataSourceState,
 )
 
 # allows for up to 5 minutes to elapse without any data sent across the stream.
@@ -129,7 +121,7 @@ class StreamingSynchronizer(Synchronizer):
         self._config = config
         self._sse: Optional[SSEClient] = None
 
-    def sync(self) -> Iterable[Update]:
+    def sync(self) -> Generator[Update, None, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
