@@ -4,13 +4,16 @@ initializer, along with any required supporting classes and protocols.
 """
 
 import json
+from abc import abstractmethod
 from collections import namedtuple
-from typing import Iterable, Optional
+from threading import Event
+from time import time
+from typing import Generator, Optional, Protocol
 from urllib import parse
 
 import urllib3
 
-from ldclient.impl.datasourcev2 import PollingRequester, PollingResult, Update
+from ldclient.impl.datasourcev2 import BasisResult, PollingResult, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
     ChangeSet,
@@ -25,7 +28,6 @@ from ldclient.impl.datasystem.protocolv2 import (
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
-    Result,
     UnsuccessfulResponseException,
     _Fail,
     _headers,
@@ -35,11 +37,35 @@ from ldclient.impl.util import (
     is_http_error_recoverable,
     log
 )
+from ldclient.interfaces import (
+    DataSourceErrorInfo,
+    DataSourceErrorKind,
+    DataSourceState
+)
 
 POLLING_ENDPOINT = "/sdk/poll"
 
 
 CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
+
+
+class Requester(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Requester allows PollingDataSource to delegate fetching data to
+    another component.
+
+    This is useful for testing the PollingDataSource without needing to set up
+    a test HTTP server.
+    """
+
+    @abstractmethod
+    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+        """
+        Fetches the data for the given selector.
+        Returns a Result containing a tuple of ChangeSet and any request headers,
+        or an error if the data could not be retrieved.
+        """
+        raise NotImplementedError
 
 
 class PollingDataSource:
@@ -51,9 +77,11 @@ class PollingDataSource:
     def __init__(
         self,
         poll_interval: float,
-        requester: PollingRequester,
+        requester: Requester,
     ):
         self._requester = requester
+        self._poll_interval = poll_interval
+        self._event = Event()
         self._task = RepeatingTask(
             "ldclient.datasource.polling", poll_interval, 0, self._poll
         )
@@ -62,21 +90,73 @@ class PollingDataSource:
         """Returns the name of the initializer."""
         return "PollingDataSourceV2"
 
-    def fetch(self) -> Result:  # Result[Basis]:
+    def fetch(self) -> BasisResult:
         """
         Fetch returns a Basis, or an error if the Basis could not be retrieved.
         """
         return self._poll()
 
-    # TODO(fdv2): This will need to be converted into a synchronizer at some point.
-    # def start(self):
-    #     log.info(
-    #         "Starting PollingUpdateProcessor with request interval: "
-    #         + str(self._config.poll_interval)
-    #     )
-    #     self._task.start()
+    def sync(self) -> Generator[Update, None, None]:
+        """
+        sync begins the synchronization process for the data source, yielding
+        Update objects until the connection is closed or an unrecoverable error
+        occurs.
+        """
+        log.info("Starting PollingDataSourceV2 synchronizer")
+        while True:
+            result = self._requester.fetch(None)
+            if isinstance(result, _Fail):
+                if isinstance(result.exception, UnsuccessfulResponseException):
+                    error_info = DataSourceErrorInfo(
+                        kind=DataSourceErrorKind.ERROR_RESPONSE,
+                        status_code=result.exception.status,
+                        time=time(),
+                        message=http_error_message(
+                            result.exception.status, "polling request"
+                        ),
+                    )
 
-    def _poll(self) -> Result:  # Result[Basis]:
+                    status_code = result.exception.status
+                    if is_http_error_recoverable(status_code):
+                        # TODO(fdv2): Add support for environment ID
+                        yield Update(
+                            state=DataSourceState.INTERRUPTED,
+                            error=error_info,
+                        )
+                        continue
+
+                    # TODO(fdv2): Add support for environment ID
+                    yield Update(
+                        state=DataSourceState.OFF,
+                        error=error_info,
+                    )
+                    break
+
+                error_info = DataSourceErrorInfo(
+                    kind=DataSourceErrorKind.NETWORK_ERROR,
+                    time=time(),
+                    status_code=0,
+                    message=result.error,
+                )
+
+                # TODO(fdv2): Go has a designation here to handle JSON decoding separately.
+                # TODO(fdv2): Add support for environment ID
+                yield Update(
+                    state=DataSourceState.INTERRUPTED,
+                    error=error_info,
+                )
+            else:
+                (change_set, headers) = result.value
+                yield Update(
+                    state=DataSourceState.VALID,
+                    change_set=change_set,
+                    environment_id=headers.get("X-LD-EnvID"),
+                )
+
+            if self._event.wait(self._poll_interval):
+                break
+
+    def _poll(self) -> BasisResult:
         try:
             # TODO(fdv2): Need to pass the selector through
             result = self._requester.fetch(None)
@@ -90,10 +170,13 @@ class PollingDataSource:
                     if is_http_error_recoverable(status_code):
                         log.warning(http_error_message_result)
 
-                    return Result.fail(http_error_message_result, result.exception)
+                    return _Fail(
+                        error=http_error_message_result, exception=result.exception
+                    )
 
-                return Result.fail(
-                    result.error or "Failed to request payload", result.exception
+                return _Fail(
+                    error=result.error or "Failed to request payload",
+                    exception=result.exception,
                 )
 
             (change_set, headers) = result.value
@@ -108,18 +191,19 @@ class PollingDataSource:
                 environment_id=env_id,
             )
 
-            return Result.success(basis)
-        except Exception as e:
+            return _Success(value=basis)
+        except Exception as e:  # pylint: disable=broad-except
             msg = f"Error: Exception encountered when updating flags. {e}"
             log.exception(msg)
 
-            return Result.fail(msg, e)
+            return _Fail(error=msg, exception=e)
 
 
 # pylint: disable=too-few-public-methods
 class Urllib3PollingRequester:
     """
-    Urllib3PollingRequester is a PollingRequester that uses urllib3 to make HTTP requests.
+    Urllib3PollingRequester is a Requester that uses urllib3 to make HTTP
+    requests.
     """
 
     def __init__(self, config):

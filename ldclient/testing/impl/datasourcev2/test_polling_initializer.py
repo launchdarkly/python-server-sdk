@@ -39,8 +39,7 @@ def test_error_is_returned_on_failure():
 
     result = ds.fetch()
 
-    assert result.value is None
-    assert not result.is_success()
+    assert isinstance(result, _Fail)
     assert result.error == "failure message"
     assert result.exception is None
 
@@ -53,8 +52,7 @@ def test_error_is_recoverable():
 
     result = ds.fetch()
 
-    assert result.value is None
-    assert not result.is_success()
+    assert isinstance(result, _Fail)
     assert result.error is not None
     assert result.error.startswith("Received HTTP error 408")
     assert isinstance(result.exception, UnsuccessfulResponseException)
@@ -68,8 +66,7 @@ def test_error_is_unrecoverable():
 
     result = ds.fetch()
 
-    assert result.value is None
-    assert not result.is_success()
+    assert isinstance(result, _Fail)
     assert result.error is not None
     assert result.error.startswith("Received HTTP error 401")
     assert isinstance(result.exception, UnsuccessfulResponseException)
@@ -83,15 +80,12 @@ def test_handles_transfer_none():
 
     result = ds.fetch()
 
-    assert result.is_success()
+    assert isinstance(result, _Success)
     assert result.value is not None
 
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_NONE
     assert result.value.change_set.changes == []
     assert result.value.persist is False
-
-    assert result.error is None
-    assert result.exception is None
 
 
 def test_handles_uncaught_exception():
@@ -100,8 +94,7 @@ def test_handles_uncaught_exception():
 
     result = ds.fetch()
 
-    assert result.value is None
-    assert not result.is_success()
+    assert isinstance(result, _Fail)
     assert result.error is not None
     assert (
         result.error
@@ -120,15 +113,12 @@ def test_handles_transfer_full():
 
     result = ds.fetch()
 
-    assert result.is_success()
+    assert isinstance(result, _Success)
     assert result.value is not None
 
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_FULL
     assert len(result.value.change_set.changes) == 1
     assert result.value.persist is True
-
-    assert result.error is None
-    assert result.exception is None
 
 
 def test_handles_transfer_changes():
@@ -141,12 +131,9 @@ def test_handles_transfer_changes():
 
     result = ds.fetch()
 
-    assert result.is_success()
+    assert isinstance(result, _Success)
     assert result.value is not None
 
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_CHANGES
     assert len(result.value.change_set.changes) == 1
     assert result.value.persist is True
-
-    assert result.error is None
-    assert result.exception is None

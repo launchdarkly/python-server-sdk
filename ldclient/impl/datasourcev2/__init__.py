@@ -12,30 +12,35 @@ You have been warned.
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Generator, Iterable, Mapping, Optional, Protocol, Tuple
+from typing import Generator, Mapping, Optional, Protocol, Tuple
 
-from ldclient.impl.datasystem.protocolv2 import ChangeSet, Selector
+from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet
 from ldclient.impl.util import _Result
 from ldclient.interfaces import DataSourceErrorInfo, DataSourceState
 
 PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
 
 
-class PollingRequester(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    PollingRequester allows PollingDataSource to delegate fetching data to
-    another component.
+BasisResult = _Result[Basis, str]
 
-    This is useful for testing the PollingDataSource without needing to set up
-    a test HTTP server.
+
+class Initializer(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Initializer represents a component capable of retrieving a single data
+    result, such as from the LD polling API.
+
+    The intent of initializers is to quickly fetch an initial set of data,
+    which may be stale but is fast to retrieve. This initial data serves as a
+    foundation for a Synchronizer to build upon, enabling it to provide updates
+    as new changes occur.
     """
 
     @abstractmethod
-    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+    def fetch(self) -> BasisResult:
         """
-        Fetches the data for the given selector.
-        Returns a Result containing a tuple of ChangeSet and any request headers,
-        or an error if the data could not be retrieved.
+        sync should begin the synchronization process for the data source, yielding
+        Update objects until the connection is closed or an unrecoverable error
+        occurs.
         """
         raise NotImplementedError
 
@@ -74,4 +79,11 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
-__all__: list[str] = []
+__all__: list[str] = [
+    # Initializer-related types
+    "BasisResult",
+    "Initializer",
+    # Synchronizer-related types
+    "Update",
+    "Synchronizer",
+]
