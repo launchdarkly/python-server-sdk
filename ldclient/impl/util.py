@@ -260,4 +260,6 @@ class _Fail(Generic[E]):
     exception: Optional[Exception] = None
 
 
+# TODO(breaking): Replace the above Result class with an improved generic
+# version.
 _Result = Union[_Success[T], _Fail[E]]
