@@ -8,12 +8,13 @@ from abc import abstractmethod
 from collections import namedtuple
 from threading import Event
 from time import time
-from typing import Generator, Optional, Protocol
+from typing import Generator, Mapping, Optional, Protocol, Tuple
 from urllib import parse
 
 import urllib3
 
-from ldclient.impl.datasourcev2 import BasisResult, PollingResult, Update
+from ldclient.config import Config
+from ldclient.impl.datasystem import BasisResult, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
     ChangeSet,
@@ -46,7 +47,7 @@ from ldclient.interfaces import (
 POLLING_ENDPOINT = "/sdk/poll"
 
 
-CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
+PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
 
 
 class Requester(Protocol):  # pylint: disable=too-few-public-methods
@@ -66,6 +67,9 @@ class Requester(Protocol):  # pylint: disable=too-few-public-methods
         or an error if the data could not be retrieved.
         """
         raise NotImplementedError
+
+
+CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
 
 
 class PollingDataSource:
@@ -206,7 +210,7 @@ class Urllib3PollingRequester:
     requests.
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self._etag = None
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
@@ -335,3 +339,30 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
                 )
 
     return _Fail(error="didn't receive any known protocol events in polling payload")
+
+
+class PollingDataSourceBuilder:
+    """
+    Builder for a PollingDataSource.
+    """
+
+    def __init__(self, config: Config):
+        self._config = config
+        self._requester = None
+
+    def requester(self, requester: Requester) -> "PollingDataSourceBuilder":
+        """Sets a custom Requester for the PollingDataSource."""
+        self._requester = requester
+        return self
+
+    def build(self) -> PollingDataSource:
+        """Builds the PollingDataSource with the configured parameters."""
+        requester = (
+            self._requester
+            if self._requester is not None
+            else Urllib3PollingRequester(self._config)
+        )
+
+        return PollingDataSource(
+            poll_interval=self._config.poll_interval, requester=requester
+        )

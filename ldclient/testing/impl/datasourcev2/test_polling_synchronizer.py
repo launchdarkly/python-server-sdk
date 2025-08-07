@@ -322,13 +322,13 @@ def test_recoverable_error_continues():
     headers = {}
     polling_result: PollingResult = _Success(value=(change_set, headers))
 
-    _failure = _Fail(error="error for test", exception=UnsuccessfulResponseException(status=408))
+    _failure = _Fail(
+        error="error for test", exception=UnsuccessfulResponseException(status=408)
+    )
 
     synchronizer = PollingDataSource(
         poll_interval=0.01,
-        requester=ListBasedRequester(
-            results=iter([_failure, polling_result])
-        ),
+        requester=ListBasedRequester(results=iter([_failure, polling_result])),
     )
     sync = synchronizer.sync()
     interrupted = next(sync)
@@ -360,13 +360,13 @@ def test_unrecoverable_error_shuts_down():
     headers = {}
     polling_result: PollingResult = _Success(value=(change_set, headers))
 
-    _failure = _Fail(error="error for test", exception=UnsuccessfulResponseException(status=401))
+    _failure = _Fail(
+        error="error for test", exception=UnsuccessfulResponseException(status=401)
+    )
 
     synchronizer = PollingDataSource(
         poll_interval=0.01,
-        requester=ListBasedRequester(
-            results=iter([_failure, polling_result])
-        ),
+        requester=ListBasedRequester(results=iter([_failure, polling_result])),
     )
     sync = synchronizer.sync()
     off = next(sync)

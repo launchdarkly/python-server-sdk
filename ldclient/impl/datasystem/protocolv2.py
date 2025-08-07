@@ -541,9 +541,8 @@ class ChangeSetBuilder:
     You have been warned.
     """
 
-    def __init__(self):
-        self.intent: Optional[IntentCode] = None
-        self.changes: List[Change] = []
+    intent: Optional[IntentCode] = None
+    changes: List[Change] = []
 
     @staticmethod
     def no_changes() -> "ChangeSet":

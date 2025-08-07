@@ -33,7 +33,12 @@ class FeatureStore:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+    def get(
+        self,
+        kind: VersionedDataKind,
+        key: str,
+        callback: Callable[[Any], Any] = lambda x: x,
+    ) -> Any:
         """
         Retrieves the object to which the specified key is mapped, or None if the key is not found
         or the associated object has a ``deleted`` property of True. The retrieved object, if any (a
@@ -46,7 +51,9 @@ class FeatureStore:
         """
 
     @abstractmethod
-    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+    def all(
+        self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x
+    ) -> Any:
         """
         Retrieves a dictionary of all associated objects of a given kind. The retrieved dict of keys
         to objects can be transformed by the specified callback.
@@ -494,7 +501,9 @@ class BigSegmentStoreStatusProvider:
         pass
 
     @abstractmethod
-    def remove_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+    def remove_listener(
+        self, listener: Callable[[BigSegmentStoreStatus], None]
+    ) -> None:
         """
         Unsubscribes from notifications of status changes.
 
@@ -509,7 +518,7 @@ class DataSourceState(Enum):
     Enumeration representing the states a data source can be in at any given time.
     """
 
-    INITIALIZING = 'initializing'
+    INITIALIZING = "initializing"
     """
     The initial state of the data source when the SDK is being initialized.
 
@@ -518,7 +527,7 @@ class DataSourceState(Enum):
     becomes {OFF}.
     """
 
-    VALID = 'valid'
+    VALID = "valid"
     """
     Indicates that the data source is currently operational and has not had any problems since the
     last time it received data.
@@ -528,7 +537,7 @@ class DataSourceState(Enum):
     request succeeded.
     """
 
-    INTERRUPTED = 'interrupted'
+    INTERRUPTED = "interrupted"
     """
     Indicates that the data source encountered an error that it will attempt to recover from.
 
@@ -537,7 +546,7 @@ class DataSourceState(Enum):
     request failed, and a new poll request will be made after the configured polling interval.
     """
 
-    OFF = 'off'
+    OFF = "off"
     """
     Indicates that the data source has been permanently shut down.
 
@@ -552,27 +561,27 @@ class DataSourceErrorKind(Enum):
     Enumeration representing the types of errors a data source can encounter.
     """
 
-    UNKNOWN = 'unknown'
+    UNKNOWN = "unknown"
     """
     An unexpected error, such as an uncaught exception.
     """
 
-    NETWORK_ERROR = 'network_error'
+    NETWORK_ERROR = "network_error"
     """
     An I/O error such as a dropped connection.
     """
 
-    ERROR_RESPONSE = 'error_response'
+    ERROR_RESPONSE = "error_response"
     """
     The LaunchDarkly service returned an HTTP response with an error status.
     """
 
-    INVALID_DATA = 'invalid_data'
+    INVALID_DATA = "invalid_data"
     """
     The SDK received malformed data from the LaunchDarkly service.
     """
 
-    STORE_ERROR = 'store_error'
+    STORE_ERROR = "store_error"
     """
     The data source itself is working, but when it tried to put an update into the data store, the data
     store failed (so the SDK may not have the latest data).
@@ -587,7 +596,13 @@ class DataSourceErrorInfo:
     A description of an error condition that the data source encountered.
     """
 
-    def __init__(self, kind: DataSourceErrorKind, status_code: int, time: float, message: Optional[str]):
+    def __init__(
+        self,
+        kind: DataSourceErrorKind,
+        status_code: int,
+        time: float,
+        message: Optional[str],
+    ):
         self.__kind = kind
         self.__status_code = status_code
         self.__time = time
@@ -627,7 +642,12 @@ class DataSourceStatus:
     Information about the data source's status and about the last status change.
     """
 
-    def __init__(self, state: DataSourceState, state_since: float, last_error: Optional[DataSourceErrorInfo]):
+    def __init__(
+        self,
+        state: DataSourceState,
+        state_since: float,
+        last_error: Optional[DataSourceErrorInfo],
+    ):
         self.__state = state
         self.__state_since = state_since
         self.__last_error = last_error
@@ -761,7 +781,9 @@ class DataSourceUpdateSink:
         pass
 
     @abstractmethod
-    def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
+    def update_status(
+        self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]
+    ):
         """
         Informs the SDK of a change in the data source's status.
 
@@ -890,7 +912,9 @@ class FlagTracker:
         pass
 
     @abstractmethod
-    def add_flag_value_change_listener(self, key: str, context: Context, listener: Callable[[FlagValueChange], None]):
+    def add_flag_value_change_listener(
+        self, key: str, context: Context, listener: Callable[[FlagValueChange], None]
+    ):
         """
         Registers a listener to be notified of a change in a specific feature flag's value for a specific
         evaluation context.
