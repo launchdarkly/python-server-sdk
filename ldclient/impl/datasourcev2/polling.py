@@ -348,7 +348,7 @@ class PollingDataSourceBuilder:
 
     def __init__(self, config: Config):
         self._config = config
-        self._requester = None
+        self._requester: Optional[Requester] = None
 
     def requester(self, requester: Requester) -> "PollingDataSourceBuilder":
         """Sets a custom Requester for the PollingDataSource."""
