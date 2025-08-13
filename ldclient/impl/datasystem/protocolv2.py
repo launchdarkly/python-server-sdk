@@ -542,8 +542,11 @@ class ChangeSetBuilder:
     """
 
     def __init__(self):
-        self.intent: Optional[IntentCode] = None
-        self.changes: List[Change] = []
+        """
+        Initializes a new ChangeSetBuilder.
+        """
+        self.intent = None
+        self.changes = []
 
     @staticmethod
     def no_changes() -> "ChangeSet":

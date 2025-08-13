@@ -19,7 +19,7 @@ from ld_eventsource.config import (
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
-from ldclient.impl.datasourcev2 import Synchronizer, Update
+from ldclient.impl.datasystem import Synchronizer, Update
 from ldclient.impl.datasystem.protocolv2 import (
     ChangeSetBuilder,
     DeleteObject,
@@ -110,7 +110,7 @@ def create_sse_client(config: Config) -> SSEClientImpl:
     )
 
 
-class StreamingSynchronizer(Synchronizer):
+class StreamingDataSource(Synchronizer):
     """
     StreamingSynchronizer is a specific type of Synchronizer that handles
     streaming data sources.
@@ -386,3 +386,17 @@ class StreamingSynchronizer(Synchronizer):
     def __exit__(self, type, value, traceback):
         # self.stop()
         pass
+
+
+class StreamingDataSourceBuilder:  # disable: pylint: disable=too-few-public-methods
+    """
+    Builder for a StreamingDataSource.
+    """
+
+    def __init__(self, config: Config):
+        self._config = config
+
+    def build(self) -> StreamingDataSource:
+        """Builds a StreamingDataSource instance with the configured parameters."""
+        # TODO(fdv2): Add in the other controls here.
+        return StreamingDataSource(self._config)
