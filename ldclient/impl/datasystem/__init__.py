@@ -159,9 +159,8 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
     @abstractmethod
     def fetch(self) -> BasisResult:
         """
-        sync should begin the synchronization process for the data source, yielding
-        Update objects until the connection is closed or an unrecoverable error
-        occurs.
+        fetch should retrieve the initial data set for the data source, returning
+        a Basis object on success, or an error message on failure.
         """
         raise NotImplementedError
 
