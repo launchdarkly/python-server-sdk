@@ -87,4 +87,3 @@ def test_data_availability_comparison_operators():
     assert DataAvailability.CACHED.value < DataAvailability.DEFAULTS.value
     assert DataAvailability.DEFAULTS.value < DataAvailability.REFRESHED.value
     assert DataAvailability.CACHED.value < DataAvailability.REFRESHED.value
-
