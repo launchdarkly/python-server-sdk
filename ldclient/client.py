@@ -284,7 +284,7 @@ class LDClient:
             log.info("Started LaunchDarkly Client in LDD mode")
 
         diagnostic_accumulator = self._set_event_processor(self._config)
-        
+
         # Pass diagnostic accumulator to data system for streaming metrics
         self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)
 

@@ -75,7 +75,7 @@ class FDv1:
 
         # Update processor created in start(), because it needs the ready Event
         self._update_processor: Optional[UpdateProcessor] = None
-        
+
         # Diagnostic accumulator provided by client for streaming metrics
         self._diagnostic_accumulator = None
 
@@ -113,7 +113,6 @@ class FDv1:
     def store(self) -> FeatureStore:
         return self._store_wrapper
 
-
     def set_flag_value_eval_fn(self, eval_fn):
         """
         Injects the flag value evaluation function used by the flag tracker to
@@ -121,7 +120,7 @@ class FDv1:
         (key: str, context: Context) -> Any.
         """
         self._flag_tracker_impl = FlagTrackerImpl(self._flag_change_listeners, eval_fn)
-    
+
     def set_diagnostic_accumulator(self, diagnostic_accumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
