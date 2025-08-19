@@ -75,6 +75,9 @@ class FDv1:
 
         # Update processor created in start(), because it needs the ready Event
         self._update_processor: Optional[UpdateProcessor] = None
+        
+        # Diagnostic accumulator provided by client for streaming metrics
+        self._diagnostic_accumulator = None
 
         # Track current data availability
         self._data_availability: DataAvailability = (
@@ -118,6 +121,13 @@ class FDv1:
         (key: str, context: Context) -> Any.
         """
         self._flag_tracker_impl = FlagTrackerImpl(self._flag_change_listeners, eval_fn)
+    
+    def set_diagnostic_accumulator(self, diagnostic_accumulator):
+        """
+        Sets the diagnostic accumulator for streaming initialization metrics.
+        This should be called before start() to ensure metrics are collected.
+        """
+        self._diagnostic_accumulator = diagnostic_accumulator
 
     @property
     def data_source_status_provider(self) -> DataSourceStatusProvider:
@@ -151,8 +161,7 @@ class FDv1:
             return NullUpdateProcessor(config, store, ready)
 
         if config.stream:
-            # Diagnostic accumulator is handled in client; pass None here
-            return StreamingUpdateProcessor(config, store, ready, None)
+            return StreamingUpdateProcessor(config, store, ready, self._diagnostic_accumulator)
 
         # Polling mode
         feature_requester = (
