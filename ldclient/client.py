@@ -249,26 +249,32 @@ class LDClient:
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
-        data_store_listeners = Listeners()
-        store_sink = DataStoreUpdateSinkImpl(data_store_listeners)
-        store = _FeatureStoreClientWrapper(self._config.feature_store, store_sink)
+        # Initialize data system (FDv1) to encapsulate v1 data plumbing
+        from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
+            FDv1
+        )
 
-        self.__data_store_status_provider = DataStoreStatusProviderImpl(store, store_sink)
-
-        data_source_listeners = Listeners()
-        flag_change_listeners = Listeners()
-
-        self.__flag_tracker = FlagTrackerImpl(flag_change_listeners, lambda key, context: self.variation(key, context, None))
-
-        self._config._data_source_update_sink = DataSourceUpdateSinkImpl(store, data_source_listeners, flag_change_listeners)
-        self.__data_source_status_provider = DataSourceStatusProviderImpl(data_source_listeners, self._config._data_source_update_sink)
-        self._store = store  # type: FeatureStore
+        self._data_system = FDv1(self._config)
+        # Provide flag evaluation function for value-change tracking
+        self._data_system.set_flag_value_eval_fn(
+            lambda key, context: self.variation(key, context, None)
+        )
+        # Expose providers and store from data system
+        self.__data_store_status_provider = self._data_system.data_store_status_provider
+        self.__data_source_status_provider = (
+            self._data_system.data_source_status_provider
+        )
+        self.__flag_tracker = self._data_system.flag_tracker
+        self._store = self._data_system.store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(store, FEATURES, key), lambda key: _get_store_item(store, SEGMENTS, key), lambda key: big_segment_store_manager.get_user_membership(key), log
+            lambda key: _get_store_item(self._store, FEATURES, key),
+            lambda key: _get_store_item(self._store, SEGMENTS, key),
+            lambda key: big_segment_store_manager.get_user_membership(key),
+            log,
         )
 
         if self._config.offline:
@@ -279,11 +285,13 @@ class LDClient:
 
         diagnostic_accumulator = self._set_event_processor(self._config)
 
+        # Pass diagnostic accumulator to data system for streaming metrics
+        self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)
+
         self.__register_plugins(environment_metadata)
 
         update_processor_ready = threading.Event()
-        self._update_processor = self._make_update_processor(self._config, self._store, update_processor_ready, diagnostic_accumulator)
-        self._update_processor.start()
+        self._data_system.start(update_processor_ready)
 
         if not self._config.offline and not self._config.use_ldd:
             if start_wait > 60:
@@ -293,7 +301,7 @@ class LDClient:
                 log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
                 update_processor_ready.wait(start_wait)
 
-        if self._update_processor.initialized() is True:
+        if self.is_initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
@@ -379,7 +387,7 @@ class LDClient:
         """
         log.info("Closing LaunchDarkly client..")
         self._event_processor.stop()
-        self._update_processor.stop()
+        self._data_system.stop()
         self.__big_segment_store_manager.stop()
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
@@ -464,7 +472,14 @@ class LDClient:
         unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
         and given up.
         """
-        return self.is_offline() or self._config.use_ldd or self._update_processor.initialized()
+        if self.is_offline() or self._config.use_ldd:
+            return True
+
+        return (
+            self._data_system._update_processor.initialized()
+            if self._data_system._update_processor
+            else False
+        )
 
     def flush(self):
         """Flushes all pending analytics events.

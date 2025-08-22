@@ -68,7 +68,7 @@ class DataSystem(Protocol):
         Starts the data system.
 
         This method will return immediately. The provided `Event` will be set when the system
-        has reached an initial state (either permanently faile, e.g. due to bad auth, or
+        has reached an initial state (either permanently failed, e.g. due to bad auth, or
         succeeded)
         """
         raise NotImplementedError
