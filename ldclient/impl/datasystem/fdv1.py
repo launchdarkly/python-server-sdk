@@ -142,7 +142,16 @@ class FDv1:
 
     @property
     def data_availability(self) -> DataAvailability:
-        return self._data_availability
+        if self._config.offline:
+            return DataAvailability.DEFAULTS
+
+        if self._update_processor is not None and self._update_processor.initialized():
+            return DataAvailability.REFRESHED
+
+        if self._store_wrapper.initialized:
+            return DataAvailability.CACHED
+
+        return DataAvailability.DEFAULTS
 
     @property
     def target_availability(self) -> DataAvailability:

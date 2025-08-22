@@ -129,6 +129,13 @@ class StreamingDataSource(Synchronizer):
         self._config = config
         self._sse: Optional[SSEClient] = None
 
+    @property
+    def name(self) -> str:
+        """
+        Returns the name of the synchronizer, which is used for logging and debugging.
+        """
+        return "streaming"
+
     def sync(self) -> Generator[Update, None, None]:
         """
         sync should begin the synchronization process for the data source, yielding

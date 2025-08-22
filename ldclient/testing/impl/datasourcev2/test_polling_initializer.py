@@ -30,7 +30,7 @@ def test_polling_has_a_name():
     mock_requester = MockPollingRequester(_Fail(error="failure message"))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    assert ds.name() == "PollingDataSourceV2"
+    assert ds.name == "PollingDataSourceV2"
 
 
 def test_error_is_returned_on_failure():
