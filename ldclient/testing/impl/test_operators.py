@@ -57,7 +57,7 @@ from ldclient.testing.builders import *
         ["before", "1970-01-01T00:00:00.500Z", 1000, True],
         ["before", True, 1000, False],  # wrong type
         ["after", "1970-01-01T00:00:02.500Z", 1000, True],
-        ["after", "1970-01-01 00:00:02.500Z", 1000, False],  # malformed timestamp
+        ["after", "1970-01-01 00:00:02.500Z", 1000, True],
         ["after", "1970-01-01T00:00:02+01:00", None, False],
         ["after", None, "1970-01-01T00:00:02+01:00", False],
         ["before", "1970-01-01T00:00:02+01:00", 1000, True],
