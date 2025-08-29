@@ -127,6 +127,8 @@ def make_temp_file(content):
 def replace_file(path, content):
     with open(path, 'w') as f:
         f.write(content)
+        f.flush()
+        os.fsync(f.fileno())
 
 
 def test_does_not_load_data_prior_to_start():

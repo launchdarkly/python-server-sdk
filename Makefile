@@ -28,7 +28,7 @@ install:
 .PHONY: test
 test: #! Run unit tests
 test: install
-	@LD_SKIP_DATABASE_TESTS=1 poetry run pytest $(PYTEST_FLAGS)
+	@LD_SKIP_DATABASE_TESTS=1 poetry run pytest $(PYTEST_FLAGS) ldclient/testing/test_file_data_source.py
 
 .PHONY: test-all
 test-all: #! Run unit tests (including database integrations)
