@@ -4,7 +4,6 @@ from typing import Callable
 
 import pytest
 
-from ldclient.context import Context
 from ldclient.impl.datasystem.protocolv2 import (
     ChangeType,
     IntentCode,
@@ -399,10 +398,10 @@ def test_initializer_can_sync():
     """Test that an initializer can call sync() and get initial data"""
     td = TestDataV2.data_source()
     td.update(td.flag('test-flag').variation_for_all(True))
-    
+
     initializer = td.build_initializer()
     sync_gen = initializer.sync()
-    
+
     # Should get initial update with data
     initial_update = next(sync_gen)
     assert initial_update.state == DataSourceState.VALID

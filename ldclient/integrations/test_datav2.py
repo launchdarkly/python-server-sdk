@@ -37,8 +37,8 @@ class FlagRuleBuilderV2:
 
     def __init__(self, flag_builder: FlagBuilderV2):
         self._flag_builder = flag_builder
-        self._clauses = []  # type: List[dict]
-        self._variation = None  # type: Optional[int]
+        self._clauses: List[dict] = []
+        self._variation: Optional[int] = None
 
     def and_match(self, attribute: str, *values) -> FlagRuleBuilderV2:
         """
@@ -170,11 +170,11 @@ class FlagBuilderV2:
         """:param str key: The name of the flag"""
         self._key = key
         self._on = True
-        self._variations = []  # type: List[Any]
-        self._off_variation = None  # type: Optional[int]
-        self._fallthrough_variation = None  # type: Optional[int]
-        self._targets = {}  # type: Dict[str, Dict[int, Set[str]]]
-        self._rules = []  # type: List[FlagRuleBuilderV2]
+        self._variations: List[Any] = []
+        self._off_variation: Optional[int] = None
+        self._fallthrough_variation: Optional[int] = None
+        self._targets: Dict[str, Dict[int, Set[str]]] = {}
+        self._rules: List[FlagRuleBuilderV2] = []
 
     # Note that _copy is private by convention, because we don't want developers to
     # consider it part of the public API, but it is still called from TestDataV2.

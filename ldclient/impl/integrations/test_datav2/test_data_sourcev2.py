@@ -1,5 +1,4 @@
 import threading
-import time
 from queue import Empty, Queue
 from typing import Generator
 
