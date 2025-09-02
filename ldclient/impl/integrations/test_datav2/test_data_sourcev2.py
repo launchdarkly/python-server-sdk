@@ -92,7 +92,6 @@ class _TestDataSourceV2:
         Yields updates as test data changes occur.
         """
 
-
         # First yield initial data
         initial_result = self.fetch()
         if isinstance(initial_result, _Fail):
