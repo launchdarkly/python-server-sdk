@@ -637,6 +637,7 @@ class TestDataV2:
         :param flag_builder: a flag configuration builder
         :return: self (the TestDataV2 object)
         """
+        instances_copy = []
         try:
             self._lock.lock()
 
@@ -650,10 +651,13 @@ class TestDataV2:
 
             self._current_flags[flag_builder._key] = new_flag
             self._flag_builders[flag_builder._key] = flag_builder._copy()
+
+            # Create a copy of instances while holding the lock to avoid race conditions
+            instances_copy = list(self._instances)
         finally:
             self._lock.unlock()
 
-        for instance in self._instances:
+        for instance in instances_copy:
             instance.upsert_flag(new_flag)
 
         return self
