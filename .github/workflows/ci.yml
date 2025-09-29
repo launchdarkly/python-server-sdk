@@ -19,26 +19,18 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
-    services:
-      redis:
-        image: redis
-        ports:
-          - 6379:6379
-      dynamodb:
-        image: amazon/dynamodb-local
-        ports:
-          - 8000:8000
-      consul:
-        image: hashicorp/consul
-        ports:
-          - 8500:8500
-
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+        with:
+          redis: true
+          consul: true
+          dynamodb: true
 
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
@@ -62,7 +54,7 @@ jobs:
       - name: start contract test service
         run: make start-contract-test-service-bg
 
-      - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1.0.2
+      - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -86,36 +78,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Setup DynamoDB
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf dynamo.zip https://s3-us-west-2.amazonaws.com/dynamodb-local/dynamodb_local_latest.zip
-          mkdir dynamo
-          Expand-Archive -Path dynamo.zip -DestinationPath dynamo
-          cd dynamo
-          cmd /c "START /b java -Djava.library.path=./DynamoDBLocal_lib -jar ./DynamoDBLocal.jar"
-
-      - name: Setup Consul
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf consul.zip https://releases.hashicorp.com/consul/1.4.2/consul_1.4.2_windows_amd64.zip
-          mkdir consul
-          Expand-Archive -Path consul.zip -DestinationPath consul
-          cd consul
-          sc.exe create "Consul" binPath="$(Get-Location)/consul.exe agent -dev"
-          sc.exe start "Consul"
-
-      - name: Setup Redis
-        run: |
-          $ProgressPreference = "SilentlyContinue"
-          iwr -outf redis.zip https://github.com/MicrosoftArchive/redis/releases/download/win-3.0.504/Redis-x64-3.0.504.zip
-          mkdir redis
-          Expand-Archive -Path redis.zip -DestinationPath redis
-          cd redis
-          ./redis-server --service-install
-          ./redis-server --service-start
-          Start-Sleep -s 5
-          ./redis-cli ping
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+        with:
+          redis: true
+          consul: true
+          dynamodb: true
 
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
