@@ -39,8 +39,13 @@ def test_validate_sdk_key_non_string():
     """Test validation of non-string SDK keys"""
     logger = Mock(spec=logging.Logger)
     
-    assert validate_sdk_key("123", logger) is True
-    logger.warning.assert_not_called()
+    non_string_values = [123, None, object(), [], {}]
+    
+    for value in non_string_values:
+        result = validate_sdk_key(value, logger)
+        assert result is False
+        logger.warning.assert_called_with("SDK key must be a string")
+        logger.reset_mock()
 
 
 def test_validate_sdk_key_empty():
