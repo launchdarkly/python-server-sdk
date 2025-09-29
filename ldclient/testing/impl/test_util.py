@@ -32,7 +32,7 @@ def test_validate_sdk_key_format_invalid():
     
     for key in invalid_keys:
         result = validate_sdk_key_format(key, logger)
-        assert result is None  # Should return None for invalid keys
+        assert result == ''  # Should return empty string for invalid keys
 
 
 def test_validate_sdk_key_format_non_string():
@@ -42,14 +42,14 @@ def test_validate_sdk_key_format_non_string():
     
     for value in non_string_values:
         result = validate_sdk_key_format(value, logger)
-        assert result is None  # Should return None for non-string values
+        assert result == ''  # Should return empty string for non-string values
 
 
 def test_validate_sdk_key_format_empty_and_none():
     """Test validation of empty and None SDK keys"""
     logger = logging.getLogger('test')
-    assert validate_sdk_key_format("", logger) is None  # Empty string should return None
-    assert validate_sdk_key_format(None, logger) is None  # None should return None
+    assert validate_sdk_key_format("", logger) == ''  # Empty string should return empty string
+    assert validate_sdk_key_format(None, logger) == ''  # None should return empty string
 
 
 def test_validate_sdk_key_format_max_length():
@@ -61,4 +61,4 @@ def test_validate_sdk_key_format_max_length():
     
     invalid_key = "a" * 8193
     result = validate_sdk_key_format(invalid_key, logger)
-    assert result is None  # Should return None for keys that are too long
+    assert result == ''  # Should return empty string for keys that are too long

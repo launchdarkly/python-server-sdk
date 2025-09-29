@@ -73,7 +73,7 @@ def test_sdk_key_validation_invalid_keys():
     
     for key in invalid_keys:
         config = Config(sdk_key=key)
-        assert config.sdk_key is None
+        assert config.sdk_key == ''
 
 
 def test_sdk_key_validation_empty_key():
@@ -85,7 +85,7 @@ def test_sdk_key_validation_empty_key():
 def test_sdk_key_validation_none_key():
     """Test that None SDK keys are accepted"""
     config = Config(sdk_key=None)
-    assert config.sdk_key is None
+    assert config.sdk_key == ''
 
 
 def test_sdk_key_validation_max_length():
@@ -96,7 +96,7 @@ def test_sdk_key_validation_max_length():
     
     invalid_key = "a" * 8193
     config = Config(sdk_key=invalid_key)
-    assert config.sdk_key is None
+    assert config.sdk_key == ''
 
 
 def test_copy_with_new_sdk_key_validation():
@@ -107,7 +107,7 @@ def test_copy_with_new_sdk_key_validation():
     assert new_config.sdk_key == "another-valid-key"
     
     invalid_config = original_config.copy_with_new_sdk_key("invalid key with spaces")
-    assert invalid_config.sdk_key is None
+    assert invalid_config.sdk_key == ''
 
 
 def application_can_be_set_and_read():

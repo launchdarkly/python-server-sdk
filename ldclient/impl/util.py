@@ -64,18 +64,21 @@ def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:
     
     :param sdk_key: the SDK key to validate
     :param logger: the logger to use for logging warnings
-    :return: the validated SDK key, or None if the SDK key is invalid
+    :return: the validated SDK key, or empty string if the SDK key is invalid
     """
     if sdk_key is None or sdk_key == '':
-        return None
+        return ""
+
+    if not isinstance(sdk_key, str):
+        return ""
     
     if len(sdk_key) > _MAX_SDK_KEY_LENGTH:
         logger.warning('SDK key was longer than %d characters and was discarded' % _MAX_SDK_KEY_LENGTH)
-        return None
+        return ""
     
     if _VALID_CHARACTERS_REGEX.search(sdk_key):
         logger.warning('SDK key contained invalid characters and was discarded')
-        return None
+        return ""
     
     return sdk_key
 
