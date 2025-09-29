@@ -53,6 +53,25 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
     return value
 
 
+def validate_sdk_key(sdk_key: str, logger: logging.Logger) -> bool:
+    """
+    Validate that an SDK key contains only characters that are valid for HTTP headers.
+    Returns True if valid, False if invalid. Logs a generic error message for invalid keys.
+    """
+    if not isinstance(sdk_key, str):
+        logger.warning("SDK key must be a string")
+        return False
+    
+    if sdk_key == '':
+        return True  # Empty keys are handled separately in _validate()
+    
+    if re.search(r"[^\x21-\x7E]", sdk_key):
+        logger.warning("SDK key contains invalid characters")
+        return False
+    
+    return True
+
+
 def _headers(config):
     base_headers = _base_headers(config)
     base_headers.update({'Content-Type': "application/json"})

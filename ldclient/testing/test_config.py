@@ -45,6 +45,39 @@ def test_trims_trailing_slashes_on_uris():
     assert config.stream_base_uri == "https://blog.launchdarkly.com"
 
 
+def test_sdk_key_validation_valid_keys():
+    """Test that valid SDK keys are accepted"""
+    valid_keys = [
+        "sdk-12345678-1234-1234-1234-123456789012",
+        "valid-sdk-key-123",
+        "VALID_SDK_KEY_456"
+    ]
+    
+    for key in valid_keys:
+        config = Config(sdk_key=key)
+        assert config.sdk_key == key
+
+
+def test_sdk_key_validation_invalid_keys():
+    """Test that invalid SDK keys are rejected"""
+    invalid_keys = [
+        "sdk-key-with-\x00-null",
+        "sdk-key-with-\n-newline",
+        "sdk-key-with-\t-tab",
+        "sdk-key-with-\x7F-del"
+    ]
+    
+    for key in invalid_keys:
+        with pytest.raises(ValueError, match="SDK key contains invalid characters"):
+            Config(sdk_key=key)
+
+
+def test_sdk_key_validation_empty_key():
+    """Test that empty SDK keys don't trigger format validation"""
+    config = Config(sdk_key="")
+    assert config.sdk_key == ""
+
+
 def application_can_be_set_and_read():
     application = {"id": "my-id", "version": "abcdef"}
     config = Config(sdk_key="SDK_KEY", application=application)
