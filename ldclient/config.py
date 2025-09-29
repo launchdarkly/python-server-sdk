@@ -333,12 +333,12 @@ class Config:
             wrapper_version=self.__wrapper_version,
             http=self.__http,
             big_segments=self.__big_segments,
-            application = self.__application,
-            hooks = self.__hooks,
-            plugins = self.__plugins,
-            enable_event_compression = self.__enable_event_compression,
-            omit_anonymous_contexts = self.__omit_anonymous_contexts,
-            payload_filter_key = self.__payload_filter_key,
+            application=self.__application,
+            hooks=self.__hooks,
+            plugins=self.__plugins,
+            enable_event_compression=self.__enable_event_compression,
+            omit_anonymous_contexts=self.__omit_anonymous_contexts,
+            payload_filter_key=self.__payload_filter_key,
         )
 
     # for internal use only - probably should be part of the client logic
