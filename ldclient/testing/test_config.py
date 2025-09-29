@@ -54,7 +54,7 @@ def test_sdk_key_validation_valid_keys():
         "test.key_with.dots",
         "test-key-with-hyphens"
     ]
-    
+
     for key in valid_keys:
         config = Config(sdk_key=key)
         assert config.sdk_key == key
@@ -70,7 +70,7 @@ def test_sdk_key_validation_invalid_keys():
         "sdk@key#with$special%chars",
         "sdk/key\\with/slashes"
     ]
-    
+
     for key in invalid_keys:
         config = Config(sdk_key=key)
         assert config.sdk_key == ''
@@ -93,7 +93,7 @@ def test_sdk_key_validation_max_length():
     valid_key = "a" * 8192
     config = Config(sdk_key=valid_key)
     assert config.sdk_key == valid_key
-    
+
     invalid_key = "a" * 8193
     config = Config(sdk_key=invalid_key)
     assert config.sdk_key == ''
@@ -102,10 +102,10 @@ def test_sdk_key_validation_max_length():
 def test_copy_with_new_sdk_key_validation():
     """Test that copy_with_new_sdk_key validates the new key"""
     original_config = Config(sdk_key="valid-key")
-    
+
     new_config = original_config.copy_with_new_sdk_key("another-valid-key")
     assert new_config.sdk_key == "another-valid-key"
-    
+
     invalid_config = original_config.copy_with_new_sdk_key("invalid key with spaces")
     assert invalid_config.sdk_key == ''
 

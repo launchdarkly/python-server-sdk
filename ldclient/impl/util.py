@@ -61,7 +61,7 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
 def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:
     """
     Validates that an SDK key does not contain invalid characters and is not too long for our systems.
-    
+
     :param sdk_key: the SDK key to validate
     :param logger: the logger to use for logging warnings
     :return: the validated SDK key, or empty string if the SDK key is invalid
@@ -71,15 +71,12 @@ def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:
 
     if not isinstance(sdk_key, str):
         return ""
-    
     if len(sdk_key) > _MAX_SDK_KEY_LENGTH:
         logger.warning('SDK key was longer than %d characters and was discarded' % _MAX_SDK_KEY_LENGTH)
         return ""
-    
     if _VALID_CHARACTERS_REGEX.search(sdk_key):
         logger.warning('SDK key contained invalid characters and was discarded')
         return ""
-    
     return sdk_key
 
 

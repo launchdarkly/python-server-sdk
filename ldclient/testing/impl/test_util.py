@@ -1,4 +1,5 @@
 import logging
+
 from ldclient.impl.util import validate_sdk_key_format
 
 
@@ -12,7 +13,7 @@ def test_validate_sdk_key_format_valid():
         "test.key_with.dots",
         "test-key-with-hyphens"
     ]
-    
+
     for key in valid_keys:
         result = validate_sdk_key_format(key, logger)
         assert result == key  # Should return the same key if valid
@@ -23,13 +24,13 @@ def test_validate_sdk_key_format_invalid():
     logger = logging.getLogger('test')
     invalid_keys = [
         "sdk-key-with-\x00-null",
-        "sdk-key-with-\n-newline", 
+        "sdk-key-with-\n-newline",
         "sdk-key-with-\t-tab",
         "sdk key with spaces",
         "sdk@key#with$special%chars",
         "sdk/key\\with/slashes"
     ]
-    
+
     for key in invalid_keys:
         result = validate_sdk_key_format(key, logger)
         assert result == ''  # Should return empty string for invalid keys
@@ -39,7 +40,7 @@ def test_validate_sdk_key_format_non_string():
     """Test validation of non-string SDK keys"""
     logger = logging.getLogger('test')
     non_string_values = [123, object(), [], {}]
-    
+
     for value in non_string_values:
         result = validate_sdk_key_format(value, logger)
         assert result == ''  # Should return empty string for non-string values
@@ -58,7 +59,7 @@ def test_validate_sdk_key_format_max_length():
     valid_key = "a" * 8192
     result = validate_sdk_key_format(valid_key, logger)
     assert result == valid_key  # Should return the same key if valid
-    
+
     invalid_key = "a" * 8193
     result = validate_sdk_key_format(invalid_key, logger)
     assert result == ''  # Should return empty string for keys that are too long

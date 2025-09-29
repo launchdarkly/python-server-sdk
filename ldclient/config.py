@@ -9,7 +9,11 @@ from typing import Callable, List, Optional, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
-from ldclient.impl.util import log, validate_application_info, validate_sdk_key_format
+from ldclient.impl.util import (
+    log,
+    validate_application_info,
+    validate_sdk_key_format
+)
 from ldclient.interfaces import (
     BigSegmentStore,
     DataSourceUpdateSink,
