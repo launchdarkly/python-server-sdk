@@ -1,8 +1,10 @@
-from ldclient.impl.util import is_valid_sdk_key_format
+import logging
+from ldclient.impl.util import validate_sdk_key_format
 
 
-def test_is_valid_sdk_key_format_valid():
+def test_validate_sdk_key_format_valid():
     """Test validation of valid SDK keys"""
+    logger = logging.getLogger('test')
     valid_keys = [
         "sdk-12345678-1234-1234-1234-123456789012",
         "valid-sdk-key-123",
@@ -12,11 +14,13 @@ def test_is_valid_sdk_key_format_valid():
     ]
     
     for key in valid_keys:
-        assert is_valid_sdk_key_format(key) is True
+        result = validate_sdk_key_format(key, logger)
+        assert result == key  # Should return the same key if valid
 
 
-def test_is_valid_sdk_key_format_invalid():
+def test_validate_sdk_key_format_invalid():
     """Test validation of invalid SDK keys"""
+    logger = logging.getLogger('test')
     invalid_keys = [
         "sdk-key-with-\x00-null",
         "sdk-key-with-\n-newline", 
@@ -27,27 +31,34 @@ def test_is_valid_sdk_key_format_invalid():
     ]
     
     for key in invalid_keys:
-        assert is_valid_sdk_key_format(key) is False
+        result = validate_sdk_key_format(key, logger)
+        assert result is None  # Should return None for invalid keys
 
 
-def test_is_valid_sdk_key_format_non_string():
+def test_validate_sdk_key_format_non_string():
     """Test validation of non-string SDK keys"""
+    logger = logging.getLogger('test')
     non_string_values = [123, object(), [], {}]
     
     for value in non_string_values:
-        assert is_valid_sdk_key_format(value) is False
+        result = validate_sdk_key_format(value, logger)
+        assert result is None  # Should return None for non-string values
 
 
-def test_is_valid_sdk_key_format_empty_and_none():
+def test_validate_sdk_key_format_empty_and_none():
     """Test validation of empty and None SDK keys"""
-    assert is_valid_sdk_key_format("") is True
-    assert is_valid_sdk_key_format(None) is True
+    logger = logging.getLogger('test')
+    assert validate_sdk_key_format("", logger) is None  # Empty string should return None
+    assert validate_sdk_key_format(None, logger) is None  # None should return None
 
 
-def test_is_valid_sdk_key_format_max_length():
+def test_validate_sdk_key_format_max_length():
     """Test validation of SDK key maximum length"""
+    logger = logging.getLogger('test')
     valid_key = "a" * 8192
-    assert is_valid_sdk_key_format(valid_key) is True
+    result = validate_sdk_key_format(valid_key, logger)
+    assert result == valid_key  # Should return the same key if valid
     
     invalid_key = "a" * 8193
-    assert is_valid_sdk_key_format(invalid_key) is False
+    result = validate_sdk_key_format(invalid_key, logger)
+    assert result is None  # Should return None for keys that are too long
