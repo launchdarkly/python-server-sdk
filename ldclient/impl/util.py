@@ -56,7 +56,9 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
 def is_valid_sdk_key_format(sdk_key: str) -> bool:
     """
     Validates that a string does not contain invalid characters and is not too long for our systems.
-    Returns True if the SDK key format is valid, otherwise False.
+    
+    :param sdk_key: the SDK key to validate
+    :return: True if the SDK key format is valid, otherwise False
     """
     if sdk_key is None or sdk_key == '':
         return True
