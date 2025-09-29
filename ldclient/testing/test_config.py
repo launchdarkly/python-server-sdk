@@ -50,7 +50,9 @@ def test_sdk_key_validation_valid_keys():
     valid_keys = [
         "sdk-12345678-1234-1234-1234-123456789012",
         "valid-sdk-key-123",
-        "VALID_SDK_KEY_456"
+        "VALID_SDK_KEY_456",
+        "test.key_with.dots",
+        "test-key-with-hyphens"
     ]
     
     for key in valid_keys:
@@ -59,23 +61,53 @@ def test_sdk_key_validation_valid_keys():
 
 
 def test_sdk_key_validation_invalid_keys():
-    """Test that invalid SDK keys are rejected"""
+    """Test that invalid SDK keys are not set"""
     invalid_keys = [
         "sdk-key-with-\x00-null",
         "sdk-key-with-\n-newline",
         "sdk-key-with-\t-tab",
-        "sdk-key-with-\x7F-del"
+        "sdk key with spaces",
+        "sdk@key#with$special%chars",
+        "sdk/key\\with/slashes"
     ]
     
     for key in invalid_keys:
-        with pytest.raises(ValueError, match="SDK key contains invalid characters"):
-            Config(sdk_key=key)
+        config = Config(sdk_key=key)
+        assert config.sdk_key is None
 
 
 def test_sdk_key_validation_empty_key():
-    """Test that empty SDK keys don't trigger format validation"""
+    """Test that empty SDK keys are accepted"""
     config = Config(sdk_key="")
     assert config.sdk_key == ""
+
+
+def test_sdk_key_validation_none_key():
+    """Test that None SDK keys are accepted"""
+    config = Config(sdk_key=None)
+    assert config.sdk_key is None
+
+
+def test_sdk_key_validation_max_length():
+    """Test SDK key maximum length validation"""
+    valid_key = "a" * 8192
+    config = Config(sdk_key=valid_key)
+    assert config.sdk_key == valid_key
+    
+    invalid_key = "a" * 8193
+    config = Config(sdk_key=invalid_key)
+    assert config.sdk_key is None
+
+
+def test_copy_with_new_sdk_key_validation():
+    """Test that copy_with_new_sdk_key validates the new key"""
+    original_config = Config(sdk_key="valid-key")
+    
+    new_config = original_config.copy_with_new_sdk_key("another-valid-key")
+    assert new_config.sdk_key == "another-valid-key"
+    
+    invalid_config = original_config.copy_with_new_sdk_key("invalid key with spaces")
+    assert invalid_config.sdk_key is None
 
 
 def application_can_be_set_and_read():

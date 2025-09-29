@@ -9,7 +9,7 @@ from typing import Callable, List, Optional, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
-from ldclient.impl.util import log, validate_application_info, validate_sdk_key
+from ldclient.impl.util import log, validate_application_info, is_valid_sdk_key_format
 from ldclient.interfaces import (
     BigSegmentStore,
     DataSourceUpdateSink,
@@ -261,10 +261,10 @@ class Config:
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
         """
-        if sdk_key and not validate_sdk_key(sdk_key, log):
-            raise ValueError("SDK key contains invalid characters")
-        
-        self.__sdk_key = sdk_key
+        if is_valid_sdk_key_format(sdk_key):
+            self.__sdk_key = sdk_key
+        else:
+            self.__sdk_key = None
 
         self.__base_uri = base_uri.rstrip('/')
         self.__events_uri = events_uri.rstrip('/')
@@ -305,6 +305,7 @@ class Config:
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
+        The key will not be updated if the provided key contains invalid characters.
 
         :param new_sdk_key: the new SDK key
         """

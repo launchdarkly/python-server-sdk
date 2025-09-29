@@ -1,56 +1,53 @@
-import logging
-from unittest.mock import Mock
-from ldclient.impl.util import validate_sdk_key
+from ldclient.impl.util import is_valid_sdk_key_format
 
 
-def test_validate_sdk_key_valid():
+def test_is_valid_sdk_key_format_valid():
     """Test validation of valid SDK keys"""
-    logger = Mock(spec=logging.Logger)
-    
     valid_keys = [
         "sdk-12345678-1234-1234-1234-123456789012",
         "valid-sdk-key-123",
-        "VALID_SDK_KEY_456"
+        "VALID_SDK_KEY_456",
+        "test.key_with.dots",
+        "test-key-with-hyphens"
     ]
     
     for key in valid_keys:
-        assert validate_sdk_key(key, logger) is True
-        logger.warning.assert_not_called()
-        logger.reset_mock()
+        assert is_valid_sdk_key_format(key) is True
 
 
-def test_validate_sdk_key_invalid():
+def test_is_valid_sdk_key_format_invalid():
     """Test validation of invalid SDK keys"""
-    logger = Mock(spec=logging.Logger)
-    
     invalid_keys = [
         "sdk-key-with-\x00-null",
         "sdk-key-with-\n-newline", 
-        "sdk-key-with-\t-tab"
+        "sdk-key-with-\t-tab",
+        "sdk key with spaces",
+        "sdk@key#with$special%chars",
+        "sdk/key\\with/slashes"
     ]
     
     for key in invalid_keys:
-        assert validate_sdk_key(key, logger) is False
-        logger.warning.assert_called_with("SDK key contains invalid characters")
-        logger.reset_mock()
+        assert is_valid_sdk_key_format(key) is False
 
 
-def test_validate_sdk_key_non_string():
+def test_is_valid_sdk_key_format_non_string():
     """Test validation of non-string SDK keys"""
-    logger = Mock(spec=logging.Logger)
-    
-    non_string_values = [123, None, object(), [], {}]
+    non_string_values = [123, object(), [], {}]
     
     for value in non_string_values:
-        result = validate_sdk_key(value, logger)
-        assert result is False
-        logger.warning.assert_called_with("SDK key must be a string")
-        logger.reset_mock()
+        assert is_valid_sdk_key_format(value) is False
 
 
-def test_validate_sdk_key_empty():
-    """Test validation of empty SDK keys"""
-    logger = Mock(spec=logging.Logger)
+def test_is_valid_sdk_key_format_empty_and_none():
+    """Test validation of empty and None SDK keys"""
+    assert is_valid_sdk_key_format("") is True
+    assert is_valid_sdk_key_format(None) is True
+
+
+def test_is_valid_sdk_key_format_max_length():
+    """Test validation of SDK key maximum length"""
+    valid_key = "a" * 8192
+    assert is_valid_sdk_key_format(valid_key) is True
     
-    assert validate_sdk_key("", logger) is True
-    logger.warning.assert_not_called()
+    invalid_key = "a" * 8193
+    assert is_valid_sdk_key_format(invalid_key) is False
