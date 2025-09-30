@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.12.1](https://github.com/launchdarkly/python-server-sdk/compare/9.12.0...9.12.1) (2025-09-30)
+
+
+### Bug Fixes
+
+* Add validation format check for SDK key ([#351](https://github.com/launchdarkly/python-server-sdk/issues/351))
+
 ## [9.12.0](https://github.com/launchdarkly/python-server-sdk/compare/9.11.1...9.12.0) (2025-07-11)
 
 
