@@ -547,7 +547,7 @@ class Config:
         return self._data_source_update_sink
 
     def _validate(self):
-        if self.offline is False and (self.sdk_key is None or self.sdk_key == ''):
+        if self.offline is False and self.sdk_key == '':
             log.warning("Missing or blank SDK key")
 
 
