@@ -7,16 +7,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 
 ### Bug Fixes
 
-* Add validation format check for SDK key ([4c8d4ae](https://github.com/launchdarkly/python-server-sdk/commit/4c8d4ae639f0206b79b7cd6e1e76c8b72f93cf55))
-* Add validation format check for SDK key ([6ec6770](https://github.com/launchdarkly/python-server-sdk/commit/6ec6770153c3712aac9a0f4587647af5208177da))
-* Add validation format check for SDK key ([a19e5bf](https://github.com/launchdarkly/python-server-sdk/commit/a19e5bf291310408e95956e1f85a9ef57ba927e1))
-* Add validation format check for SDK key ([6959036](https://github.com/launchdarkly/python-server-sdk/commit/69590361bf25fbdf075c078830197ed081626ccc))
-* Add validation format check for SDK key ([b4f8ab6](https://github.com/launchdarkly/python-server-sdk/commit/b4f8ab613d4d7493c5c945629117fb687684c814))
-* Add validation format check for SDK key ([e514784](https://github.com/launchdarkly/python-server-sdk/commit/e5147846ace86bda7a0b0fc6f5dbe1b478343168))
-* Add validation format check for SDK key ([b7eec96](https://github.com/launchdarkly/python-server-sdk/commit/b7eec9696be7bd03e1198592e13dbc8c17cbb0e0))
-* Add validation format check for SDK key ([5891f34](https://github.com/launchdarkly/python-server-sdk/commit/5891f344898b14d1751b4234f63cc3fcb6812f2b))
-* Add validation format check for SDK key ([6b0920b](https://github.com/launchdarkly/python-server-sdk/commit/6b0920bf764fcc4428f25788cf10e7788a2553f3))
-* Add validation format check for SDK key ([133b3db](https://github.com/launchdarkly/python-server-sdk/commit/133b3db811882a17ede887b9fb622815e4d0fd2b))
+* Add validation format check for SDK key ([#351](https://github.com/launchdarkly/python-server-sdk/issues/351))
 
 ## [9.12.0](https://github.com/launchdarkly/python-server-sdk/compare/9.11.1...9.12.0) (2025-07-11)
 
