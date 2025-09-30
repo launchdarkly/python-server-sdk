@@ -8,8 +8,7 @@
         "ldclient/version.py",
         "PROVENANCE.md"
       ],
-      "include-component-in-tag": false,
-      "release-as": "9.12.0"
+      "include-component-in-tag": false
     }
   }
 }
