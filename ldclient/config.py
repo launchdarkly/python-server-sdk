@@ -9,7 +9,11 @@ from typing import Callable, List, Optional, Set
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
-from ldclient.impl.util import log, validate_application_info
+from ldclient.impl.util import (
+    log,
+    validate_application_info,
+    validate_sdk_key_format
+)
 from ldclient.interfaces import (
     BigSegmentStore,
     DataSourceUpdateSink,
@@ -261,7 +265,7 @@ class Config:
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
         """
-        self.__sdk_key = sdk_key
+        self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
         self.__base_uri = base_uri.rstrip('/')
         self.__events_uri = events_uri.rstrip('/')
@@ -302,6 +306,7 @@ class Config:
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
+        The key will not be updated if the provided key contains invalid characters.
 
         :param new_sdk_key: the new SDK key
         """
@@ -542,8 +547,8 @@ class Config:
         return self._data_source_update_sink
 
     def _validate(self):
-        if self.offline is False and self.sdk_key is None or self.sdk_key == '':
-            log.warning("Missing or blank sdk_key.")
+        if self.offline is False and self.sdk_key == '':
+            log.warning("Missing or blank SDK key")
 
 
 __all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']
