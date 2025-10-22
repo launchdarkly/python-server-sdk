@@ -16,6 +16,7 @@ from ldclient.impl.datasourcev2.streaming import (
     StreamingDataSourceBuilder
 )
 from ldclient.impl.datasystem import Initializer, Synchronizer
+from ldclient.interfaces import DataStoreMode, FeatureStore
 
 T = TypeVar("T")
 
@@ -30,6 +31,8 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
     _initializers: Optional[List[Builder[Initializer]]] = None
     _primary_synchronizer: Optional[Builder[Synchronizer]] = None
     _secondary_synchronizer: Optional[Builder[Synchronizer]] = None
+    _store_mode: DataStoreMode = DataStoreMode.READ_ONLY
+    _data_store: Optional[FeatureStore] = None
 
     def initializers(self, initializers: Optional[List[Builder[Initializer]]]) -> "ConfigBuilder":
         """
@@ -50,17 +53,27 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         self._secondary_synchronizer = secondary
         return self
 
+    def data_store(self, data_store: FeatureStore, store_mode: DataStoreMode) -> "ConfigBuilder":
+        """
+        Sets the data store configuration for the data system.
+        """
+        self._data_store = data_store
+        self._store_mode = store_mode
+        return self
+
     def build(self) -> DataSystemConfig:
         """
         Builds the data system configuration.
         """
-        if self._primary_synchronizer is None:
-            raise ValueError("Primary synchronizer must be set")
+        if self._secondary_synchronizer is not None and self._primary_synchronizer is None:
+            raise ValueError("Primary synchronizer must be set if secondary is set")
 
         return DataSystemConfig(
             initializers=self._initializers,
             primary_synchronizer=self._primary_synchronizer,
             secondary_synchronizer=self._secondary_synchronizer,
+            data_store_mode=self._store_mode,
+            data_store=self._data_store,
         )
 
 
@@ -147,18 +160,29 @@ def custom() -> ConfigBuilder:
     return ConfigBuilder()
 
 
+# TODO(fdv2): Need to update these so they don't rely on the LDConfig
+def daemon(config: LDConfig, store: FeatureStore) -> ConfigBuilder:
+    """
+    Daemon configures the SDK to read from a persistent store integration
+    that is populated by Relay Proxy or other SDKs. The SDK will not connect
+    to LaunchDarkly. In this mode, the SDK never writes to the data store.
+    """
+    return default(config).data_store(store, DataStoreMode.READ_ONLY)
+
+
+def persistent_store(config: LDConfig, store: FeatureStore) -> ConfigBuilder:
+    """
+    PersistentStore is similar to Default, with the addition of a persistent
+    store integration. Before data has arrived from LaunchDarkly, the SDK is
+    able to evaluate flags using data from the persistent store. Once fresh
+    data is available, the SDK will no longer read from the persistent store,
+    although it will keep it up-to-date.
+    """
+    return default(config).data_store(store, DataStoreMode.READ_WRITE)
+
+
 # TODO(fdv2): Implement these methods
 #
-# Daemon configures the SDK to read from a persistent store integration
-# that is populated by Relay Proxy or other SDKs. The SDK will not connect
-# to LaunchDarkly. In this mode, the SDK never writes to the data store.
-
-# PersistentStore is similar to Default, with the addition of a persistent
-# store integration. Before data has arrived from LaunchDarkly, the SDK is
-# able to evaluate flags using data from the persistent store. Once fresh
-# data is available, the SDK will no longer read from the persistent store,
-# although it will keep it up-to-date.
-
 # WithEndpoints configures the data system with custom endpoints for
 # LaunchDarkly's streaming and polling synchronizers. This method is not
 # necessary for most use-cases, but can be useful for testing or custom

@@ -19,6 +19,7 @@ from ldclient.impl.util import (
 from ldclient.interfaces import (
     BigSegmentStore,
     DataSourceUpdateSink,
+    DataStoreMode,
     EventProcessor,
     FeatureStore,
     UpdateProcessor
@@ -161,18 +162,22 @@ Builder = Callable[[], T]
 
 @dataclass(frozen=True)
 class DataSystemConfig:
-    """
-    Configuration for LaunchDarkly's data acquisition strategy.
-    """
+    """Configuration for LaunchDarkly's data acquisition strategy."""
 
     initializers: Optional[List[Builder[Initializer]]]
     """The initializers for the data system."""
 
-    primary_synchronizer: Builder[Synchronizer]
+    primary_synchronizer: Optional[Builder[Synchronizer]]
     """The primary synchronizer for the data system."""
 
     secondary_synchronizer: Optional[Builder[Synchronizer]] = None
     """The secondary synchronizers for the data system."""
+
+    data_store_mode: DataStoreMode = DataStoreMode.READ_WRITE
+    """The data store mode specifies the mode in which the persistent store will operate, if present."""
+
+    data_store: Optional[FeatureStore] = None
+    """The (optional) persistent data store instance."""
 
     # TODO(fdv2): Implement this synchronizer up and hook it up everywhere.
     # TODO(fdv2): Remove this when FDv2 is fully launched
