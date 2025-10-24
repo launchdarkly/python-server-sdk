@@ -126,9 +126,7 @@ def test_custom_builder():
 
 def test_default_config_builder():
     """Test that default() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = default(mock_ld_config)
+    builder = default()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests
@@ -137,9 +135,7 @@ def test_default_config_builder():
 
 def test_streaming_config_builder():
     """Test that streaming() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = streaming(mock_ld_config)
+    builder = streaming()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests
@@ -148,9 +144,7 @@ def test_streaming_config_builder():
 
 def test_polling_config_builder():
     """Test that polling() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = polling(mock_ld_config)
+    builder = polling()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests

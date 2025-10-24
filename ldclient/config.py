@@ -157,7 +157,7 @@ class HTTPConfig:
 
 T = TypeVar("T")
 
-Builder = Callable[[], T]
+Builder = Callable[['Config'], T]
 
 
 @dataclass(frozen=True)

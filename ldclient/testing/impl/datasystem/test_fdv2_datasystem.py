@@ -5,7 +5,7 @@ from typing import List
 
 from mock import Mock
 
-from ldclient.config import DataSystemConfig
+from ldclient.config import Config, DataSystemConfig
 from ldclient.impl.datasystem import DataAvailability, Synchronizer
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.integrations.test_datav2 import TestDataV2
@@ -18,13 +18,13 @@ def test_two_phase_init():
 
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         initializers=[td_initializer.build_initializer],
         primary_synchronizer=td_synchronizer.build_synchronizer,
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     changed = Event()
     changes: List[FlagChange] = []
@@ -52,13 +52,13 @@ def test_two_phase_init():
 
 def test_can_stop_fdv2():
     td = TestDataV2.data_source()
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         initializers=None,
         primary_synchronizer=td.build_synchronizer,
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     changed = Event()
     changes: List[FlagChange] = []
@@ -81,13 +81,13 @@ def test_can_stop_fdv2():
 
 def test_fdv2_data_availability_is_refreshed_with_data():
     td = TestDataV2.data_source()
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         initializers=None,
         primary_synchronizer=td.build_synchronizer,
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -101,9 +101,9 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
     mock.sync.return_value = iter([])  # Empty iterator to simulate no data
     td = TestDataV2.data_source()
     td.update(td.flag("feature-flag").on(True))
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         initializers=[td.build_initializer],
-        primary_synchronizer=lambda: mock,  # Primary synchronizer is None to force fallback
+        primary_synchronizer=lambda _: mock,  # Primary synchronizer is None to force fallback
         secondary_synchronizer=td.build_synchronizer,
     )
 
@@ -120,7 +120,7 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
             changed.set()
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
     fdv2.flag_tracker.add_listener(listener)
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -137,10 +137,10 @@ def test_fdv2_shutdown_down_if_both_synchronizers_fail():
     mock.sync.return_value = iter([])  # Empty iterator to simulate no data
     td = TestDataV2.data_source()
     td.update(td.flag("feature-flag").on(True))
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         initializers=[td.build_initializer],
-        primary_synchronizer=lambda: mock,  # Primary synchronizer is None to force fallback
-        secondary_synchronizer=lambda: mock,  # Secondary synchronizer also fails
+        primary_synchronizer=lambda _: mock,  # Primary synchronizer is None to force fallback
+        secondary_synchronizer=lambda _: mock,  # Secondary synchronizer also fails
     )
 
     changed = Event()
@@ -150,7 +150,7 @@ def test_fdv2_shutdown_down_if_both_synchronizers_fail():
             changed.set()
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
     fdv2.data_source_status_provider.add_listener(listener)
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
