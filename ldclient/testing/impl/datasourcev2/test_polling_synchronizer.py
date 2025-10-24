@@ -201,6 +201,7 @@ def test_handles_delete_objects():
     assert valid.change_set.selector.state == "p:SOMETHING:300"
     assert valid.change_set.intent_code == IntentCode.TRANSFER_FULL
 
+
 def test_generic_error_interrupts_and_recovers():
     builder = ChangeSetBuilder()
     builder.start(intent=IntentCode.TRANSFER_FULL)

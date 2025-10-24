@@ -140,7 +140,7 @@ def test_fdv2_shutdown_down_if_both_synchronizers_fail():
     config = DataSystemConfig(
         initializers=[td.build_initializer],
         primary_synchronizer=lambda: mock,  # Primary synchronizer is None to force fallback
-        secondary_synchronizer=lambda: mock, # Secondary synchronizer also fails
+        secondary_synchronizer=lambda: mock,  # Secondary synchronizer also fails
     )
 
     changed = Event()
