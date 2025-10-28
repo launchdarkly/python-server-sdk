@@ -7,9 +7,9 @@ ChangeSet applications and flag change notifications.
 """
 
 import threading
-from typing import Dict, List, Mapping, Optional, Set
+from collections import defaultdict
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set
 
-from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasystem.protocolv2 import (
     Change,
     ChangeSet,
@@ -20,13 +20,108 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     DataStoreStatusProvider,
+    DiagnosticDescription,
     FeatureStore,
     FlagChange
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
+
+
+class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
+    """The default feature store implementation, which holds all data in a thread-safe data structure in memory."""
+
+    def __init__(self):
+        """Constructs an instance of InMemoryFeatureStore."""
+        self._lock = ReadWriteLock()
+        self._initialized = False
+        self._items = defaultdict(dict)
+
+    def is_monitoring_enabled(self) -> bool:
+        return False
+
+    def is_available(self) -> bool:
+        return True
+
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        """ """
+        try:
+            self._lock.rlock()
+            items_of_kind = self._items[kind]
+            item = items_of_kind.get(key)
+            if item is None:
+                log.debug("Attempted to get missing key %s in '%s', returning None", key, kind.namespace)
+                return callback(None)
+            if 'deleted' in item and item['deleted']:
+                log.debug("Attempted to get deleted key %s in '%s', returning None", key, kind.namespace)
+                return callback(None)
+            return callback(item)
+        finally:
+            self._lock.runlock()
+
+    def all(self, kind, callback):
+        """ """
+        try:
+            self._lock.rlock()
+            items_of_kind = self._items[kind]
+            return callback(dict((k, i) for k, i in items_of_kind.items() if ('deleted' not in i) or not i['deleted']))
+        finally:
+            self._lock.runlock()
+
+    def init(self, all_data):
+        """ """
+        all_decoded = {}
+        for kind, items in all_data.items():
+            items_decoded = {}
+            for key, item in items.items():
+                items_decoded[key] = kind.decode(item)
+            all_decoded[kind] = items_decoded
+        try:
+            self._lock.rlock()
+            self._items.clear()
+            self._items.update(all_decoded)
+            self._initialized = True
+            for k in all_data:
+                log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
+        finally:
+            self._lock.runlock()
+
+    # noinspection PyShadowingNames
+    def delete(self, kind, key: str, version: int):
+        """ """
+        try:
+            self._lock.rlock()
+            items_of_kind = self._items[kind]
+            items_of_kind[key] = {'deleted': True, 'version': version}
+        finally:
+            self._lock.runlock()
+
+    def upsert(self, kind, item):
+        """ """
+        decoded_item = kind.decode(item)
+        key = item['key']
+        try:
+            self._lock.rlock()
+            items_of_kind = self._items[kind]
+            items_of_kind[key] = decoded_item
+            log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
+        finally:
+            self._lock.runlock()
+
+    @property
+    def initialized(self) -> bool:
+        """ """
+        try:
+            self._lock.rlock()
+            return self._initialized
+        finally:
+            self._lock.runlock()
+
+    def describe_configuration(self, config):
+        return 'memory'
 
 
 class Store:
