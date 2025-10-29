@@ -2,7 +2,7 @@ import threading
 from queue import Empty, Queue
 from typing import Generator
 
-from ldclient.impl.datasystem import BasisResult, Update
+from ldclient.impl.datasystem import BasisResult, SelectorStore, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
     ChangeSetBuilder,
@@ -16,6 +16,7 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState
 )
+from ldclient.testing.mock_components import MockSelectorStore
 
 
 class _TestDataSourceV2:
@@ -47,7 +48,7 @@ class _TestDataSourceV2:
         """Return the name of this data source."""
         return "TestDataV2"
 
-    def fetch(self) -> BasisResult:
+    def fetch(self, ss: SelectorStore) -> BasisResult:
         """
         Implementation of the Initializer.fetch method.
 
@@ -90,7 +91,7 @@ class _TestDataSourceV2:
         except Exception as e:
             return _Fail(f"Error fetching test data: {str(e)}")
 
-    def sync(self) -> Generator[Update, None, None]:
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
         """
         Implementation of the Synchronizer.sync method.
 
@@ -98,7 +99,7 @@ class _TestDataSourceV2:
         """
 
         # First yield initial data
-        initial_result = self.fetch()
+        initial_result = self.fetch(ss)
         if isinstance(initial_result, _Fail):
             yield Update(
                 state=DataSourceState.OFF,
@@ -143,8 +144,8 @@ class _TestDataSourceV2:
                 )
                 break
 
-    def close(self):
-        """Close the data source and clean up resources."""
+    def stop(self):
+        """Stop the data source and clean up resources"""
         with self._lock:
             if self._closed:
                 return

@@ -14,7 +14,7 @@ from urllib import parse
 import urllib3
 
 from ldclient.config import Config
-from ldclient.impl.datasystem import BasisResult, Update
+from ldclient.impl.datasystem import BasisResult, SelectorStore, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
     ChangeSet,
@@ -96,13 +96,13 @@ class PollingDataSource:
         """Returns the name of the initializer."""
         return "PollingDataSourceV2"
 
-    def fetch(self) -> BasisResult:
+    def fetch(self, ss: SelectorStore) -> BasisResult:
         """
         Fetch returns a Basis, or an error if the Basis could not be retrieved.
         """
-        return self._poll()
+        return self._poll(ss)
 
-    def sync(self) -> Generator[Update, None, None]:
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
         """
         sync begins the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
@@ -111,7 +111,7 @@ class PollingDataSource:
         log.info("Starting PollingDataSourceV2 synchronizer")
         self._stop.clear()
         while self._stop.is_set() is False:
-            result = self._requester.fetch(None)
+            result = self._requester.fetch(ss.selector())
             if isinstance(result, _Fail):
                 if isinstance(result.exception, UnsuccessfulResponseException):
                     error_info = DataSourceErrorInfo(
@@ -170,10 +170,9 @@ class PollingDataSource:
         self._task.stop()
         self._stop.set()
 
-    def _poll(self) -> BasisResult:
+    def _poll(self, ss: SelectorStore) -> BasisResult:
         try:
-            # TODO(fdv2): Need to pass the selector through
-            result = self._requester.fetch(None)
+            result = self._requester.fetch(ss.selector())
 
             if isinstance(result, _Fail):
                 if isinstance(result.exception, UnsuccessfulResponseException):

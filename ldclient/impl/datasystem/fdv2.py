@@ -299,7 +299,7 @@ class FDv2:
                 initializer = initializer_builder(self._config)
                 log.info("Attempting to initialize via %s", initializer.name)
 
-                basis_result = initializer.fetch()
+                basis_result = initializer.fetch(self._store)
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
@@ -426,7 +426,7 @@ class FDv2:
         :return: Tuple of (should_remove_sync, fallback_to_fdv1)
         """
         try:
-            for update in synchronizer.sync():
+            for update in synchronizer.sync(self._store):
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
                     return False, False
