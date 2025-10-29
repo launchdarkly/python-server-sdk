@@ -7,9 +7,9 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event
-from typing import Generator, Optional, Protocol
+from typing import Callable, Generator, Optional, Protocol
 
-from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet
+from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet, Selector
 from ldclient.impl.util import _Result
 from ldclient.interfaces import (
     DataSourceErrorInfo,
@@ -142,6 +142,21 @@ class DataSystem(Protocol):
         raise NotImplementedError
 
 
+class SelectorStore(Protocol):
+    """
+    SelectorStore represents a component capable of providing Selectors
+    for data retrieval.
+    """
+
+    @abstractmethod
+    def selector(self) -> Selector:
+        """
+        get_selector should return a Selector object that defines the criteria
+        for data retrieval.
+        """
+        raise NotImplementedError
+
+
 BasisResult = _Result[Basis, str]
 
 
@@ -165,10 +180,12 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
     @abstractmethod
-    def fetch(self) -> BasisResult:
+    def fetch(self, ss: SelectorStore) -> BasisResult:
         """
         fetch should retrieve the initial data set for the data source, returning
         a Basis object on success, or an error message on failure.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
         """
         raise NotImplementedError
 
@@ -205,11 +222,13 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
     @abstractmethod
-    def sync(self) -> Generator[Update, None, None]:
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
         occurs.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
         """
         raise NotImplementedError
 

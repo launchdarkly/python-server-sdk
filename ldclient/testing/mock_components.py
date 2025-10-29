@@ -1,6 +1,7 @@
 import time
 from typing import Callable
 
+from ldclient.impl.datasystem.protocolv2 import Selector
 from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
 
 
@@ -42,3 +43,11 @@ class MockBigSegmentStore(BigSegmentStore):
 
     def __fail(self):
         raise Exception("deliberate error")
+
+
+class MockSelectorStore():
+    def __init__(self, selector: Selector):
+        self._selector = selector
+
+    def selector(self) -> Selector:
+        return self._selector
