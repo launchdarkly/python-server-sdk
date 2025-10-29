@@ -31,7 +31,7 @@ def test_two_phase_init():
     count = 0
 
     def listener(flag_change: FlagChange):
-        nonlocal count
+        nonlocal count, changes
         count += 1
         changes.append(flag_change)
 
@@ -112,7 +112,7 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
     count = 0
 
     def listener(flag_change: FlagChange):
-        nonlocal count
+        nonlocal count, changes
         count += 1
         changes.append(flag_change)
 
