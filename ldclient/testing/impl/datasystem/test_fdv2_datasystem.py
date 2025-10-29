@@ -33,10 +33,10 @@ def test_two_phase_init():
     def listener(flag_change: FlagChange):
         nonlocal count
         count += 1
+        changes.append(flag_change)
 
         if count == 2:
             changed.set()
-        changes.append(flag_change)
 
     fdv2.flag_tracker.add_listener(listener)
 
@@ -64,8 +64,8 @@ def test_can_stop_fdv2():
     changes: List[FlagChange] = []
 
     def listener(flag_change: FlagChange):
-        changed.set()
         changes.append(flag_change)
+        changed.set()
 
     fdv2.flag_tracker.add_listener(listener)
 
@@ -114,10 +114,10 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
     def listener(flag_change: FlagChange):
         nonlocal count
         count += 1
+        changes.append(flag_change)
 
         if count == 2:
             changed.set()
-        changes.append(flag_change)
 
     set_on_ready = Event()
     fdv2 = FDv2(config)
