@@ -3,8 +3,10 @@ This submodule contains factory/configuration methods for integrating the SDK wi
 other than LaunchDarkly.
 """
 
-from typing import Any, Dict, List, Mapping, Optional
+from threading import Event
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from ldclient.config import Config
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import (
@@ -23,7 +25,7 @@ from ldclient.impl.integrations.redis.redis_big_segment_store import (
 from ldclient.impl.integrations.redis.redis_feature_store import (
     _RedisFeatureStoreCore
 )
-from ldclient.interfaces import BigSegmentStore
+from ldclient.interfaces import BigSegmentStore, FeatureStore, UpdateProcessor
 
 
 class Consul:
@@ -206,7 +208,7 @@ class Files:
     """Provides factory methods for integrations with filesystem data."""
 
     @staticmethod
-    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> object:
+    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> Optional[Callable[[Config, FeatureStore, Event], UpdateProcessor]]:
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
         actual LaunchDarkly connection.
