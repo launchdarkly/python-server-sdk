@@ -42,6 +42,11 @@ class _TestDataSourceV2:
         # - Added to `upsert_flag` to address potential race conditions.
         # - The `sync` method relies on Queue's thread-safe properties for updates.
 
+    @property
+    def name(self) -> str:
+        """Return the name of this data source."""
+        return "TestDataV2"
+
     def fetch(self) -> BasisResult:
         """
         Implementation of the Initializer.fetch method.

@@ -2,10 +2,10 @@
 Configuration for LaunchDarkly's data acquisition strategy.
 """
 
-from dataclasses import dataclass
 from typing import Callable, List, Optional, TypeVar
 
 from ldclient.config import Config as LDConfig
+from ldclient.config import DataSystemConfig
 from ldclient.impl.datasourcev2.polling import (
     PollingDataSource,
     PollingDataSourceBuilder,
@@ -22,22 +22,6 @@ T = TypeVar("T")
 Builder = Callable[[], T]
 
 
-@dataclass(frozen=True)
-class Config:
-    """
-    Configuration for LaunchDarkly's data acquisition strategy.
-    """
-
-    initializers: Optional[List[Builder[Initializer]]]
-    """The initializers for the data system."""
-
-    primary_synchronizer: Builder[Synchronizer]
-    """The primary synchronizer for the data system."""
-
-    secondary_synchronizer: Optional[Builder[Synchronizer]]
-    """The secondary synchronizers for the data system."""
-
-
 class ConfigBuilder:  # pylint: disable=too-few-public-methods
     """
     Builder for the data system configuration.
@@ -47,7 +31,7 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
     _primary_synchronizer: Optional[Builder[Synchronizer]] = None
     _secondary_synchronizer: Optional[Builder[Synchronizer]] = None
 
-    def initializers(self, initializers: List[Builder[Initializer]]) -> "ConfigBuilder":
+    def initializers(self, initializers: Optional[List[Builder[Initializer]]]) -> "ConfigBuilder":
         """
         Sets the initializers for the data system.
         """
@@ -66,14 +50,14 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         self._secondary_synchronizer = secondary
         return self
 
-    def build(self) -> Config:
+    def build(self) -> DataSystemConfig:
         """
         Builds the data system configuration.
         """
         if self._primary_synchronizer is None:
             raise ValueError("Primary synchronizer must be set")
 
-        return Config(
+        return DataSystemConfig(
             initializers=self._initializers,
             primary_synchronizer=self._primary_synchronizer,
             secondary_synchronizer=self._secondary_synchronizer,
@@ -144,7 +128,7 @@ def polling(config: LDConfig) -> ConfigBuilder:
     streaming, but may be necessary in some network environments.
     """
 
-    polling_builder = __polling_ds_builder(config)
+    polling_builder: Builder[Synchronizer] = __polling_ds_builder(config)
 
     builder = ConfigBuilder()
     builder.synchronizers(polling_builder)

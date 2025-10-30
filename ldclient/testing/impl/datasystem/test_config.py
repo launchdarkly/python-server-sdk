@@ -1,12 +1,11 @@
 import dataclasses
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
 from ldclient.config import Config as LDConfig
-from ldclient.impl.datasystem import Initializer, Synchronizer
+from ldclient.config import DataSystemConfig
 from ldclient.impl.datasystem.config import (
-    Config,
     ConfigBuilder,
     custom,
     default,
@@ -63,7 +62,7 @@ def test_config_builder_build_success():
 
     config = builder.build()
 
-    assert isinstance(config, Config)
+    assert isinstance(config, DataSystemConfig)
     assert config.initializers == [mock_initializer]
     assert config.primary_synchronizer == mock_primary
     assert config.secondary_synchronizer == mock_secondary
@@ -178,11 +177,11 @@ def test_polling_config_builder():
 
 
 def test_config_dataclass_immutability():
-    """Test that Config instances are immutable (frozen dataclass)."""
+    """Test that DataSystemConfig instances are immutable (frozen dataclass)."""
     mock_primary = Mock()
     mock_secondary = Mock()
 
-    config = Config(
+    config = DataSystemConfig(
         initializers=None,
         primary_synchronizer=mock_primary,
         secondary_synchronizer=mock_secondary,
