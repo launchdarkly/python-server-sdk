@@ -51,6 +51,12 @@ class ListBasedSseClient:
     def all(self) -> Iterable[Action]:
         return self._events
 
+    def interrupt(self):
+        pass
+
+    def close(self):
+        pass
+
 
 class HttpExceptionThrowingSseClient:
     def __init__(self, status_codes: List[int]):  # pylint: disable=redefined-outer-name
@@ -74,16 +80,16 @@ def test_ignores_unknown_events():
         pass
 
     unknown_named_event = Event(event="Unknown")
-    builder = list_sse_client([UnknownTypeOfEvent(), unknown_named_event])
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = list_sse_client([UnknownTypeOfEvent(), unknown_named_event])
 
     assert len(list(synchronizer.sync())) == 0
 
 
 def test_ignores_faults_without_errors():
     errorless_fault = Fault(error=None)
-    builder = list_sse_client([errorless_fault])
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = list_sse_client([errorless_fault])
 
     assert len(list(synchronizer.sync())) == 0
 
@@ -160,9 +166,9 @@ def test_handles_no_changes():
         event=EventName.SERVER_INTENT,
         data=json.dumps(server_intent.to_dict()),
     )
-    builder = list_sse_client([intent_event])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = list_sse_client([intent_event])
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -181,7 +187,8 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -207,7 +214,8 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -238,7 +246,8 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -268,7 +277,8 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -294,7 +304,8 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -322,7 +333,8 @@ def test_error_resets(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -345,7 +357,8 @@ def test_handles_out_of_order(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -375,7 +388,8 @@ def test_invalid_json_decoding(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 2
@@ -407,7 +421,8 @@ def test_stops_on_unrecoverable_status_code(
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 1
@@ -436,7 +451,8 @@ def test_continues_on_recoverable_status_code(
             events[EventName.PAYLOAD_TRANSFERRED],
         ]
     )
-    synchronizer = StreamingDataSource(Config(sdk_key="key"), builder)
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync())
 
     assert len(updates) == 3

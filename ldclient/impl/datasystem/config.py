@@ -28,11 +28,13 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
     Builder for the data system configuration.
     """
 
-    _initializers: Optional[List[Builder[Initializer]]] = None
-    _primary_synchronizer: Optional[Builder[Synchronizer]] = None
-    _secondary_synchronizer: Optional[Builder[Synchronizer]] = None
-    _store_mode: DataStoreMode = DataStoreMode.READ_ONLY
-    _data_store: Optional[FeatureStore] = None
+    def __init__(self) -> None:
+        self._initializers: Optional[List[Builder[Initializer]]] = None
+        self._primary_synchronizer: Optional[Builder[Synchronizer]] = None
+        self._secondary_synchronizer: Optional[Builder[Synchronizer]] = None
+        self._fdv1_fallback_synchronizer: Optional[Builder[Synchronizer]] = None
+        self._store_mode: DataStoreMode = DataStoreMode.READ_ONLY
+        self._data_store: Optional[FeatureStore] = None
 
     def initializers(self, initializers: Optional[List[Builder[Initializer]]]) -> "ConfigBuilder":
         """
@@ -72,12 +74,13 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
             initializers=self._initializers,
             primary_synchronizer=self._primary_synchronizer,
             secondary_synchronizer=self._secondary_synchronizer,
+            fdv1_fallback_synchronizer=self._fdv1_fallback_synchronizer,
             data_store_mode=self._store_mode,
             data_store=self._data_store,
         )
 
 
-def __polling_ds_builder() -> Builder[PollingDataSource]:
+def polling_ds_builder() -> Builder[PollingDataSource]:
     def builder(config: LDConfig) -> PollingDataSource:
         requester = Urllib3PollingRequester(config)
         polling_ds = PollingDataSourceBuilder(config)
@@ -88,7 +91,7 @@ def __polling_ds_builder() -> Builder[PollingDataSource]:
     return builder
 
 
-def __streaming_ds_builder() -> Builder[StreamingDataSource]:
+def streaming_ds_builder() -> Builder[StreamingDataSource]:
     def builder(config: LDConfig) -> StreamingDataSource:
         return StreamingDataSourceBuilder(config).build()
 
@@ -109,8 +112,8 @@ def default() -> ConfigBuilder:
     for updates.
     """
 
-    polling_builder = __polling_ds_builder()
-    streaming_builder = __streaming_ds_builder()
+    polling_builder = polling_ds_builder()
+    streaming_builder = streaming_ds_builder()
 
     builder = ConfigBuilder()
     builder.initializers([polling_builder])
@@ -126,7 +129,7 @@ def streaming() -> ConfigBuilder:
     with no additional latency.
     """
 
-    streaming_builder = __streaming_ds_builder()
+    streaming_builder = streaming_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(streaming_builder)
@@ -141,7 +144,7 @@ def polling() -> ConfigBuilder:
     streaming, but may be necessary in some network environments.
     """
 
-    polling_builder: Builder[Synchronizer] = __polling_ds_builder()
+    polling_builder: Builder[Synchronizer] = polling_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(polling_builder)

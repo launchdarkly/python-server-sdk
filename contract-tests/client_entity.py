@@ -15,6 +15,12 @@ from ldclient import (
     Stage
 )
 from ldclient.config import BigSegmentsConfig
+from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
+from ldclient.impl.datasystem.config import (
+    custom,
+    polling_ds_builder,
+    streaming_ds_builder
+)
 
 
 class ClientEntity:
@@ -29,7 +35,70 @@ class ClientEntity:
                 'version': tags.get('applicationVersion', ''),
             }
 
-        if config.get("streaming") is not None:
+        datasystem_config = config.get('dataSystem')
+        if datasystem_config is not None:
+            datasystem = custom()
+
+            init_configs = datasystem_config.get('initializers')
+            if init_configs is not None:
+                initializers = []
+                for init_config in init_configs:
+                    polling = init_config.get('polling')
+                    if polling is not None:
+                        if polling.get("baseUri") is not None:
+                            opts["base_uri"] = polling["baseUri"]
+                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
+                        polling = polling_ds_builder()
+                        initializers.append(polling)
+
+                datasystem.initializers(initializers)
+            sync_config = datasystem_config.get('synchronizers')
+            if sync_config is not None:
+                primary = sync_config.get('primary')
+                secondary = sync_config.get('secondary')
+
+                primary_builder = None
+                secondary_builder = None
+
+                if primary is not None:
+                    streaming = primary.get('streaming')
+                    if streaming is not None:
+                        primary_builder = streaming_ds_builder()
+                        if streaming.get("baseUri") is not None:
+                            opts["stream_uri"] = streaming["baseUri"]
+                        _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
+                        primary_builder = streaming_ds_builder()
+                    elif primary.get('polling') is not None:
+                        polling = primary.get('polling')
+                        if polling.get("baseUri") is not None:
+                            opts["base_uri"] = polling["baseUri"]
+                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
+                        primary_builder = polling_ds_builder()
+
+                if secondary is not None:
+                    streaming = secondary.get('streaming')
+                    if streaming is not None:
+                        secondary_builder = streaming_ds_builder()
+                        if streaming.get("baseUri") is not None:
+                            opts["stream_uri"] = streaming["baseUri"]
+                        _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
+                        secondary_builder = streaming_ds_builder()
+                    elif secondary.get('polling') is not None:
+                        polling = secondary.get('polling')
+                        if polling.get("baseUri") is not None:
+                            opts["base_uri"] = polling["baseUri"]
+                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
+                        secondary_builder = polling_ds_builder()
+
+                if primary_builder is not None:
+                    datasystem.synchronizers(primary_builder, secondary_builder)
+
+            if datasystem_config.get("payloadFilter") is not None:
+                opts["payload_filter_key"] = datasystem_config["payloadFilter"]
+
+            opts["datasystem_config"] = datasystem.build()
+
+        elif config.get("streaming") is not None:
             streaming = config["streaming"]
             if streaming.get("baseUri") is not None:
                 opts["stream_uri"] = streaming["baseUri"]

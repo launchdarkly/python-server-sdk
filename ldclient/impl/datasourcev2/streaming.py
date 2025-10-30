@@ -9,7 +9,7 @@ from time import time
 from typing import Callable, Generator, Iterable, Optional, Protocol, Tuple
 from urllib import parse
 
-from ld_eventsource import SSEClient as SSEClientImpl
+from ld_eventsource import SSEClient
 from ld_eventsource.actions import Action, Event, Fault
 from ld_eventsource.config import (
     ConnectStrategy,
@@ -54,33 +54,19 @@ JITTER_RATIO = 0.5
 STREAMING_ENDPOINT = "/sdk/stream"
 
 
-class SSEClient(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    SSEClient is a protocol that defines the interface for a client that can
-    connect to a Server-Sent Events (SSE) stream and provide an iterable of
-    actions received from that stream.
-    """
-
-    @property
-    @abstractmethod
-    def all(self) -> Iterable[Action]:
-        """
-        Returns an iterable of all actions received from the SSE stream.
-        """
-        raise NotImplementedError
-
-
 SseClientBuilder = Callable[[Config], SSEClient]
 
 
 # TODO(sdk-1391): Pass a selector-retrieving function through so it can
 # re-connect with the last known status.
-def create_sse_client(config: Config) -> SSEClientImpl:
+def create_sse_client(config: Config) -> SSEClient:
     """ "
-    create_sse_client creates an SSEClientImpl instance configured to connect
+    create_sse_client creates an SSEClient instance configured to connect
     to the LaunchDarkly streaming endpoint.
     """
     uri = config.stream_base_uri + STREAMING_ENDPOINT
+    if config.payload_filter_key is not None:
+        uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
 
     # We don't want the stream to use the same read timeout as the rest of the SDK.
     http_factory = _http_factory(config)
@@ -90,7 +76,7 @@ def create_sse_client(config: Config) -> SSEClientImpl:
         override_read_timeout=STREAM_READ_TIMEOUT,
     )
 
-    return SSEClientImpl(
+    return SSEClient(
         connect=ConnectStrategy.http(
             url=uri,
             headers=http_factory.base_headers,
@@ -119,15 +105,11 @@ class StreamingDataSource(Synchronizer):
     from the streaming data source.
     """
 
-    def __init__(
-        self, config: Config, sse_client_builder: SseClientBuilder = create_sse_client
-    ):
-        self._sse_client_builder = sse_client_builder
-        self._uri = config.stream_base_uri + STREAMING_ENDPOINT
-        if config.payload_filter_key is not None:
-            self._uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
+    def __init__(self, config: Config):
+        self._sse_client_builder = create_sse_client
         self._config = config
         self._sse: Optional[SSEClient] = None
+        self._running = False
 
     @property
     def name(self) -> str:
@@ -142,13 +124,13 @@ class StreamingDataSource(Synchronizer):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        log.info("Starting StreamingUpdateProcessor connecting to uri: %s", self._uri)
         self._sse = self._sse_client_builder(self._config)
         if self._sse is None:
             log.error("Failed to create SSE client for streaming updates.")
             return
 
         change_set_builder = ChangeSetBuilder()
+        self._running = True
 
         for action in self._sse.all:
             if isinstance(action, Fault):
@@ -177,8 +159,7 @@ class StreamingDataSource(Synchronizer):
                 log.info(
                     "Error while handling stream event; will restart stream: %s", e
                 )
-                # TODO(sdk-1409)
-                # self._sse.interrupt()
+                self._sse.interrupt()
 
                 (update, should_continue) = self._handle_error(e)
                 if update is not None:
@@ -189,8 +170,7 @@ class StreamingDataSource(Synchronizer):
                 log.info(
                     "Error while handling stream event; will restart stream: %s", e
                 )
-                # TODO(sdk-1409)
-                # self._sse.interrupt()
+                self._sse.interrupt()
 
                 yield Update(
                     state=DataSourceState.INTERRUPTED,
@@ -210,27 +190,16 @@ class StreamingDataSource(Synchronizer):
             #         DataSourceState.VALID, None
             #     )
 
-            # if not self._ready.is_set():
-            #     log.info("StreamingUpdateProcessor initialized ok.")
-            #     self._ready.set()
+        self._sse.close()
 
-        # TODO(sdk-1409)
-        # self._sse.close()
-
-    # TODO(sdk-1409)
-    # def stop(self):
-    #     self.__stop_with_error_info(None)
-    #
-    # def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
-    #     log.info("Stopping StreamingUpdateProcessor")
-    #     self._running = False
-    #     if self._sse:
-    #         self._sse.close()
-    #
-    #     if self._data_source_update_sink is None:
-    #         return
-    #
-    #     self._data_source_update_sink.update_status(DataSourceState.OFF, error)
+    def stop(self):
+        """
+        Stops the streaming synchronizer, closing any open connections.
+        """
+        log.info("Stopping StreamingUpdateProcessor")
+        self._running = False
+        if self._sse:
+            self._sse.close()
 
     # pylint: disable=too-many-return-statements
     def _process_message(
@@ -317,8 +286,8 @@ class StreamingDataSource(Synchronizer):
         If an update is provided, it should be forward upstream, regardless of
         whether or not we are going to retry this failure.
         """
-        # if not self._running:
-        #     return (False, None)  # don't retry if we've been deliberately stopped
+        if not self._running:
+            return (None, False)  # don't retry if we've been deliberately stopped
 
         update: Optional[Update] = None
 
@@ -362,10 +331,7 @@ class StreamingDataSource(Synchronizer):
 
             if not is_recoverable:
                 log.error(http_error_message_result)
-                # TODO(sdk-1409)
-                # self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
-                # self.__stop_with_error_info(error_info)
-                # self.stop()
+                self.stop()
                 return (update, False)
 
             log.warning(http_error_message_result)
@@ -391,8 +357,7 @@ class StreamingDataSource(Synchronizer):
         return self
 
     def __exit__(self, type, value, traceback):
-        # self.stop()
-        pass
+        self.stop()
 
 
 class StreamingDataSourceBuilder:  # disable: pylint: disable=too-few-public-methods

@@ -212,3 +212,11 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
         occurs.
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def stop(self):
+        """
+        stop should halt the synchronization process, causing the sync method
+        to exit as soon as possible.
+        """
+        raise NotImplementedError

@@ -205,6 +205,8 @@ class FDv2:
 
         # Threading
         self._stop_event = Event()
+        self._lock = ReadWriteLock()
+        self._active_synchronizer: Optional[Synchronizer] = None
         self._threads: List[Thread] = []
 
         # Track configuration
@@ -240,10 +242,20 @@ class FDv2:
         """Stop the FDv2 data system and all associated threads."""
         self._stop_event.set()
 
+        self._lock.lock()
+        if self._active_synchronizer is not None:
+            try:
+                self._active_synchronizer.stop()
+            except Exception as e:
+                log.error("Error stopping active data source: %s", e)
+        self._lock.unlock()
+
         # Wait for all threads to complete
         for thread in self._threads:
             if thread.is_alive():
                 thread.join(timeout=5.0)  # 5 second timeout
+                if thread.is_alive():
+                    log.warning("Thread %s did not terminate in time", thread.name)
 
         # Close the store
         self._store.close()
@@ -319,7 +331,11 @@ class FDv2:
                 while not self._stop_event.is_set() and self._primary_synchronizer_builder is not None:
                     # Try primary synchronizer
                     try:
+                        self._lock.lock()
                         primary_sync = self._primary_synchronizer_builder(self._config)
+                        self._active_synchronizer = primary_sync
+                        self._lock.unlock()
+
                         log.info("Primary synchronizer %s is starting", primary_sync.name)
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
@@ -345,9 +361,14 @@ class FDv2:
 
                         if self._secondary_synchronizer_builder is None:
                             continue
+                        if self._stop_event.is_set():
+                            break
 
+                        self._lock.lock()
                         secondary_sync = self._secondary_synchronizer_builder(self._config)
                         log.info("Secondary synchronizer %s is starting", secondary_sync.name)
+                        self._active_synchronizer = secondary_sync
+                        self._lock.unlock()
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
                             secondary_sync, set_on_ready, self._recovery_condition
@@ -378,6 +399,11 @@ class FDv2:
                 # Ensure we always set the ready event when exiting
                 if not set_on_ready.is_set():
                     set_on_ready.set()
+                self._lock.lock()
+                if self._active_synchronizer is not None:
+                    self._active_synchronizer.stop()
+                self._active_synchronizer = None
+                self._lock.unlock()
 
         sync_thread = Thread(
             target=synchronizer_loop,
@@ -428,6 +454,8 @@ class FDv2:
         except Exception as e:
             log.error("Error consuming synchronizer results: %s", e)
             return True, False
+        finally:
+            synchronizer.stop()
 
         return True, False
 
