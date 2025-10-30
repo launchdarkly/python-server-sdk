@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.12.3](https://github.com/launchdarkly/python-server-sdk/compare/9.12.2...9.12.3) (2025-10-30)
+
+
+### Bug Fixes
+
+* Fix overly generic type hint on File data source ([#365](https://github.com/launchdarkly/python-server-sdk/issues/365)) ([52a7499](https://github.com/launchdarkly/python-server-sdk/commit/52a7499f7cf1d4311f89fa98e65bca670e127aa6)), closes [#364](https://github.com/launchdarkly/python-server-sdk/issues/364)
+
 ## [9.12.2](https://github.com/launchdarkly/python-server-sdk/compare/9.12.1...9.12.2) (2025-10-27)
 
 
