@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
+from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
     _TestDataSourceV2
@@ -693,7 +694,7 @@ class TestDataV2:
         finally:
             self._lock.unlock()
 
-    def build_initializer(self) -> _TestDataSourceV2:
+    def build_initializer(self, _: Config) -> _TestDataSourceV2:
         """
         Creates an initializer that can be used with the FDv2 data system.
 
@@ -701,7 +702,7 @@ class TestDataV2:
         """
         return _TestDataSourceV2(self)
 
-    def build_synchronizer(self) -> _TestDataSourceV2:
+    def build_synchronizer(self, _: Config) -> _TestDataSourceV2:
         """
         Creates a synchronizer that can be used with the FDv2 data system.
 
