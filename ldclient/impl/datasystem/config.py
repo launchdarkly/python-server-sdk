@@ -20,7 +20,7 @@ from ldclient.interfaces import DataStoreMode, FeatureStore
 
 T = TypeVar("T")
 
-Builder = Callable[[], T]
+Builder = Callable[[LDConfig], T]
 
 
 class ConfigBuilder:  # pylint: disable=too-few-public-methods
@@ -77,8 +77,8 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         )
 
 
-def __polling_ds_builder(config: LDConfig) -> Builder[PollingDataSource]:
-    def builder() -> PollingDataSource:
+def __polling_ds_builder() -> Builder[PollingDataSource]:
+    def builder(config: LDConfig) -> PollingDataSource:
         requester = Urllib3PollingRequester(config)
         polling_ds = PollingDataSourceBuilder(config)
         polling_ds.requester(requester)
@@ -88,14 +88,14 @@ def __polling_ds_builder(config: LDConfig) -> Builder[PollingDataSource]:
     return builder
 
 
-def __streaming_ds_builder(config: LDConfig) -> Builder[StreamingDataSource]:
-    def builder() -> StreamingDataSource:
+def __streaming_ds_builder() -> Builder[StreamingDataSource]:
+    def builder(config: LDConfig) -> StreamingDataSource:
         return StreamingDataSourceBuilder(config).build()
 
     return builder
 
 
-def default(config: LDConfig) -> ConfigBuilder:
+def default() -> ConfigBuilder:
     """
     Default is LaunchDarkly's recommended flag data acquisition strategy.
 
@@ -109,8 +109,8 @@ def default(config: LDConfig) -> ConfigBuilder:
     for updates.
     """
 
-    polling_builder = __polling_ds_builder(config)
-    streaming_builder = __streaming_ds_builder(config)
+    polling_builder = __polling_ds_builder()
+    streaming_builder = __streaming_ds_builder()
 
     builder = ConfigBuilder()
     builder.initializers([polling_builder])
@@ -119,14 +119,14 @@ def default(config: LDConfig) -> ConfigBuilder:
     return builder
 
 
-def streaming(config: LDConfig) -> ConfigBuilder:
+def streaming() -> ConfigBuilder:
     """
     Streaming configures the SDK to efficiently streams flag/segment data
     in the background, allowing evaluations to operate on the latest data
     with no additional latency.
     """
 
-    streaming_builder = __streaming_ds_builder(config)
+    streaming_builder = __streaming_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(streaming_builder)
@@ -134,14 +134,14 @@ def streaming(config: LDConfig) -> ConfigBuilder:
     return builder
 
 
-def polling(config: LDConfig) -> ConfigBuilder:
+def polling() -> ConfigBuilder:
     """
     Polling configures the SDK to regularly poll an endpoint for
     flag/segment data in the background. This is less efficient than
     streaming, but may be necessary in some network environments.
     """
 
-    polling_builder: Builder[Synchronizer] = __polling_ds_builder(config)
+    polling_builder: Builder[Synchronizer] = __polling_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(polling_builder)
@@ -160,17 +160,16 @@ def custom() -> ConfigBuilder:
     return ConfigBuilder()
 
 
-# TODO(fdv2): Need to update these so they don't rely on the LDConfig
-def daemon(config: LDConfig, store: FeatureStore) -> ConfigBuilder:
+def daemon(store: FeatureStore) -> ConfigBuilder:
     """
     Daemon configures the SDK to read from a persistent store integration
     that is populated by Relay Proxy or other SDKs. The SDK will not connect
     to LaunchDarkly. In this mode, the SDK never writes to the data store.
     """
-    return default(config).data_store(store, DataStoreMode.READ_ONLY)
+    return default().data_store(store, DataStoreMode.READ_ONLY)
 
 
-def persistent_store(config: LDConfig, store: FeatureStore) -> ConfigBuilder:
+def persistent_store(store: FeatureStore) -> ConfigBuilder:
     """
     PersistentStore is similar to Default, with the addition of a persistent
     store integration. Before data has arrived from LaunchDarkly, the SDK is
@@ -178,7 +177,7 @@ def persistent_store(config: LDConfig, store: FeatureStore) -> ConfigBuilder:
     data is available, the SDK will no longer read from the persistent store,
     although it will keep it up-to-date.
     """
-    return default(config).data_store(store, DataStoreMode.READ_WRITE)
+    return default().data_store(store, DataStoreMode.READ_WRITE)
 
 
 # TODO(fdv2): Implement these methods

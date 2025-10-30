@@ -3,7 +3,7 @@ import time
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from ldclient.config import Builder, DataSystemConfig
+from ldclient.config import Builder, Config, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.impl.datasourcev2.status import (
     DataSourceStatusProviderImpl,
@@ -153,8 +153,8 @@ class FDv2:
 
     def __init__(
         self,
-        config: DataSystemConfig,
-        disabled: bool = False,
+        config: Config,
+        data_system_config: DataSystemConfig,
     ):
         """
         Initialize a new FDv2 data system.
@@ -165,10 +165,11 @@ class FDv2:
         :param disabled: Whether the data system is disabled (offline mode)
         """
         self._config = config
-        self._primary_synchronizer_builder: Optional[Builder[Synchronizer]] = config.primary_synchronizer
-        self._secondary_synchronizer_builder = config.secondary_synchronizer
-        self._fdv1_fallback_synchronizer_builder = config.fdv1_fallback_synchronizer
-        self._disabled = disabled
+        self._data_system_config = data_system_config
+        self._primary_synchronizer_builder: Optional[Builder[Synchronizer]] = data_system_config.primary_synchronizer
+        self._secondary_synchronizer_builder = data_system_config.secondary_synchronizer
+        self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
+        self._disabled = self._config.offline
 
         # Diagnostic accumulator provided by client for streaming metrics
         # TODO(fdv2): Either we need to use this, or we need to provide it to
@@ -188,10 +189,10 @@ class FDv2:
         self._data_store_status_provider = DataStoreStatusProviderImpl(None, Listeners())
 
         # Configure persistent store if provided
-        if self._config.data_store is not None:
-            self._data_store_status_provider = DataStoreStatusProviderImpl(self._config.data_store, Listeners())
-            writable = self._config.data_store_mode == DataStoreMode.READ_WRITE
-            wrapper = FeatureStoreClientWrapper(self._config.data_store, self._data_store_status_provider)
+        if self._data_system_config.data_store is not None:
+            self._data_store_status_provider = DataStoreStatusProviderImpl(self._data_system_config.data_store, Listeners())
+            writable = self._data_system_config.data_store_mode == DataStoreMode.READ_WRITE
+            wrapper = FeatureStoreClientWrapper(self._data_system_config.data_store, self._data_store_status_provider)
             self._store.with_persistence(
                 wrapper, writable, self._data_store_status_provider
             )
@@ -208,8 +209,8 @@ class FDv2:
 
         # Track configuration
         self._configured_with_data_sources = (
-            (config.initializers is not None and len(config.initializers) > 0)
-            or config.primary_synchronizer is not None
+            (data_system_config.initializers is not None and len(data_system_config.initializers) > 0)
+            or data_system_config.primary_synchronizer is not None
         )
 
     def start(self, set_on_ready: Event):
@@ -268,32 +269,32 @@ class FDv2:
             self._run_synchronizers(set_on_ready)
 
         except Exception as e:
-            log.error(f"Error in FDv2 main loop: {e}")
+            log.error("Error in FDv2 main loop: %s", e)
             # Ensure ready event is set even on error
             if not set_on_ready.is_set():
                 set_on_ready.set()
 
     def _run_initializers(self, set_on_ready: Event):
         """Run initializers to get initial data."""
-        if self._config.initializers is None:
+        if self._data_system_config.initializers is None:
             return
 
-        for initializer_builder in self._config.initializers:
+        for initializer_builder in self._data_system_config.initializers:
             if self._stop_event.is_set():
                 return
 
             try:
-                initializer = initializer_builder()
-                log.info(f"Attempting to initialize via {initializer.name}")
+                initializer = initializer_builder(self._config)
+                log.info("Attempting to initialize via %s", initializer.name)
 
                 basis_result = initializer.fetch()
 
                 if isinstance(basis_result, _Fail):
-                    log.warning(f"Initializer {initializer.name} failed: {basis_result.error}")
+                    log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
                     continue
 
                 basis = basis_result.value
-                log.info(f"Initialized via {initializer.name}")
+                log.info("Initialized via %s", initializer.name)
 
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
@@ -302,12 +303,12 @@ class FDv2:
                 if not set_on_ready.is_set():
                     set_on_ready.set()
             except Exception as e:
-                log.error(f"Initializer failed with exception: {e}")
+                log.error("Initializer failed with exception: %s", e)
 
     def _run_synchronizers(self, set_on_ready: Event):
         """Run synchronizers to keep data up-to-date."""
         # If no primary synchronizer configured, just set ready and return
-        if self._config.primary_synchronizer is None:
+        if self._data_system_config.primary_synchronizer is None:
             if not set_on_ready.is_set():
                 set_on_ready.set()
             return
@@ -318,8 +319,8 @@ class FDv2:
                 while not self._stop_event.is_set() and self._primary_synchronizer_builder is not None:
                     # Try primary synchronizer
                     try:
-                        primary_sync = self._primary_synchronizer_builder()
-                        log.info(f"Primary synchronizer {primary_sync.name} is starting")
+                        primary_sync = self._primary_synchronizer_builder(self._config)
+                        log.info("Primary synchronizer %s is starting", primary_sync.name)
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
                             primary_sync, set_on_ready, self._fallback_condition
@@ -345,8 +346,8 @@ class FDv2:
                         if self._secondary_synchronizer_builder is None:
                             continue
 
-                        secondary_sync = self._secondary_synchronizer_builder()
-                        log.info(f"Secondary synchronizer {secondary_sync.name} is starting")
+                        secondary_sync = self._secondary_synchronizer_builder(self._config)
+                        log.info("Secondary synchronizer %s is starting", secondary_sync.name)
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
                             secondary_sync, set_on_ready, self._recovery_condition
@@ -368,11 +369,11 @@ class FDv2:
 
                         log.info("Recovery condition met, returning to primary synchronizer")
                     except Exception as e:
-                        log.error(f"Failed to build primary synchronizer: {e}")
+                        log.error("Failed to build primary synchronizer: %s", e)
                         break
 
             except Exception as e:
-                log.error(f"Error in synchronizer loop: {e}")
+                log.error("Error in synchronizer loop: %s", e)
             finally:
                 # Ensure we always set the ready event when exiting
                 if not set_on_ready.is_set():
@@ -400,7 +401,7 @@ class FDv2:
         """
         try:
             for update in synchronizer.sync():
-                log.info(f"Synchronizer {synchronizer.name} update: {update.state}")
+                log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
                     return False, False
 
@@ -425,7 +426,7 @@ class FDv2:
                     return False, False
 
         except Exception as e:
-            log.error(f"Error consuming synchronizer results: {e}")
+            log.error("Error consuming synchronizer results: %s", e)
             return True, False
 
         return True, False

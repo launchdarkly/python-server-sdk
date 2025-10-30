@@ -260,7 +260,7 @@ class LDClient:
 
             self._data_system: DataSystem = FDv1(self._config)
         else:
-            self._data_system = FDv2(datasystem_config, disabled=self._config.offline)
+            self._data_system = FDv2(self._config, datasystem_config)
 
         # Provide flag evaluation function for value-change tracking
         self._data_system.set_flag_value_eval_fn(  # type: ignore

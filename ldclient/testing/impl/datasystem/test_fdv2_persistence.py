@@ -3,16 +3,11 @@
 from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from ldclient.config import DataSystemConfig
+from ldclient.config import Config, DataSystemConfig
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.integrations.test_datav2 import TestDataV2
-from ldclient.interfaces import (
-    DataStoreMode,
-    DataStoreStatus,
-    FeatureStore,
-    FlagChange
-)
+from ldclient.interfaces import DataStoreMode, FeatureStore, FlagChange
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
@@ -21,10 +16,16 @@ class StubFeatureStore(FeatureStore):
     A simple stub implementation of FeatureStore for testing.
     Records all operations and allows inspection of state.
     """
-    def __init__(self, initial_data: Optional[Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]] = None):
+
+    def __init__(
+        self,
+        initial_data: Optional[
+            Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]
+        ] = None,
+    ):
         self._data: Dict[VersionedDataKind, Dict[str, dict]] = {
             FEATURES: {},
-            SEGMENTS: {}
+            SEGMENTS: {},
         }
         self._initialized = False
         self._available = True
@@ -44,16 +45,23 @@ class StubFeatureStore(FeatureStore):
         self.init_called_count += 1
         self._data = {
             FEATURES: dict(all_data.get(FEATURES, {})),
-            SEGMENTS: dict(all_data.get(SEGMENTS, {}))
+            SEGMENTS: dict(all_data.get(SEGMENTS, {})),
         }
         self._initialized = True
 
-    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x):
+    def get(
+        self,
+        kind: VersionedDataKind,
+        key: str,
+        callback: Callable[[Any], Any] = lambda x: x,
+    ):
         self.get_calls.append((kind, key))
         item = self._data.get(kind, {}).get(key)
         return callback(item) if item else None
 
-    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x):
+    def all(
+        self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x
+    ):
         self.all_calls.append(kind)
         items = self._data.get(kind, {})
         return {key: callback(value) for key, value in items.items()}
@@ -61,14 +69,14 @@ class StubFeatureStore(FeatureStore):
     def delete(self, kind: VersionedDataKind, key: str, version: int):
         self.delete_calls.append((kind, key, version))
         existing = self._data.get(kind, {}).get(key)
-        if existing and existing.get('version', 0) < version:
-            self._data[kind][key] = {'key': key, 'version': version, 'deleted': True}
+        if existing and existing.get("version", 0) < version:
+            self._data[kind][key] = {"key": key, "version": version, "deleted": True}
 
     def upsert(self, kind: VersionedDataKind, item: dict):
-        self.upsert_calls.append((kind, item.get('key'), item.get('version')))
-        key = item['key']
+        self.upsert_calls.append((kind, item.get("key"), item.get("version")))
+        key = item["key"]
         existing = self._data.get(kind, {}).get(key)
-        if not existing or existing.get('version', 0) < item.get('version', 0):
+        if not existing or existing.get("version", 0) < item.get("version", 0):
             self._data[kind][key] = item
 
     @property
@@ -95,7 +103,7 @@ class StubFeatureStore(FeatureStore):
         """Test helper to get a snapshot of current data"""
         return {
             FEATURES: dict(self._data[FEATURES]),
-            SEGMENTS: dict(self._data[SEGMENTS])
+            SEGMENTS: dict(self._data[SEGMENTS]),
         }
 
     def reset_operation_tracking(self):
@@ -112,15 +120,15 @@ def test_persistent_store_read_only_mode():
     # Pre-populate persistent store with a flag
     initial_data = {
         FEATURES: {
-            'existing-flag': {
-                'key': 'existing-flag',
-                'version': 1,
-                'on': True,
-                'variations': [True, False],
-                'fallthrough': {'variation': 0}
+            "existing-flag": {
+                "key": "existing-flag",
+                "version": 1,
+                "on": True,
+                "variations": [True, False],
+                "fallthrough": {"variation": 0},
             }
         },
-        SEGMENTS: {}
+        SEGMENTS: {},
     }
 
     persistent_store = StubFeatureStore(initial_data)
@@ -129,7 +137,7 @@ def test_persistent_store_read_only_mode():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("new-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_ONLY,
         data_store=persistent_store,
         initializers=None,
@@ -137,7 +145,7 @@ def test_persistent_store_read_only_mode():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -158,15 +166,15 @@ def test_persistent_store_read_write_mode():
     # Pre-populate persistent store with a flag
     initial_data = {
         FEATURES: {
-            'existing-flag': {
-                'key': 'existing-flag',
-                'version': 1,
-                'on': True,
-                'variations': [True, False],
-                'fallthrough': {'variation': 0}
+            "existing-flag": {
+                "key": "existing-flag",
+                "version": 1,
+                "on": True,
+                "variations": [True, False],
+                "fallthrough": {"variation": 0},
             }
         },
-        SEGMENTS: {}
+        SEGMENTS: {},
     }
 
     persistent_store = StubFeatureStore(initial_data)
@@ -176,7 +184,7 @@ def test_persistent_store_read_write_mode():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("new-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
@@ -184,17 +192,19 @@ def test_persistent_store_read_write_mode():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
 
     # In READ_WRITE mode, the store should be initialized with new data
-    assert persistent_store.init_called_count >= 1  # At least one init call for the new data
+    assert (
+        persistent_store.init_called_count >= 1
+    )  # At least one init call for the new data
 
     # Verify the new flag was written to persistent store
     snapshot = persistent_store.get_data_snapshot()
-    assert 'new-flag' in snapshot[FEATURES]
+    assert "new-flag" in snapshot[FEATURES]
 
     fdv2.stop()
 
@@ -207,7 +217,7 @@ def test_persistent_store_delta_updates_read_write():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
@@ -215,7 +225,7 @@ def test_persistent_store_delta_updates_read_write():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Set up flag change listener to detect the update
     flag_changed = Event()
@@ -223,7 +233,9 @@ def test_persistent_store_delta_updates_read_write():
 
     def listener(flag_change: FlagChange):
         change_count[0] += 1
-        if change_count[0] == 2:  # First change is from initial sync, second is our update
+        if (
+            change_count[0] == 2
+        ):  # First change is from initial sync, second is our update
             flag_changed.set()
 
     fdv2.flag_tracker.add_listener(listener)
@@ -241,12 +253,12 @@ def test_persistent_store_delta_updates_read_write():
 
     # Verify the update was written to persistent store
     assert len(persistent_store.upsert_calls) > 0
-    assert any(call[1] == 'feature-flag' for call in persistent_store.upsert_calls)
+    assert any(call[1] == "feature-flag" for call in persistent_store.upsert_calls)
 
     # Verify the updated flag is in the store
     snapshot = persistent_store.get_data_snapshot()
-    assert 'feature-flag' in snapshot[FEATURES]
-    assert snapshot[FEATURES]['feature-flag']['on'] is False
+    assert "feature-flag" in snapshot[FEATURES]
+    assert snapshot[FEATURES]["feature-flag"]["on"] is False
 
     fdv2.stop()
 
@@ -259,7 +271,7 @@ def test_persistent_store_delta_updates_read_only():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_ONLY,
         data_store=persistent_store,
         initializers=None,
@@ -267,7 +279,7 @@ def test_persistent_store_delta_updates_read_only():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Set up flag change listener to detect the update
     flag_changed = Event()
@@ -275,7 +287,9 @@ def test_persistent_store_delta_updates_read_only():
 
     def listener(flag_change: FlagChange):
         change_count[0] += 1
-        if change_count[0] == 2:  # First change is from initial sync, second is our update
+        if (
+            change_count[0] == 2
+        ):  # First change is from initial sync, second is our update
             flag_changed.set()
 
     fdv2.flag_tracker.add_listener(listener)
@@ -309,7 +323,7 @@ def test_persistent_store_with_initializer_and_synchronizer():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("sync-flag").on(False))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=[td_initializer.build_initializer],
@@ -317,7 +331,7 @@ def test_persistent_store_with_initializer_and_synchronizer():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Set up flag change listener to detect when synchronizer data arrives
     sync_flag_arrived = Event()
@@ -338,8 +352,8 @@ def test_persistent_store_with_initializer_and_synchronizer():
     # The synchronizer flag should be in the persistent store
     # (it replaces the init-flag since synchronizer does a full data set)
     snapshot = persistent_store.get_data_snapshot()
-    assert 'init-flag' not in snapshot[FEATURES]
-    assert 'sync-flag' in snapshot[FEATURES]
+    assert "init-flag" not in snapshot[FEATURES]
+    assert "sync-flag" in snapshot[FEATURES]
 
     fdv2.stop()
 
@@ -361,15 +375,15 @@ def test_persistent_store_delete_operations():
     # Pre-populate with a flag
     initial_data = {
         FEATURES: {
-            'deletable-flag': {
-                'key': 'deletable-flag',
-                'version': 1,
-                'on': True,
-                'variations': [True, False],
-                'fallthrough': {'variation': 0}
+            "deletable-flag": {
+                "key": "deletable-flag",
+                "version": 1,
+                "on": True,
+                "variations": [True, False],
+                "fallthrough": {"variation": 0},
             }
         },
-        SEGMENTS: {}
+        SEGMENTS: {},
     }
 
     persistent_store = StubFeatureStore(initial_data)
@@ -384,18 +398,18 @@ def test_persistent_store_delete_operations():
             Change(
                 action=ChangeType.PUT,
                 kind=ObjectKind.FLAG,
-                key='deletable-flag',
+                key="deletable-flag",
                 version=1,
                 object={
-                    'key': 'deletable-flag',
-                    'version': 1,
-                    'on': True,
-                    'variations': [True, False],
-                    'fallthrough': {'variation': 0}
-                }
+                    "key": "deletable-flag",
+                    "version": 1,
+                    "on": True,
+                    "variations": [True, False],
+                    "fallthrough": {"variation": 0},
+                },
             )
         ],
-        selector=None
+        selector=None,
     )
     store.apply(init_changeset, True)
 
@@ -408,19 +422,19 @@ def test_persistent_store_delete_operations():
             Change(
                 action=ChangeType.DELETE,
                 kind=ObjectKind.FLAG,
-                key='deletable-flag',
+                key="deletable-flag",
                 version=2,
-                object=None
+                object=None,
             )
         ],
-        selector=None
+        selector=None,
     )
 
     store.apply(delete_changeset, True)
 
     # Verify delete was called on persistent store
     assert len(persistent_store.delete_calls) > 0
-    assert any(call[1] == 'deletable-flag' for call in persistent_store.delete_calls)
+    assert any(call[1] == "deletable-flag" for call in persistent_store.delete_calls)
 
 
 def test_data_store_status_provider():
@@ -430,7 +444,7 @@ def test_data_store_status_provider():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
@@ -438,7 +452,7 @@ def test_data_store_status_provider():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Verify data store status provider exists
     status_provider = fdv2.data_store_status_provider
@@ -462,14 +476,14 @@ def test_data_store_status_monitoring_not_enabled_by_default():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
         primary_synchronizer=td_synchronizer.build_synchronizer,
     )
 
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Monitoring should not be enabled because the store doesn't support it
     status_provider = fdv2.data_store_status_provider
@@ -484,14 +498,14 @@ def test_data_store_status_monitoring_enabled_when_supported():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
         primary_synchronizer=td_synchronizer.build_synchronizer,
     )
 
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Monitoring should be enabled
     status_provider = fdv2.data_store_status_provider
@@ -503,7 +517,7 @@ def test_no_persistent_store_status_provider_without_store():
     td_synchronizer = TestDataV2.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
-    config = DataSystemConfig(
+    data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=None,
         initializers=None,
@@ -511,7 +525,7 @@ def test_no_persistent_store_status_provider_without_store():
     )
 
     set_on_ready = Event()
-    fdv2 = FDv2(config)
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
     # Status provider should exist but not be monitoring
     status_provider = fdv2.data_store_status_provider
