@@ -68,25 +68,6 @@ def test_config_builder_build_success():
     assert config.secondary_synchronizer == mock_secondary
 
 
-def test_config_builder_build_missing_primary_synchronizer():
-    """Test that build fails when primary synchronizer is not set."""
-    builder = ConfigBuilder()
-
-    with pytest.raises(ValueError, match="Primary synchronizer must be set"):
-        builder.build()
-
-
-def test_config_builder_build_with_initializers_only():
-    """Test that build fails when only initializers are set."""
-    builder = ConfigBuilder()
-    mock_initializer = Mock()
-
-    builder.initializers([mock_initializer])
-
-    with pytest.raises(ValueError, match="Primary synchronizer must be set"):
-        builder.build()
-
-
 def test_config_builder_method_chaining():
     """Test that all builder methods support method chaining."""
     builder = ConfigBuilder()

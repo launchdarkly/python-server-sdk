@@ -14,6 +14,31 @@ from ldclient.impl.listeners import Listeners
 from .versioned_data_kind import VersionedDataKind
 
 
+class DataStoreMode(Enum):
+    """
+    DataStoreMode represents the mode of operation of a Data Store in FDV2
+    mode.
+
+    This enum is not stable, and not subject to any backwards compatibility
+    guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    READ_ONLY = 'read-only'
+    """
+    READ_ONLY indicates that the data store is read-only. Data will never be
+    written back to the store by the SDK.
+    """
+
+    READ_WRITE = 'read-write'
+    """
+    READ_WRITE indicates that the data store is read-write. Data from
+    initializers/synchronizers may be written to the store as necessary.
+    """
+
+
 class FeatureStore:
     """
     Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
@@ -923,8 +948,8 @@ class DataStoreStatus:
     __metaclass__ = ABCMeta
 
     def __init__(self, available: bool, stale: bool):
-        self.__available = available
-        self.__stale = stale
+        self._available = available
+        self._stale = stale
 
     @property
     def available(self) -> bool:
@@ -939,7 +964,7 @@ class DataStoreStatus:
 
         :return: if store is available
         """
-        return self.__available
+        return self._available
 
     @property
     def stale(self) -> bool:
@@ -952,7 +977,18 @@ class DataStoreStatus:
 
         :return: true if data should be rewritten
         """
-        return self.__stale
+        return self._stale
+
+    def __eq__(self, other):
+        """
+        Ensures two instances of DataStoreStatus are the same if their properties are the same.
+
+        :param other: The other instance to compare
+        :return: True if instances are equal, False otherwise
+        """
+        if isinstance(other, DataStoreStatus):
+            return self._available == other._available and self._stale == other._stale
+        return False
 
 
 class DataStoreUpdateSink:

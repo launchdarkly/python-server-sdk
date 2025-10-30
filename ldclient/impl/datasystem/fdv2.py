@@ -1,22 +1,147 @@
+import logging
 import time
 from threading import Event, Thread
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient.config import Builder, DataSystemConfig
-from ldclient.impl.datasourcev2.status import DataSourceStatusProviderImpl
+from ldclient.feature_store import _FeatureStoreDataSetSorter
+from ldclient.impl.datasourcev2.status import (
+    DataSourceStatusProviderImpl,
+    DataStoreStatusProviderImpl
+)
 from ldclient.impl.datasystem import DataAvailability, Synchronizer
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
-from ldclient.impl.util import _Fail
+from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.impl.util import _Fail, log
 from ldclient.interfaces import (
     DataSourceState,
     DataSourceStatus,
     DataSourceStatusProvider,
+    DataStoreMode,
+    DataStoreStatus,
     DataStoreStatusProvider,
     FeatureStore,
     FlagTracker
 )
+from ldclient.versioned_data_kind import VersionedDataKind
+
+
+class FeatureStoreClientWrapper(FeatureStore):
+    """Provides additional behavior that the client requires before or after feature store operations.
+    Currently this just means sorting the data set for init() and dealing with data store status listeners.
+    """
+
+    def __init__(self, store: FeatureStore, store_update_sink: DataStoreStatusProviderImpl):
+        self.store = store
+        self.__store_update_sink = store_update_sink
+        self.__monitoring_enabled = self.is_monitoring_enabled()
+
+        # Covers the following variables
+        self.__lock = ReadWriteLock()
+        self.__last_available = True
+        self.__poller: Optional[RepeatingTask] = None
+
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
+        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+
+    def get(self, kind, key, callback):
+        return self.__wrapper(lambda: self.store.get(kind, key, callback))
+
+    def all(self, kind, callback):
+        return self.__wrapper(lambda: self.store.all(kind, callback))
+
+    def delete(self, kind, key, version):
+        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+
+    def upsert(self, kind, item):
+        return self.__wrapper(lambda: self.store.upsert(kind, item))
+
+    @property
+    def initialized(self) -> bool:
+        return self.store.initialized
+
+    def __wrapper(self, fn: Callable):
+        try:
+            return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __update_availability(self, available: bool):
+        try:
+            self.__lock.lock()
+            if available == self.__last_available:
+                return
+            self.__last_available = available
+        finally:
+            self.__lock.unlock()
+
+        if available:
+            log.warning("Persistent store is available again")
+
+        status = DataStoreStatus(available, False)
+        self.__store_update_sink.update_status(status)
+
+        if available:
+            try:
+                self.__lock.lock()
+                if self.__poller is not None:
+                    self.__poller.stop()
+                    self.__poller = None
+            finally:
+                self.__lock.unlock()
+
+            return
+
+        log.warning("Detected persistent store unavailability; updates will be cached until it recovers")
+        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+
+        self.__lock.lock()
+        self.__poller = task
+        self.__poller.start()
+        self.__lock.unlock()
+
+    def __check_availability(self):
+        try:
+            if self.store.is_available():
+                self.__update_availability(True)
+        except BaseException as e:
+            log.error("Unexpected error from data store status function: %s", e)
+
+    def is_monitoring_enabled(self) -> bool:
+        """
+        This methods determines whether the wrapped store can support enabling monitoring.
+
+        The wrapped store must provide a monitoring_enabled method, which must
+        be true. But this alone is not sufficient.
+
+        Because this class wraps all interactions with a provided store, it can
+        technically "monitor" any store. However, monitoring also requires that
+        we notify listeners when the store is available again.
+
+        We determine this by checking the store's `available?` method, so this
+        is also a requirement for monitoring support.
+
+        These extra checks won't be necessary once `available` becomes a part
+        of the core interface requirements and this class no longer wraps every
+        feature store.
+        """
+
+        if not hasattr(self.store, 'is_monitoring_enabled'):
+            return False
+
+        if not hasattr(self.store, 'is_available'):
+            return False
+
+        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
+        if not callable(monitoring_enabled):
+            return False
+
+        return monitoring_enabled()
 
 
 class FDv2:
@@ -29,9 +154,6 @@ class FDv2:
     def __init__(
         self,
         config: DataSystemConfig,
-        # # TODO: These next 2 parameters should be moved into the Config.
-        # persistent_store: Optional[FeatureStore] = None,
-        # store_writable: bool = True,
         disabled: bool = False,
     ):
         """
@@ -56,19 +178,24 @@ class FDv2:
         # Set up event listeners
         self._flag_change_listeners = Listeners()
         self._change_set_listeners = Listeners()
+        self._data_store_listeners = Listeners()
 
         # Create the store
         self._store = Store(self._flag_change_listeners, self._change_set_listeners)
 
         # Status providers
         self._data_source_status_provider = DataSourceStatusProviderImpl(Listeners())
+        self._data_store_status_provider = DataStoreStatusProviderImpl(None, Listeners())
 
-        # # Configure persistent store if provided
-        # if persistent_store is not None:
-        #     self._store.with_persistence(
-        #         persistent_store, store_writable, self._data_source_status_provider
-        #     )
-        #
+        # Configure persistent store if provided
+        if self._config.data_store is not None:
+            self._data_store_status_provider = DataStoreStatusProviderImpl(self._config.data_store, Listeners())
+            writable = self._config.data_store_mode == DataStoreMode.READ_WRITE
+            wrapper = FeatureStoreClientWrapper(self._config.data_store, self._data_store_status_provider)
+            self._store.with_persistence(
+                wrapper, writable, self._data_store_status_provider
+            )
+
         # Flag tracker (evaluation function set later by client)
         self._flag_tracker = FlagTrackerImpl(
             self._flag_change_listeners,
@@ -80,8 +207,6 @@ class FDv2:
         self._threads: List[Thread] = []
 
         # Track configuration
-        # TODO: What is the point of checking if primary_synchronizer is not
-        # None? Doesn't it have to be set?
         self._configured_with_data_sources = (
             (config.initializers is not None and len(config.initializers) > 0)
             or config.primary_synchronizer is not None
@@ -94,7 +219,7 @@ class FDv2:
         :param set_on_ready: Event to set when the system is ready or has failed
         """
         if self._disabled:
-            print("Data system is disabled, SDK will return application-defined default values")
+            log.warning("Data system is disabled, SDK will return application-defined default values")
             set_on_ready.set()
             return
 
@@ -139,25 +264,11 @@ class FDv2:
             # Run initializers first
             self._run_initializers(set_on_ready)
 
-            # # If we have persistent store with status monitoring, start recovery monitoring
-            # if (
-            #     self._configured_with_data_sources
-            #     and self._data_store_status_provider is not None
-            #     and hasattr(self._data_store_status_provider, 'add_listener')
-            # ):
-            #     recovery_thread = Thread(
-            #         target=self._run_persistent_store_outage_recovery,
-            #         name="FDv2-store-recovery",
-            #         daemon=True
-            #     )
-            #     recovery_thread.start()
-            #     self._threads.append(recovery_thread)
-
             # Run synchronizers
             self._run_synchronizers(set_on_ready)
 
         except Exception as e:
-            print(f"Error in FDv2 main loop: {e}")
+            log.error(f"Error in FDv2 main loop: {e}")
             # Ensure ready event is set even on error
             if not set_on_ready.is_set():
                 set_on_ready.set()
@@ -173,16 +284,16 @@ class FDv2:
 
             try:
                 initializer = initializer_builder()
-                print(f"Attempting to initialize via {initializer.name}")
+                log.info(f"Attempting to initialize via {initializer.name}")
 
                 basis_result = initializer.fetch()
 
                 if isinstance(basis_result, _Fail):
-                    print(f"Initializer {initializer.name} failed: {basis_result.error}")
+                    log.warning(f"Initializer {initializer.name} failed: {basis_result.error}")
                     continue
 
                 basis = basis_result.value
-                print(f"Initialized via {initializer.name}")
+                log.info(f"Initialized via {initializer.name}")
 
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
@@ -191,7 +302,7 @@ class FDv2:
                 if not set_on_ready.is_set():
                     set_on_ready.set()
             except Exception as e:
-                print(f"Initializer failed with exception: {e}")
+                log.error(f"Initializer failed with exception: {e}")
 
     def _run_synchronizers(self, set_on_ready: Event):
         """Run synchronizers to keep data up-to-date."""
@@ -208,7 +319,7 @@ class FDv2:
                     # Try primary synchronizer
                     try:
                         primary_sync = self._primary_synchronizer_builder()
-                        print(f"Primary synchronizer {primary_sync.name} is starting")
+                        log.info(f"Primary synchronizer {primary_sync.name} is starting")
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
                             primary_sync, set_on_ready, self._fallback_condition
@@ -222,20 +333,20 @@ class FDv2:
                                 self._primary_synchronizer_builder = self._fdv1_fallback_synchronizer_builder
 
                             if self._primary_synchronizer_builder is None:
-                                print("No more synchronizers available")
+                                log.warning("No more synchronizers available")
                                 self._data_source_status_provider.update_status(
                                     DataSourceState.OFF,
                                     self._data_source_status_provider.status.error
                                 )
                                 break
                         else:
-                            print("Fallback condition met")
+                            log.info("Fallback condition met")
 
                         if self._secondary_synchronizer_builder is None:
                             continue
 
                         secondary_sync = self._secondary_synchronizer_builder()
-                        print(f"Secondary synchronizer {secondary_sync.name} is starting")
+                        log.info(f"Secondary synchronizer {secondary_sync.name} is starting")
 
                         remove_sync, fallback_v1 = self._consume_synchronizer_results(
                             secondary_sync, set_on_ready, self._recovery_condition
@@ -247,7 +358,7 @@ class FDv2:
                                 self._primary_synchronizer_builder = self._fdv1_fallback_synchronizer_builder
 
                             if self._primary_synchronizer_builder is None:
-                                print("No more synchronizers available")
+                                log.warning("No more synchronizers available")
                                 self._data_source_status_provider.update_status(
                                     DataSourceState.OFF,
                                     self._data_source_status_provider.status.error
@@ -255,13 +366,13 @@ class FDv2:
                                 # TODO: WE might need to also set that threading.Event here
                                 break
 
-                        print("Recovery condition met, returning to primary synchronizer")
+                        log.info("Recovery condition met, returning to primary synchronizer")
                     except Exception as e:
-                        print(f"Failed to build primary synchronizer: {e}")
+                        log.error(f"Failed to build primary synchronizer: {e}")
                         break
 
             except Exception as e:
-                print(f"Error in synchronizer loop: {e}")
+                log.error(f"Error in synchronizer loop: {e}")
             finally:
                 # Ensure we always set the ready event when exiting
                 if not set_on_ready.is_set():
@@ -289,7 +400,7 @@ class FDv2:
         """
         try:
             for update in synchronizer.sync():
-                print(f"Synchronizer {synchronizer.name} update: {update.state}")
+                log.info(f"Synchronizer {synchronizer.name} update: {update.state}")
                 if self._stop_event.is_set():
                     return False, False
 
@@ -314,18 +425,11 @@ class FDv2:
                     return False, False
 
         except Exception as e:
-            print(f"Error consuming synchronizer results: {e}")
+            log.error(f"Error consuming synchronizer results: {e}")
             return True, False
 
         return True, False
 
-    # def _run_persistent_store_outage_recovery(self):
-    #     """Monitor persistent store status and trigger recovery when needed."""
-    #     # This is a simplified version - in a full implementation we'd need
-    #     # to properly monitor store status and trigger commit operations
-    #     # when the store comes back online after an outage
-    #     pass
-    #
     def _fallback_condition(self, status: DataSourceStatus) -> bool:
         """
         Determine if we should fallback to secondary synchronizer.
@@ -387,8 +491,7 @@ class FDv2:
     @property
     def data_store_status_provider(self) -> DataStoreStatusProvider:
         """Get the data store status provider."""
-        raise NotImplementedError
-        # return self._data_store_status_provider
+        return self._data_store_status_provider
 
     @property
     def flag_tracker(self) -> FlagTracker:
