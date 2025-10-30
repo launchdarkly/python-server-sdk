@@ -1,13 +1,18 @@
 import time
+from copy import copy
 from typing import Callable, Optional
 
+from ldclient.impl.datasystem.store import Store
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceState,
     DataSourceStatus,
-    DataSourceStatusProvider
+    DataSourceStatusProvider,
+    DataStoreStatus,
+    DataStoreStatusProvider,
+    FeatureStore
 )
 
 
@@ -54,4 +59,51 @@ class DataSourceStatusProviderImpl(DataSourceStatusProvider):
         self.__listeners.add(listener)
 
     def remove_listener(self, listener: Callable[[DataSourceStatus], None]):
+        self.__listeners.remove(listener)
+
+
+class DataStoreStatusProviderImpl(DataStoreStatusProvider):
+    def __init__(self, store: Optional[FeatureStore], listeners: Listeners):
+        self.__store = store
+        self.__listeners = listeners
+
+        self.__lock = ReadWriteLock()
+        self.__status = DataStoreStatus(True, False)
+
+    def update_status(self, status: DataStoreStatus):
+        """
+        update_status is called from the data store to push a status update.
+        """
+        self.__lock.lock()
+        modified = False
+
+        if self.__status != status:
+            self.__status = status
+            modified = True
+
+        self.__lock.unlock()
+
+        if modified:
+            self.__listeners.notify(status)
+
+    @property
+    def status(self) -> DataStoreStatus:
+        self.__lock.rlock()
+        status = copy(self.__status)
+        self.__lock.runlock()
+
+        return status
+
+    def is_monitoring_enabled(self) -> bool:
+        if self.__store is None:
+            return False
+        if hasattr(self.__store, "is_monitoring_enabled") is False:
+            return False
+
+        return self.__store.is_monitoring_enabled()  # type: ignore
+
+    def add_listener(self, listener: Callable[[DataStoreStatus], None]):
+        self.__listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[DataStoreStatus], None]):
         self.__listeners.remove(listener)

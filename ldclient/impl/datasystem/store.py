@@ -20,6 +20,7 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.util import log
 from ldclient.interfaces import (
     DataStoreStatusProvider,
     FeatureStore,
@@ -144,7 +145,7 @@ class Store:
 
             except Exception as e:
                 # Log error but don't re-raise - matches Go behavior
-                print(f"Store: couldn't apply changeset: {e}")
+                log.error(f"Store: couldn't apply changeset: {e}")
 
     def _set_basis(self, change_set: ChangeSet, persist: bool) -> None:
         """
