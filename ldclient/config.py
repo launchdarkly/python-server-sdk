@@ -4,11 +4,13 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
+from dataclasses import dataclass
 from threading import Event
-from typing import Callable, List, Optional, Set
+from typing import Callable, List, Optional, Set, TypeVar
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
+from ldclient.impl.datasystem import Initializer, Synchronizer
 from ldclient.impl.util import (
     log,
     validate_application_info,
@@ -152,6 +154,32 @@ class HTTPConfig:
         return self.__disable_ssl_verification
 
 
+T = TypeVar("T")
+
+Builder = Callable[[], T]
+
+
+@dataclass(frozen=True)
+class DataSystemConfig:
+    """
+    Configuration for LaunchDarkly's data acquisition strategy.
+    """
+
+    initializers: Optional[List[Builder[Initializer]]]
+    """The initializers for the data system."""
+
+    primary_synchronizer: Builder[Synchronizer]
+    """The primary synchronizer for the data system."""
+
+    secondary_synchronizer: Optional[Builder[Synchronizer]] = None
+    """The secondary synchronizers for the data system."""
+
+    # TODO(fdv2): Implement this synchronizer up and hook it up everywhere.
+    # TODO(fdv2): Remove this when FDv2 is fully launched
+    fdv1_fallback_synchronizer: Optional[Builder[Synchronizer]] = None
+    """An optional fallback synchronizer that will read from FDv1"""
+
+
 class Config:
     """Advanced configuration options for the SDK client.
 
@@ -194,6 +222,7 @@ class Config:
         enable_event_compression: bool = False,
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
+        datasystem_config: Optional[DataSystemConfig] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -264,6 +293,7 @@ class Config:
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
+        :param datasystem_config: Configuration for the upcoming enhanced data system design. This is experimental and should not be set without direction from LaunchDarkly support.
         """
         self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
@@ -303,6 +333,7 @@ class Config:
         self.__payload_filter_key = payload_filter_key
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
         self._instance_id: Optional[str] = None
+        self._datasystem_config = datasystem_config
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
@@ -545,6 +576,15 @@ class Config:
         they want to provide support for data source status listeners.
         """
         return self._data_source_update_sink
+
+    @property
+    def datasystem_config(self) -> Optional[DataSystemConfig]:
+        """
+        Configuration for the upcoming enhanced data system design. This is
+        experimental and should not be set without direction from LaunchDarkly
+        support.
+        """
+        return self._datasystem_config
 
     def _validate(self):
         if self.offline is False and self.sdk_key == '':

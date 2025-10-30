@@ -30,6 +30,8 @@ from ldclient.impl.datastore.status import (
     DataStoreStatusProviderImpl,
     DataStoreUpdateSinkImpl
 )
+from ldclient.impl.datasystem import DataAvailability, DataSystem
+from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
@@ -249,14 +251,19 @@ class LDClient:
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
-        # Initialize data system (FDv1) to encapsulate v1 data plumbing
-        from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
-            FDv1
-        )
+        datasystem_config = self._config.datasystem_config
+        if datasystem_config is None:
+            # Initialize data system (FDv1) to encapsulate v1 data plumbing
+            from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
+                FDv1
+            )
 
-        self._data_system = FDv1(self._config)
+            self._data_system: DataSystem = FDv1(self._config)
+        else:
+            self._data_system = FDv2(datasystem_config, disabled=self._config.offline)
+
         # Provide flag evaluation function for value-change tracking
-        self._data_system.set_flag_value_eval_fn(
+        self._data_system.set_flag_value_eval_fn(  # type: ignore
             lambda key, context: self.variation(key, context, None)
         )
         # Expose providers and store from data system
@@ -265,7 +272,7 @@ class LDClient:
             self._data_system.data_source_status_provider
         )
         self.__flag_tracker = self._data_system.flag_tracker
-        self._store = self._data_system.store  # type: FeatureStore
+        self._store: FeatureStore = self._data_system.store  # type: ignore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
@@ -286,7 +293,7 @@ class LDClient:
         diagnostic_accumulator = self._set_event_processor(self._config)
 
         # Pass diagnostic accumulator to data system for streaming metrics
-        self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)
+        self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)  # type: ignore
 
         self.__register_plugins(environment_metadata)
 
@@ -475,11 +482,7 @@ class LDClient:
         if self.is_offline() or self._config.use_ldd:
             return True
 
-        return (
-            self._data_system._update_processor.initialized()
-            if self._data_system._update_processor
-            else False
-        )
+        return self._data_system.data_availability.at_least(DataAvailability.CACHED)
 
     def flush(self):
         """Flushes all pending analytics events.

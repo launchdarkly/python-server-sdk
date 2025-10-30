@@ -90,6 +90,7 @@ class PollingDataSource:
             "ldclient.datasource.polling", poll_interval, 0, self._poll
         )
 
+    @property
     def name(self) -> str:
         """Returns the name of the initializer."""
         return "PollingDataSourceV2"
