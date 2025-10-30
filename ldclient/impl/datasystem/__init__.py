@@ -156,6 +156,14 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
     as new changes occur.
     """
 
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the initializer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
+
     @abstractmethod
     def fetch(self) -> BasisResult:
         """
@@ -188,6 +196,13 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
     of the data source, including any changes that have occurred since the last
     synchronization.
     """
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the synchronizer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def sync(self) -> Generator[Update, None, None]:
