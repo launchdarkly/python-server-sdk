@@ -80,36 +80,36 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
                 items_decoded[key] = kind.decode(item)
             all_decoded[kind] = items_decoded
         try:
-            self._lock.rlock()
+            self._lock.lock()
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
             for k in all_data:
                 log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
         finally:
-            self._lock.runlock()
+            self._lock.unlock()
 
     # noinspection PyShadowingNames
     def delete(self, kind, key: str, version: int):
         """ """
         try:
-            self._lock.rlock()
+            self._lock.lock()
             items_of_kind = self._items[kind]
             items_of_kind[key] = {'deleted': True, 'version': version}
         finally:
-            self._lock.runlock()
+            self._lock.unlock()
 
     def upsert(self, kind, item):
         """ """
         decoded_item = kind.decode(item)
         key = item['key']
         try:
-            self._lock.rlock()
+            self._lock.lock()
             items_of_kind = self._items[kind]
             items_of_kind[key] = decoded_item
             log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
         finally:
-            self._lock.runlock()
+            self._lock.unlock()
 
     @property
     def initialized(self) -> bool:
