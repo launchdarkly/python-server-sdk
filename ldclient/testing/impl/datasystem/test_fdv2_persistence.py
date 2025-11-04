@@ -20,7 +20,7 @@ class StubFeatureStore(FeatureStore):
     def __init__(
         self,
         initial_data: Optional[
-            Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]
+            Dict[VersionedDataKind, Dict[str, Dict[Any, Any]]]
         ] = None,
     ):
         self._data: Dict[VersionedDataKind, Dict[str, dict]] = {
@@ -433,8 +433,8 @@ def test_persistent_store_delete_operations():
     store.apply(delete_changeset, True)
 
     # Verify delete was called on persistent store
-    assert len(persistent_store.delete_calls) > 0
-    assert any(call[1] == "deletable-flag" for call in persistent_store.delete_calls)
+    assert len(persistent_store.upsert_calls) > 0
+    assert any(call[1] == "deletable-flag" for call in persistent_store.upsert_calls)
 
 
 def test_data_store_status_provider():

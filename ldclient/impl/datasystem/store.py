@@ -8,7 +8,7 @@ ChangeSet applications and flag change notifications.
 
 import threading
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from ldclient.impl.datasystem.protocolv2 import (
     Change,
@@ -24,15 +24,20 @@ from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     DataStoreStatusProvider,
-    DiagnosticDescription,
     FeatureStore,
-    FlagChange
+    FlagChange,
+    ReadOnlyStore
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
+Collections = Dict[VersionedDataKind, Dict[str, dict]]
 
-class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
-    """The default feature store implementation, which holds all data in a thread-safe data structure in memory."""
+
+class InMemoryFeatureStore(ReadOnlyStore):
+    """
+    The default feature store implementation, which holds all data in a
+    thread-safe data structure in memory.
+    """
 
     def __init__(self):
         """Constructs an instance of InMemoryFeatureStore."""
@@ -40,98 +45,114 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
         self._initialized = False
         self._items = defaultdict(dict)
 
-    def is_monitoring_enabled(self) -> bool:
-        return False
-
-    def is_available(self) -> bool:
-        return True
-
-    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
-        """ """
+    def get(
+        self,
+        kind: VersionedDataKind,
+        key: str,
+        callback: Callable[[Any], Any] = lambda x: x,
+    ) -> Any:
         try:
             self._lock.rlock()
             items_of_kind = self._items[kind]
             item = items_of_kind.get(key)
             if item is None:
-                log.debug("Attempted to get missing key %s in '%s', returning None", key, kind.namespace)
+                log.debug(
+                    "Attempted to get missing key %s in '%s', returning None",
+                    key,
+                    kind.namespace,
+                )
                 return callback(None)
-            if 'deleted' in item and item['deleted']:
-                log.debug("Attempted to get deleted key %s in '%s', returning None", key, kind.namespace)
+            if "deleted" in item and item["deleted"]:
+                log.debug(
+                    "Attempted to get deleted key %s in '%s', returning None",
+                    key,
+                    kind.namespace,
+                )
                 return callback(None)
             return callback(item)
         finally:
             self._lock.runlock()
 
-    def all(self, kind, callback):
-        """ """
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         try:
             self._lock.rlock()
             items_of_kind = self._items[kind]
-            return callback(dict((k, i) for k, i in items_of_kind.items() if ('deleted' not in i) or not i['deleted']))
+            return callback(
+                dict(
+                    (k, i)
+                    for k, i in items_of_kind.items()
+                    if ("deleted" not in i) or not i["deleted"]
+                )
+            )
         finally:
             self._lock.runlock()
 
-    def init(self, all_data):
-        """ """
-        all_decoded = {}
-        for kind, items in all_data.items():
-            items_decoded = {}
-            for key, item in items.items():
-                items_decoded[key] = kind.decode(item)
-            all_decoded[kind] = items_decoded
+    def set_basis(self, collections: Collections):
+        """
+        Initializes the store with a full set of data, replacing any existing data.
+        """
         try:
+            all_decoded = {}
+            for kind in collections:
+                collection = collections[kind]
+                items_decoded = {}
+                for key in collection:
+                    items_decoded[key] = kind.decode(collection[key])
+                all_decoded[kind] = items_decoded
+
             self._lock.lock()
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
-            for k in all_data:
-                log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
         finally:
             self._lock.unlock()
 
-    # noinspection PyShadowingNames
-    def delete(self, kind, key: str, version: int):
-        """ """
+    def apply_delta(self, collections: Collections):
+        """
+        Applies a delta update to the store.
+        """
         try:
             self._lock.lock()
-            items_of_kind = self._items[kind]
-            items_of_kind[key] = {'deleted': True, 'version': version}
+            for kind in collections:
+                collection = collections[kind]
+                for key in collection:
+                    self.__upsert(kind, collection[key])
         finally:
             self._lock.unlock()
 
-    def upsert(self, kind, item):
-        """ """
+    def __upsert(self, kind, item):
+        """
+        Inserts or updates an item in the store.
+        """
         decoded_item = kind.decode(item)
-        key = item['key']
-        try:
-            self._lock.lock()
-            items_of_kind = self._items[kind]
-            items_of_kind[key] = decoded_item
-            log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
-        finally:
-            self._lock.unlock()
+        key = item["key"]
+        items_of_kind = self._items[kind]
+        items_of_kind[key] = decoded_item
+        log.debug(
+            "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
+        )
 
     @property
     def initialized(self) -> bool:
-        """ """
+        """
+        Indicates whether the store has been initialized with data.
+        """
         try:
             self._lock.rlock()
             return self._initialized
         finally:
             self._lock.runlock()
 
-    def describe_configuration(self, config):
-        return 'memory'
-
 
 class Store:
     """
-    Store is a dual-mode persistent/in-memory store that serves requests for data from the evaluation
-    algorithm.
+    Store is a dual-mode persistent/in-memory store that serves requests for
+    data from the evaluation algorithm.
 
-    At any given moment one of two stores is active: in-memory, or persistent. Once the in-memory
-    store has data (either from initializers or a synchronizer), the persistent store is no longer
-    read from. From that point forward, calls to get data will serve from the memory store.
+    At any given moment one of two stores is active: in-memory, or persistent.
+    Once the in-memory store has data (either from initializers or a
+    synchronizer), the persistent store is no longer read from. From that point
+    forward, calls to get data will serve from the memory store.
     """
 
     def __init__(
@@ -164,7 +185,7 @@ class Store:
         self._persist = False
 
         # Points to the active store. Swapped upon initialization.
-        self._active_store: FeatureStore = self._memory_store
+        self._active_store: ReadOnlyStore = self._memory_store
 
         # Identifies the current data
         self._selector = Selector.no_selector()
@@ -211,7 +232,7 @@ class Store:
                 try:
                     # Most FeatureStore implementations don't have close methods
                     # but we'll try to call it if it exists
-                    if hasattr(self._persistent_store, 'close'):
+                    if hasattr(self._persistent_store, "close"):
                         self._persistent_store.close()
                 except Exception as e:
                     return e
@@ -225,12 +246,14 @@ class Store:
             change_set: The changeset to apply
             persist: Whether the changes should be persisted to the persistent store
         """
+        collections = self._changes_to_store_data(change_set.changes)
+
         with self._lock:
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
-                    self._set_basis(change_set, persist)
+                    self._set_basis(collections, change_set.selector, persist)
                 elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
-                    self._apply_delta(change_set, persist)
+                    self._apply_delta(collections, change_set.selector, persist)
                 elif change_set.intent_code == IntentCode.TRANSFER_NONE:
                     # No-op, no changes to apply
                     return
@@ -240,9 +263,11 @@ class Store:
 
             except Exception as e:
                 # Log error but don't re-raise - matches Go behavior
-                log.error(f"Store: couldn't apply changeset: {e}")
+                log.error("Store: couldn't apply changeset: %s", str(e))
 
-    def _set_basis(self, change_set: ChangeSet, persist: bool) -> None:
+    def _set_basis(
+        self, collections: Collections, selector: Optional[Selector], persist: bool
+    ) -> None:
         """
         Set the basis of the store. Any existing data is discarded.
 
@@ -251,39 +276,38 @@ class Store:
             persist: Whether to persist the data to the persistent store
         """
         # Take snapshot for change detection if we have flag listeners
-        old_data: Optional[Mapping[VersionedDataKind, Mapping[str, dict]]] = None
+        old_data: Optional[Collections] = None
         if self._flag_change_listeners.has_listeners():
             old_data = {}
             for kind in [FEATURES, SEGMENTS]:
                 old_data[kind] = self._memory_store.all(kind, lambda x: x)
 
-        # Convert changes to the format expected by FeatureStore.init()
-        all_data = self._changes_to_store_data(change_set.changes)
-
-        # Initialize memory store with new data
-        self._memory_store.init(all_data)
+        self._memory_store.set_basis(collections)
 
         # Update dependency tracker
-        self._reset_dependency_tracker(all_data)
+        self._reset_dependency_tracker(collections)
 
         # Send change events if we had listeners
         if old_data is not None:
-            affected_items = self._compute_changed_items_for_full_data_set(old_data, all_data)
+            affected_items = self._compute_changed_items_for_full_data_set(
+                old_data, collections
+            )
             self._send_change_events(affected_items)
 
         # Update state
         self._persist = persist
-        if change_set.selector is not None:
-            self._selector = change_set.selector
+        self._selector = selector if selector is not None else Selector.no_selector()
 
         # Switch to memory store as active
         self._active_store = self._memory_store
 
         # Persist to persistent store if configured and writable
         if self._should_persist():
-            self._persistent_store.init(all_data)  # type: ignore
+            self._persistent_store.init(collections)  # type: ignore
 
-    def _apply_delta(self, change_set: ChangeSet, persist: bool) -> None:
+    def _apply_delta(
+        self, collections: Collections, selector: Optional[Selector], persist: bool
+    ) -> None:
         """
         Apply a delta update to the store.
 
@@ -291,44 +315,22 @@ class Store:
             change_set: The changeset containing the delta changes
             persist: Whether to persist the changes to the persistent store
         """
+        self._memory_store.apply_delta(collections)
+
         has_listeners = self._flag_change_listeners.has_listeners()
         affected_items: Set[KindAndKey] = set()
 
-        # Apply each change
-        for change in change_set.changes:
-            if change.action == ChangeType.PUT:
-                # Convert to VersionedDataKind
-                kind = FEATURES if change.kind == ObjectKind.FLAG else SEGMENTS
-                item = change.object
-                if item is not None:
-                    self._memory_store.upsert(kind, item)
-
-                    # Update dependency tracking
-                    self._dependency_tracker.update_dependencies_from(kind, change.key, item)
-                    if has_listeners:
-                        self._dependency_tracker.add_affected_items(
-                            affected_items, KindAndKey(kind=kind, key=change.key)
-                        )
-
-                    # Persist to persistent store if configured
-                    if self._should_persist():
-                        self._persistent_store.upsert(kind, item)  # type: ignore
-
-            elif change.action == ChangeType.DELETE:
-                # Convert to VersionedDataKind
-                kind = FEATURES if change.kind == ObjectKind.FLAG else SEGMENTS
-                self._memory_store.delete(kind, change.key, change.version)
-
-                # Update dependency tracking
-                self._dependency_tracker.update_dependencies_from(kind, change.key, None)
+        for kind in collections:
+            collection = collections[kind]
+            for key in collection:
+                item = collection[key]
+                self._dependency_tracker.update_dependencies_from(
+                    kind, key, item
+                )
                 if has_listeners:
                     self._dependency_tracker.add_affected_items(
-                        affected_items, KindAndKey(kind=kind, key=change.key)
+                        affected_items, KindAndKey(kind=kind, key=key)
                     )
-
-                # Persist to persistent store if configured
-                if self._should_persist():
-                    self._persistent_store.delete(kind, change.key, change.version)  # type: ignore
 
         # Send change events
         if affected_items:
@@ -336,8 +338,14 @@ class Store:
 
         # Update state
         self._persist = persist
-        if change_set.selector is not None:
-            self._selector = change_set.selector
+        self._selector = selector if selector is not None else Selector.no_selector()
+
+        if self._should_persist():
+            for kind in collections:
+                kind_data: Dict[str, dict] = collections[kind]
+                for i in kind_data:
+                    item = kind_data[i]
+                    self._persistent_store.upsert(kind, item)  # type: ignore
 
     def _should_persist(self) -> bool:
         """Returns whether data should be persisted to the persistent store."""
@@ -347,33 +355,31 @@ class Store:
             and self._persistent_store_writable
         )
 
-    def _changes_to_store_data(
-        self, changes: List[Change]
-    ) -> Mapping[VersionedDataKind, Mapping[str, dict]]:
+    def _changes_to_store_data(self, changes: List[Change]) -> Collections:
         """
-        Convert a list of Changes to the format expected by FeatureStore.init().
+        Convert a list of Changes to the pre-existing format used by FeatureStore.
 
         Args:
             changes: List of changes to convert
 
         Returns:
-            Mapping suitable for FeatureStore.init()
+            Mapping suitable for FeatureStore operations.
         """
-        all_data: Dict[VersionedDataKind, Dict[str, dict]] = {
+        all_data: Collections = {
             FEATURES: {},
             SEGMENTS: {},
         }
 
         for change in changes:
+            kind = FEATURES if change.kind == ObjectKind.FLAG else SEGMENTS
             if change.action == ChangeType.PUT and change.object is not None:
-                kind = FEATURES if change.kind == ObjectKind.FLAG else SEGMENTS
                 all_data[kind][change.key] = change.object
+            if change.action == ChangeType.DELETE:
+                all_data[kind][change.key] = {'key': change.key, 'deleted': True, 'version': change.version}
 
         return all_data
 
-    def _reset_dependency_tracker(
-        self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]
-    ) -> None:
+    def _reset_dependency_tracker(self, all_data: Collections) -> None:
         """Reset dependency tracker with new full data set."""
         self._dependency_tracker.reset()
         for kind, items in all_data.items():
@@ -388,8 +394,8 @@ class Store:
 
     def _compute_changed_items_for_full_data_set(
         self,
-        old_data: Mapping[VersionedDataKind, Mapping[str, dict]],
-        new_data: Mapping[VersionedDataKind, Mapping[str, dict]],
+        old_data: Collections,
+        new_data: Collections,
     ) -> Set[KindAndKey]:
         """Compute which items changed between old and new data sets."""
         affected_items: Set[KindAndKey] = set()
@@ -436,7 +442,7 @@ class Store:
                     return e
         return None
 
-    def get_active_store(self) -> FeatureStore:
+    def get_active_store(self) -> ReadOnlyStore:
         """Get the currently active store for reading data."""
         with self._lock:
             return self._active_store
