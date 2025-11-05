@@ -86,6 +86,7 @@ class PollingDataSource:
         self._requester = requester
         self._poll_interval = poll_interval
         self._event = Event()
+        self._stop = Event()
         self._task = RepeatingTask(
             "ldclient.datasource.polling", poll_interval, 0, self._poll
         )
@@ -108,7 +109,8 @@ class PollingDataSource:
         occurs.
         """
         log.info("Starting PollingDataSourceV2 synchronizer")
-        while True:
+        self._stop.clear()
+        while self._stop.is_set() is False:
             result = self._requester.fetch(None)
             if isinstance(result, _Fail):
                 if isinstance(result.exception, UnsuccessfulResponseException):
@@ -160,6 +162,13 @@ class PollingDataSource:
 
             if self._event.wait(self._poll_interval):
                 break
+
+    def stop(self):
+        """Stops the synchronizer."""
+        log.info("Stopping PollingDataSourceV2 synchronizer")
+        self._event.set()
+        self._task.stop()
+        self._stop.set()
 
     def _poll(self) -> BasisResult:
         try:
