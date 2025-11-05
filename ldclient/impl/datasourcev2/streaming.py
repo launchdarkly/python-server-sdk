@@ -19,7 +19,7 @@ from ld_eventsource.config import (
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
-from ldclient.impl.datasystem import Synchronizer, Update
+from ldclient.impl.datasystem import SelectorStore, Synchronizer, Update
 from ldclient.impl.datasystem.protocolv2 import (
     ChangeSetBuilder,
     DeleteObject,
@@ -54,12 +54,10 @@ JITTER_RATIO = 0.5
 STREAMING_ENDPOINT = "/sdk/stream"
 
 
-SseClientBuilder = Callable[[Config], SSEClient]
+SseClientBuilder = Callable[[Config, SelectorStore], SSEClient]
 
 
-# TODO(sdk-1391): Pass a selector-retrieving function through so it can
-# re-connect with the last known status.
-def create_sse_client(config: Config) -> SSEClient:
+def create_sse_client(config: Config, ss: SelectorStore) -> SSEClient:
     """ "
     create_sse_client creates an SSEClient instance configured to connect
     to the LaunchDarkly streaming endpoint.
@@ -76,12 +74,17 @@ def create_sse_client(config: Config) -> SSEClient:
         override_read_timeout=STREAM_READ_TIMEOUT,
     )
 
+    def query_params() -> dict[str, str]:
+        selector = ss.selector()
+        return {"basis": selector.state} if selector.is_defined() else {}
+
     return SSEClient(
         connect=ConnectStrategy.http(
             url=uri,
             headers=http_factory.base_headers,
             pool=stream_http_factory.create_pool_manager(1, uri),
             urllib3_request_options={"timeout": stream_http_factory.timeout},
+            query_params=query_params
         ),
         # we'll make error-handling decisions when we see a Fault
         error_strategy=ErrorStrategy.always_continue(),
@@ -118,13 +121,13 @@ class StreamingDataSource(Synchronizer):
         """
         return "streaming"
 
-    def sync(self) -> Generator[Update, None, None]:
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        self._sse = self._sse_client_builder(self._config)
+        self._sse = self._sse_client_builder(self._config, ss)
         if self._sse is None:
             log.error("Failed to create SSE client for streaming updates.")
             return
