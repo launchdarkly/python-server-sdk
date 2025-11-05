@@ -16,6 +16,7 @@ from ldclient.impl.datasourcev2.streaming import (
     SseClientBuilder,
     StreamingDataSource
 )
+from ldclient.impl.datasystem import SelectorStore
 from ldclient.impl.datasystem.protocolv2 import (
     ChangeType,
     DeleteObject,
@@ -30,12 +31,13 @@ from ldclient.impl.datasystem.protocolv2 import (
     ServerIntent
 )
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.testing.mock_components import MockSelectorStore
 
 
 def list_sse_client(
     events: Iterable[Action],  # pylint: disable=redefined-outer-name
 ) -> SseClientBuilder:
-    def builder(_: Config) -> SSEClient:
+    def builder(config: Config, ss: SelectorStore) -> SSEClient:
         return ListBasedSseClient(events)
 
     return builder
@@ -83,7 +85,7 @@ def test_ignores_unknown_events():
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = list_sse_client([UnknownTypeOfEvent(), unknown_named_event])
 
-    assert len(list(synchronizer.sync())) == 0
+    assert len(list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))) == 0
 
 
 def test_ignores_faults_without_errors():
@@ -91,7 +93,7 @@ def test_ignores_faults_without_errors():
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = list_sse_client([errorless_fault])
 
-    assert len(list(synchronizer.sync())) == 0
+    assert len(list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))) == 0
 
 
 @pytest.fixture
@@ -169,7 +171,7 @@ def test_handles_no_changes():
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = list_sse_client([intent_event])
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -189,7 +191,7 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -216,7 +218,7 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -248,7 +250,7 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -279,7 +281,7 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -306,7 +308,7 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -335,7 +337,7 @@ def test_error_resets(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
@@ -359,7 +361,7 @@ def test_handles_out_of_order(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.INTERRUPTED
@@ -390,7 +392,7 @@ def test_invalid_json_decoding(events):  # pylint: disable=redefined-outer-name
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 2
     assert updates[0].state == DataSourceState.INTERRUPTED
@@ -423,7 +425,7 @@ def test_stops_on_unrecoverable_status_code(
 
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
@@ -453,7 +455,7 @@ def test_continues_on_recoverable_status_code(
     )
     synchronizer = StreamingDataSource(Config(sdk_key="key"))
     synchronizer._sse_client_builder = builder
-    updates = list(synchronizer.sync())
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 3
     assert updates[0].state == DataSourceState.INTERRUPTED
