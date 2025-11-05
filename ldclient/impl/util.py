@@ -4,7 +4,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Optional, TypeVar, Union
 from urllib.parse import urlparse, urlunparse
 
 from ldclient.impl.http import _base_headers
@@ -117,18 +117,23 @@ class Event:
 
 
 class UnsuccessfulResponseException(Exception):
-    def __init__(self, status):
+    def __init__(self, status, headers={}):
         super(UnsuccessfulResponseException, self).__init__("HTTP error %d" % status)
         self._status = status
+        self._headers = headers
 
     @property
     def status(self):
         return self._status
 
+    @property
+    def headers(self):
+        return self._headers
+
 
 def throw_if_unsuccessful_response(resp):
     if resp.status >= 400:
-        raise UnsuccessfulResponseException(resp.status)
+        raise UnsuccessfulResponseException(resp.status, resp.headers)
 
 
 def is_http_error_recoverable(status):

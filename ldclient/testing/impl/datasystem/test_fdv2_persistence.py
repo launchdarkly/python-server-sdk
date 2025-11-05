@@ -229,12 +229,13 @@ def test_persistent_store_delta_updates_read_write():
 
     # Set up flag change listener to detect the update
     flag_changed = Event()
-    change_count = [0]  # Use list to allow modification in nested function
+    change_count = 0
 
     def listener(flag_change: FlagChange):
-        change_count[0] += 1
+        nonlocal change_count
+        change_count += 1
         if (
-            change_count[0] == 2
+            change_count == 2
         ):  # First change is from initial sync, second is our update
             flag_changed.set()
 
