@@ -23,6 +23,7 @@ from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
     IntentCode,
+    ObjectKind,
     Payload,
     PutObject,
     Selector,
@@ -478,9 +479,10 @@ def fdv1_polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
     selector = Selector.no_selector()
 
     # FDv1 uses "flags" instead of "features", so we need to map accordingly
+    # Map FDv1 JSON keys to ObjectKind enum values
     kind_mappings = [
-        (FEATURES, "flags"),
-        (SEGMENTS, "segments")
+        (ObjectKind.FLAG, "flags"),
+        (ObjectKind.SEGMENT, "segments")
     ]
 
     for kind, fdv1_key in kind_mappings:

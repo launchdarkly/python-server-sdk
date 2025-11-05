@@ -7,7 +7,6 @@ from ldclient.impl.datasourcev2.polling import (
 )
 from ldclient.impl.datasystem.protocolv2 import ChangeType, ObjectKind
 from ldclient.impl.util import _Fail, _Success
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 def test_payload_is_missing_events_key():
@@ -195,7 +194,7 @@ def test_fdv1_payload_with_single_flag():
 
     change = change_set.changes[0]
     assert change.action == ChangeType.PUT
-    assert change.kind == FEATURES
+    assert change.kind == ObjectKind.FLAG
     assert change.key == "test-flag"
     assert change.version == 1
 
@@ -240,7 +239,7 @@ def test_fdv1_payload_with_single_segment():
 
     change = change_set.changes[0]
     assert change.action == ChangeType.PUT
-    assert change.kind == SEGMENTS
+    assert change.kind == ObjectKind.SEGMENT
     assert change.key == "test-segment"
     assert change.version == 5
 
@@ -263,8 +262,8 @@ def test_fdv1_payload_with_flags_and_segments():
     change_set = result.value
     assert len(change_set.changes) == 4
 
-    flag_changes = [c for c in change_set.changes if c.kind == FEATURES]
-    segment_changes = [c for c in change_set.changes if c.kind == SEGMENTS]
+    flag_changes = [c for c in change_set.changes if c.kind == ObjectKind.FLAG]
+    segment_changes = [c for c in change_set.changes if c.kind == ObjectKind.SEGMENT]
 
     assert len(flag_changes) == 2
     assert len(segment_changes) == 2
