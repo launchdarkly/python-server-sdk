@@ -22,6 +22,7 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.testing.mock_components import MockSelectorStore
 
 
 class ListBasedRequester:
@@ -103,7 +104,7 @@ def test_handles_no_changes():
         poll_interval=0.01, requester=ListBasedRequester(results=iter([polling_result]))
     )
 
-    valid = next(synchronizer.sync())
+    valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
@@ -124,7 +125,7 @@ def test_handles_empty_changeset():
     synchronizer = PollingDataSource(
         poll_interval=0.01, requester=ListBasedRequester(results=iter([polling_result]))
     )
-    valid = next(synchronizer.sync())
+    valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
@@ -152,7 +153,7 @@ def test_handles_put_objects():
     synchronizer = PollingDataSource(
         poll_interval=0.01, requester=ListBasedRequester(results=iter([polling_result]))
     )
-    valid = next(synchronizer.sync())
+    valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
@@ -183,7 +184,7 @@ def test_handles_delete_objects():
     synchronizer = PollingDataSource(
         poll_interval=0.01, requester=ListBasedRequester(results=iter([polling_result]))
     )
-    valid = next(synchronizer.sync())
+    valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
@@ -216,7 +217,7 @@ def test_generic_error_interrupts_and_recovers():
             results=iter([_Fail(error="error for test"), polling_result])
         ),
     )
-    sync = synchronizer.sync()
+    sync = synchronizer.sync(MockSelectorStore(Selector.no_selector()))
     interrupted = next(sync)
     valid = next(sync)
 
@@ -250,7 +251,7 @@ def test_recoverable_error_continues():
         poll_interval=0.01,
         requester=ListBasedRequester(results=iter([_failure, polling_result])),
     )
-    sync = synchronizer.sync()
+    sync = synchronizer.sync(MockSelectorStore(Selector.no_selector()))
     interrupted = next(sync)
     valid = next(sync)
 
@@ -288,7 +289,7 @@ def test_unrecoverable_error_shuts_down():
         poll_interval=0.01,
         requester=ListBasedRequester(results=iter([_failure, polling_result])),
     )
-    sync = synchronizer.sync()
+    sync = synchronizer.sync(MockSelectorStore(Selector.no_selector()))
     off = next(sync)
     assert off.state == DataSourceState.OFF
     assert off.error is not None
