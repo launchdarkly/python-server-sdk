@@ -16,7 +16,8 @@ from ldclient.interfaces import (
     DataSourceState,
     DataSourceStatusProvider,
     DataStoreStatusProvider,
-    FlagTracker
+    FlagTracker,
+    ReadOnlyStore
 )
 
 
@@ -138,6 +139,14 @@ class DataSystem(Protocol):
     def target_availability(self) -> DataAvailability:
         """
         Indicates the ideal form of data attainable given the current configuration.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def store(self) -> ReadOnlyStore:
+        """
+        Returns the data store used by the data system.
         """
         raise NotImplementedError
 
