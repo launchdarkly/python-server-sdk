@@ -24,6 +24,7 @@ from ldclient.interfaces import (
     DataStoreStatusProvider,
     FeatureStore,
     FlagTracker,
+    ReadOnlyStore,
     UpdateProcessor
 )
 
@@ -110,7 +111,7 @@ class FDv1:
             self._update_processor.stop()
 
     @property
-    def store(self) -> FeatureStore:
+    def store(self) -> ReadOnlyStore:
         return self._store_wrapper
 
     def set_flag_value_eval_fn(self, eval_fn):
