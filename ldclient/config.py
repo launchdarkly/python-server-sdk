@@ -179,8 +179,6 @@ class DataSystemConfig:
     data_store: Optional[FeatureStore] = None
     """The (optional) persistent data store instance."""
 
-    # TODO(fdv2): Implement this synchronizer up and hook it up everywhere.
-    # TODO(fdv2): Remove this when FDv2 is fully launched
     fdv1_fallback_synchronizer: Optional[Builder[Synchronizer]] = None
     """An optional fallback synchronizer that will read from FDv1"""
 

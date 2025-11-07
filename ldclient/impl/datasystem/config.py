@@ -9,6 +9,7 @@ from ldclient.config import DataSystemConfig
 from ldclient.impl.datasourcev2.polling import (
     PollingDataSource,
     PollingDataSourceBuilder,
+    Urllib3FDv1PollingRequester,
     Urllib3PollingRequester
 )
 from ldclient.impl.datasourcev2.streaming import (
@@ -55,6 +56,17 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         self._secondary_synchronizer = secondary
         return self
 
+    def fdv1_compatible_synchronizer(
+            self,
+            fallback: Builder[Synchronizer]
+    ) -> "ConfigBuilder":
+        """
+        Configures the SDK with a fallback synchronizer that is compatible with
+        the Flag Delivery v1 API.
+        """
+        self._fdv1_fallback_synchronizer = fallback
+        return self
+
     def data_store(self, data_store: FeatureStore, store_mode: DataStoreMode) -> "ConfigBuilder":
         """
         Sets the data store configuration for the data system.
@@ -91,6 +103,17 @@ def polling_ds_builder() -> Builder[PollingDataSource]:
     return builder
 
 
+def fdv1_fallback_ds_builder() -> Builder[PollingDataSource]:
+    def builder(config: LDConfig) -> PollingDataSource:
+        requester = Urllib3FDv1PollingRequester(config)
+        polling_ds = PollingDataSourceBuilder(config)
+        polling_ds.requester(requester)
+
+        return polling_ds.build()
+
+    return builder
+
+
 def streaming_ds_builder() -> Builder[StreamingDataSource]:
     def builder(config: LDConfig) -> StreamingDataSource:
         return StreamingDataSourceBuilder(config).build()
@@ -114,10 +137,12 @@ def default() -> ConfigBuilder:
 
     polling_builder = polling_ds_builder()
     streaming_builder = streaming_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.initializers([polling_builder])
     builder.synchronizers(streaming_builder, polling_builder)
+    builder.fdv1_compatible_synchronizer(fallback)
 
     return builder
 
@@ -130,9 +155,11 @@ def streaming() -> ConfigBuilder:
     """
 
     streaming_builder = streaming_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(streaming_builder)
+    builder.fdv1_compatible_synchronizer(fallback)
 
     return builder
 
@@ -145,9 +172,11 @@ def polling() -> ConfigBuilder:
     """
 
     polling_builder: Builder[Synchronizer] = polling_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(polling_builder)
+    builder.fdv1_compatible_synchronizer(fallback)
 
     return builder
 

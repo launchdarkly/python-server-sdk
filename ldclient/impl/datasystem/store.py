@@ -306,13 +306,6 @@ class Store:
         # Update dependency tracker
         self._reset_dependency_tracker(collections)
 
-        # Send change events if we had listeners
-        if old_data is not None:
-            affected_items = self._compute_changed_items_for_full_data_set(
-                old_data, collections
-            )
-            self._send_change_events(affected_items)
-
         # Update state
         self._persist = persist
         self._selector = selector if selector is not None else Selector.no_selector()
@@ -323,6 +316,13 @@ class Store:
         # Persist to persistent store if configured and writable
         if self._should_persist():
             self._persistent_store.init(collections)  # type: ignore
+
+        # Send change events if we had listeners
+        if old_data is not None:
+            affected_items = self._compute_changed_items_for_full_data_set(
+                old_data, collections
+            )
+            self._send_change_events(affected_items)
 
     def _apply_delta(
         self, collections: Collections, selector: Optional[Selector], persist: bool
@@ -353,10 +353,6 @@ class Store:
                         affected_items, KindAndKey(kind=kind, key=key)
                     )
 
-        # Send change events
-        if affected_items:
-            self._send_change_events(affected_items)
-
         # Update state
         self._persist = persist
         self._selector = selector if selector is not None else Selector.no_selector()
@@ -367,6 +363,10 @@ class Store:
                 for i in kind_data:
                     item = kind_data[i]
                     self._persistent_store.upsert(kind, item)  # type: ignore
+
+        # Send change events
+        if affected_items:
+            self._send_change_events(affected_items)
 
     def _should_persist(self) -> bool:
         """Returns whether data should be persisted to the persistent store."""
