@@ -6,7 +6,7 @@ They may be useful in writing new implementations of these components, or for te
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 from enum import Enum
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional, Protocol
 
 from ldclient.context import Context
 from ldclient.impl.listeners import Listeners
@@ -37,6 +37,23 @@ class DataStoreMode(Enum):
     READ_WRITE indicates that the data store is read-write. Data from
     initializers/synchronizers may be written to the store as necessary.
     """
+
+
+class ReadOnlyStore(Protocol):
+    """ReadOnlyStore is a read-only interface for a feature store."""
+
+    @abstractmethod
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        raise NotImplementedError
+
+    @abstractmethod
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def initialized(self) -> bool:
+        raise NotImplementedError
 
 
 class FeatureStore:

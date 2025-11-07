@@ -53,7 +53,8 @@ from ldclient.interfaces import (
     DataStoreStatusProvider,
     DataStoreUpdateSink,
     FeatureStore,
-    FlagTracker
+    FlagTracker,
+    ReadOnlyStore
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import (
@@ -272,7 +273,7 @@ class LDClient:
             self._data_system.data_source_status_provider
         )
         self.__flag_tracker = self._data_system.flag_tracker
-        self._store: FeatureStore = self._data_system.store  # type: ignore
+        self._store: ReadOnlyStore = self._data_system.store
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager

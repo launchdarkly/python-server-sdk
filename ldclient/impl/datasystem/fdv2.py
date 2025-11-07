@@ -24,7 +24,8 @@ from ldclient.interfaces import (
     DataStoreStatus,
     DataStoreStatusProvider,
     FeatureStore,
-    FlagTracker
+    FlagTracker,
+    ReadOnlyStore
 )
 from ldclient.versioned_data_kind import VersionedDataKind
 
@@ -500,7 +501,7 @@ class FDv2:
         return interrupted_at_runtime or healthy_for_too_long or cannot_initialize
 
     @property
-    def store(self) -> FeatureStore:
+    def store(self) -> ReadOnlyStore:
         """Get the underlying store for flag evaluation."""
         return self._store.get_active_store()
 

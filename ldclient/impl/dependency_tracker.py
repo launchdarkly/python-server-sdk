@@ -89,7 +89,7 @@ class DependencyTracker:
         @param from_item [LaunchDarkly::Impl::Model::FeatureFlag, LaunchDarkly::Impl::Model::Segment]
         @return [Set]
         """
-        if from_item is None:
+        if from_item is None or from_item.get('deleted', False):
             return set()
 
         from_item = from_kind.decode(from_item) if isinstance(from_item, dict) else from_item

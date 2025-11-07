@@ -458,9 +458,7 @@ class Change:
     kind: ObjectKind
     key: str
     version: int
-    object: Any = (
-        None  # TODO(fdv2): At some point, we should define a better type for this.
-    )
+    object: Optional[dict] = None
 
 
 @dataclass(frozen=True)
