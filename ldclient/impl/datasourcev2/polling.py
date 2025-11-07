@@ -445,12 +445,12 @@ class Urllib3FDv1PollingRequester:
             retries=1,
         )
 
+        headers = response.headers
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status)
+                f"HTTP error {response}", UnsuccessfulResponseException(response.status),
+                headers=headers
             )
-
-        headers = response.headers
 
         if response.status == 304:
             return _Success(value=(ChangeSetBuilder.no_changes(), headers))
@@ -475,6 +475,7 @@ class Urllib3FDv1PollingRequester:
         return _Fail(
             error=changeset_result.error,
             exception=changeset_result.exception,
+            headers=headers,
         )
 
 
