@@ -116,25 +116,29 @@ class InMemoryFeatureStore(ReadOnlyStore):
         Applies a delta update to the store.
         """
         try:
-            self._lock.lock()
+            all_decoded = {}
             for kind in collections:
                 collection = collections[kind]
+                items_decoded = {}
                 for key in collection:
-                    self.__upsert(kind, collection[key])
+                    items_decoded[key] = kind.decode(collection[key])
+                all_decoded[kind] = items_decoded
+        except Exception as e:
+            log.error("Failed decoding apply_delta collection. Aborting", exc_info=e)
+            return
+
+        try:
+            self._lock.lock()
+            for kind, kind_data in all_decoded.items():
+                items_of_kind = self._items[kind]
+                kind_data = all_decoded[kind]
+                for key, item in kind_data.items():
+                    items_of_kind[key] = item
+                    log.debug(
+                        "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
+                    )
         finally:
             self._lock.unlock()
-
-    def __upsert(self, kind, item):
-        """
-        Inserts or updates an item in the store.
-        """
-        decoded_item = kind.decode(item)
-        key = item["key"]
-        items_of_kind = self._items[kind]
-        items_of_kind[key] = decoded_item
-        log.debug(
-            "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
-        )
 
     @property
     def initialized(self) -> bool:
