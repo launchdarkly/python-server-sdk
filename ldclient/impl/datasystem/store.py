@@ -92,8 +92,6 @@ class InMemoryFeatureStore(ReadOnlyStore):
         Initializes the store with a full set of data, replacing any existing data.
         """
         try:
-            self._lock.lock()
-
             all_decoded = {}
             for kind in collections:
                 collection = collections[kind]
@@ -101,7 +99,12 @@ class InMemoryFeatureStore(ReadOnlyStore):
                 for key in collection:
                     items_decoded[key] = kind.decode(collection[key])
                 all_decoded[kind] = items_decoded
+        except Exception as e:
+            log.error("Failed decoding set_basis collection. Aborting", exc_info=e)
+            return
 
+        try:
+            self._lock.lock()
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
