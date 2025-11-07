@@ -91,16 +91,8 @@ class InMemoryFeatureStore(ReadOnlyStore):
         """
         Initializes the store with a full set of data, replacing any existing data.
         """
-        try:
-            all_decoded = {}
-            for kind in collections:
-                collection = collections[kind]
-                items_decoded = {}
-                for key in collection:
-                    items_decoded[key] = kind.decode(collection[key])
-                all_decoded[kind] = items_decoded
-        except Exception as e:
-            log.error("Failed decoding set_basis collection. Aborting", exc_info=e)
+        all_decoded = self.__decode_collection(collections)
+        if all_decoded is None:
             return
 
         try:
@@ -115,16 +107,8 @@ class InMemoryFeatureStore(ReadOnlyStore):
         """
         Applies a delta update to the store.
         """
-        try:
-            all_decoded = {}
-            for kind in collections:
-                collection = collections[kind]
-                items_decoded = {}
-                for key in collection:
-                    items_decoded[key] = kind.decode(collection[key])
-                all_decoded[kind] = items_decoded
-        except Exception as e:
-            log.error("Failed decoding apply_delta collection. Aborting", exc_info=e)
+        all_decoded = self.__decode_collection(collections)
+        if all_decoded is None:
             return
 
         try:
@@ -139,6 +123,21 @@ class InMemoryFeatureStore(ReadOnlyStore):
                     )
         finally:
             self._lock.unlock()
+
+    def __decode_collection(self, collections: Collections) -> Optional[Dict[VersionedDataKind, Dict[str, Any]]]:
+        try:
+            all_decoded = {}
+            for kind in collections:
+                collection = collections[kind]
+                items_decoded = {}
+                for key in collection:
+                    items_decoded[key] = kind.decode(collection[key])
+                all_decoded[kind] = items_decoded
+
+            return all_decoded
+        except Exception as e:
+            log.error("Failed decoding collection.", exc_info=e)
+            return None
 
     @property
     def initialized(self) -> bool:
