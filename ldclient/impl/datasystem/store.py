@@ -87,29 +87,34 @@ class InMemoryFeatureStore(ReadOnlyStore):
         finally:
             self._lock.runlock()
 
-    def set_basis(self, collections: Collections):
+    def set_basis(self, collections: Collections) -> bool:
         """
         Initializes the store with a full set of data, replacing any existing data.
         """
         all_decoded = self.__decode_collection(collections)
         if all_decoded is None:
-            return
+            return False
 
         try:
             self._lock.lock()
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
+        except Exception as e:
+            log.error("Failed applying set_basis", exc_info=e)
+            return False
         finally:
             self._lock.unlock()
 
-    def apply_delta(self, collections: Collections):
+        return True
+
+    def apply_delta(self, collections: Collections) -> bool:
         """
         Applies a delta update to the store.
         """
         all_decoded = self.__decode_collection(collections)
         if all_decoded is None:
-            return
+            return False
 
         try:
             self._lock.lock()
@@ -121,8 +126,13 @@ class InMemoryFeatureStore(ReadOnlyStore):
                     log.debug(
                         "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
                     )
+        except Exception as e:
+            log.error("Failed applying apply_delta", exc_info=e)
+            return False
         finally:
             self._lock.unlock()
+
+        return True
 
     def __decode_collection(self, collections: Collections) -> Optional[Dict[VersionedDataKind, Dict[str, Any]]]:
         try:
@@ -289,7 +299,9 @@ class Store:
             for kind in [FEATURES, SEGMENTS]:
                 old_data[kind] = self._memory_store.all(kind, lambda x: x)
 
-        self._memory_store.set_basis(collections)
+        ok = self._memory_store.set_basis(collections)
+        if ok is False:
+            return
 
         # Update dependency tracker
         self._reset_dependency_tracker(collections)
@@ -322,7 +334,9 @@ class Store:
             change_set: The changeset containing the delta changes
             persist: Whether to persist the changes to the persistent store
         """
-        self._memory_store.apply_delta(collections)
+        ok = self._memory_store.apply_delta(collections)
+        if ok is False:
+            return
 
         has_listeners = self._flag_change_listeners.has_listeners()
         affected_items: Set[KindAndKey] = set()
