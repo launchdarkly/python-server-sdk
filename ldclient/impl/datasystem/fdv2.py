@@ -443,9 +443,13 @@ class FDv2:
                 # Update status
                 self._data_source_status_provider.update_status(update.state, update.error)
 
+                # Check if we should revert to FDv1 immediately
+                if update.revert_to_fdv1:
+                    return True, True
+
                 # Check for OFF state indicating permanent failure
                 if update.state == DataSourceState.OFF:
-                    return True, update.revert_to_fdv1
+                    return True, False
 
                 # Check condition periodically
                 current_status = self._data_source_status_provider.status

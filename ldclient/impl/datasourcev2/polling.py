@@ -14,6 +14,7 @@ from urllib import parse
 import urllib3
 
 from ldclient.config import Config
+from ldclient.impl.datasource.feature_requester import LATEST_ALL_URI
 from ldclient.impl.datasystem import BasisResult, SelectorStore, Update
 from ldclient.impl.datasystem.protocolv2 import (
     Basis,
@@ -22,6 +23,8 @@ from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
     IntentCode,
+    ObjectKind,
+    Payload,
     PutObject,
     Selector,
     ServerIntent
@@ -43,6 +46,7 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState
 )
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 POLLING_ENDPOINT = "/sdk/poll"
 
@@ -123,6 +127,15 @@ class PollingDataSource:
                         ),
                     )
 
+                    fallback = result.exception.headers.get("X-LD-FD-Fallback") == 'true'
+                    if fallback:
+                        yield Update(
+                            state=DataSourceState.OFF,
+                            error=error_info,
+                            revert_to_fdv1=True
+                        )
+                        break
+
                     status_code = result.exception.status
                     if is_http_error_recoverable(status_code):
                         # TODO(fdv2): Add support for environment ID
@@ -158,6 +171,7 @@ class PollingDataSource:
                     state=DataSourceState.VALID,
                     change_set=change_set,
                     environment_id=headers.get("X-LD-EnvID"),
+                    revert_to_fdv1=headers.get('X-LD-FD-Fallback') == 'true'
                 )
 
             if self._event.wait(self._poll_interval):
@@ -262,7 +276,7 @@ class Urllib3PollingRequester:
 
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status)
+                f"HTTP error {response}", UnsuccessfulResponseException(response.status, response.headers)
             )
 
         headers = response.headers
@@ -375,3 +389,118 @@ class PollingDataSourceBuilder:
         return PollingDataSource(
             poll_interval=self._config.poll_interval, requester=requester
         )
+
+
+# pylint: disable=too-few-public-methods
+class Urllib3FDv1PollingRequester:
+    """
+    Urllib3PollingRequesterFDv1 is a Requester that uses urllib3 to make HTTP
+    requests.
+    """
+
+    def __init__(self, config: Config):
+        self._etag = None
+        self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
+        self._config = config
+        self._poll_uri = config.base_uri + LATEST_ALL_URI
+
+    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+        """
+        Fetches the data for the given selector.
+        Returns a Result containing a tuple of ChangeSet and any request headers,
+        or an error if the data could not be retrieved.
+        """
+        query_params = {}
+        if self._config.payload_filter_key is not None:
+            query_params["filter"] = self._config.payload_filter_key
+
+        uri = self._poll_uri
+        if len(query_params) > 0:
+            filter_query = parse.urlencode(query_params)
+            uri += f"?{filter_query}"
+
+        hdrs = _headers(self._config)
+        hdrs["Accept-Encoding"] = "gzip"
+
+        if self._etag is not None:
+            hdrs["If-None-Match"] = self._etag
+
+        response = self._http.request(
+            "GET",
+            uri,
+            headers=hdrs,
+            timeout=urllib3.Timeout(
+                connect=self._config.http.connect_timeout,
+                read=self._config.http.read_timeout,
+            ),
+            retries=1,
+        )
+
+        if response.status >= 400:
+            return _Fail(
+                f"HTTP error {response}", UnsuccessfulResponseException(response.status, response.headers)
+            )
+
+        headers = response.headers
+
+        if response.status == 304:
+            return _Success(value=(ChangeSetBuilder.no_changes(), headers))
+
+        data = json.loads(response.data.decode("UTF-8"))
+        etag = headers.get("ETag")
+
+        if etag is not None:
+            self._etag = etag
+
+        log.debug(
+            "%s response status:[%d] ETag:[%s]",
+            uri,
+            response.status,
+            etag,
+        )
+
+        changeset_result = fdv1_polling_payload_to_changeset(data)
+        if isinstance(changeset_result, _Success):
+            return _Success(value=(changeset_result.value, headers))
+
+        return _Fail(
+            error=changeset_result.error,
+            exception=changeset_result.exception,
+        )
+
+
+# pylint: disable=too-many-branches,too-many-return-statements
+def fdv1_polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
+    """
+    Converts a fdv1 polling payload into a ChangeSet.
+    """
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    selector = Selector.no_selector()
+
+    # FDv1 uses "flags" instead of "features", so we need to map accordingly
+    # Map FDv1 JSON keys to ObjectKind enum values
+    kind_mappings = [
+        (ObjectKind.FLAG, "flags"),
+        (ObjectKind.SEGMENT, "segments")
+    ]
+
+    for kind, fdv1_key in kind_mappings:
+        kind_data = data.get(fdv1_key)
+        if kind_data is None:
+            continue
+        if not isinstance(kind_data, dict):
+            return _Fail(error=f"Invalid format: {fdv1_key} is not a dictionary")
+
+        for key in kind_data:
+            flag_or_segment = kind_data.get(key)
+            if flag_or_segment is None or not isinstance(flag_or_segment, dict):
+                return _Fail(error=f"Invalid format: {key} is not a dictionary")
+
+            version = flag_or_segment.get('version')
+            if version is None:
+                return _Fail(error=f"Invalid format: {key} does not have a version set")
+
+            builder.add_put(kind, key, version, flag_or_segment)
+
+    return _Success(builder.finish(selector))

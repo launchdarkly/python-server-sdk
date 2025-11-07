@@ -4,13 +4,12 @@ with any required supporting classes and protocols.
 """
 
 import json
-from abc import abstractmethod
 from time import time
-from typing import Callable, Generator, Iterable, Optional, Protocol, Tuple
+from typing import Callable, Generator, Optional, Tuple
 from urllib import parse
 
 from ld_eventsource import SSEClient
-from ld_eventsource.actions import Action, Event, Fault
+from ld_eventsource.actions import Event, Fault, Start
 from ld_eventsource.config import (
     ConnectStrategy,
     ErrorStrategy,
@@ -151,6 +150,15 @@ class StreamingDataSource(Synchronizer):
                     break
                 continue
 
+            if isinstance(action, Start) and action.headers is not None:
+                fallback = action.headers.get('X-LD-FD-Fallback') == 'true'
+                if fallback:
+                    yield Update(
+                        state=DataSourceState.OFF,
+                        revert_to_fdv1=True
+                    )
+                    break
+
             if not isinstance(action, Event):
                 continue
 
@@ -187,11 +195,6 @@ class StreamingDataSource(Synchronizer):
             # TODO(sdk-1408)
             # if update is not None:
             #     self._record_stream_init(False)
-
-            # if self._data_source_update_sink is not None:
-            #     self._data_source_update_sink.update_status(
-            #         DataSourceState.VALID, None
-            #     )
 
         self._sse.close()
 
@@ -288,6 +291,8 @@ class StreamingDataSource(Synchronizer):
 
         If an update is provided, it should be forward upstream, regardless of
         whether or not we are going to retry this failure.
+
+        The return should be thought of (update, should_continue)
         """
         if not self._running:
             return (None, False)  # don't retry if we've been deliberately stopped
@@ -315,12 +320,18 @@ class StreamingDataSource(Synchronizer):
                 str(error),
             )
 
+            if error.headers is not None and error.headers.get("X-LD-FD-Fallback") == 'true':
+                update = Update(
+                    state=DataSourceState.OFF,
+                    error=error_info,
+                    revert_to_fdv1=True
+                )
+                return (update, False)
+
             http_error_message_result = http_error_message(
                 error.status, "stream connection"
             )
-
             is_recoverable = is_http_error_recoverable(error.status)
-
             update = Update(
                 state=(
                     DataSourceState.INTERRUPTED
