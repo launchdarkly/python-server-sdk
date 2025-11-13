@@ -505,7 +505,7 @@ class Synchronizer(Protocol):
         """Returns the name of the initializer."""
         raise NotImplementedError
 
-    def sync(self, ss: "SelectorStore") -> "Generator[Update, None, None]":
+    def sync(self, ss: "SelectorStore") -> Generator["Update", None, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error

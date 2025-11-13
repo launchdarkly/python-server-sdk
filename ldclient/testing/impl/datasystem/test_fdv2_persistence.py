@@ -537,3 +537,245 @@ def test_no_persistent_store_status_provider_without_store():
     assert set_on_ready.wait(1), "Data system did not become ready in time"
 
     fdv2.stop()
+
+
+def test_persistent_store_outage_recovery_flushes_on_recovery():
+    """Test that in-memory store is flushed to persistent store when it recovers from outage"""
+    from ldclient.interfaces import DataStoreStatus
+
+    persistent_store = StubFeatureStore()
+
+    # Create synchronizer with initial data
+    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
+
+    data_system_config = DataSystemConfig(
+        data_store_mode=DataStoreMode.READ_WRITE,
+        data_store=persistent_store,
+        initializers=None,
+        primary_synchronizer=td_synchronizer.build_synchronizer,
+    )
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    # Verify initial data is in the persistent store
+    snapshot = persistent_store.get_data_snapshot()
+    assert "feature-flag" in snapshot[FEATURES]
+    assert snapshot[FEATURES]["feature-flag"]["on"] is True
+
+    # Reset tracking to isolate recovery behavior
+    persistent_store.reset_operation_tracking()
+
+    event = Event()
+    fdv2.flag_tracker.add_listener(lambda _flag_change: event.set())
+    # Simulate a new flag being added while store is "offline"
+    # (In reality, the store is still online, but we're testing the recovery mechanism)
+    td_synchronizer.update(td_synchronizer.flag("new-flag").on(False))
+
+    # Block until the flag has propagated through the data store
+    assert event.wait(1)
+
+    # Now simulate the persistent store coming back online with stale data
+    # by triggering the recovery callback directly
+    fdv2._persistent_store_outage_recovery(DataStoreStatus(available=True, stale=True))
+
+    # Verify that init was called on the persistent store (flushing in-memory data)
+    assert persistent_store.init_called_count > 0, "Store should have been reinitialized"
+
+    # Verify both flags are now in the persistent store
+    snapshot = persistent_store.get_data_snapshot()
+    assert "feature-flag" in snapshot[FEATURES]
+    assert "new-flag" in snapshot[FEATURES]
+
+    fdv2.stop()
+
+
+def test_persistent_store_outage_recovery_no_flush_when_not_stale():
+    """Test that recovery does NOT flush when store comes back online without stale data"""
+    from ldclient.interfaces import DataStoreStatus
+
+    persistent_store = StubFeatureStore()
+
+    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
+
+    data_system_config = DataSystemConfig(
+        data_store_mode=DataStoreMode.READ_WRITE,
+        data_store=persistent_store,
+        initializers=None,
+        primary_synchronizer=td_synchronizer.build_synchronizer,
+    )
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    # Reset tracking
+    persistent_store.reset_operation_tracking()
+
+    # Simulate store coming back online but NOT stale (data is fresh)
+    fdv2._persistent_store_outage_recovery(DataStoreStatus(available=True, stale=False))
+
+    # Verify that init was NOT called (no flush needed)
+    assert persistent_store.init_called_count == 0, "Store should not be reinitialized when not stale"
+
+    fdv2.stop()
+
+
+def test_persistent_store_outage_recovery_no_flush_when_unavailable():
+    """Test that recovery does NOT flush when store is unavailable"""
+    from ldclient.interfaces import DataStoreStatus
+
+    persistent_store = StubFeatureStore()
+
+    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
+
+    data_system_config = DataSystemConfig(
+        data_store_mode=DataStoreMode.READ_WRITE,
+        data_store=persistent_store,
+        initializers=None,
+        primary_synchronizer=td_synchronizer.build_synchronizer,
+    )
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    # Reset tracking
+    persistent_store.reset_operation_tracking()
+
+    # Simulate store being unavailable (even if marked as stale)
+    fdv2._persistent_store_outage_recovery(DataStoreStatus(available=False, stale=True))
+
+    # Verify that init was NOT called (store is not available)
+    assert persistent_store.init_called_count == 0, "Store should not be reinitialized when unavailable"
+
+    fdv2.stop()
+
+
+def test_persistent_store_commit_encodes_data_correctly():
+    """Test that Store.commit() properly encodes data before writing to persistent store"""
+    from ldclient.impl.datasystem.protocolv2 import (
+        Change,
+        ChangeSet,
+        ChangeType,
+        IntentCode,
+        ObjectKind
+    )
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+
+    persistent_store = StubFeatureStore()
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(persistent_store, True, None)
+
+    # Create a flag with raw data
+    flag_data = {
+        "key": "test-flag",
+        "version": 1,
+        "on": True,
+        "variations": [True, False],
+        "fallthrough": {"variation": 0},
+    }
+
+    # Apply a changeset to add the flag to the in-memory store
+    changeset = ChangeSet(
+        intent_code=IntentCode.TRANSFER_FULL,
+        changes=[
+            Change(
+                action=ChangeType.PUT,
+                kind=ObjectKind.FLAG,
+                key="test-flag",
+                version=1,
+                object=flag_data,
+            )
+        ],
+        selector=None,
+    )
+    store.apply(changeset, True)
+
+    # Reset tracking
+    persistent_store.reset_operation_tracking()
+
+    # Now commit the in-memory store to the persistent store
+    err = store.commit()
+    assert err is None, "Commit should succeed"
+
+    # Verify that init was called with properly encoded data
+    assert persistent_store.init_called_count == 1, "Init should be called once"
+
+    # Verify the data in the persistent store is properly encoded
+    snapshot = persistent_store.get_data_snapshot()
+    assert "test-flag" in snapshot[FEATURES]
+
+    # The data should be in the encoded format (as a dict with all required fields)
+    flag_in_store = snapshot[FEATURES]["test-flag"]
+    assert flag_in_store["key"] == "test-flag"
+    assert flag_in_store["version"] == 1
+    assert flag_in_store["on"] is True
+
+
+def test_persistent_store_commit_with_no_persistent_store():
+    """Test that Store.commit() safely handles the case where there's no persistent store"""
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+
+    # Create store without persistent store
+    store = Store(Listeners(), Listeners())
+
+    # Commit should succeed but do nothing
+    err = store.commit()
+    assert err is None, "Commit should succeed even without persistent store"
+
+
+def test_persistent_store_commit_handles_errors():
+    """Test that Store.commit() handles errors from persistent store gracefully"""
+    from ldclient.impl.datasystem.protocolv2 import (
+        Change,
+        ChangeSet,
+        ChangeType,
+        IntentCode,
+        ObjectKind
+    )
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+
+    class FailingFeatureStore(StubFeatureStore):
+        """A feature store that always fails on init"""
+        def init(self, all_data):
+            raise RuntimeError("Simulated persistent store failure")
+
+    persistent_store = FailingFeatureStore()
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(persistent_store, True, None)
+
+    # Add some data to the in-memory store
+    changeset = ChangeSet(
+        intent_code=IntentCode.TRANSFER_FULL,
+        changes=[
+            Change(
+                action=ChangeType.PUT,
+                kind=ObjectKind.FLAG,
+                key="test-flag",
+                version=1,
+                object={"key": "test-flag", "version": 1, "on": True},
+            )
+        ],
+        selector=None,
+    )
+    store.apply(changeset, True)
+
+    # Commit should return the error without raising
+    err = store.commit()
+    assert err is not None, "Commit should return error from persistent store"
+    assert isinstance(err, RuntimeError)
+    assert str(err) == "Simulated persistent store failure"
