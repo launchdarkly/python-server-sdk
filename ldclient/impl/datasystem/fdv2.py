@@ -2,6 +2,7 @@ import logging
 import time
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
+from queue import Queue, Empty
 
 from ldclient.config import Builder, Config, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
@@ -367,10 +368,11 @@ class FDv2:
                         else:
                             log.info("Fallback condition met")
 
-                        if self._secondary_synchronizer_builder is None:
-                            continue
                         if self._stop_event.is_set():
                             break
+
+                        if self._secondary_synchronizer_builder is None:
+                            continue
 
                         self._lock.lock()
                         secondary_sync = self._secondary_synchronizer_builder(self._config)
@@ -433,8 +435,45 @@ class FDv2:
 
         :return: Tuple of (should_remove_sync, fallback_to_fdv1)
         """
+        action_queue = Queue()
+        timer = RepeatingTask(
+            label="FDv2-sync-cond-timer",
+            interval=10,
+            initial_delay=10,
+            callable=lambda: action_queue.put("check")
+        )
+
+        def reader(self: 'FDv2'):
+            try:
+                for update in synchronizer.sync(self._store):
+                    action_queue.put(update)
+            finally:
+                action_queue.put("quit")
+
+        sync_reader = Thread(
+            target=reader,
+            name="FDv2-sync-reader",
+            args=(self,),
+            daemon=True
+        )
+
         try:
-            for update in synchronizer.sync(self._store):
+            timer.start()
+            sync_reader.start()
+
+            while True:
+                update = action_queue.get(True)
+                if isinstance(update, str):
+                    if update == "quit":
+                        break
+
+                    if update == "check":
+                        # Check condition periodically
+                        current_status = self._data_source_status_provider.status
+                        if condition_func(current_status):
+                            return False, False
+                    continue
+
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
                     return False, False
@@ -457,17 +496,14 @@ class FDv2:
                 # Check for OFF state indicating permanent failure
                 if update.state == DataSourceState.OFF:
                     return True, False
-
-                # Check condition periodically
-                current_status = self._data_source_status_provider.status
-                if condition_func(current_status):
-                    return False, False
-
         except Exception as e:
             log.error("Error consuming synchronizer results: %s", e)
             return True, False
         finally:
             synchronizer.stop()
+            timer.stop()
+
+            sync_reader.join(0.5)
 
         return True, False
 

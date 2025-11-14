@@ -19,7 +19,7 @@ from ldclient.interfaces import (
 class DataSourceStatusProviderImpl(DataSourceStatusProvider):
     def __init__(self, listeners: Listeners):
         self.__listeners = listeners
-        self.__status = DataSourceStatus(DataSourceState.INITIALIZING, 0, None)
+        self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
         self.__lock = ReadWriteLock()
 
     @property
