@@ -188,9 +188,11 @@ class _FileDataSourceV2:
                 return
             self._closed = True
 
-            if self._auto_updater:
-                self._auto_updater.stop()
-                self._auto_updater = None
+            auto_updater = self._auto_updater
+            self._auto_updater = None
+
+        if auto_updater:
+            auto_updater.stop()
 
         # Signal shutdown to sync generator
         self._update_queue.put(None)
