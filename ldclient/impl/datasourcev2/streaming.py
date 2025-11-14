@@ -147,6 +147,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._running = True
         self._connection_attempt_start_time = time()
 
+        envid = None
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -165,7 +166,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     break
                 continue
 
-            envid = None
             if isinstance(action, Start) and action.headers is not None:
                 fallback = action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 envid = action.headers.get(_LD_ENVID_HEADER)
