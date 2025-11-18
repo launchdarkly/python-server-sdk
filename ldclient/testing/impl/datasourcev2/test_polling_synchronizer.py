@@ -20,7 +20,13 @@ from ldclient.impl.datasystem.protocolv2 import (
     Selector,
     ServerIntent
 )
-from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success, _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    UnsuccessfulResponseException,
+    _Fail,
+    _Success
+)
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
 from ldclient.testing.mock_components import MockSelectorStore
 
