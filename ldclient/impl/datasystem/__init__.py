@@ -7,7 +7,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event
-from typing import Callable, Generator, Optional, Protocol
+from typing import Generator, Optional, Protocol, runtime_checkable
 
 from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet, Selector
 from ldclient.impl.util import _Result
@@ -147,6 +147,27 @@ class DataSystem(Protocol):
     def store(self) -> ReadOnlyStore:
         """
         Returns the data store used by the data system.
+        """
+        raise NotImplementedError
+
+
+class DiagnosticAccumulator(Protocol):
+    def record_stream_init(self, timestamp, duration, failed):
+        raise NotImplementedError
+
+    def record_events_in_batch(self, events_in_batch):
+        raise NotImplementedError
+
+    def create_event_and_reset(self, dropped_events, deduplicated_users):
+        raise NotImplementedError
+
+
+@runtime_checkable
+class DiagnosticSource(Protocol):
+    @abstractmethod
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
+        """
+        Set the diagnostic_accumulator to be used for reporting diagnostic events.
         """
         raise NotImplementedError
 

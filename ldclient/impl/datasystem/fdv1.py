@@ -13,7 +13,7 @@ from ldclient.impl.datastore.status import (
     DataStoreStatusProviderImpl,
     DataStoreUpdateSinkImpl
 )
-from ldclient.impl.datasystem import DataAvailability
+from ldclient.impl.datasystem import DataAvailability, DiagnosticAccumulator
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
@@ -78,7 +78,7 @@ class FDv1:
         self._update_processor: Optional[UpdateProcessor] = None
 
         # Diagnostic accumulator provided by client for streaming metrics
-        self._diagnostic_accumulator = None
+        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
 
         # Track current data availability
         self._data_availability: DataAvailability = (
@@ -122,7 +122,7 @@ class FDv1:
         """
         self._flag_tracker_impl = FlagTrackerImpl(self._flag_change_listeners, eval_fn)
 
-    def set_diagnostic_accumulator(self, diagnostic_accumulator):
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
         This should be called before start() to ensure metrics are collected.
