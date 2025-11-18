@@ -423,5 +423,6 @@ class _PollingAutoUpdaterV2:
             try:
                 ret[path] = os.path.getmtime(path)
             except Exception:
+                log.warning("Failed to get modification time for %s. Setting to None", path)
                 ret[path] = None
         return ret
