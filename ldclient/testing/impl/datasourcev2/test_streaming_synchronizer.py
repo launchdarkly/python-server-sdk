@@ -418,9 +418,7 @@ def test_stops_on_unrecoverable_status_code(
     events,
 ):  # pylint: disable=redefined-outer-name
     error = HTTPStatusError(401)
-    error.headers = None
     fault = Fault(error=error)
-    fault.headers = None
     builder = list_sse_client(
         [
             # This will generate an error but the stream should continue
@@ -451,14 +449,10 @@ def test_continues_on_recoverable_status_code(
     events,
 ):  # pylint: disable=redefined-outer-name
     error1 = HTTPStatusError(400)
-    error1.headers = None
     fault1 = Fault(error=error1)
-    fault1.headers = None
 
     error2 = HTTPStatusError(408)
-    error2.headers = None
     fault2 = Fault(error=error2)
-    fault2.headers = None
 
     builder = list_sse_client(
         [
@@ -497,8 +491,7 @@ def test_continues_on_recoverable_status_code(
 
 def test_envid_from_start_action(events):  # pylint: disable=redefined-outer-name
     """Test that environment ID is captured from Start action headers"""
-    start_action = Start()
-    start_action.headers = {_LD_ENVID_HEADER: 'test-env-123'}
+    start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-123'})
 
     builder = list_sse_client(
         [
@@ -519,8 +512,7 @@ def test_envid_from_start_action(events):  # pylint: disable=redefined-outer-nam
 
 def test_envid_preserved_across_events(events):  # pylint: disable=redefined-outer-name
     """Test that environment ID is preserved across multiple events after being set on Start"""
-    start_action = Start()
-    start_action.headers = {_LD_ENVID_HEADER: 'test-env-456'}
+    start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-456'})
 
     builder = list_sse_client(
         [
@@ -544,11 +536,7 @@ def test_envid_preserved_across_events(events):  # pylint: disable=redefined-out
 
 def test_envid_from_fallback_header():
     """Test that environment ID is captured when fallback header is present"""
-    start_action = Start()
-    start_action.headers = {
-        _LD_ENVID_HEADER: 'test-env-fallback',
-        _LD_FD_FALLBACK_HEADER: 'true'
-    }
+    start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-fallback', _LD_FD_FALLBACK_HEADER: 'true'})
 
     builder = list_sse_client([start_action])
 
@@ -564,10 +552,8 @@ def test_envid_from_fallback_header():
 
 def test_envid_from_fault_action():
     """Test that environment ID is captured from Fault action headers"""
-    error = HTTPStatusError(401)
-    error.headers = {_LD_ENVID_HEADER: 'test-env-fault'}
+    error = HTTPStatusError(401, headers={_LD_ENVID_HEADER: 'test-env-fault'})
     fault_action = Fault(error=error)
-    fault_action.headers = {_LD_ENVID_HEADER: 'test-env-fault'}
 
     builder = list_sse_client([fault_action])
 
@@ -584,16 +570,8 @@ def test_envid_from_fault_action():
 
 def test_envid_from_fault_with_fallback():
     """Test that environment ID and fallback are captured from Fault action"""
-    error = HTTPStatusError(503)
-    error.headers = {
-        _LD_ENVID_HEADER: 'test-env-503',
-        _LD_FD_FALLBACK_HEADER: 'true'
-    }
+    error = HTTPStatusError(503, headers={_LD_ENVID_HEADER: 'test-env-503', _LD_FD_FALLBACK_HEADER: 'true'})
     fault_action = Fault(error=error)
-    fault_action.headers = {
-        _LD_ENVID_HEADER: 'test-env-503',
-        _LD_FD_FALLBACK_HEADER: 'true'
-    }
 
     builder = list_sse_client([fault_action])
 
@@ -609,10 +587,8 @@ def test_envid_from_fault_with_fallback():
 
 def test_envid_from_recoverable_fault(events):  # pylint: disable=redefined-outer-name
     """Test that environment ID is captured from recoverable Fault and preserved in subsequent events"""
-    error = HTTPStatusError(400)
-    error.headers = {_LD_ENVID_HEADER: 'test-env-400'}
+    error = HTTPStatusError(400, headers={_LD_ENVID_HEADER: 'test-env-400'})
     fault_action = Fault(error=error)
-    fault_action.headers = {_LD_ENVID_HEADER: 'test-env-400'}
 
     builder = list_sse_client(
         [
@@ -639,7 +615,6 @@ def test_envid_from_recoverable_fault(events):  # pylint: disable=redefined-oute
 def test_envid_missing_when_no_headers():
     """Test that environment ID is None when no headers are present"""
     start_action = Start()
-    start_action.headers = None
 
     server_intent = ServerIntent(
         payload=Payload(
