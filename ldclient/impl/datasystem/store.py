@@ -20,6 +20,7 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.model.entity import ModelEntity
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 from ldclient.interfaces import (
@@ -451,13 +452,19 @@ class Store:
         Returns:
             Exception if commit failed, None otherwise
         """
+        def __mapping_from_kind(kind: VersionedDataKind) -> Callable[[Dict[str, ModelEntity]], Dict[str, Dict[str, Any]]]:
+            def __mapping(data: Dict[str, ModelEntity]) -> Dict[str, Dict[str, Any]]:
+                return {k: kind.encode(v) for k, v in data.items()}
+
+            return __mapping
+
         with self._lock:
             if self._should_persist():
                 try:
                     # Get all data from memory store and write to persistent store
                     all_data = {}
                     for kind in [FEATURES, SEGMENTS]:
-                        all_data[kind] = self._memory_store.all(kind, lambda x: x)
+                        all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
                     self._persistent_store.init(all_data)  # type: ignore
                 except Exception as e:
                     return e

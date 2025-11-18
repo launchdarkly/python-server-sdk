@@ -257,7 +257,7 @@ class Urllib3PollingRequester:
         if self._config.payload_filter_key is not None:
             query_params["filter"] = self._config.payload_filter_key
 
-        if selector is not None:
+        if selector is not None and selector.is_defined():
             query_params["selector"] = selector.state
 
         uri = self._poll_uri
