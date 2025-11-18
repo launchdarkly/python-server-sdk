@@ -18,7 +18,13 @@ from ld_eventsource.config import (
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
-from ldclient.impl.datasystem import SelectorStore, Synchronizer, Update
+from ldclient.impl.datasystem import (
+    DiagnosticAccumulator,
+    DiagnosticSource,
+    SelectorStore,
+    Synchronizer,
+    Update
+)
 from ldclient.impl.datasystem.protocolv2 import (
     ChangeSetBuilder,
     DeleteObject,
@@ -98,7 +104,7 @@ def create_sse_client(config: Config, ss: SelectorStore) -> SSEClient:
     )
 
 
-class StreamingDataSource(Synchronizer):
+class StreamingDataSource(Synchronizer, DiagnosticSource):
     """
     StreamingSynchronizer is a specific type of Synchronizer that handles
     streaming data sources.
@@ -112,6 +118,11 @@ class StreamingDataSource(Synchronizer):
         self._config = config
         self._sse: Optional[SSEClient] = None
         self._running = False
+        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
+        self._connection_attempt_start_time: Optional[float] = None
+
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
+        self._diagnostic_accumulator = diagnostic_accumulator
 
     @property
     def name(self) -> str:
@@ -133,6 +144,7 @@ class StreamingDataSource(Synchronizer):
 
         change_set_builder = ChangeSetBuilder()
         self._running = True
+        self._connection_attempt_start_time = time()
 
         for action in self._sse.all:
             if isinstance(action, Fault):
@@ -153,6 +165,7 @@ class StreamingDataSource(Synchronizer):
             if isinstance(action, Start) and action.headers is not None:
                 fallback = action.headers.get('X-LD-FD-Fallback') == 'true'
                 if fallback:
+                    self._record_stream_init(True)
                     yield Update(
                         state=DataSourceState.OFF,
                         revert_to_fdv1=True
@@ -165,6 +178,8 @@ class StreamingDataSource(Synchronizer):
             try:
                 update = self._process_message(action, change_set_builder)
                 if update is not None:
+                    self._record_stream_init(False)
+                    self._connection_attempt_start_time = None
                     yield update
             except json.decoder.JSONDecodeError as e:
                 log.info(
@@ -192,10 +207,6 @@ class StreamingDataSource(Synchronizer):
                     environment_id=None,  # TODO(sdk-1410)
                 )
 
-            # TODO(sdk-1408)
-            # if update is not None:
-            #     self._record_stream_init(False)
-
         self._sse.close()
 
     def stop(self):
@@ -206,6 +217,12 @@ class StreamingDataSource(Synchronizer):
         self._running = False
         if self._sse:
             self._sse.close()
+
+    def _record_stream_init(self, failed: bool):
+        if self._diagnostic_accumulator and self._connection_attempt_start_time:
+            current_time = int(time() * 1000)
+            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
+            self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
     # pylint: disable=too-many-return-statements
     def _process_message(
@@ -301,6 +318,9 @@ class StreamingDataSource(Synchronizer):
 
         if isinstance(error, json.decoder.JSONDecodeError):
             log.error("Unexpected error on stream connection: %s, will retry", error)
+            self._record_stream_init(True)
+            self._connection_attempt_start_time = time() + \
+                self._sse.next_retry_delay  # type: ignore
 
             update = Update(
                 state=DataSourceState.INTERRUPTED,
@@ -313,6 +333,10 @@ class StreamingDataSource(Synchronizer):
             return (update, True)
 
         if isinstance(error, HTTPStatusError):
+            self._record_stream_init(True)
+            self._connection_attempt_start_time = time() + \
+                self._sse.next_retry_delay  # type: ignore
+
             error_info = DataSourceErrorInfo(
                 DataSourceErrorKind.ERROR_RESPONSE,
                 error.status,
@@ -344,6 +368,7 @@ class StreamingDataSource(Synchronizer):
             )
 
             if not is_recoverable:
+                self._connection_attempt_start_time = None
                 log.error(http_error_message_result)
                 self.stop()
                 return (update, False)
@@ -352,6 +377,8 @@ class StreamingDataSource(Synchronizer):
             return (update, True)
 
         log.warning("Unexpected error on stream connection: %s, will retry", error)
+        self._record_stream_init(True)
+        self._connection_attempt_start_time = time() + self._sse.next_retry_delay  # type: ignore
 
         update = Update(
             state=DataSourceState.INTERRUPTED,

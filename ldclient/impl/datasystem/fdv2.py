@@ -9,7 +9,12 @@ from ldclient.impl.datasourcev2.status import (
     DataSourceStatusProviderImpl,
     DataStoreStatusProviderImpl
 )
-from ldclient.impl.datasystem import DataAvailability, Synchronizer
+from ldclient.impl.datasystem import (
+    DataAvailability,
+    DiagnosticAccumulator,
+    DiagnosticSource,
+    Synchronizer
+)
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
@@ -173,9 +178,7 @@ class FDv2:
         self._disabled = self._config.offline
 
         # Diagnostic accumulator provided by client for streaming metrics
-        # TODO(fdv2): Either we need to use this, or we need to provide it to
-        # the streaming synchronizers
-        self._diagnostic_accumulator = None
+        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
 
         # Set up event listeners
         self._flag_change_listeners = Listeners()
@@ -261,7 +264,7 @@ class FDv2:
         # Close the store
         self._store.close()
 
-    def set_diagnostic_accumulator(self, diagnostic_accumulator):
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
         This should be called before start() to ensure metrics are collected.
@@ -334,6 +337,8 @@ class FDv2:
                     try:
                         self._lock.lock()
                         primary_sync = self._primary_synchronizer_builder(self._config)
+                        if isinstance(primary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
+                            primary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
                         self._active_synchronizer = primary_sync
                         self._lock.unlock()
 
@@ -367,6 +372,8 @@ class FDv2:
 
                         self._lock.lock()
                         secondary_sync = self._secondary_synchronizer_builder(self._config)
+                        if isinstance(secondary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
+                            secondary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
                         log.info("Secondary synchronizer %s is starting", secondary_sync.name)
                         self._active_synchronizer = secondary_sync
                         self._lock.unlock()
@@ -386,7 +393,6 @@ class FDv2:
                                     DataSourceState.OFF,
                                     self._data_source_status_provider.status.error
                                 )
-                                # TODO: WE might need to also set that threading.Event here
                                 break
 
                         log.info("Recovery condition met, returning to primary synchronizer")
@@ -398,8 +404,7 @@ class FDv2:
                 log.error("Error in synchronizer loop: %s", e)
             finally:
                 # Ensure we always set the ready event when exiting
-                if not set_on_ready.is_set():
-                    set_on_ready.set()
+                set_on_ready.set()
                 self._lock.lock()
                 if self._active_synchronizer is not None:
                     self._active_synchronizer.stop()

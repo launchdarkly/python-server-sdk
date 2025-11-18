@@ -6,9 +6,12 @@ LaunchDarkly data system version 2 (FDv2).
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Optional, Protocol
+from typing import TYPE_CHECKING, Generator, List, Optional, Protocol
 
 from ldclient.impl.util import Result
+
+if TYPE_CHECKING:
+    from ldclient.impl.datasystem import SelectorStore, Update
 
 
 class EventName(str, Enum):
@@ -502,7 +505,13 @@ class Synchronizer(Protocol):
         """Returns the name of the initializer."""
         raise NotImplementedError
 
-    # TODO(fdv2): Need sync method
+    def sync(self, ss: "SelectorStore") -> "Generator[Update, None, None]":
+        """
+        sync should begin the synchronization process for the data source, yielding
+        Update objects until the connection is closed or an unrecoverable error
+        occurs.
+        """
+        raise NotImplementedError
 
     def close(self):
         """
