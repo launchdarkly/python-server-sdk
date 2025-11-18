@@ -1,8 +1,8 @@
 import logging
 import time
+from queue import Empty, Queue
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
-from queue import Queue, Empty
 
 from ldclient.config import Builder, Config, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
@@ -435,7 +435,7 @@ class FDv2:
 
         :return: Tuple of (should_remove_sync, fallback_to_fdv1)
         """
-        action_queue = Queue()
+        action_queue: Queue = Queue()
         timer = RepeatingTask(
             label="FDv2-sync-cond-timer",
             interval=10,
