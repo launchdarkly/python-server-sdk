@@ -510,6 +510,34 @@ def test_envid_from_start_action(events):  # pylint: disable=redefined-outer-nam
     assert updates[0].environment_id == 'test-env-123'
 
 
+def test_envid_not_cleared_from_next_start(events):  # pylint: disable=redefined-outer-name
+    """Test that environment ID is captured from Start action headers"""
+    start_action_with_headers = Start(headers={_LD_ENVID_HEADER: 'test-env-123'})
+    start_action_without_headers = Start()
+
+    builder = list_sse_client(
+        [
+            start_action_with_headers,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+            start_action_without_headers,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 2
+    assert updates[0].state == DataSourceState.VALID
+    assert updates[0].environment_id == 'test-env-123'
+
+    assert updates[1].state == DataSourceState.VALID
+    assert updates[1].environment_id == 'test-env-123'
+
+
 def test_envid_preserved_across_events(events):  # pylint: disable=redefined-outer-name
     """Test that environment ID is preserved across multiple events after being set on Start"""
     start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-456'})
@@ -566,6 +594,31 @@ def test_envid_from_fault_action():
     assert updates[0].environment_id == 'test-env-fault'
     assert updates[0].error is not None
     assert updates[0].error.status_code == 401
+
+
+def test_envid_not_cleared_from_next_error():
+    """Test that environment ID is captured from Fault action headers"""
+    error_with_headers_ = HTTPStatusError(408, headers={_LD_ENVID_HEADER: 'test-env-fault'})
+    error_without_headers_ = HTTPStatusError(401)
+    fault_action_with_headers = Fault(error=error_with_headers_)
+    fault_action_without_headers = Fault(error=error_without_headers_)
+
+    builder = list_sse_client([fault_action_with_headers, fault_action_without_headers])
+
+    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 2
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].environment_id == 'test-env-fault'
+    assert updates[0].error is not None
+    assert updates[0].error.status_code == 408
+
+    assert updates[1].state == DataSourceState.OFF
+    assert updates[1].environment_id == 'test-env-fault'
+    assert updates[1].error is not None
+    assert updates[1].error.status_code == 401
 
 
 def test_envid_from_fault_with_fallback():

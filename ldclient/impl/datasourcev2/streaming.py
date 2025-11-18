@@ -156,7 +156,8 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 if action.error is None:
                     continue
 
-                envid = action.headers.get(_LD_ENVID_HEADER) if action.headers is not None else None
+                if action.headers is not None:
+                    envid = action.headers.get(_LD_ENVID_HEADER, envid)
 
                 (update, should_continue) = self._handle_error(action.error, envid)
                 if update is not None:
@@ -168,7 +169,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
             if isinstance(action, Start) and action.headers is not None:
                 fallback = action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
-                envid = action.headers.get(_LD_ENVID_HEADER)
+                envid = action.headers.get(_LD_ENVID_HEADER, envid)
 
                 if fallback:
                     self._record_stream_init(True)
