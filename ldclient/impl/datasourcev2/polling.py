@@ -32,6 +32,8 @@ from ldclient.impl.datasystem.protocolv2 import (
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
     UnsuccessfulResponseException,
     _Fail,
     _headers,
@@ -117,6 +119,13 @@ class PollingDataSource:
         while self._stop.is_set() is False:
             result = self._requester.fetch(ss.selector())
             if isinstance(result, _Fail):
+                fallback = None
+                envid = None
+
+                if result.headers is not None:
+                    fallback = result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
+                    envid = result.headers.get(_LD_ENVID_HEADER)
+
                 if isinstance(result.exception, UnsuccessfulResponseException):
                     error_info = DataSourceErrorInfo(
                         kind=DataSourceErrorKind.ERROR_RESPONSE,
@@ -127,28 +136,28 @@ class PollingDataSource:
                         ),
                     )
 
-                    fallback = result.exception.headers.get("X-LD-FD-Fallback") == 'true'
                     if fallback:
                         yield Update(
                             state=DataSourceState.OFF,
                             error=error_info,
-                            revert_to_fdv1=True
+                            revert_to_fdv1=True,
+                            environment_id=envid,
                         )
                         break
 
                     status_code = result.exception.status
                     if is_http_error_recoverable(status_code):
-                        # TODO(fdv2): Add support for environment ID
                         yield Update(
                             state=DataSourceState.INTERRUPTED,
                             error=error_info,
+                            environment_id=envid,
                         )
                         continue
 
-                    # TODO(fdv2): Add support for environment ID
                     yield Update(
                         state=DataSourceState.OFF,
                         error=error_info,
+                        environment_id=envid,
                     )
                     break
 
@@ -159,19 +168,18 @@ class PollingDataSource:
                     message=result.error,
                 )
 
-                # TODO(fdv2): Go has a designation here to handle JSON decoding separately.
-                # TODO(fdv2): Add support for environment ID
                 yield Update(
                     state=DataSourceState.INTERRUPTED,
                     error=error_info,
+                    environment_id=envid,
                 )
             else:
                 (change_set, headers) = result.value
                 yield Update(
                     state=DataSourceState.VALID,
                     change_set=change_set,
-                    environment_id=headers.get("X-LD-EnvID"),
-                    revert_to_fdv1=headers.get('X-LD-FD-Fallback') == 'true'
+                    environment_id=headers.get(_LD_ENVID_HEADER),
+                    revert_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 )
 
             if self._event.wait(self._poll_interval):
@@ -208,7 +216,7 @@ class PollingDataSource:
 
             (change_set, headers) = result.value
 
-            env_id = headers.get("X-LD-EnvID")
+            env_id = headers.get(_LD_ENVID_HEADER)
             if not isinstance(env_id, str):
                 env_id = None
 
@@ -273,13 +281,13 @@ class Urllib3PollingRequester:
             ),
             retries=1,
         )
+        headers = response.headers
 
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status, response.headers)
+                f"HTTP error {response}", UnsuccessfulResponseException(response.status),
+                headers=headers,
             )
-
-        headers = response.headers
 
         if response.status == 304:
             return _Success(value=(ChangeSetBuilder.no_changes(), headers))
@@ -304,6 +312,7 @@ class Urllib3PollingRequester:
         return _Fail(
             error=changeset_result.error,
             exception=changeset_result.exception,
+            headers=headers,  # type: ignore
         )
 
 
@@ -436,12 +445,12 @@ class Urllib3FDv1PollingRequester:
             retries=1,
         )
 
+        headers = response.headers
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status, response.headers)
+                f"HTTP error {response}", UnsuccessfulResponseException(response.status),
+                headers=headers
             )
-
-        headers = response.headers
 
         if response.status == 304:
             return _Success(value=(ChangeSetBuilder.no_changes(), headers))
@@ -466,6 +475,7 @@ class Urllib3FDv1PollingRequester:
         return _Fail(
             error=changeset_result.error,
             exception=changeset_result.exception,
+            headers=headers,
         )
 
 

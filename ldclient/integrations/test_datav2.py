@@ -551,17 +551,21 @@ class TestDataV2:
     ::
 
         from ldclient.impl.datasystem import config as datasystem_config
+        from ldclient.integrations.test_datav2 import TestDataV2
+
 
         td = TestDataV2.data_source()
         td.update(td.flag('flag-key-1').variation_for_all(True))
 
         # Configure the data system with TestDataV2 as both initializer and synchronizer
         data_config = datasystem_config.custom()
-        data_config.initializers([lambda: td.build_initializer()])
-        data_config.synchronizers(lambda: td.build_synchronizer())
+        data_config.initializers([td.build_initializer])
+        data_config.synchronizers(td.build_synchronizer)
 
-        # TODO(fdv2): This will be integrated with the main Config in a future version
-        # For now, TestDataV2 is primarily intended for unit testing scenarios
+        config = Config(
+            sdk_key,
+            datasystem_config=data_config.build(),
+        )
 
         # flags can be updated at any time:
         td.update(td.flag('flag-key-1').

@@ -50,7 +50,7 @@ test-filesource = ["pyyaml", "watchdog"]
 
 [tool.poetry.group.dev.dependencies]
 mock = ">=2.0.0"
-pytest = ">=2.8"
+pytest = "^8.0.0"
 redis = ">=2.10.5,<5.0.0"
 boto3 = ">=1.9.71,<2.0.0"
 coverage = ">=4.4"
