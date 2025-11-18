@@ -53,6 +53,10 @@ class ListBasedSseClient:
     def all(self) -> Iterable[Action]:
         return self._events
 
+    @property
+    def next_retry_delay(self):
+        return 1
+
     def interrupt(self):
         pass
 
