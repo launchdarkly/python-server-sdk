@@ -38,6 +38,8 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
     http_error_message,
     is_http_error_recoverable,
     log
@@ -57,7 +59,6 @@ BACKOFF_RESET_INTERVAL = 60
 JITTER_RATIO = 0.5
 
 STREAMING_ENDPOINT = "/sdk/stream"
-
 
 SseClientBuilder = Callable[[Config, SelectorStore], SSEClient]
 
@@ -146,6 +147,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._running = True
         self._connection_attempt_start_time = time()
 
+        envid = None
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -154,7 +156,10 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 if action.error is None:
                     continue
 
-                (update, should_continue) = self._handle_error(action.error)
+                if action.headers is not None:
+                    envid = action.headers.get(_LD_ENVID_HEADER, envid)
+
+                (update, should_continue) = self._handle_error(action.error, envid)
                 if update is not None:
                     yield update
 
@@ -163,12 +168,15 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 continue
 
             if isinstance(action, Start) and action.headers is not None:
-                fallback = action.headers.get('X-LD-FD-Fallback') == 'true'
+                fallback = action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
+                envid = action.headers.get(_LD_ENVID_HEADER, envid)
+
                 if fallback:
                     self._record_stream_init(True)
                     yield Update(
                         state=DataSourceState.OFF,
-                        revert_to_fdv1=True
+                        revert_to_fdv1=True,
+                        environment_id=envid,
                     )
                     break
 
@@ -176,7 +184,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 continue
 
             try:
-                update = self._process_message(action, change_set_builder)
+                update = self._process_message(action, change_set_builder, envid)
                 if update is not None:
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
@@ -187,7 +195,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 )
                 self._sse.interrupt()
 
-                (update, should_continue) = self._handle_error(e)
+                (update, should_continue) = self._handle_error(e, envid)
                 if update is not None:
                     yield update
                 if not should_continue:
@@ -204,7 +212,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                         DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                     ),
                     revert_to_fdv1=False,
-                    environment_id=None,  # TODO(sdk-1410)
+                    environment_id=envid,
                 )
 
         self._sse.close()
@@ -226,7 +234,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
     # pylint: disable=too-many-return-statements
     def _process_message(
-        self, msg: Event, change_set_builder: ChangeSetBuilder
+        self, msg: Event, change_set_builder: ChangeSetBuilder, envid: Optional[str]
     ) -> Optional[Update]:
         """
         Processes a single message from the SSE stream and returns an Update
@@ -247,7 +255,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 change_set_builder.expect_changes()
                 return Update(
                     state=DataSourceState.VALID,
-                    environment_id=None,  # TODO(sdk-1410)
+                    environment_id=envid,
                 )
             return None
 
@@ -293,13 +301,13 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             return Update(
                 state=DataSourceState.VALID,
                 change_set=change_set,
-                environment_id=None,  # TODO(sdk-1410)
+                environment_id=envid,
             )
 
         log.info("Unexpected event found in stream: %s", msg.event)
         return None
 
-    def _handle_error(self, error: Exception) -> Tuple[Optional[Update], bool]:
+    def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
         """
         This method handles errors that occur during the streaming process.
 
@@ -328,7 +336,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     DataSourceErrorKind.INVALID_DATA, 0, time(), str(error)
                 ),
                 revert_to_fdv1=False,
-                environment_id=None,  # TODO(sdk-1410)
+                environment_id=envid,
             )
             return (update, True)
 
@@ -344,11 +352,15 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 str(error),
             )
 
-            if error.headers is not None and error.headers.get("X-LD-FD-Fallback") == 'true':
+            if envid is None and error.headers is not None:
+                envid = error.headers.get(_LD_ENVID_HEADER)
+
+            if error.headers is not None and error.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
                 update = Update(
                     state=DataSourceState.OFF,
                     error=error_info,
-                    revert_to_fdv1=True
+                    revert_to_fdv1=True,
+                    environment_id=envid,
                 )
                 return (update, False)
 
@@ -364,7 +376,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 ),
                 error=error_info,
                 revert_to_fdv1=False,
-                environment_id=None,  # TODO(sdk-1410)
+                environment_id=envid,
             )
 
             if not is_recoverable:
@@ -386,7 +398,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 DataSourceErrorKind.UNKNOWN, 0, time(), str(error)
             ),
             revert_to_fdv1=False,
-            environment_id=None,  # TODO(sdk-1410)
+            environment_id=envid,
         )
         # no stacktrace here because, for a typical connection error, it'll
         # just be a lengthy tour of urllib3 internals
@@ -411,5 +423,4 @@ class StreamingDataSourceBuilder:  # disable: pylint: disable=too-few-public-met
 
     def build(self) -> StreamingDataSource:
         """Builds a StreamingDataSource instance with the configured parameters."""
-        # TODO(fdv2): Add in the other controls here.
         return StreamingDataSource(self._config)

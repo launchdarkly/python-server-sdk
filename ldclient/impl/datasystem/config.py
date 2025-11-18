@@ -210,18 +210,3 @@ def persistent_store(store: FeatureStore) -> ConfigBuilder:
     although it will keep it up-to-date.
     """
     return default().data_store(store, DataStoreMode.READ_WRITE)
-
-
-# TODO(fdv2): Implement these methods
-#
-# WithEndpoints configures the data system with custom endpoints for
-# LaunchDarkly's streaming and polling synchronizers. This method is not
-# necessary for most use-cases, but can be useful for testing or custom
-# network configurations.
-#
-# Any endpoint that is not specified (empty string) will be treated as the
-# default LaunchDarkly SaaS endpoint for that service.
-
-# WithRelayProxyEndpoints configures the data system with a single endpoint
-# for LaunchDarkly's streaming and polling synchronizers. The endpoint
-# should be Relay Proxy's base URI, for example http://localhost:8123.
