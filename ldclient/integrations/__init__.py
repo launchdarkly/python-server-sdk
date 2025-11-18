@@ -6,7 +6,7 @@ other than LaunchDarkly.
 from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from ldclient.config import Config
+from ldclient.config import Builder, Config
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import (
@@ -19,6 +19,9 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBFeatureStoreCore
 )
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
+from ldclient.impl.integrations.files.file_data_sourcev2 import (
+    _FileDataSourceV2
+)
 from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
 )
@@ -250,3 +253,62 @@ class Files:
         :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property
         """
         return lambda config, store, ready: _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)
+
+    @staticmethod
+    def new_data_source_v2(paths: List[str], poll_interval: float = 1, force_polling: bool = False) -> Builder[Any]:
+        """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
+
+        This type is not stable, and not subject to any backwards
+        compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+        Do not use it.
+        You have been warned.
+
+        This returns a builder that can be used with the FDv2 data system configuration as both an
+        Initializer and a Synchronizer. When used as an Initializer, it reads files once. When used
+        as a Synchronizer, it watches for file changes and automatically updates when files are modified.
+
+        To use this component with the FDv2 data system, call ``new_data_source_v2`` and use the returned
+        builder with the custom data system configuration:
+        ::
+
+            from ldclient.integrations import Files
+            from ldclient.impl.datasystem.config import custom
+
+            file_source = Files.new_data_source_v2(paths=['my_flags.json'])
+
+            # Use as initializer only
+            data_system = custom().initializers([file_source]).build()
+            config = Config(data_system=data_system)
+
+            # Use as synchronizer only
+            data_system = custom().synchronizers(file_source).build()
+            config = Config(data_system=data_system)
+
+            # Use as both initializer and synchronizer
+            data_system = custom().initializers([file_source]).synchronizers(file_source).build()
+            config = Config(data_system=data_system)
+
+        This will cause the client not to connect to LaunchDarkly to get feature flags. The
+        client may still make network connections to send analytics events, unless you have disabled
+        this in your configuration with ``send_events`` or ``offline``.
+
+        The format of the data files is the same as for the v1 file data source, described in the
+        SDK Reference Guide on `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
+        Note that in order to use YAML, you will need to install the ``pyyaml`` package.
+
+        If the data source encounters any error in any file-- malformed content, a missing file, or a
+        duplicate key-- it will not load flags from any of the files.
+
+        :param paths: the paths of the source files for loading flag data. These may be absolute paths
+          or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``
+          package is installed, in which case YAML is also allowed.
+        :param poll_interval: (default: 1) the minimum interval, in seconds, between checks for file
+          modifications when used as a Synchronizer. Only applies if the native file-watching mechanism
+          from ``watchdog`` is not being used.
+        :param force_polling: (default: false) True if the data source should implement file watching via
+          polling the filesystem even if a native mechanism is available. This is mainly for SDK testing.
+
+        :return: a builder function that creates the file data source
+        """
+        return lambda config: _FileDataSourceV2(paths, poll_interval, force_polling)
