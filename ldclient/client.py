@@ -273,14 +273,13 @@ class LDClient:
             self._data_system.data_source_status_provider
         )
         self.__flag_tracker = self._data_system.flag_tracker
-        self._store: ReadOnlyStore = self._data_system.store
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(self._store, FEATURES, key),
-            lambda key: _get_store_item(self._store, SEGMENTS, key),
+            lambda key: _get_store_item(self._data_system.store, FEATURES, key),
+            lambda key: _get_store_item(self._data_system.store, SEGMENTS, key),
             lambda key: big_segment_store_manager.get_user_membership(key),
             log,
         )
@@ -571,7 +570,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
         if not self.is_initialized():
-            if self._store.initialized:
+            if self._data_system.store.initialized:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -584,7 +583,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._store, FEATURES, key)
+            flag = _get_store_item(self._data_system.store, FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
@@ -642,7 +641,7 @@ class LDClient:
             return FeatureFlagsState(False)
 
         if not self.is_initialized():
-            if self._store.initialized:
+            if self._data_system.store.initialized:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
@@ -657,7 +656,7 @@ class LDClient:
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
-            flags_map = self._store.all(FEATURES, lambda x: x)
+            flags_map = self._data_system.store.all(FEATURES, lambda x: x)
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:

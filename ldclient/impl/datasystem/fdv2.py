@@ -89,7 +89,7 @@ class FeatureStoreClientWrapper(FeatureStore):
         if available:
             log.warning("Persistent store is available again")
 
-        status = DataStoreStatus(available, False)
+        status = DataStoreStatus(available, True)
         self.__store_update_sink.update_status(status)
 
         if available:
@@ -185,16 +185,18 @@ class FDv2:
         self._change_set_listeners = Listeners()
         self._data_store_listeners = Listeners()
 
+        self._data_store_listeners.add(self._persistent_store_outage_recovery)
+
         # Create the store
         self._store = Store(self._flag_change_listeners, self._change_set_listeners)
 
         # Status providers
         self._data_source_status_provider = DataSourceStatusProviderImpl(Listeners())
-        self._data_store_status_provider = DataStoreStatusProviderImpl(None, Listeners())
+        self._data_store_status_provider = DataStoreStatusProviderImpl(None, self._data_store_listeners)
 
         # Configure persistent store if provided
         if self._data_system_config.data_store is not None:
-            self._data_store_status_provider = DataStoreStatusProviderImpl(self._data_system_config.data_store, Listeners())
+            self._data_store_status_provider = DataStoreStatusProviderImpl(self._data_system_config.data_store, self._data_store_listeners)
             writable = self._data_system_config.data_store_mode == DataStoreMode.READ_WRITE
             wrapper = FeatureStoreClientWrapper(self._data_system_config.data_store, self._data_store_status_provider)
             self._store.with_persistence(
@@ -508,6 +510,21 @@ class FDv2:
         )
 
         return interrupted_at_runtime or healthy_for_too_long or cannot_initialize
+
+    def _persistent_store_outage_recovery(self, data_store_status: DataStoreStatus):
+        """
+        Monitor the data store status. If the store comes online and
+        potentially has stale data, we should write our known state to it.
+        """
+        if not data_store_status.available:
+            return
+
+        if not data_store_status.stale:
+            return
+
+        err = self._store.commit()
+        if err is not None:
+            log.error("Failed to reinitialize data store", exc_info=err)
 
     @property
     def store(self) -> ReadOnlyStore:
