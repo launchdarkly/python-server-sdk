@@ -4,7 +4,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Dict, Generic, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, Mapping, Optional, TypeVar, Union
 from urllib.parse import urlparse, urlunparse
 
 from ldclient.impl.http import _base_headers
@@ -34,6 +34,9 @@ _RETRYABLE_STATUSES = [400, 408, 429]
 
 # Compiled regex pattern for valid characters in application values and SDK keys
 _VALID_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9._-]")
+
+_LD_ENVID_HEADER = 'X-LD-EnvID'
+_LD_FD_FALLBACK_HEADER = 'X-LD-FD-Fallback'
 
 
 def validate_application_info(application: dict, logger: logging.Logger) -> dict:
@@ -117,23 +120,18 @@ class Event:
 
 
 class UnsuccessfulResponseException(Exception):
-    def __init__(self, status, headers={}):
+    def __init__(self, status):
         super(UnsuccessfulResponseException, self).__init__("HTTP error %d" % status)
         self._status = status
-        self._headers = headers
 
     @property
     def status(self):
         return self._status
 
-    @property
-    def headers(self):
-        return self._headers
-
 
 def throw_if_unsuccessful_response(resp):
     if resp.status >= 400:
-        raise UnsuccessfulResponseException(resp.status, resp.headers)
+        raise UnsuccessfulResponseException(resp.status)
 
 
 def is_http_error_recoverable(status):
@@ -290,6 +288,7 @@ class _Success(Generic[T]):
 class _Fail(Generic[E]):
     error: E
     exception: Optional[Exception] = None
+    headers: Optional[Mapping[str, Any]] = None
 
 
 # TODO(breaking): Replace the above Result class with an improved generic
