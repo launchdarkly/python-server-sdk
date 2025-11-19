@@ -7,14 +7,14 @@ import time
 import pytest
 
 from ldclient.config import Config
-from ldclient.impl.datasystem.protocolv2 import (
+from ldclient.impl.util import _Fail, _Success
+from ldclient.integrations import Files
+from ldclient.interfaces import (
+    DataSourceState,
     IntentCode,
     ObjectKind,
     Selector
 )
-from ldclient.impl.util import _Fail, _Success
-from ldclient.integrations import Files
-from ldclient.interfaces import DataSourceState
 from ldclient.testing.mock_components import MockSelectorStore
 
 # Skip all tests in this module in CI due to flakiness

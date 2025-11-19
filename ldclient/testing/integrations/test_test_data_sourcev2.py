@@ -5,15 +5,15 @@ from typing import Callable
 import pytest
 
 from ldclient.config import Config
-from ldclient.impl.datasystem.protocolv2 import (
+from ldclient.impl.util import _Fail, _Success
+from ldclient.integrations.test_datav2 import FlagBuilderV2, TestDataV2
+from ldclient.interfaces import (
     ChangeType,
+    DataSourceState,
     IntentCode,
     ObjectKind,
     Selector
 )
-from ldclient.impl.util import _Fail, _Success
-from ldclient.integrations.test_datav2 import FlagBuilderV2, TestDataV2
-from ldclient.interfaces import DataSourceState
 from ldclient.testing.mock_components import MockSelectorStore
 
 # Test Data + Data Source V2

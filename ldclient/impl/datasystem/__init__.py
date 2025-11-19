@@ -4,16 +4,11 @@ v2), as well as types for v1 and v2 specific protocols.
 """
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 from threading import Event
-from typing import Generator, Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
-from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet, Selector
-from ldclient.impl.util import _Result
 from ldclient.interfaces import (
-    DataSourceErrorInfo,
-    DataSourceState,
     DataSourceStatusProvider,
     DataStoreStatusProvider,
     FlagTracker,
@@ -168,104 +163,5 @@ class DiagnosticSource(Protocol):
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Set the diagnostic_accumulator to be used for reporting diagnostic events.
-        """
-        raise NotImplementedError
-
-
-class SelectorStore(Protocol):
-    """
-    SelectorStore represents a component capable of providing Selectors
-    for data retrieval.
-    """
-
-    @abstractmethod
-    def selector(self) -> Selector:
-        """
-        get_selector should return a Selector object that defines the criteria
-        for data retrieval.
-        """
-        raise NotImplementedError
-
-
-BasisResult = _Result[Basis, str]
-
-
-class Initializer(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    Initializer represents a component capable of retrieving a single data
-    result, such as from the LD polling API.
-
-    The intent of initializers is to quickly fetch an initial set of data,
-    which may be stale but is fast to retrieve. This initial data serves as a
-    foundation for a Synchronizer to build upon, enabling it to provide updates
-    as new changes occur.
-    """
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """
-        Returns the name of the initializer, which is used for logging and debugging.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def fetch(self, ss: SelectorStore) -> BasisResult:
-        """
-        fetch should retrieve the initial data set for the data source, returning
-        a Basis object on success, or an error message on failure.
-
-        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
-        """
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class Update:
-    """
-    Update represents the results of a synchronizer's ongoing sync
-    method.
-    """
-
-    state: DataSourceState
-    change_set: Optional[ChangeSet] = None
-    error: Optional[DataSourceErrorInfo] = None
-    revert_to_fdv1: bool = False
-    environment_id: Optional[str] = None
-
-
-class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    Synchronizer represents a component capable of synchronizing data from an external
-    data source, such as a streaming or polling API.
-
-    It is responsible for yielding Update objects that represent the current state
-    of the data source, including any changes that have occurred since the last
-    synchronization.
-    """
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """
-        Returns the name of the synchronizer, which is used for logging and debugging.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
-        """
-        sync should begin the synchronization process for the data source, yielding
-        Update objects until the connection is closed or an unrecoverable error
-        occurs.
-
-        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def stop(self):
-        """
-        stop should halt the synchronization process, causing the sync method
-        to exit as soon as possible.
         """
         raise NotImplementedError

@@ -363,15 +363,15 @@ def test_persistent_store_delete_operations():
     """Test that delete operations are written to persistent store in READ_WRITE mode"""
     # We'll need to manually trigger a delete via the store
     # This is more of an integration test with the Store class
-    from ldclient.impl.datasystem.protocolv2 import (
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+    from ldclient.interfaces import (
         Change,
         ChangeSet,
         ChangeType,
         IntentCode,
         ObjectKind
     )
-    from ldclient.impl.datasystem.store import Store
-    from ldclient.impl.listeners import Listeners
 
     # Pre-populate with a flag
     initial_data = {
@@ -664,15 +664,15 @@ def test_persistent_store_outage_recovery_no_flush_when_unavailable():
 
 def test_persistent_store_commit_encodes_data_correctly():
     """Test that Store.commit() properly encodes data before writing to persistent store"""
-    from ldclient.impl.datasystem.protocolv2 import (
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+    from ldclient.interfaces import (
         Change,
         ChangeSet,
         ChangeType,
         IntentCode,
         ObjectKind
     )
-    from ldclient.impl.datasystem.store import Store
-    from ldclient.impl.listeners import Listeners
 
     persistent_store = StubFeatureStore()
     store = Store(Listeners(), Listeners())
@@ -739,15 +739,15 @@ def test_persistent_store_commit_with_no_persistent_store():
 
 def test_persistent_store_commit_handles_errors():
     """Test that Store.commit() handles errors from persistent store gracefully"""
-    from ldclient.impl.datasystem.protocolv2 import (
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+    from ldclient.interfaces import (
         Change,
         ChangeSet,
         ChangeType,
         IntentCode,
         ObjectKind
     )
-    from ldclient.impl.datasystem.store import Store
-    from ldclient.impl.listeners import Listeners
 
     class FailingFeatureStore(StubFeatureStore):
         """A feature store that always fails on init"""

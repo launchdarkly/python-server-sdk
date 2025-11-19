@@ -16,8 +16,12 @@ from ldclient.impl.datasourcev2.streaming import (
     StreamingDataSource,
     StreamingDataSourceBuilder
 )
-from ldclient.impl.datasystem import Initializer, Synchronizer
-from ldclient.interfaces import DataStoreMode, FeatureStore
+from ldclient.interfaces import (
+    DataStoreMode,
+    FeatureStore,
+    Initializer,
+    Synchronizer
+)
 
 T = TypeVar("T")
 

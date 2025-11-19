@@ -13,7 +13,11 @@ from ldclient.impl.datastore.status import (
     DataStoreStatusProviderImpl,
     DataStoreUpdateSinkImpl
 )
-from ldclient.impl.datasystem import DataAvailability, DiagnosticAccumulator
+from ldclient.impl.datasystem import (
+    DataAvailability,
+    DataSystem,
+    DiagnosticAccumulator
+)
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
@@ -31,7 +35,7 @@ from ldclient.interfaces import (
 # Delayed import inside __init__ to avoid circular dependency with ldclient.client
 
 
-class FDv1:
+class FDv1(DataSystem):
     """
     FDv1 wires the existing v1 data source and store behavior behind the
     generic DataSystem surface.
