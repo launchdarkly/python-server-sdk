@@ -16,7 +16,7 @@ from ldclient import (
 )
 from ldclient.config import BigSegmentsConfig
 from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
-from ldclient.impl.datasystem.config import (
+from ldclient.datasystem import (
     custom,
     polling_ds_builder,
     streaming_ds_builder

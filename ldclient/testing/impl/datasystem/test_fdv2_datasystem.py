@@ -58,7 +58,7 @@ def test_two_phase_init():
     assert set_on_ready.wait(1), "Data system did not become ready in time"
     assert initialized.wait(1), "Flag change listener was not called in time"
 
-    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
     assert modified.wait(1), "Flag change listener was not called in time"
     assert len(changes) == 3
     assert changes[0].key == "feature-flag"

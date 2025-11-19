@@ -96,7 +96,7 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         )
 
 
-def __polling_ds_builder() -> Builder[PollingDataSource]:
+def polling_ds_builder() -> Builder[PollingDataSource]:
     def builder(config: LDConfig) -> PollingDataSource:
         requester = Urllib3PollingRequester(config)
         polling_ds = PollingDataSourceBuilder(config)
@@ -107,7 +107,7 @@ def __polling_ds_builder() -> Builder[PollingDataSource]:
     return builder
 
 
-def __fdv1_fallback_ds_builder() -> Builder[PollingDataSource]:
+def fdv1_fallback_ds_builder() -> Builder[PollingDataSource]:
     def builder(config: LDConfig) -> PollingDataSource:
         requester = Urllib3FDv1PollingRequester(config)
         polling_ds = PollingDataSourceBuilder(config)
@@ -118,7 +118,7 @@ def __fdv1_fallback_ds_builder() -> Builder[PollingDataSource]:
     return builder
 
 
-def __streaming_ds_builder() -> Builder[StreamingDataSource]:
+def streaming_ds_builder() -> Builder[StreamingDataSource]:
     def builder(config: LDConfig) -> StreamingDataSource:
         return StreamingDataSourceBuilder(config).build()
 
@@ -139,9 +139,9 @@ def default() -> ConfigBuilder:
     for updates.
     """
 
-    polling_builder = __polling_ds_builder()
-    streaming_builder = __streaming_ds_builder()
-    fallback = __fdv1_fallback_ds_builder()
+    polling_builder = polling_ds_builder()
+    streaming_builder = streaming_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.initializers([polling_builder])
@@ -158,8 +158,8 @@ def streaming() -> ConfigBuilder:
     with no additional latency.
     """
 
-    streaming_builder = __streaming_ds_builder()
-    fallback = __fdv1_fallback_ds_builder()
+    streaming_builder = streaming_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(streaming_builder)
@@ -175,8 +175,8 @@ def polling() -> ConfigBuilder:
     streaming, but may be necessary in some network environments.
     """
 
-    polling_builder: Builder[Synchronizer] = __polling_ds_builder()
-    fallback = __fdv1_fallback_ds_builder()
+    polling_builder: Builder[Synchronizer] = polling_ds_builder()
+    fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
     builder.synchronizers(polling_builder)
