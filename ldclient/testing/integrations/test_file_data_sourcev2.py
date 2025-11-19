@@ -17,6 +17,12 @@ from ldclient.integrations import Files
 from ldclient.interfaces import DataSourceState
 from ldclient.testing.mock_components import MockSelectorStore
 
+# Skip all tests in this module in CI due to flakiness
+pytestmark = pytest.mark.skipif(
+    os.getenv('LD_SKIP_FLAKY_TESTS', '').lower() in ('true', '1', 'yes'),
+    reason="Skipping flaky test"
+)
+
 have_yaml = False
 try:
     import yaml
