@@ -19,7 +19,8 @@ from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
 from ldclient.datasystem import (
     custom,
     polling_ds_builder,
-    streaming_ds_builder
+    streaming_ds_builder,
+    fdv1_fallback_ds_builder
 )
 
 
@@ -59,6 +60,7 @@ class ClientEntity:
 
                 primary_builder = None
                 secondary_builder = None
+                fallback_builder = None
 
                 if primary is not None:
                     streaming = primary.get('streaming')
@@ -74,6 +76,7 @@ class ClientEntity:
                             opts["base_uri"] = polling["baseUri"]
                         _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
                         primary_builder = polling_ds_builder()
+                        fallback_builder = fdv1_fallback_ds_builder()
 
                 if secondary is not None:
                     streaming = secondary.get('streaming')
@@ -89,9 +92,12 @@ class ClientEntity:
                             opts["base_uri"] = polling["baseUri"]
                         _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
                         secondary_builder = polling_ds_builder()
+                        fallback_builder = fdv1_fallback_ds_builder()
 
                 if primary_builder is not None:
                     datasystem.synchronizers(primary_builder, secondary_builder)
+                if fallback_builder is not None:
+                    datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
             if datasystem_config.get("payloadFilter") is not None:
                 opts["payload_filter_key"] = datasystem_config["payloadFilter"]
