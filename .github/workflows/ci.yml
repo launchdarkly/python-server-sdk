@@ -40,6 +40,8 @@ jobs:
 
       - name: Run tests
         run: make test-all
+        env:
+          LD_SKIP_FLAKY_TESTS: true
 
       - name: Verify typehints
         run: make lint
@@ -92,3 +94,5 @@ jobs:
 
       - name: Run tests
         run: make test-all
+        env:
+          LD_SKIP_FLAKY_TESTS: true

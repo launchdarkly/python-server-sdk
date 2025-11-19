@@ -18,7 +18,11 @@ def test_two_phase_init():
     td_initializer.update(td_initializer.flag("feature-flag").on(True))
 
     td_synchronizer = TestDataV2.data_source()
-    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
+    # Set this to true, and then to false to ensure the version number exceeded
+    # the initializer version number. Otherwise, they start as the same version
+    # and the latest value is ignored.
+    td_synchronizer.update(td_initializer.flag("feature-flag").on(True))
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
     data_system_config = DataSystemConfig(
         initializers=[td_initializer.build_initializer],
         primary_synchronizer=td_synchronizer.build_synchronizer,
@@ -27,7 +31,8 @@ def test_two_phase_init():
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
-    changed = Event()
+    initialized = Event()
+    modified = Event()
     changes: List[FlagChange] = []
     count = 0
 
@@ -37,18 +42,22 @@ def test_two_phase_init():
         changes.append(flag_change)
 
         if count == 2:
-            changed.set()
+            initialized.set()
+        if count == 3:
+            modified.set()
 
     fdv2.flag_tracker.add_listener(listener)
 
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
+    assert initialized.wait(1), "Flag change listener was not called in time"
 
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
-    assert changed.wait(1), "Flag change listener was not called in time"
-    assert len(changes) == 2
+    assert modified.wait(1), "Flag change listener was not called in time"
+    assert len(changes) == 3
     assert changes[0].key == "feature-flag"
     assert changes[1].key == "feature-flag"
+    assert changes[2].key == "feature-flag"
 
 
 def test_can_stop_fdv2():
