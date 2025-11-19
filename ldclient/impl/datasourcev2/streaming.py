@@ -405,13 +405,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
         return (update, True)
 
-    # magic methods for "with" statement (used in testing)
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.stop()
-
 
 class StreamingDataSourceBuilder:  # disable: pylint: disable=too-few-public-methods
     """
