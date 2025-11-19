@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.13.1](https://github.com/launchdarkly/python-server-sdk/compare/9.13.0...9.13.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* Include ldclient.datasystem in docs ([#379](https://github.com/launchdarkly/python-server-sdk/issues/379)) ([318c6fe](https://github.com/launchdarkly/python-server-sdk/commit/318c6fea0738d296713768afc8e08ee9b2360dc2))
+
 ## [9.13.0](https://github.com/launchdarkly/python-server-sdk/compare/9.12.3...9.13.0) (2025-11-19)
 
 
