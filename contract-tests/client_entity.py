@@ -15,13 +15,13 @@ from ldclient import (
     Stage
 )
 from ldclient.config import BigSegmentsConfig
-from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
 from ldclient.datasystem import (
     custom,
+    fdv1_fallback_ds_builder,
     polling_ds_builder,
-    streaming_ds_builder,
-    fdv1_fallback_ds_builder
+    streaming_ds_builder
 )
+from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
 
 
 class ClientEntity:
