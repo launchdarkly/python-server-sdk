@@ -1,8 +1,11 @@
 import time
 from typing import Callable
 
-from ldclient.impl.datasystem.protocolv2 import Selector
-from ldclient.interfaces import BigSegmentStore, BigSegmentStoreMetadata
+from ldclient.interfaces import (
+    BigSegmentStore,
+    BigSegmentStoreMetadata,
+    Selector
+)
 
 
 class MockBigSegmentStore(BigSegmentStore):

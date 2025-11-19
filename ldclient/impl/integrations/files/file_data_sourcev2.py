@@ -5,25 +5,26 @@ import traceback
 from queue import Empty, Queue
 from typing import Generator
 
-from ldclient.impl.datasystem import BasisResult, SelectorStore, Update
-from ldclient.impl.datasystem.protocolv2 import (
-    Basis,
-    ChangeSetBuilder,
-    IntentCode,
-    ObjectKind,
-    Selector
-)
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import _Fail, _Success, current_time_millis, log
 from ldclient.interfaces import (
+    Basis,
+    BasisResult,
+    ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState
+    DataSourceState,
+    IntentCode,
+    ObjectKind,
+    Selector,
+    SelectorStore,
+    Update
 )
 
 have_yaml = False
 try:
     import yaml
+
     have_yaml = True
 except ImportError:
     pass
@@ -33,14 +34,15 @@ try:
     import watchdog
     import watchdog.events
     import watchdog.observers
+
     have_watchdog = True
 except ImportError:
     pass
 
 
 def _sanitize_json_item(item):
-    if not ('version' in item):
-        item['version'] = 1
+    if not ("version" in item):
+        item["version"] = 1
 
 
 class _FileDataSourceV2:
@@ -105,16 +107,12 @@ class _FileDataSourceV2:
 
                 change_set = result.value
 
-                basis = Basis(
-                    change_set=change_set,
-                    persist=False,
-                    environment_id=None
-                )
+                basis = Basis(change_set=change_set, persist=False, environment_id=None)
 
                 return _Success(basis)
 
         except Exception as e:
-            log.error('Error fetching file data: %s' % repr(e))
+            log.error("Error fetching file data: %s" % repr(e))
             traceback.print_exc()
             return _Fail(f"Error fetching file data: {str(e)}")
 
@@ -137,15 +135,14 @@ class _FileDataSourceV2:
                     kind=DataSourceErrorKind.INVALID_DATA,
                     status_code=0,
                     time=current_time_millis(),
-                    message=initial_result.error
-                )
+                    message=initial_result.error,
+                ),
             )
             return
 
         # Yield the initial successful state
         yield Update(
-            state=DataSourceState.VALID,
-            change_set=initial_result.value.change_set
+            state=DataSourceState.VALID, change_set=initial_result.value.change_set
         )
 
         # Start watching for file changes
@@ -168,7 +165,7 @@ class _FileDataSourceV2:
                 yield update
 
             except Exception as e:
-                log.error('Error in file data synchronizer: %s' % repr(e))
+                log.error("Error in file data synchronizer: %s" % repr(e))
                 traceback.print_exc()
                 yield Update(
                     state=DataSourceState.OFF,
@@ -176,8 +173,8 @@ class _FileDataSourceV2:
                         kind=DataSourceErrorKind.UNKNOWN,
                         status_code=0,
                         time=current_time_millis(),
-                        message=f"Error in file data synchronizer: {str(e)}"
-                    )
+                        message=f"Error in file data synchronizer: {str(e)}",
+                    ),
                 )
                 break
 
@@ -221,19 +218,13 @@ class _FileDataSourceV2:
         # Add all flags to the changeset
         for key, flag_data in flags_dict.items():
             builder.add_put(
-                ObjectKind.FLAG,
-                key,
-                flag_data.get('version', 1),
-                flag_data
+                ObjectKind.FLAG, key, flag_data.get("version", 1), flag_data
             )
 
         # Add all segments to the changeset
         for key, segment_data in segments_dict.items():
             builder.add_put(
-                ObjectKind.SEGMENT,
-                key,
-                segment_data.get('version', 1),
-                segment_data
+                ObjectKind.SEGMENT, key, segment_data.get("version", 1), segment_data
             )
 
         # Use no_selector since we don't have versioning information from files
@@ -250,20 +241,20 @@ class _FileDataSourceV2:
         :param segments_dict: dictionary to add segments to
         """
         content = None
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             content = f.read()
         parsed = self._parse_content(content)
 
-        for key, flag in parsed.get('flags', {}).items():
+        for key, flag in parsed.get("flags", {}).items():
             _sanitize_json_item(flag)
-            self._add_item(flags_dict, 'flags', flag)
+            self._add_item(flags_dict, "flags", flag)
 
-        for key, value in parsed.get('flagValues', {}).items():
-            self._add_item(flags_dict, 'flags', self._make_flag_with_value(key, value))
+        for key, value in parsed.get("flagValues", {}).items():
+            self._add_item(flags_dict, "flags", self._make_flag_with_value(key, value))
 
-        for key, segment in parsed.get('segments', {}).items():
+        for key, segment in parsed.get("segments", {}).items():
             _sanitize_json_item(segment)
-            self._add_item(segments_dict, 'segments', segment)
+            self._add_item(segments_dict, "segments", segment)
 
     def _parse_content(self, content):
         """
@@ -284,11 +275,13 @@ class _FileDataSourceV2:
         :param kind_name: name of the kind (for error messages)
         :param item: item to add
         """
-        key = item.get('key')
+        key = item.get("key")
         if items_dict.get(key) is None:
             items_dict[key] = item
         else:
-            raise Exception('In %s, key "%s" was used more than once' % (kind_name, key))
+            raise Exception(
+                'In %s, key "%s" was used more than once' % (kind_name, key)
+            )
 
     def _make_flag_with_value(self, key, value):
         """
@@ -298,7 +291,13 @@ class _FileDataSourceV2:
         :param value: flag value
         :return: flag dictionary
         """
-        return {'key': key, 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': [value]}
+        return {
+            "key": key,
+            "version": 1,
+            "on": True,
+            "fallthrough": {"variation": 0},
+            "variations": [value],
+        }
 
     def _start_auto_updater(self):
         """
@@ -311,12 +310,17 @@ class _FileDataSourceV2:
             try:
                 resolved_paths.append(os.path.realpath(path))
             except Exception:
-                log.warning('Cannot watch for changes to data file "%s" because it is an invalid path' % path)
+                log.warning(
+                    'Cannot watch for changes to data file "%s" because it is an invalid path'
+                    % path
+                )
 
         if have_watchdog and not self._force_polling:
             return _WatchdogAutoUpdaterV2(resolved_paths, self._on_file_change)
         else:
-            return _PollingAutoUpdaterV2(resolved_paths, self._on_file_change, self._poll_interval)
+            return _PollingAutoUpdaterV2(
+                resolved_paths, self._on_file_change, self._poll_interval
+            )
 
     def _on_file_change(self):
         """
@@ -340,20 +344,19 @@ class _FileDataSourceV2:
                             kind=DataSourceErrorKind.INVALID_DATA,
                             status_code=0,
                             time=current_time_millis(),
-                            message=result.error
-                        )
+                            message=result.error,
+                        ),
                     )
                     self._update_queue.put(error_update)
                 else:
                     # Queue a successful update
                     update = Update(
-                        state=DataSourceState.VALID,
-                        change_set=result.value
+                        state=DataSourceState.VALID, change_set=result.value
                     )
                     self._update_queue.put(update)
 
             except Exception as e:
-                log.error('Error processing file change: %s' % repr(e))
+                log.error("Error processing file change: %s" % repr(e))
                 traceback.print_exc()
                 error_update = Update(
                     state=DataSourceState.INTERRUPTED,
@@ -361,8 +364,8 @@ class _FileDataSourceV2:
                         kind=DataSourceErrorKind.UNKNOWN,
                         status_code=0,
                         time=current_time_millis(),
-                        message=f"Error processing file change: {str(e)}"
-                    )
+                        message=f"Error processing file change: {str(e)}",
+                    ),
                 )
                 self._update_queue.put(error_update)
 
@@ -400,7 +403,9 @@ class _PollingAutoUpdaterV2:
         self._paths = resolved_paths
         self._on_change = on_change_callback
         self._file_times = self._check_file_times()
-        self._timer = RepeatingTask("ldclient.datasource.filev2.poll", interval, interval, self._poll)
+        self._timer = RepeatingTask(
+            "ldclient.datasource.filev2.poll", interval, interval, self._poll
+        )
         self._timer.start()
 
     def stop(self):
@@ -410,7 +415,10 @@ class _PollingAutoUpdaterV2:
         new_times = self._check_file_times()
         changed = False
         for file_path, file_time in self._file_times.items():
-            if new_times.get(file_path) is not None and new_times.get(file_path) != file_time:
+            if (
+                new_times.get(file_path) is not None
+                and new_times.get(file_path) != file_time
+            ):
                 changed = True
                 break
         self._file_times = new_times
@@ -423,6 +431,8 @@ class _PollingAutoUpdaterV2:
             try:
                 ret[path] = os.path.getmtime(path)
             except Exception:
-                log.warning("Failed to get modification time for %s. Setting to None", path)
+                log.warning(
+                    "Failed to get modification time for %s. Setting to None", path
+                )
                 ret[path] = None
         return ret

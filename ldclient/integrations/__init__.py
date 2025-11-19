@@ -3,7 +3,7 @@ This submodule contains factory/configuration methods for integrating the SDK wi
 other than LaunchDarkly.
 """
 
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional
 
 from ldclient.config import Builder
 from ldclient.feature_store import CacheConfig

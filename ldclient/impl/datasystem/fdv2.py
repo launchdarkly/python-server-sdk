@@ -1,20 +1,16 @@
-import logging
 import time
-from queue import Empty, Queue
+from copy import copy
+from queue import Queue
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient.config import Builder, Config, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
-from ldclient.impl.datasourcev2.status import (
-    DataSourceStatusProviderImpl,
-    DataStoreStatusProviderImpl
-)
 from ldclient.impl.datasystem import (
     DataAvailability,
+    DataSystem,
     DiagnosticAccumulator,
-    DiagnosticSource,
-    Synchronizer
+    DiagnosticSource
 )
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.flag_tracker import FlagTrackerImpl
@@ -23,6 +19,7 @@ from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import _Fail, log
 from ldclient.interfaces import (
+    DataSourceErrorInfo,
     DataSourceState,
     DataSourceStatus,
     DataSourceStatusProvider,
@@ -31,9 +28,103 @@ from ldclient.interfaces import (
     DataStoreStatusProvider,
     FeatureStore,
     FlagTracker,
-    ReadOnlyStore
+    ReadOnlyStore,
+    Synchronizer
 )
 from ldclient.versioned_data_kind import VersionedDataKind
+
+
+class DataSourceStatusProviderImpl(DataSourceStatusProvider):
+    def __init__(self, listeners: Listeners):
+        self.__listeners = listeners
+        self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
+        self.__lock = ReadWriteLock()
+
+    @property
+    def status(self) -> DataSourceStatus:
+        self.__lock.rlock()
+        status = self.__status
+        self.__lock.runlock()
+
+        return status
+
+    def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
+        status_to_broadcast = None
+
+        try:
+            self.__lock.lock()
+            old_status = self.__status
+
+            if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
+                new_state = DataSourceState.INITIALIZING
+
+            if new_state == old_status.state and new_error is None:
+                return
+
+            new_since = self.__status.since if new_state == self.__status.state else time.time()
+            new_error = self.__status.error if new_error is None else new_error
+
+            self.__status = DataSourceStatus(new_state, new_since, new_error)
+
+            status_to_broadcast = self.__status
+        finally:
+            self.__lock.unlock()
+
+        if status_to_broadcast is not None:
+            self.__listeners.notify(status_to_broadcast)
+
+    def add_listener(self, listener: Callable[[DataSourceStatus], None]):
+        self.__listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[DataSourceStatus], None]):
+        self.__listeners.remove(listener)
+
+
+class DataStoreStatusProviderImpl(DataStoreStatusProvider):
+    def __init__(self, store: Optional[FeatureStore], listeners: Listeners):
+        self.__store = store
+        self.__listeners = listeners
+
+        self.__lock = ReadWriteLock()
+        self.__status = DataStoreStatus(True, False)
+
+    def update_status(self, status: DataStoreStatus):
+        """
+        update_status is called from the data store to push a status update.
+        """
+        self.__lock.lock()
+        modified = False
+
+        if self.__status != status:
+            self.__status = status
+            modified = True
+
+        self.__lock.unlock()
+
+        if modified:
+            self.__listeners.notify(status)
+
+    @property
+    def status(self) -> DataStoreStatus:
+        self.__lock.rlock()
+        status = copy(self.__status)
+        self.__lock.runlock()
+
+        return status
+
+    def is_monitoring_enabled(self) -> bool:
+        if self.__store is None:
+            return False
+        if hasattr(self.__store, "is_monitoring_enabled") is False:
+            return False
+
+        return self.__store.is_monitoring_enabled()  # type: ignore
+
+    def add_listener(self, listener: Callable[[DataStoreStatus], None]):
+        self.__listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[DataStoreStatus], None]):
+        self.__listeners.remove(listener)
 
 
 class FeatureStoreClientWrapper(FeatureStore):
@@ -151,7 +242,7 @@ class FeatureStoreClientWrapper(FeatureStore):
         return monitoring_enabled()
 
 
-class FDv2:
+class FDv2(DataSystem):
     """
     FDv2 is an implementation of the DataSystem interface that uses the Flag Delivery V2 protocol
     for obtaining and keeping data up-to-date. Additionally, it operates with an optional persistent
@@ -307,7 +398,6 @@ class FDv2:
                 log.info("Attempting to initialize via %s", initializer.name)
 
                 basis_result = initializer.fetch(self._store)
-                print("@@@@@@", "init", basis_result, "\n")
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
@@ -447,7 +537,6 @@ class FDv2:
         def reader(self: 'FDv2'):
             try:
                 for update in synchronizer.sync(self._store):
-                    print("@@@@@@", "update is at", update, "\n")
                     action_queue.put(update)
             finally:
                 action_queue.put("quit")

@@ -16,22 +16,25 @@ from ldclient.impl.datasourcev2.streaming import (
     SseClientBuilder,
     StreamingDataSource
 )
-from ldclient.impl.datasystem import SelectorStore
 from ldclient.impl.datasystem.protocolv2 import (
-    ChangeType,
     DeleteObject,
     Error,
     EventName,
     Goodbye,
+    PutObject
+)
+from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER
+from ldclient.interfaces import (
+    ChangeType,
+    DataSourceErrorKind,
+    DataSourceState,
     IntentCode,
     ObjectKind,
     Payload,
-    PutObject,
     Selector,
+    SelectorStore,
     ServerIntent
 )
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER
-from ldclient.interfaces import DataSourceErrorKind, DataSourceState
 from ldclient.testing.mock_components import MockSelectorStore
 
 

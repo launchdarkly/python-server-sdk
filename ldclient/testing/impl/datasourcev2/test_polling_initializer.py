@@ -9,8 +9,8 @@ from ldclient.impl.datasourcev2.polling import (
     Selector,
     polling_payload_to_changeset
 )
-from ldclient.impl.datasystem.protocolv2 import ChangeSetBuilder, IntentCode
 from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
+from ldclient.interfaces import ChangeSetBuilder, IntentCode
 from ldclient.testing.mock_components import MockSelectorStore
 
 
