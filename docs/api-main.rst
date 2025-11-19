@@ -20,6 +20,13 @@ ldclient.config module
     :members:
     :special-members: __init__
 
+ldclient.datasystem module
+--------------------------
+
+.. automodule:: ldclient.datasystem
+    :members:
+    :special-members: __init__
+
 ldclient.hook module
 --------------------------
 

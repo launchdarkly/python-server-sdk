@@ -595,4 +595,4 @@ class Config:
             log.warning("Missing or blank SDK key")
 
 
-__all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']
+__all__ = ['Config', 'BigSegmentsConfig', 'DataSystemConfig', 'HTTPConfig']
