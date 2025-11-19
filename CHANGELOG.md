@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.13.0](https://github.com/launchdarkly/python-server-sdk/compare/9.12.3...9.13.0) (2025-11-19)
+
+
+### Features
+
+* **experimental:** Release EAP support for FDv2 data system ([#376](https://github.com/launchdarkly/python-server-sdk/issues/376)) ([0e7c32b](https://github.com/launchdarkly/python-server-sdk/commit/0e7c32b4df12daef25e9b2e9b637225c3e74a2dd))
+
 ## [9.12.3](https://github.com/launchdarkly/python-server-sdk/compare/9.12.2...9.12.3) (2025-10-30)
 
 
