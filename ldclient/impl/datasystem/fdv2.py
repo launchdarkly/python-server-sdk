@@ -307,6 +307,7 @@ class FDv2:
                 log.info("Attempting to initialize via %s", initializer.name)
 
                 basis_result = initializer.fetch(self._store)
+                print("@@@@@@", "init", basis_result, "\n")
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
@@ -446,6 +447,7 @@ class FDv2:
         def reader(self: 'FDv2'):
             try:
                 for update in synchronizer.sync(self._store):
+                    print("@@@@@@", "update is at", update, "\n")
                     action_queue.put(update)
             finally:
                 action_queue.put("quit")

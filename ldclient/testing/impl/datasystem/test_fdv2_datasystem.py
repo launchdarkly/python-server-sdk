@@ -36,13 +36,14 @@ def test_two_phase_init():
         count += 1
         changes.append(flag_change)
 
-        if count == 2:
+        if count >= 2:
             changed.set()
 
     fdv2.flag_tracker.add_listener(listener)
 
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
+    changed.clear()
 
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
     assert changed.wait(1), "Flag change listener was not called in time"
