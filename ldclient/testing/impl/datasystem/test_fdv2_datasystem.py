@@ -21,7 +21,7 @@ def test_two_phase_init():
     # Set this to true, and then to false to ensure the version number exceeded
     # the initializer version number. Otherwise, they start as the same version
     # and the latest value is ignored.
-    td_initializer.update(td_initializer.flag("feature-flag").on(True))
+    td_synchronizer.update(td_initializer.flag("feature-flag").on(True))
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
     data_system_config = DataSystemConfig(
         initializers=[td_initializer.build_initializer],
