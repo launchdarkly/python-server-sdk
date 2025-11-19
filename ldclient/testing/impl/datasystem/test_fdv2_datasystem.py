@@ -6,10 +6,16 @@ from typing import List
 from mock import Mock
 
 from ldclient.config import Config, DataSystemConfig
-from ldclient.impl.datasystem import DataAvailability, Synchronizer
+from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.integrations.test_datav2 import TestDataV2
-from ldclient.interfaces import DataSourceState, DataSourceStatus, FlagChange
+from ldclient.interfaces import (
+    DataSourceState,
+    DataSourceStatus,
+    FlagChange,
+    Synchronizer,
+    Update
+)
 from ldclient.versioned_data_kind import FEATURES
 
 
@@ -52,7 +58,7 @@ def test_two_phase_init():
     assert set_on_ready.wait(1), "Data system did not become ready in time"
     assert initialized.wait(1), "Flag change listener was not called in time"
 
-    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
+    td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
     assert modified.wait(1), "Flag change listener was not called in time"
     assert len(changes) == 3
     assert changes[0].key == "feature-flag"
@@ -180,7 +186,6 @@ def test_fdv2_falls_back_to_fdv1_on_polling_error_with_header():
     mock_primary.stop = Mock()
 
     # Simulate a synchronizer that yields an OFF state with revert_to_fdv1=True
-    from ldclient.impl.datasystem import Update
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,
@@ -231,7 +236,6 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
 
-    from ldclient.impl.datasystem import Update
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.VALID,
@@ -290,7 +294,6 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
 
-    from ldclient.impl.datasystem import Update
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,
@@ -340,7 +343,6 @@ def test_fdv2_no_fallback_without_header():
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
 
-    from ldclient.impl.datasystem import Update
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.INTERRUPTED,
@@ -396,7 +398,6 @@ def test_fdv2_stays_on_fdv1_after_fallback():
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
 
-    from ldclient.impl.datasystem import Update
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,

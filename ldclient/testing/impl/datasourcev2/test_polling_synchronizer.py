@@ -4,21 +4,13 @@ from typing import Iterator, Optional
 import pytest
 from ld_eventsource.sse_client import Event
 
-from ldclient.impl.datasourcev2 import PollingResult
-from ldclient.impl.datasourcev2.polling import PollingDataSource
+from ldclient.impl.datasourcev2.polling import PollingDataSource, PollingResult
 from ldclient.impl.datasystem.protocolv2 import (
-    ChangeSetBuilder,
-    ChangeType,
     DeleteObject,
     Error,
     EventName,
     Goodbye,
-    IntentCode,
-    ObjectKind,
-    Payload,
-    PutObject,
-    Selector,
-    ServerIntent
+    PutObject
 )
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
@@ -27,7 +19,17 @@ from ldclient.impl.util import (
     _Fail,
     _Success
 )
-from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.interfaces import (
+    ChangeSetBuilder,
+    ChangeType,
+    DataSourceErrorKind,
+    DataSourceState,
+    IntentCode,
+    ObjectKind,
+    Payload,
+    Selector,
+    ServerIntent
+)
 from ldclient.testing.mock_components import MockSelectorStore
 
 

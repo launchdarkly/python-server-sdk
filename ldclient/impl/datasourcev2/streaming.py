@@ -18,23 +18,13 @@ from ld_eventsource.config import (
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
-from ldclient.impl.datasystem import (
-    DiagnosticAccumulator,
-    DiagnosticSource,
-    SelectorStore,
-    Synchronizer,
-    Update
-)
+from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
 from ldclient.impl.datasystem.protocolv2 import (
-    ChangeSetBuilder,
     DeleteObject,
     Error,
     EventName,
     Goodbye,
-    IntentCode,
-    PutObject,
-    Selector,
-    ServerIntent
+    PutObject
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.util import (
@@ -45,9 +35,16 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState
+    DataSourceState,
+    IntentCode,
+    Selector,
+    SelectorStore,
+    ServerIntent,
+    Synchronizer,
+    Update
 )
 
 # allows for up to 5 minutes to elapse without any data sent across the stream.

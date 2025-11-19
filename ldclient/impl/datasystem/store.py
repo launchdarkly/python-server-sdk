@@ -10,24 +10,22 @@ import threading
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from ldclient.impl.datasystem.protocolv2 import (
-    Change,
-    ChangeSet,
-    ChangeType,
-    IntentCode,
-    ObjectKind,
-    Selector
-)
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.entity import ModelEntity
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 from ldclient.interfaces import (
+    Change,
+    ChangeSet,
+    ChangeType,
     DataStoreStatusProvider,
     FeatureStore,
     FlagChange,
-    ReadOnlyStore
+    IntentCode,
+    ObjectKind,
+    ReadOnlyStore,
+    Selector
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 

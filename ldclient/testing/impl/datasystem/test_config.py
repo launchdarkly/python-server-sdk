@@ -5,7 +5,7 @@ import pytest
 
 from ldclient.config import Config as LDConfig
 from ldclient.config import DataSystemConfig
-from ldclient.impl.datasystem.config import (
+from ldclient.datasystem import (
     ConfigBuilder,
     custom,
     default,

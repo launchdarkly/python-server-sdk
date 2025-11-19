@@ -10,7 +10,6 @@ from typing import Callable, List, Optional, Set, TypeVar
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
-from ldclient.impl.datasystem import Initializer, Synchronizer
 from ldclient.impl.util import (
     log,
     validate_application_info,
@@ -22,6 +21,8 @@ from ldclient.interfaces import (
     DataStoreMode,
     EventProcessor,
     FeatureStore,
+    Initializer,
+    Synchronizer,
     UpdateProcessor
 )
 from ldclient.plugin import Plugin

@@ -15,19 +15,10 @@ import urllib3
 
 from ldclient.config import Config
 from ldclient.impl.datasource.feature_requester import LATEST_ALL_URI
-from ldclient.impl.datasystem import BasisResult, SelectorStore, Update
 from ldclient.impl.datasystem.protocolv2 import (
-    Basis,
-    ChangeSet,
-    ChangeSetBuilder,
     DeleteObject,
     EventName,
-    IntentCode,
-    ObjectKind,
-    Payload,
-    PutObject,
-    Selector,
-    ServerIntent
+    PutObject
 )
 from ldclient.impl.http import _http_factory
 from ldclient.impl.repeating_task import RepeatingTask
@@ -44,11 +35,22 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    Basis,
+    BasisResult,
+    ChangeSet,
+    ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState
+    DataSourceState,
+    Initializer,
+    IntentCode,
+    ObjectKind,
+    Selector,
+    SelectorStore,
+    ServerIntent,
+    Synchronizer,
+    Update
 )
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 POLLING_ENDPOINT = "/sdk/poll"
 
@@ -78,7 +80,7 @@ class Requester(Protocol):  # pylint: disable=too-few-public-methods
 CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
 
 
-class PollingDataSource:
+class PollingDataSource(Initializer, Synchronizer):
     """
     PollingDataSource is a data source that can retrieve information from
     LaunchDarkly either as an Initializer or as a Synchronizer.
@@ -235,7 +237,7 @@ class PollingDataSource:
 
 
 # pylint: disable=too-few-public-methods
-class Urllib3PollingRequester:
+class Urllib3PollingRequester(Requester):
     """
     Urllib3PollingRequester is a Requester that uses urllib3 to make HTTP
     requests.
@@ -401,7 +403,7 @@ class PollingDataSourceBuilder:
 
 
 # pylint: disable=too-few-public-methods
-class Urllib3FDv1PollingRequester:
+class Urllib3FDv1PollingRequester(Requester):
     """
     Urllib3PollingRequesterFDv1 is a Requester that uses urllib3 to make HTTP
     requests.

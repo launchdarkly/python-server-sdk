@@ -5,8 +5,8 @@ from ldclient.impl.datasourcev2.polling import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )
-from ldclient.impl.datasystem.protocolv2 import ChangeType, ObjectKind
 from ldclient.impl.util import _Fail, _Success
+from ldclient.interfaces import ChangeType, ObjectKind
 
 
 def test_payload_is_missing_events_key():
