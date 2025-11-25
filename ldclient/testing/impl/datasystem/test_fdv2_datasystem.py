@@ -437,11 +437,10 @@ def test_fdv2_stays_on_fdv1_after_fallback():
     assert flag is not None
 
 
-def test_fdv2_with_file_to_polling_initializers():
+def test_fdv2_initializer_should_run_until_success():
     """
-    Test that FDv2 can be initialized with a file data source and a polling data source.
-    In this case the results from the file data source should be overwritten by the
-    results from the polling datasource.
+    Test that FDv2 initializers will run in order until a successful run. Then
+    the datasystem is expected to transition to run synchronizers.
     """
     initial_flag_data = '''
 {
@@ -475,27 +474,29 @@ def test_fdv2_with_file_to_polling_initializers():
         )
 
         set_on_ready = Event()
+        synchronizer_ran = Event()
         fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
         count = 0
 
         def listener(_: FlagChange):
             nonlocal count
             count += 1
+            if count == 3:
+                synchronizer_ran.set()
 
         fdv2.flag_tracker.add_listener(listener)
 
         fdv2.start(set_on_ready)
         assert set_on_ready.wait(1), "Data system did not become ready in time"
-        assert count == 2, "Invalid initializer process"
-        fdv2.stop()
+        assert synchronizer_ran.wait(1), "Data system did not transition to synchronizer"
     finally:
         os.remove(path)
 
 
-def test_fdv2_with_polling_to_file_initializers():
+def test_fdv2_should_finish_initialization_on_first_successful_initializer():
     """
-    Test that when FDv2 is initialized with a polling datasource and a file datasource
-    then only the polling processor needs to run.
+    Test that when a FDv2 initializer returns a basis and selector that the rest
+    of the intializers will be skipped and the client starts synchronizing phase.
     """
     initial_flag_data = '''
 {
@@ -525,7 +526,7 @@ def test_fdv2_with_polling_to_file_initializers():
 
         data_system_config = DataSystemConfig(
             initializers=[td_initializer.build_initializer, file_ds_builder([path])],
-            primary_synchronizer=td_synchronizer.build_synchronizer,
+            primary_synchronizer=None,
         )
 
         set_on_ready = Event()
