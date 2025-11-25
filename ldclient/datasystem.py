@@ -16,6 +16,9 @@ from ldclient.impl.datasourcev2.streaming import (
     StreamingDataSource,
     StreamingDataSourceBuilder
 )
+from ldclient.impl.integrations.files.file_data_sourcev2 import (
+    _FileDataSourceV2
+)
 from ldclient.interfaces import (
     DataStoreMode,
     FeatureStore,
@@ -124,6 +127,12 @@ def streaming_ds_builder() -> Builder[StreamingDataSource]:
 
     return builder
 
+
+def file_ds_builder(paths: List[str]) -> Builder[Initializer]:
+    def builder(_: LDConfig) -> Initializer:
+        return _FileDataSourceV2(paths)
+
+    return builder
 
 def default() -> ConfigBuilder:
     """
