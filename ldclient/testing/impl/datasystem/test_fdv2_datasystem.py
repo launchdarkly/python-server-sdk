@@ -1,11 +1,14 @@
 # pylint: disable=missing-docstring
 
+import os
+import tempfile
 from threading import Event
 from typing import List
 
 from mock import Mock
 
 from ldclient.config import Config, DataSystemConfig
+from ldclient.datasystem import file_ds_builder
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.integrations.test_datav2 import TestDataV2
@@ -432,3 +435,112 @@ def test_fdv2_stays_on_fdv1_after_fallback():
     store = fdv2.store
     flag = store.get(FEATURES, "fdv1-flag", lambda x: x)
     assert flag is not None
+
+
+def test_fdv2_with_file_to_polling_initializers():
+    """
+    Test that FDv2 can be initialized with a file data source and a polling data source.
+    In this case the results from the file data source should be overwritten by the
+    results from the polling datasource.
+    """
+    initial_flag_data = '''
+{
+  "flags": {
+    "feature-flag": {
+      "key": "feature-flag",
+      "version": 0,
+      "on": false,
+      "fallthrough": {
+        "variation": 0
+      },
+      "variations": ["off", "on"]
+    }
+  }
+}
+'''
+    f, path = tempfile.mkstemp(suffix='.json')
+    try:
+        os.write(f, initial_flag_data.encode("utf-8"))
+        os.close(f)
+
+        td_initializer = TestDataV2.data_source()
+        td_initializer.update(td_initializer.flag("feature-flag").on(True))
+
+        # We actually do not care what this synchronizer does.
+        td_synchronizer = TestDataV2.data_source()
+
+        data_system_config = DataSystemConfig(
+            initializers=[file_ds_builder([path]), td_initializer.build_initializer],
+            primary_synchronizer=td_synchronizer.build_synchronizer,
+        )
+
+        set_on_ready = Event()
+        fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+        count = 0
+
+        def listener(_: FlagChange):
+            nonlocal count
+            count += 1
+
+        fdv2.flag_tracker.add_listener(listener)
+
+        fdv2.start(set_on_ready)
+        assert set_on_ready.wait(1), "Data system did not become ready in time"
+        assert count == 2, "Invalid initializer process"
+        fdv2.stop()
+    finally:
+        os.remove(path)
+
+
+def test_fdv2_with_polling_to_file_initializers():
+    """
+    Test that when FDv2 is initialized with a polling datasource and a file datasource
+    then only the polling processor needs to run.
+    """
+    initial_flag_data = '''
+{
+  "flags": {
+    "feature-flag": {
+      "key": "feature-flag",
+      "version": 0,
+      "on": false,
+      "fallthrough": {
+        "variation": 0
+      },
+      "variations": ["off", "on"]
+    }
+  }
+}
+'''
+    f, path = tempfile.mkstemp(suffix='.json')
+    try:
+        os.write(f, initial_flag_data.encode("utf-8"))
+        os.close(f)
+
+        td_initializer = TestDataV2.data_source()
+        td_initializer.update(td_initializer.flag("feature-flag").on(True))
+
+        # We actually do not care what this synchronizer does.
+        td_synchronizer = TestDataV2.data_source()
+
+        data_system_config = DataSystemConfig(
+            initializers=[td_initializer.build_initializer, file_ds_builder([path])],
+            primary_synchronizer=td_synchronizer.build_synchronizer,
+        )
+
+        set_on_ready = Event()
+        fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+        count = 0
+
+        def listener(_: FlagChange):
+            nonlocal count
+            count += 1
+
+        fdv2.flag_tracker.add_listener(listener)
+
+        fdv2.start(set_on_ready)
+        assert set_on_ready.wait(1), "Data system did not become ready in time"
+        assert count == 1, "Invalid initializer process"
+        fdv2.stop()
+    finally:
+        os.remove(path)

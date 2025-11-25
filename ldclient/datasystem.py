@@ -134,6 +134,7 @@ def file_ds_builder(paths: List[str]) -> Builder[Initializer]:
 
     return builder
 
+
 def default() -> ConfigBuilder:
     """
     Default is LaunchDarkly's recommended flag data acquisition strategy.
