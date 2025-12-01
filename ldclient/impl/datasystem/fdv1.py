@@ -22,8 +22,6 @@ from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
 from ldclient.interfaces import (
-    DataSourceState,
-    DataSourceStatus,
     DataSourceStatusProvider,
     DataStoreStatusProvider,
     FeatureStore,
@@ -83,20 +81,6 @@ class FDv1(DataSystem):
 
         # Diagnostic accumulator provided by client for streaming metrics
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
-
-        # Track current data availability
-        self._data_availability: DataAvailability = (
-            DataAvailability.CACHED
-            if getattr(self._store_wrapper, "initialized", False)
-            else DataAvailability.DEFAULTS
-        )
-
-        # React to data source status updates to adjust availability
-        def _on_status_change(status: DataSourceStatus):
-            if status.state == DataSourceState.VALID:
-                self._data_availability = DataAvailability.REFRESHED
-
-        self._data_source_status_provider_impl.add_listener(_on_status_change)
 
     def start(self, set_on_ready: Event):
         """
