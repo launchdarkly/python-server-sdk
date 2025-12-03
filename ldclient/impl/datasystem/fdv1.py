@@ -60,10 +60,6 @@ class FDv1(DataSystem):
         # Set up data source plumbing
         self._data_source_listeners = Listeners()
         self._flag_change_listeners = Listeners()
-        self._flag_tracker_impl = FlagTrackerImpl(
-            self._flag_change_listeners,
-            lambda key, context: None,  # Replaced by client to use its evaluation method
-        )
         self._data_source_update_sink = DataSourceUpdateSinkImpl(
             self._store_wrapper,
             self._data_source_listeners,
@@ -102,14 +98,6 @@ class FDv1(DataSystem):
     def store(self) -> ReadOnlyStore:
         return self._store_wrapper
 
-    def set_flag_value_eval_fn(self, eval_fn):
-        """
-        Injects the flag value evaluation function used by the flag tracker to
-        compute FlagValueChange events. The function signature should be
-        (key: str, context: Context) -> Any.
-        """
-        self._flag_tracker_impl = FlagTrackerImpl(self._flag_change_listeners, eval_fn)
-
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
@@ -126,8 +114,8 @@ class FDv1(DataSystem):
         return self._data_store_status_provider_impl
 
     @property
-    def flag_tracker(self) -> FlagTracker:
-        return self._flag_tracker_impl
+    def flag_change_listeners(self) -> Listeners:
+        return self._flag_change_listeners
 
     @property
     def data_availability(self) -> DataAvailability:

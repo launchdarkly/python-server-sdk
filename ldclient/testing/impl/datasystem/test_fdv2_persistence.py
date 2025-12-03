@@ -239,7 +239,7 @@ def test_persistent_store_delta_updates_read_write():
         ):  # First change is from initial sync, second is our update
             flag_changed.set()
 
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -293,7 +293,7 @@ def test_persistent_store_delta_updates_read_only():
         ):  # First change is from initial sync, second is our update
             flag_changed.set()
 
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -341,7 +341,7 @@ def test_persistent_store_with_initializer_and_synchronizer():
         if flag_change.key == "sync-flag":
             sync_flag_arrived.set()
 
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -571,7 +571,7 @@ def test_persistent_store_outage_recovery_flushes_on_recovery():
     persistent_store.reset_operation_tracking()
 
     event = Event()
-    fdv2.flag_tracker.add_listener(lambda _flag_change: event.set())
+    fdv2.flag_change_listeners.add(lambda _flag_change: event.set())
     # Simulate a new flag being added while store is "offline"
     # (In reality, the store is still online, but we're testing the recovery mechanism)
     td_synchronizer.update(td_synchronizer.flag("new-flag").on(False))

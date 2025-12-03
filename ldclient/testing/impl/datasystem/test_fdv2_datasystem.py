@@ -55,7 +55,7 @@ def test_two_phase_init():
         if count == 3:
             modified.set()
 
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
 
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -86,7 +86,7 @@ def test_can_stop_fdv2():
         changes.append(flag_change)
         changed.set()
 
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
 
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -140,7 +140,7 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
 
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
 
@@ -215,7 +215,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_error_with_header():
 
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -269,7 +269,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
 
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -324,7 +324,7 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
 
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
-    fdv2.flag_tracker.add_listener(listener)
+    fdv2.flag_change_listeners.add(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -484,7 +484,7 @@ def test_fdv2_initializer_should_run_until_success():
             if count == 3:
                 synchronizer_ran.set()
 
-        fdv2.flag_tracker.add_listener(listener)
+        fdv2.flag_change_listeners.add(listener)
 
         fdv2.start(set_on_ready)
         assert set_on_ready.wait(1), "Data system did not become ready in time"
@@ -537,7 +537,7 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
             nonlocal count
             count += 1
 
-        fdv2.flag_tracker.add_listener(listener)
+        fdv2.flag_change_listeners.add(listener)
 
         fdv2.start(set_on_ready)
         assert set_on_ready.wait(1), "Data system did not become ready in time"

@@ -8,6 +8,7 @@ from enum import Enum
 from threading import Event
 from typing import Protocol, runtime_checkable
 
+from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
     DataSourceStatusProvider,
     DataStoreStatusProvider,
@@ -111,13 +112,9 @@ class DataSystem(Protocol):
 
     @property
     @abstractmethod
-    def flag_tracker(self) -> FlagTracker:
+    def flag_change_listeners(self) -> Listeners:
         """
-        Returns an interface for tracking changes in feature flag configurations.
-
-        The :class:`ldclient.interfaces.FlagTracker` contains methods for
-        requesting notifications about feature flag changes using an event
-        listener model.
+        Returns the collection of listeners for flag change events.
         """
         raise NotImplementedError
 

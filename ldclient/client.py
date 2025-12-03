@@ -263,8 +263,8 @@ class LDClient:
         else:
             self._data_system = FDv2(self._config, datasystem_config)
 
-        # Provide flag evaluation function for value-change tracking
-        self._data_system.set_flag_value_eval_fn(  # type: ignore
+        self.__flag_tracker = FlagTrackerImpl(
+            self._data_system.flag_change_listeners,
             lambda key, context: self.variation(key, context, None)
         )
         # Expose providers and store from data system
@@ -272,7 +272,6 @@ class LDClient:
         self.__data_source_status_provider = (
             self._data_system.data_source_status_provider
         )
-        self.__flag_tracker = self._data_system.flag_tracker
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
