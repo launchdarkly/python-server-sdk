@@ -267,7 +267,6 @@ class FDv2(DataSystem):
         self._primary_synchronizer_builder: Optional[Builder[Synchronizer]] = data_system_config.primary_synchronizer
         self._secondary_synchronizer_builder = data_system_config.secondary_synchronizer
         self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
-        self._disabled = self._config.offline
 
         # Diagnostic accumulator provided by client for streaming metrics
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
@@ -319,7 +318,7 @@ class FDv2(DataSystem):
 
         :param set_on_ready: Event to set when the system is ready or has failed
         """
-        if self._disabled:
+        if self._config.offline:
             log.warning("Data system is disabled, SDK will return application-defined default values")
             set_on_ready.set()
             return
@@ -688,7 +687,7 @@ class FDv2(DataSystem):
         if self._store.selector().is_defined():
             return DataAvailability.REFRESHED
 
-        if not self._configured_with_data_sources or self._store.is_initialized():
+        if self._store.is_initialized():
             return DataAvailability.CACHED
 
         return DataAvailability.DEFAULTS
@@ -696,7 +695,13 @@ class FDv2(DataSystem):
     @property
     def target_availability(self) -> DataAvailability:
         """Get the target data availability level based on configuration."""
+        if self._config.offline:
+            return DataAvailability.DEFAULTS
+
         if self._configured_with_data_sources:
             return DataAvailability.REFRESHED
+
+        if self._data_system_config.data_store is None:
+            return DataAvailability.DEFAULTS
 
         return DataAvailability.CACHED

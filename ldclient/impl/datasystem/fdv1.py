@@ -134,6 +134,11 @@ class FDv1(DataSystem):
         if self._config.offline:
             return DataAvailability.DEFAULTS
 
+        if self._config.use_ldd:
+            return DataAvailability.CACHED \
+                if self._store_wrapper.initialized \
+                else DataAvailability.DEFAULTS
+
         if self._update_processor is not None and self._update_processor.initialized():
             return DataAvailability.REFRESHED
 
@@ -146,7 +151,9 @@ class FDv1(DataSystem):
     def target_availability(self) -> DataAvailability:
         if self._config.offline:
             return DataAvailability.DEFAULTS
-        # In LDD mode or normal connected modes, the ideal is to be refreshed
+        if self._config.use_ldd:
+            return DataAvailability.CACHED
+
         return DataAvailability.REFRESHED
 
     def _make_update_processor(self, config: Config, store: FeatureStore, ready: Event):
