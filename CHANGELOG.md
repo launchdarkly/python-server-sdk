@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.14.0](https://github.com/launchdarkly/python-server-sdk/compare/9.13.1...9.14.0) (2025-12-04)
+
+
+### Features
+
+* adding data system option to create file datasource intializer ([e5b121f](https://github.com/launchdarkly/python-server-sdk/commit/e5b121f92a09fcaf717f88b426348798961ab62e))
+* adding file data source as an intializer ([#381](https://github.com/launchdarkly/python-server-sdk/issues/381)) ([3700d1d](https://github.com/launchdarkly/python-server-sdk/commit/3700d1ddd9ef6c7a505ec24783c71753cea89abb))
+
+
+### Bug Fixes
+
+* Add warning if relying on Redis `max_connections` parameter ([#387](https://github.com/launchdarkly/python-server-sdk/issues/387)) ([e6395fa](https://github.com/launchdarkly/python-server-sdk/commit/e6395fa5316bef1c0d2829b4cc4b655fece8b8ea)), closes [#386](https://github.com/launchdarkly/python-server-sdk/issues/386)
+* modified initializer behavior to spec ([064f65c](https://github.com/launchdarkly/python-server-sdk/commit/064f65c76135c385a6fdcb0209caa0e7a8cf872c))
+
 ## [9.13.1](https://github.com/launchdarkly/python-server-sdk/compare/9.13.0...9.13.1) (2025-11-19)
 
 
