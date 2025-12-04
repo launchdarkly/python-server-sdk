@@ -6,6 +6,7 @@ other than LaunchDarkly.
 from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from ldclient import log
 from ldclient.config import Builder, Config
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
@@ -168,11 +169,20 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
+        :param max_connections: (deprecated and unused) This parameter is not used. To configure
+          the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """
+
+        if max_connections != Redis.DEFAULT_MAX_CONNECTIONS:
+            log.warning(
+                "The max_connections parameter is not used and will be removed in a future version. "
+                "Please set max_connections in redis_opts instead, e.g., redis_opts={'max_connections': %d}",
+                max_connections
+            )
 
         core = _RedisFeatureStoreCore(url, prefix, redis_opts)
         wrapper = CachingStoreWrapper(core, caching)
@@ -200,9 +210,18 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
+        :param max_connections: (deprecated and unused) This parameter is not used. To configure
+          the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """
+
+        if max_connections != Redis.DEFAULT_MAX_CONNECTIONS:
+            log.warning(
+                "The max_connections parameter is not used and will be removed in a future version. "
+                "Please set max_connections in redis_opts instead, e.g., redis_opts={'max_connections': %d}",
+                max_connections
+            )
 
         return _RedisBigSegmentStore(url, prefix, redis_opts)
 
