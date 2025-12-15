@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.14.1](https://github.com/launchdarkly/python-server-sdk/compare/9.14.0...9.14.1) (2025-12-15)
+
+
+### Bug Fixes
+
+* Remove all synchronizers in daemon mode ([#388](https://github.com/launchdarkly/python-server-sdk/issues/388)) ([441a5ec](https://github.com/launchdarkly/python-server-sdk/commit/441a5ecb3d3f1428801c44b875b32ef396df2fa3))
+
 ## [9.14.0](https://github.com/launchdarkly/python-server-sdk/compare/9.13.1...9.14.0) (2025-12-04)
 
 
