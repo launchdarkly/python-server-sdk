@@ -212,7 +212,7 @@ def daemon(store: FeatureStore) -> ConfigBuilder:
     that is populated by Relay Proxy or other SDKs. The SDK will not connect
     to LaunchDarkly. In this mode, the SDK never writes to the data store.
     """
-    return default().data_store(store, DataStoreMode.READ_ONLY)
+    return custom().data_store(store, DataStoreMode.READ_ONLY)
 
 
 def persistent_store(store: FeatureStore) -> ConfigBuilder:
