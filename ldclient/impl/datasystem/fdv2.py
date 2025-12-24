@@ -170,38 +170,39 @@ class FeatureStoreClientWrapper(FeatureStore):
             raise
 
     def __update_availability(self, available: bool):
-        try:
-            self.__lock.lock()
-            if available == self.__last_available:
-                return
-            self.__last_available = available
-        finally:
+        state_changed = False
+        poller_to_stop = None
+        task_to_start = None
+
+        self.__lock.lock()
+        if available == self.__last_available:
             self.__lock.unlock()
+            return
+
+        state_changed = True
+        self.__last_available = available
+
+        if available:
+            poller_to_stop = self.__poller
+            self.__poller = None
+        elif self.__poller is None:
+            task_to_start = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+            self.__poller = task_to_start
+        self.__lock.unlock()
 
         if available:
             log.warning("Persistent store is available again")
+        else:
+            log.warning("Detected persistent store unavailability; updates will be cached until it recovers")
 
         status = DataStoreStatus(available, True)
         self.__store_update_sink.update_status(status)
 
-        if available:
-            try:
-                self.__lock.lock()
-                if self.__poller is not None:
-                    self.__poller.stop()
-                    self.__poller = None
-            finally:
-                self.__lock.unlock()
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
 
-            return
-
-        log.warning("Detected persistent store unavailability; updates will be cached until it recovers")
-        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
-
-        self.__lock.lock()
-        self.__poller = task
-        self.__poller.start()
-        self.__lock.unlock()
+        if task_to_start is not None:
+            task_to_start.start()
 
     def __check_availability(self):
         try:
@@ -487,7 +488,7 @@ class FDv2(DataSystem):
 
                         log.info("Recovery condition met, returning to primary synchronizer")
                     except Exception as e:
-                        log.error("Failed to build primary synchronizer: %s", e)
+                        log.error("Failed to build synchronizer: %s", e)
                         break
 
             except Exception as e:
