@@ -56,10 +56,19 @@ jobs:
       - name: start contract test service
         run: make start-contract-test-service-bg
 
-      - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+      - name: Run contract tests v2
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
+          stop_service: 'false'
+
+      - name: Run contract tests v3
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9000
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v3.0.0-alpha.1
 
   windows:
     runs-on: windows-latest
