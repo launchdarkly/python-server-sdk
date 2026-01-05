@@ -175,20 +175,21 @@ class FeatureStoreClientWrapper(FeatureStore):
         task_to_start = None
 
         self.__lock.lock()
-        if available == self.__last_available:
+        try:
+            if available == self.__last_available:
+                return
+
+            state_changed = True
+            self.__last_available = available
+
+            if available:
+                poller_to_stop = self.__poller
+                self.__poller = None
+            elif self.__poller is None:
+                task_to_start = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+                self.__poller = task_to_start
+        finally:
             self.__lock.unlock()
-            return
-
-        state_changed = True
-        self.__last_available = available
-
-        if available:
-            poller_to_stop = self.__poller
-            self.__poller = None
-        elif self.__poller is None:
-            task_to_start = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
-            self.__poller = task_to_start
-        self.__lock.unlock()
 
         if available:
             log.warning("Persistent store is available again")
