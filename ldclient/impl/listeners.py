@@ -1,6 +1,6 @@
-from threading import RLock
 from typing import Any, Callable
 
+from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import log
 
 
@@ -12,25 +12,25 @@ class Listeners:
 
     def __init__(self):
         self.__listeners = []
-        self.__lock = RLock()
+        self.__lock = ReadWriteLock()
 
     def has_listeners(self) -> bool:
-        with self.__lock:
+        with self.__lock.read():
             return len(self.__listeners) > 0
 
     def add(self, listener: Callable):
-        with self.__lock:
+        with self.__lock.write():
             self.__listeners.append(listener)
 
     def remove(self, listener: Callable):
-        with self.__lock:
+        with self.__lock.write():
             try:
                 self.__listeners.remove(listener)
             except ValueError:
                 pass  # removing a listener that wasn't in the list is a no-op
 
     def notify(self, value: Any):
-        with self.__lock:
+        with self.__lock.read():
             listeners_copy = self.__listeners.copy()
         for listener in listeners_copy:
             try:

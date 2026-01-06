@@ -617,14 +617,11 @@ class TestDataV2:
         :param str key: the flag key
         :return: the flag configuration builder object
         """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
 
             return FlagBuilderV2(key).boolean_flag()
-        finally:
-            self._lock.runlock()
 
     def update(self, flag_builder: FlagBuilderV2) -> TestDataV2:
         """
@@ -643,9 +640,7 @@ class TestDataV2:
         :return: self (the TestDataV2 object)
         """
         instances_copy = []
-        try:
-            self._lock.lock()
-
+        with self._lock.write():
             old_version = 0
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
@@ -659,8 +654,6 @@ class TestDataV2:
 
             # Create a copy of instances while holding the lock to avoid race conditions
             instances_copy = list(self._instances)
-        finally:
-            self._lock.unlock()
 
         for instance in instances_copy:
             instance.upsert_flag(new_flag)
@@ -668,35 +661,23 @@ class TestDataV2:
         return self
 
     def _make_init_data(self) -> Dict[str, Any]:
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             return copy.copy(self._current_flags)
-        finally:
-            self._lock.runlock()
 
     def _get_version(self) -> int:
-        try:
-            self._lock.lock()
+        with self._lock.write():
             version = self._version
             self._version += 1
             return version
-        finally:
-            self._lock.unlock()
 
     def _closed_instance(self, instance):
-        try:
-            self._lock.lock()
+        with self._lock.write():
             if instance in self._instances:
                 self._instances.remove(instance)
-        finally:
-            self._lock.unlock()
 
     def _add_instance(self, instance):
-        try:
-            self._lock.lock()
+        with self._lock.write():
             self._instances.append(instance)
-        finally:
-            self._lock.unlock()
 
     def build_initializer(self, _: Config) -> _TestDataSourceV2:
         """

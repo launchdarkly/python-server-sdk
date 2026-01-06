@@ -22,9 +22,8 @@ class FlagValueChangeListener:
 
         new_value = self.__eval_fn(self.__key, self.__context)
 
-        self.__lock.lock()
-        old_value, self.__value = self.__value, new_value
-        self.__lock.unlock()
+        with self.__lock.write():
+            old_value, self.__value = self.__value, new_value
 
         if new_value == old_value:
             return
