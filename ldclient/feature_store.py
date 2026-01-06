@@ -77,7 +77,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
 
     def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         """ """
-        with self._lock.read_lock():
+        with self._lock.read():
             itemsOfKind = self._items[kind]
             item = itemsOfKind.get(key)
             if item is None:
@@ -90,7 +90,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
 
     def all(self, kind, callback):
         """ """
-        with self._lock.read_lock():
+        with self._lock.read():
             itemsOfKind = self._items[kind]
             return callback(dict((k, i) for k, i in itemsOfKind.items() if ('deleted' not in i) or not i['deleted']))
 
@@ -102,7 +102,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             for key, item in items.items():
                 items_decoded[key] = kind.decode(item)
             all_decoded[kind] = items_decoded
-        with self._lock.write_lock():
+        with self._lock.write():
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
@@ -112,7 +112,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     # noinspection PyShadowingNames
     def delete(self, kind, key: str, version: int):
         """ """
-        with self._lock.write_lock():
+        with self._lock.write():
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < version:
@@ -123,7 +123,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
         """ """
         decoded_item = kind.decode(item)
         key = item['key']
-        with self._lock.write_lock():
+        with self._lock.write():
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < item['version']:
@@ -133,7 +133,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     @property
     def initialized(self) -> bool:
         """ """
-        with self._lock.read_lock():
+        with self._lock.read():
             return self._initialized
 
     def describe_configuration(self, config):

@@ -57,7 +57,7 @@ class TestData:
 
     def __call__(self, config, store, ready):
         data_source = _TestDataSource(store, self, ready)
-        with self._lock.write_lock():
+        with self._lock.write():
             self._instances.append(data_source)
 
         return data_source
@@ -86,7 +86,7 @@ class TestData:
         :param str key: the flag key
         :return: the flag configuration builder object
         """
-        with self._lock.read_lock():
+        with self._lock.read():
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
             else:
@@ -107,7 +107,7 @@ class TestData:
         :param flag_builder: a flag configuration builder
         :return: self (the TestData object)
         """
-        with self._lock.write_lock():
+        with self._lock.write():
             old_version = 0
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
@@ -128,7 +128,7 @@ class TestData:
         return {FEATURES: copy.copy(self._current_flags)}
 
     def _closed_instance(self, instance):
-        with self._lock.write_lock():
+        with self._lock.write():
             self._instances.remove(instance)
 
 

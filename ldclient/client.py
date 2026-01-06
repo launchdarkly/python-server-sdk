@@ -111,7 +111,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
             raise
 
     def __update_availability(self, available: bool):
-        with self.__lock.write_lock():
+        with self.__lock.write():
             if available == self.__last_available:
                 return
             self.__last_available = available
@@ -124,7 +124,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__store_update_sink.update_status(status)
 
         if available:
-            with self.__lock.write_lock():
+            with self.__lock.write():
                 if self.__poller is not None:
                     self.__poller.stop()
                     self.__poller = None
@@ -134,7 +134,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
         log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
         task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
-        with self.__lock.write_lock():
+        with self.__lock.write():
             self.__poller = task
             self.__poller.start()
 
@@ -710,7 +710,7 @@ class LDClient:
         if not isinstance(hook, Hook):
             return
 
-        with self.__hooks_lock.write_lock():
+        with self.__hooks_lock.write():
             self.__hooks.append(hook)
 
     def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], _EvaluationWithHookResult]) -> _EvaluationWithHookResult:
@@ -725,7 +725,7 @@ class LDClient:
         # :return:
         """
         hooks = []  # type: List[Hook]
-        with self.__hooks_lock.read_lock():
+        with self.__hooks_lock.read():
             if len(self.__hooks) == 0:
                 return block()
 

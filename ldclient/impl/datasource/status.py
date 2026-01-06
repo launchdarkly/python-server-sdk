@@ -29,7 +29,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
 
     @property
     def status(self) -> DataSourceStatus:
-        with self.__lock.read_lock():
+        with self.__lock.read():
             return self.__status
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
@@ -67,7 +67,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
         status_to_broadcast = None
 
-        with self.__lock.write_lock():
+        with self.__lock.write():
             old_status = self.__status
 
             if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:

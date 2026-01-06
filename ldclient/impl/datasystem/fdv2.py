@@ -42,13 +42,13 @@ class DataSourceStatusProviderImpl(DataSourceStatusProvider):
 
     @property
     def status(self) -> DataSourceStatus:
-        with self.__lock.read_lock():
+        with self.__lock.read():
             return self.__status
 
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
         status_to_broadcast = None
 
-        with self.__lock.write_lock():
+        with self.__lock.write():
             old_status = self.__status
 
             if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
@@ -88,7 +88,7 @@ class DataStoreStatusProviderImpl(DataStoreStatusProvider):
         """
         modified = False
 
-        with self.__lock.write_lock():
+        with self.__lock.write():
             if self.__status != status:
                 self.__status = status
                 modified = True
@@ -98,7 +98,7 @@ class DataStoreStatusProviderImpl(DataStoreStatusProvider):
 
     @property
     def status(self) -> DataStoreStatus:
-        with self.__lock.read_lock():
+        with self.__lock.read():
             return copy(self.__status)
 
     def is_monitoring_enabled(self) -> bool:
@@ -163,7 +163,7 @@ class FeatureStoreClientWrapper(FeatureStore):
         poller_to_stop = None
         task_to_start = None
 
-        with self.__lock.write_lock():
+        with self.__lock.write():
             if available == self.__last_available:
                 return
 
@@ -322,7 +322,7 @@ class FDv2(DataSystem):
         """Stop the FDv2 data system and all associated threads."""
         self._stop_event.set()
 
-        with self._lock.write_lock():
+        with self._lock.write():
             if self._active_synchronizer is not None:
                 try:
                     self._active_synchronizer.stop()
@@ -411,7 +411,7 @@ class FDv2(DataSystem):
                 while not self._stop_event.is_set() and self._primary_synchronizer_builder is not None:
                     # Try primary synchronizer
                     try:
-                        with self._lock.write_lock():
+                        with self._lock.write():
                             primary_sync = self._primary_synchronizer_builder(self._config)
                             if isinstance(primary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
                                 primary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
@@ -446,7 +446,7 @@ class FDv2(DataSystem):
                         if self._secondary_synchronizer_builder is None:
                             continue
 
-                        with self._lock.write_lock():
+                        with self._lock.write():
                             secondary_sync = self._secondary_synchronizer_builder(self._config)
                             if isinstance(secondary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
                                 secondary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
@@ -480,7 +480,7 @@ class FDv2(DataSystem):
             finally:
                 # Ensure we always set the ready event when exiting
                 set_on_ready.set()
-                with self._lock.write_lock():
+                with self._lock.write():
                     if self._active_synchronizer is not None:
                         self._active_synchronizer.stop()
                     self._active_synchronizer = None

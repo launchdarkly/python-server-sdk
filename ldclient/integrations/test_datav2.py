@@ -617,7 +617,7 @@ class TestDataV2:
         :param str key: the flag key
         :return: the flag configuration builder object
         """
-        with self._lock.read_lock():
+        with self._lock.read():
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
 
@@ -640,7 +640,7 @@ class TestDataV2:
         :return: self (the TestDataV2 object)
         """
         instances_copy = []
-        with self._lock.write_lock():
+        with self._lock.write():
             old_version = 0
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
@@ -661,22 +661,22 @@ class TestDataV2:
         return self
 
     def _make_init_data(self) -> Dict[str, Any]:
-        with self._lock.read_lock():
+        with self._lock.read():
             return copy.copy(self._current_flags)
 
     def _get_version(self) -> int:
-        with self._lock.write_lock():
+        with self._lock.write():
             version = self._version
             self._version += 1
             return version
 
     def _closed_instance(self, instance):
-        with self._lock.write_lock():
+        with self._lock.write():
             if instance in self._instances:
                 self._instances.remove(instance)
 
     def _add_instance(self, instance):
-        with self._lock.write_lock():
+        with self._lock.write():
             self._instances.append(instance)
 
     def build_initializer(self, _: Config) -> _TestDataSourceV2:

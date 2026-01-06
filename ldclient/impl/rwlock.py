@@ -41,11 +41,11 @@ class ReadWriteLock:
         self._read_ready.release()
 
     @contextmanager
-    def read_lock(self):
+    def read(self):
         """Context manager for acquiring a read lock.
         
         Usage:
-            with lock.read_lock():
+            with lock.read():
                 # read lock held here
                 pass
         """
@@ -56,11 +56,11 @@ class ReadWriteLock:
             self.runlock()
 
     @contextmanager
-    def write_lock(self):
+    def write(self):
         """Context manager for acquiring a write lock.
         
         Usage:
-            with lock.write_lock():
+            with lock.write():
                 # write lock held here
                 pass
         """

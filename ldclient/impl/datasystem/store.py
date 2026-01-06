@@ -49,7 +49,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
         key: str,
         callback: Callable[[Any], Any] = lambda x: x,
     ) -> Any:
-        with self._lock.read_lock():
+        with self._lock.read():
             items_of_kind = self._items[kind]
             item = items_of_kind.get(key)
             if item is None:
@@ -69,7 +69,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return callback(item)
 
     def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
-        with self._lock.read_lock():
+        with self._lock.read():
             items_of_kind = self._items[kind]
             return callback(
                 dict(
@@ -88,7 +88,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return False
 
         try:
-            with self._lock.write_lock():
+            with self._lock.write():
                 self._items.clear()
                 self._items.update(all_decoded)
                 self._initialized = True
@@ -107,7 +107,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return False
 
         try:
-            with self._lock.write_lock():
+            with self._lock.write():
                 for kind, kind_data in all_decoded.items():
                     items_of_kind = self._items[kind]
                     kind_data = all_decoded[kind]
@@ -142,7 +142,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
         """
         Indicates whether the store has been initialized with data.
         """
-        with self._lock.read_lock():
+        with self._lock.read():
             return self._initialized
 
 
@@ -212,7 +212,7 @@ class Store:
         Returns:
             Self for method chaining
         """
-        with self._lock.write_lock():
+        with self._lock.write():
             self._persistent_store = persistent_store
             self._persistent_store_writable = writable
             self._persistent_store_status_provider = status_provider
@@ -224,12 +224,12 @@ class Store:
 
     def selector(self) -> Selector:
         """Returns the current selector."""
-        with self._lock.read_lock():
+        with self._lock.read():
             return self._selector
 
     def close(self) -> Optional[Exception]:
         """Close the store and any persistent store if configured."""
-        with self._lock.write_lock():
+        with self._lock.write():
             if self._persistent_store is not None:
                 try:
                     # Most FeatureStore implementations don't have close methods
@@ -250,7 +250,7 @@ class Store:
         """
         collections = self._changes_to_store_data(change_set.changes)
 
-        with self._lock.write_lock():
+        with self._lock.write():
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
                     self._set_basis(collections, change_set.selector, persist)
@@ -442,7 +442,7 @@ class Store:
 
             return __mapping
 
-        with self._lock.write_lock():
+        with self._lock.write():
             if self._should_persist():
                 try:
                     # Get all data from memory store and write to persistent store
@@ -456,7 +456,7 @@ class Store:
 
     def get_active_store(self) -> ReadOnlyStore:
         """Get the currently active store for reading data."""
-        with self._lock.read_lock():
+        with self._lock.read():
             return self._active_store
 
     def is_initialized(self) -> bool:
@@ -465,5 +465,5 @@ class Store:
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""
-        with self._lock.read_lock():
+        with self._lock.read():
             return self._persistent_store_status_provider
