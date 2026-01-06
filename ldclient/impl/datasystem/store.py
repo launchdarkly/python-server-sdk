@@ -6,8 +6,8 @@ from the evaluation algorithm. It manages both in-memory and persistent storage,
 ChangeSet applications and flag change notifications.
 """
 
-from collections import defaultdict
 import threading
+from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
