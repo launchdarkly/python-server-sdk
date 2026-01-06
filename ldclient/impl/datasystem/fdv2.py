@@ -228,6 +228,19 @@ class FeatureStoreClientWrapper(FeatureStore):
             return False
 
         return monitoring_enabled()
+        
+    def close(self):
+        """
+        Close the wrapper and stop the repeating task poller if it's running.
+        This is called by Store.close() during shutdown to ensure the poller thread is stopped.
+        """
+        poller_to_stop = None
+        with self.__lock.write():
+            poller_to_stop = self.__poller
+            self.__poller = None
+
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
 
 
 class FDv2(DataSystem):
