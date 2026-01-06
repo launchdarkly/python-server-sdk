@@ -189,6 +189,28 @@ class FeatureStore:
     #     :return: true if the underlying data store is reachable
     #     """
 
+    # WARN: This isn't a required method on a FeatureStore. The SDK will
+    # check if the provided store responds to this method, and if it does,
+    # will call it during shutdown to release any resources (such as database
+    # connections or connection pools) that the store may be using.
+    #
+    # @abstractmethod
+    # def close(self):
+    #     """
+    #     Releases any resources used by the data store implementation.
+    #
+    #     This method will be called by the SDK during shutdown to ensure proper
+    #     cleanup of resources such as database connections, connection pools,
+    #     network sockets, or other resources that should be explicitly released.
+    #
+    #     Implementations should be idempotent - calling close() multiple times
+    #     should be safe and have no additional effect after the first call.
+    #
+    #     This is particularly important for persistent data stores that maintain
+    #     connection pools or other long-lived resources that should be properly
+    #     cleaned up when the SDK is shut down.
+    #     """
+
 
 class FeatureStoreCore:
     """

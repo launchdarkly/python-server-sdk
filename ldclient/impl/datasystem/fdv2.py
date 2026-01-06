@@ -232,15 +232,14 @@ class FeatureStoreClientWrapper(FeatureStore):
     def close(self):
         """
         Close the wrapper and stop the repeating task poller if it's running.
-        This is called by Store.close() during shutdown to ensure the poller thread is stopped.
+        Also forwards the close call to the underlying store if it has a close method.
         """
-        poller_to_stop = None
         with self.__lock.write():
-            poller_to_stop = self.__poller
-            self.__poller = None
-
-        if poller_to_stop is not None:
-            poller_to_stop.stop()
+            if self.__poller is not None:
+                self.__poller.stop()
+                self.__poller = None
+            if hasattr(self.store, "close"):
+                self.store.close()
 
 
 class FDv2(DataSystem):
