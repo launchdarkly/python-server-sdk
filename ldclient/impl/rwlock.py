@@ -43,7 +43,7 @@ class ReadWriteLock:
     @contextmanager
     def read(self):
         """Context manager for acquiring a read lock.
-        
+
         Usage:
             with lock.read():
                 # read lock held here
@@ -58,7 +58,7 @@ class ReadWriteLock:
     @contextmanager
     def write(self):
         """Context manager for acquiring a write lock.
-        
+
         Usage:
             with lock.write():
                 # write lock held here
