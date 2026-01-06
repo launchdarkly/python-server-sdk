@@ -29,11 +29,8 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
 
     @property
     def status(self) -> DataSourceStatus:
-        try:
-            self.__lock.rlock()
+        with self.__lock.read_lock():
             return self.__status
-        finally:
-            self.__lock.runlock()
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
         old_data = None
@@ -70,8 +67,7 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
         status_to_broadcast = None
 
-        try:
-            self.__lock.lock()
+        with self.__lock.write_lock():
             old_status = self.__status
 
             if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
@@ -83,8 +79,6 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
             self.__status = DataSourceStatus(new_state, self.__status.since if new_state == self.__status.state else time.time(), self.__status.error if new_error is None else new_error)
 
             status_to_broadcast = self.__status
-        finally:
-            self.__lock.unlock()
 
         if status_to_broadcast is not None:
             self.__status_listeners.notify(status_to_broadcast)

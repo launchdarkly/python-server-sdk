@@ -27,16 +27,12 @@ class DataStoreUpdateSinkImpl(DataStoreUpdateSink):
         return self.__listeners
 
     def status(self) -> DataStoreStatus:
-        self.__lock.rlock()
-        status = copy(self.__status)
-        self.__lock.runlock()
-
-        return status
+        with self.__lock.read_lock():
+            return copy(self.__status)
 
     def update_status(self, status: DataStoreStatus):
-        self.__lock.lock()
-        old_value, self.__status = self.__status, status
-        self.__lock.unlock()
+        with self.__lock.write_lock():
+            old_value, self.__status = self.__status, status
 
         if old_value != status:
             self.__listeners.notify(status)

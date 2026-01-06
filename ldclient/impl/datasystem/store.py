@@ -50,8 +50,7 @@ class InMemoryFeatureStore(ReadOnlyStore):
         key: str,
         callback: Callable[[Any], Any] = lambda x: x,
     ) -> Any:
-        try:
-            self._lock.rlock()
+        with self._lock.read_lock():
             items_of_kind = self._items[kind]
             item = items_of_kind.get(key)
             if item is None:
@@ -69,12 +68,9 @@ class InMemoryFeatureStore(ReadOnlyStore):
                 )
                 return callback(None)
             return callback(item)
-        finally:
-            self._lock.runlock()
 
     def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
-        try:
-            self._lock.rlock()
+        with self._lock.read_lock():
             items_of_kind = self._items[kind]
             return callback(
                 dict(
@@ -83,8 +79,6 @@ class InMemoryFeatureStore(ReadOnlyStore):
                     if ("deleted" not in i) or not i["deleted"]
                 )
             )
-        finally:
-            self._lock.runlock()
 
     def set_basis(self, collections: Collections) -> bool:
         """
@@ -95,15 +89,13 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return False
 
         try:
-            self._lock.lock()
-            self._items.clear()
-            self._items.update(all_decoded)
-            self._initialized = True
+            with self._lock.write_lock():
+                self._items.clear()
+                self._items.update(all_decoded)
+                self._initialized = True
         except Exception as e:
             log.error("Failed applying set_basis", exc_info=e)
             return False
-        finally:
-            self._lock.unlock()
 
         return True
 
@@ -116,20 +108,18 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return False
 
         try:
-            self._lock.lock()
-            for kind, kind_data in all_decoded.items():
-                items_of_kind = self._items[kind]
-                kind_data = all_decoded[kind]
-                for key, item in kind_data.items():
-                    items_of_kind[key] = item
-                    log.debug(
-                        "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
-                    )
+            with self._lock.write_lock():
+                for kind, kind_data in all_decoded.items():
+                    items_of_kind = self._items[kind]
+                    kind_data = all_decoded[kind]
+                    for key, item in kind_data.items():
+                        items_of_kind[key] = item
+                        log.debug(
+                            "Updated %s in '%s' to version %d", key, kind.namespace, item["version"]
+                        )
         except Exception as e:
             log.error("Failed applying apply_delta", exc_info=e)
             return False
-        finally:
-            self._lock.unlock()
 
         return True
 
@@ -153,11 +143,8 @@ class InMemoryFeatureStore(ReadOnlyStore):
         """
         Indicates whether the store has been initialized with data.
         """
-        try:
-            self._lock.rlock()
+        with self._lock.read_lock():
             return self._initialized
-        finally:
-            self._lock.runlock()
 
 
 class Store:

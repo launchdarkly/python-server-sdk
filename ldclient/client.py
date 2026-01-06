@@ -111,13 +111,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
             raise
 
     def __update_availability(self, available: bool):
-        try:
-            self.__lock.lock()
+        with self.__lock.write_lock():
             if available == self.__last_available:
                 return
             self.__last_available = available
-        finally:
-            self.__lock.unlock()
 
         status = DataStoreStatus(available, False)
 
@@ -127,23 +124,19 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__store_update_sink.update_status(status)
 
         if available:
-            try:
-                self.__lock.lock()
+            with self.__lock.write_lock():
                 if self.__poller is not None:
                     self.__poller.stop()
                     self.__poller = None
-            finally:
-                self.__lock.unlock()
 
             return
 
         log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
         task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
-        self.__lock.lock()
-        self.__poller = task
-        self.__poller.start()
-        self.__lock.unlock()
+        with self.__lock.write_lock():
+            self.__poller = task
+            self.__poller.start()
 
     def __check_availability(self):
         try:
@@ -717,9 +710,8 @@ class LDClient:
         if not isinstance(hook, Hook):
             return
 
-        self.__hooks_lock.lock()
-        self.__hooks.append(hook)
-        self.__hooks_lock.unlock()
+        with self.__hooks_lock.write_lock():
+            self.__hooks.append(hook)
 
     def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], _EvaluationWithHookResult]) -> _EvaluationWithHookResult:
         """
@@ -733,15 +725,11 @@ class LDClient:
         # :return:
         """
         hooks = []  # type: List[Hook]
-        try:
-            self.__hooks_lock.rlock()
-
+        with self.__hooks_lock.read_lock():
             if len(self.__hooks) == 0:
                 return block()
 
             hooks = self.__hooks.copy()
-        finally:
-            self.__hooks_lock.runlock()
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
         hook_data = self.__execute_before_evaluation(hooks, series_context)
