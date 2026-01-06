@@ -6,7 +6,6 @@ from the evaluation algorithm. It manages both in-memory and persistent storage,
 ChangeSet applications and flag change notifications.
 """
 
-import threading
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -194,7 +193,7 @@ class Store:
         self._selector = Selector.no_selector()
 
         # Thread synchronization
-        self._lock = threading.RLock()
+        self._lock = ReadWriteLock()
 
     def with_persistence(
         self,
@@ -213,7 +212,7 @@ class Store:
         Returns:
             Self for method chaining
         """
-        with self._lock:
+        with self._lock.write_lock():
             self._persistent_store = persistent_store
             self._persistent_store_writable = writable
             self._persistent_store_status_provider = status_provider
@@ -225,12 +224,12 @@ class Store:
 
     def selector(self) -> Selector:
         """Returns the current selector."""
-        with self._lock:
+        with self._lock.read_lock():
             return self._selector
 
     def close(self) -> Optional[Exception]:
         """Close the store and any persistent store if configured."""
-        with self._lock:
+        with self._lock.write_lock():
             if self._persistent_store is not None:
                 try:
                     # Most FeatureStore implementations don't have close methods
@@ -251,7 +250,7 @@ class Store:
         """
         collections = self._changes_to_store_data(change_set.changes)
 
-        with self._lock:
+        with self._lock.write_lock():
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
                     self._set_basis(collections, change_set.selector, persist)
@@ -443,7 +442,7 @@ class Store:
 
             return __mapping
 
-        with self._lock:
+        with self._lock.write_lock():
             if self._should_persist():
                 try:
                     # Get all data from memory store and write to persistent store
@@ -457,7 +456,7 @@ class Store:
 
     def get_active_store(self) -> ReadOnlyStore:
         """Get the currently active store for reading data."""
-        with self._lock:
+        with self._lock.read_lock():
             return self._active_store
 
     def is_initialized(self) -> bool:
@@ -466,5 +465,5 @@ class Store:
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""
-        with self._lock:
+        with self._lock.read_lock():
             return self._persistent_store_status_provider
