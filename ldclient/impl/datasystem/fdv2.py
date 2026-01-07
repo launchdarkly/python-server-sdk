@@ -228,7 +228,7 @@ class FeatureStoreClientWrapper(FeatureStore):
             return False
 
         return monitoring_enabled()
-        
+
     def close(self):
         """
         Close the wrapper and stop the repeating task poller if it's running.
