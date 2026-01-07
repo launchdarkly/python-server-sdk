@@ -130,6 +130,7 @@ class FeatureStoreClientWrapper(FeatureStore):
         self.__lock = ReadWriteLock()
         self.__last_available = True
         self.__poller: Optional[RepeatingTask] = None
+        self.__closed = False
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
@@ -164,6 +165,8 @@ class FeatureStoreClientWrapper(FeatureStore):
         task_to_start = None
 
         with self.__lock.write():
+            if self.__closed:
+                return
             if available == self.__last_available:
                 return
 
@@ -234,12 +237,20 @@ class FeatureStoreClientWrapper(FeatureStore):
         Close the wrapper and stop the repeating task poller if it's running.
         Also forwards the close call to the underlying store if it has a close method.
         """
+        poller_to_stop = None
+
         with self.__lock.write():
-            if self.__poller is not None:
-                self.__poller.stop()
-                self.__poller = None
-            if hasattr(self.store, "close"):
-                self.store.close()
+            if self.__closed:
+                return
+            self.__closed = True
+            poller_to_stop = self.__poller
+            self.__poller = None
+
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
+
+        if hasattr(self.store, "close"):
+            self.store.close()
 
 
 class FDv2(DataSystem):
