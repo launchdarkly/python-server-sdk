@@ -14,14 +14,13 @@ from urllib import parse
 import urllib3
 
 from ldclient.config import Config
-from ldclient.impl.datasource.feature_requester import LATEST_ALL_URI
+from ldclient.impl.datasource.feature_requester import FDV1_POLLING_ENDPOINT
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
     PutObject
 )
 from ldclient.impl.http import _http_factory
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
@@ -52,7 +51,7 @@ from ldclient.interfaces import (
     Update
 )
 
-POLLING_ENDPOINT = "/sdk/poll"
+FDV2_POLLING_ENDPOINT = "/sdk/poll"
 
 
 PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
@@ -93,11 +92,8 @@ class PollingDataSource(Initializer, Synchronizer):
     ):
         self._requester = requester
         self._poll_interval = poll_interval
-        self._event = Event()
+        self._interrupt_event = Event()
         self._stop = Event()
-        self._task = RepeatingTask(
-            "ldclient.datasource.polling", poll_interval, 0, self._poll
-        )
 
     @property
     def name(self) -> str:
@@ -117,6 +113,7 @@ class PollingDataSource(Initializer, Synchronizer):
         occurs.
         """
         log.info("Starting PollingDataSourceV2 synchronizer")
+        self._interrupt_event.clear()
         self._stop.clear()
         while self._stop.is_set() is False:
             result = self._requester.fetch(ss.selector())
@@ -184,14 +181,13 @@ class PollingDataSource(Initializer, Synchronizer):
                     revert_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 )
 
-            if self._event.wait(self._poll_interval):
+            if self._interrupt_event.wait(self._poll_interval):
                 break
 
     def stop(self):
         """Stops the synchronizer."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
-        self._event.set()
-        self._task.stop()
+        self._interrupt_event.set()
         self._stop.set()
 
     def _poll(self, ss: SelectorStore) -> BasisResult:
@@ -247,7 +243,7 @@ class Urllib3PollingRequester(Requester):
         self._etag = None
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
-        self._poll_uri = config.base_uri + POLLING_ENDPOINT
+        self._poll_uri = config.base_uri + FDV2_POLLING_ENDPOINT
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
@@ -413,7 +409,7 @@ class Urllib3FDv1PollingRequester(Requester):
         self._etag = None
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
-        self._poll_uri = config.base_uri + LATEST_ALL_URI
+        self._poll_uri = config.base_uri + FDV1_POLLING_ENDPOINT
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
