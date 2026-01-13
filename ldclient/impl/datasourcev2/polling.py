@@ -93,7 +93,7 @@ class PollingDataSource(Initializer, Synchronizer):
     ):
         self._requester = requester
         self._poll_interval = poll_interval
-        self._event = Event()
+        self._interrupt_event = Event()
         self._stop = Event()
         self._task = RepeatingTask(
             "ldclient.datasource.polling", poll_interval, 0, self._poll
@@ -117,6 +117,7 @@ class PollingDataSource(Initializer, Synchronizer):
         occurs.
         """
         log.info("Starting PollingDataSourceV2 synchronizer")
+        self._interrupt_event.clear()
         self._stop.clear()
         while self._stop.is_set() is False:
             result = self._requester.fetch(ss.selector())
@@ -154,6 +155,7 @@ class PollingDataSource(Initializer, Synchronizer):
                             error=error_info,
                             environment_id=envid,
                         )
+                        self._interrupt_event.wait(self._poll_interval)
                         continue
 
                     yield Update(
@@ -184,13 +186,13 @@ class PollingDataSource(Initializer, Synchronizer):
                     revert_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 )
 
-            if self._event.wait(self._poll_interval):
+            if self._interrupt_event.wait(self._poll_interval):
                 break
 
     def stop(self):
         """Stops the synchronizer."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
-        self._event.set()
+        self._interrupt_event.set()
         self._task.stop()
         self._stop.set()
 
