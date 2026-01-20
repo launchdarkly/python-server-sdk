@@ -54,10 +54,8 @@ class EvaluationDetail:
         * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
           e.g. ``"FLAG_NOT_FOUND"``
 
-        * ``inExperiment``: True if the evaluation was part of an experiment. This is set when
-          the evaluation resulted in the context being assigned to a variation that is part of a
-          running experiment. This property is used by LaunchDarkly's Experimentation product to
-          track experiment assignment events.
+        * ``inExperiment``: This is true if the evaluation resulted in an experiment rollout and
+          served one of the variations in the experiment. Otherwise it is false.
 
         * ``bigSegmentsStatus``: describes the validity of Big Segment information, if and only if
           the flag evaluation required querying at least one Big Segment; otherwise it returns None.
