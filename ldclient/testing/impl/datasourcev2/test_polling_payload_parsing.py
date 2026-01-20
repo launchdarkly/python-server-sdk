@@ -46,7 +46,8 @@ def test_transfer_none():
     change_set = result.value
     assert change_set.intent_code == IntentCode.TRANSFER_NONE
     assert len(change_set.changes) == 0
-    assert change_set.selector is None
+    assert change_set.selector is not None
+    assert not change_set.selector.is_defined()
 
 
 def test_transfer_full_with_empty_payload():
