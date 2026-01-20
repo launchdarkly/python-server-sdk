@@ -189,7 +189,6 @@ class PollingDataSource(Initializer, Synchronizer):
         """Stops the synchronizer."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
-        self._task.stop()
         self._stop.set()
 
     def _poll(self, ss: SelectorStore) -> BasisResult:
