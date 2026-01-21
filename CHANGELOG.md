@@ -2,6 +2,22 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.15.0](https://github.com/launchdarkly/python-server-sdk/compare/9.14.1...9.15.0) (2026-01-21)
+
+
+### Features
+
+* Drop support for python 3.9 ([#393](https://github.com/launchdarkly/python-server-sdk/issues/393)) ([5b761bd](https://github.com/launchdarkly/python-server-sdk/commit/5b761bd306e1e6973b59cea3f7657463de0204d1))
+
+
+### Bug Fixes
+
+* Add context manager for clearer, safer locks ([#396](https://github.com/launchdarkly/python-server-sdk/issues/396)) ([beca0fa](https://github.com/launchdarkly/python-server-sdk/commit/beca0fa4985f385cb3328408528e14696ec7c70f))
+* Address potential race condition in FeatureStore update_availability ([#391](https://github.com/launchdarkly/python-server-sdk/issues/391)) ([31cf487](https://github.com/launchdarkly/python-server-sdk/commit/31cf4875c35f08177105a16f65140acabe93d3da))
+* Prevent immediate polling on recoverable error ([#399](https://github.com/launchdarkly/python-server-sdk/issues/399)) ([da565a2](https://github.com/launchdarkly/python-server-sdk/commit/da565a2dce67fc386396686dd2017819e2c4edfb))
+* Stop FeatureStoreClientWrapper poller on close ([#397](https://github.com/launchdarkly/python-server-sdk/issues/397)) ([468afdf](https://github.com/launchdarkly/python-server-sdk/commit/468afdfef32f74f7cc82cb61f01f5674054da9db))
+* Update reason documentation with inExperiment value ([#401](https://github.com/launchdarkly/python-server-sdk/issues/401)) ([cbfc3dd](https://github.com/launchdarkly/python-server-sdk/commit/cbfc3dd8876eae9ffa352ec12a1131a64110c08a))
+
 ## [9.14.1](https://github.com/launchdarkly/python-server-sdk/compare/9.14.0...9.14.1) (2025-12-15)
 
 
