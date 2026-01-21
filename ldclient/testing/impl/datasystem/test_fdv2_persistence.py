@@ -370,7 +370,8 @@ def test_persistent_store_delete_operations():
         ChangeSet,
         ChangeType,
         IntentCode,
-        ObjectKind
+        ObjectKind,
+        Selector
     )
 
     # Pre-populate with a flag
@@ -410,7 +411,7 @@ def test_persistent_store_delete_operations():
                 },
             )
         ],
-        selector=None,
+        selector=Selector.no_selector(),
     )
     store.apply(init_changeset, True)
 
@@ -428,7 +429,7 @@ def test_persistent_store_delete_operations():
                 object=None,
             )
         ],
-        selector=None,
+        selector=Selector.no_selector(),
     )
 
     store.apply(delete_changeset, True)
@@ -671,7 +672,8 @@ def test_persistent_store_commit_encodes_data_correctly():
         ChangeSet,
         ChangeType,
         IntentCode,
-        ObjectKind
+        ObjectKind,
+        Selector
     )
 
     persistent_store = StubFeatureStore()
@@ -699,7 +701,7 @@ def test_persistent_store_commit_encodes_data_correctly():
                 object=flag_data,
             )
         ],
-        selector=None,
+        selector=Selector.no_selector(),
     )
     store.apply(changeset, True)
 
@@ -746,7 +748,8 @@ def test_persistent_store_commit_handles_errors():
         ChangeSet,
         ChangeType,
         IntentCode,
-        ObjectKind
+        ObjectKind,
+        Selector
     )
 
     class FailingFeatureStore(StubFeatureStore):
@@ -770,7 +773,7 @@ def test_persistent_store_commit_handles_errors():
                 object={"key": "test-flag", "version": 1, "on": True},
             )
         ],
-        selector=None,
+        selector=Selector.no_selector(),
     )
     store.apply(changeset, True)
 

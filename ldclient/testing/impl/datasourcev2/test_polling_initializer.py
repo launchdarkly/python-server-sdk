@@ -7,7 +7,8 @@ from ldclient.impl.datasourcev2.polling import (
     PollingDataSource,
     PollingResult,
     Selector,
-    polling_payload_to_changeset
+    polling_payload_to_changeset,
+    fdv1_polling_payload_to_changeset
 )
 from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
 from ldclient.interfaces import ChangeSetBuilder, IntentCode
@@ -138,3 +139,33 @@ def test_handles_transfer_changes():
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_CHANGES
     assert len(result.value.change_set.changes) == 1
     assert result.value.persist is True
+
+
+def test_handles_fdv1_payload():
+    """Test that FDv1 payloads have persist set to False."""
+    fdv1_data = {
+        "flags": {
+            "test-flag": {
+                "key": "test-flag",
+                "version": 1,
+                "on": True,
+                "variations": [True, False]
+            }
+        },
+        "segments": {}
+    }
+    change_set_result = fdv1_polling_payload_to_changeset(fdv1_data)
+    assert isinstance(change_set_result, _Success)
+
+    mock_requester = MockPollingRequester(_Success(value=(change_set_result.value, {})))
+    ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
+
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
+
+    assert isinstance(result, _Success)
+    assert result.value is not None
+
+    assert result.value.change_set.intent_code == IntentCode.TRANSFER_FULL
+    assert len(result.value.change_set.changes) == 1
+    # FDv1 payloads should not be persisted because they have no selector
+    assert result.value.persist is False

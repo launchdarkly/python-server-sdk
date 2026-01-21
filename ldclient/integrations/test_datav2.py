@@ -182,7 +182,7 @@ class FlagBuilderV2:
     def _copy(self) -> FlagBuilderV2:
         """
         Creates a deep copy of the flag builder. Subsequent updates to the
-        original ``FlagBuilderV2`` object will not update the copy and vise versa.
+        original ``FlagBuilderV2`` object will not update the copy and vice versa.
 
         :return: a copy of the flag builder object
         """

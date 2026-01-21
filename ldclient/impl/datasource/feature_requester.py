@@ -13,7 +13,7 @@ from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import FeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
-LATEST_ALL_URI = '/sdk/latest-all'
+FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
 
 
 CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
@@ -24,7 +24,7 @@ class FeatureRequesterImpl(FeatureRequester):
         self._cache = dict()
         self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
         self._config = config
-        self._poll_uri = config.base_uri + LATEST_ALL_URI
+        self._poll_uri = config.base_uri + FDV1_POLLING_ENDPOINT
         if config.payload_filter_key is not None:
             self._poll_uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
 
