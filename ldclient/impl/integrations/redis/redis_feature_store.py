@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict
 
 from ldclient import log
+from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.util import redact_password
 from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES
@@ -20,6 +21,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
+        self._init_key = "{0}:{1}".format(self._prefix, CachingStoreWrapper.__INITED_CACHE_KEY__)
         self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
         self.test_update_hook = None  # exposed for testing
         log.info("Started RedisFeatureStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
@@ -46,6 +48,8 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
                 item_json = json.dumps(item)
                 pipe.hset(base_key, key, item_json)
             all_count = all_count + len(items)
+
+        pipe.set(self._init_key, self._init_key)
         pipe.execute()
         log.info("Initialized RedisFeatureStore with %d items", all_count)
 
@@ -109,7 +113,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def initialized_internal(self):
         r = redis.Redis(connection_pool=self._pool)
-        return r.exists(self._items_key(FEATURES))
+        return r.exists(self._init_key)
 
     def describe_configuration(self, config):
         return 'Redis'
