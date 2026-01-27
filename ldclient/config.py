@@ -181,11 +181,12 @@ class DataSystemConfig:
     initializers: Optional[List[DataSourceBuilder[Initializer]]]
     """The initializers for the data system."""
 
-    primary_synchronizer: Optional[DataSourceBuilder[Synchronizer]]
-    """The primary synchronizer for the data system."""
-
-    secondary_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
-    """The secondary synchronizers for the data system."""
+    synchronizers: Optional[List[DataSourceBuilder[Synchronizer]]]
+    """
+    The synchronizers for the data system, ordered by preference.
+    The first synchronizer is the most preferred, with subsequent synchronizers
+    serving as fallbacks in order of decreasing preference.
+    """
 
     data_store_mode: DataStoreMode = DataStoreMode.READ_WRITE
     """The data store mode specifies the mode in which the persistent store will operate, if present."""

@@ -58,50 +58,32 @@ class ClientEntity:
                         initializers.append(polling_builder)
 
                 datasystem.initializers(initializers)
-            sync_config = datasystem_config.get('synchronizers')
-            if sync_config is not None:
-                primary = sync_config.get('primary')
-                secondary = sync_config.get('secondary')
-
-                primary_builder = None
-                secondary_builder = None
+            sync_configs = datasystem_config.get('synchronizers')
+            if sync_configs is not None:
+                sync_builders = []
                 fallback_builder = None
 
-                if primary is not None:
-                    streaming = primary.get('streaming')
+                for sync_config in sync_configs:
+                    streaming = sync_config.get('streaming')
                     if streaming is not None:
-                        primary_builder = streaming_ds_builder()
-                        _set_optional_value(streaming, "baseUri", primary_builder.base_uri)
-                        _set_optional_time(streaming, "initialRetryDelayMs", primary_builder.initial_reconnect_delay)
-                    elif primary.get('polling') is not None:
-                        polling = primary.get('polling')
+                        builder = streaming_ds_builder()
+                        _set_optional_value(streaming, "baseUri", builder.base_uri)
+                        _set_optional_time(streaming, "initialRetryDelayMs", builder.initial_reconnect_delay)
+                        sync_builders.append(builder)
+                    elif sync_config.get('polling') is not None:
+                        polling = sync_config.get('polling')
 
-                        primary_builder = polling_ds_builder()
-                        _set_optional_value(polling, "baseUri", primary_builder.base_uri)
-                        _set_optional_time(polling, "pollIntervalMs", primary_builder.poll_interval)
+                        builder = polling_ds_builder()
+                        _set_optional_value(polling, "baseUri", builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", builder.poll_interval)
+                        sync_builders.append(builder)
 
                         fallback_builder = fdv1_fallback_ds_builder()
                         _set_optional_value(polling, "baseUri", fallback_builder.base_uri)
                         _set_optional_time(polling, "pollIntervalMs", fallback_builder.poll_interval)
 
-                if secondary is not None:
-                    streaming = secondary.get('streaming')
-                    if streaming is not None:
-                        secondary_builder = streaming_ds_builder()
-                        _set_optional_value(streaming, "baseUri", secondary_builder.base_uri)
-                        _set_optional_time(streaming, "initialRetryDelayMs", secondary_builder.initial_reconnect_delay)
-                    elif secondary.get('polling') is not None:
-                        polling = secondary.get('polling')
-
-                        secondary_builder = polling_ds_builder()
-                        _set_optional_value(polling, "baseUri", secondary_builder.base_uri)
-                        _set_optional_time(polling, "pollIntervalMs", secondary_builder.poll_interval)
-                        fallback_builder = fdv1_fallback_ds_builder()
-                        _set_optional_value(polling, "baseUri", fallback_builder.base_uri)
-                        _set_optional_time(polling, "pollIntervalMs", fallback_builder.poll_interval)
-
-                if primary_builder is not None:
-                    datasystem.synchronizers(primary_builder, secondary_builder)
+                if sync_builders:
+                    datasystem.synchronizers(*sync_builders)
                 if fallback_builder is not None:
                     datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
