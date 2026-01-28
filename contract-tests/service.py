@@ -79,6 +79,9 @@ def status():
             'evaluation-hooks',
             'omit-anonymous-contexts',
             'client-prereq-events',
+            'persistent-data-store-redis',
+            'persistent-data-store-dynamodb',
+            'persistent-data-store-consul',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
