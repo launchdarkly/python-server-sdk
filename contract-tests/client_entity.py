@@ -1,6 +1,6 @@
-import sys
 import json
 import logging
+import sys
 from urllib.parse import urlparse
 
 import requests
