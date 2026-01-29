@@ -111,7 +111,6 @@ class InMemoryFeatureStore(ReadOnlyStore):
             with self._lock.write():
                 for kind, kind_data in all_decoded.items():
                     items_of_kind = self._items[kind]
-                    kind_data = all_decoded[kind]
                     for key, item in kind_data.items():
                         items_of_kind[key] = item
                         log.debug(

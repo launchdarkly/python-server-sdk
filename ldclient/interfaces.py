@@ -1393,7 +1393,7 @@ class ChangeSetBuilder:
         require changes.
         """
         return ChangeSet(
-            intent_code=IntentCode.TRANSFER_NONE, selector=None, changes=[]
+            intent_code=IntentCode.TRANSFER_NONE, selector=Selector.no_selector(), changes=[]
         )
 
     @staticmethod

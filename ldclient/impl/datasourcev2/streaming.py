@@ -359,6 +359,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     revert_to_fdv1=True,
                     environment_id=envid,
                 )
+                self.stop()
                 return (update, False)
 
             http_error_message_result = http_error_message(
