@@ -342,8 +342,8 @@ def _create_persistent_store(persistent_store_config: dict):
             caching=caching
         )
     elif store_type == "dynamodb":
-        # Parse endpoint from DSN
-        parsed = urlparse(dsn)
+        # Parse endpoint from DSN (handle URLs without scheme)
+        parsed = urlparse(dsn) if '://' in dsn else urlparse(f'http://{dsn}')
         endpoint_url = f"{parsed.scheme}://{parsed.netloc}"
 
         # Import boto3 for DynamoDB configuration
