@@ -632,8 +632,8 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        if not self.is_initialized():
-            if self._data_system.store.initialized:
+        if self._data_system.data_availability != DataAvailability.REFRESHED:
+            if self._data_system.data_availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
