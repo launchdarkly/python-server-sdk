@@ -6,7 +6,7 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 
 from dataclasses import dataclass
 from threading import Event
-from typing import Callable, List, Optional, Set, TypeVar
+from typing import Callable, List, Optional, Protocol, Set, TypeVar
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
@@ -92,11 +92,11 @@ class BigSegmentsConfig:
 
 
 class HTTPConfig:
-    """Advanced HTTP configuration options for the SDK client.
+    """Advanced HTTP configuration options for the SDK client / data sources.
 
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
     If you need to set these, construct an ``HTTPConfig`` instance and pass it as the ``http`` parameter when
-    you construct the main :class:`Config` for the SDK client.
+    you construct the main :class:`Config` for the SDK client, or to the appropriate data source builder method.
     """
 
     def __init__(
@@ -156,22 +156,35 @@ class HTTPConfig:
         return self.__disable_ssl_verification
 
 
-T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
-Builder = Callable[['Config'], T]
+
+class DataSourceBuilder(Protocol[T_co]):  # pylint: disable=too-few-public-methods
+    """
+    Protocol for building data sources.
+    """
+
+    def build(self, config: 'Config') -> T_co:
+        """
+        Builds the data source.
+
+        :param config: the SDK configuration
+        :return: the built data source
+        """
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
 class DataSystemConfig:
     """Configuration for LaunchDarkly's data acquisition strategy."""
 
-    initializers: Optional[List[Builder[Initializer]]]
+    initializers: Optional[List[DataSourceBuilder[Initializer]]]
     """The initializers for the data system."""
 
-    primary_synchronizer: Optional[Builder[Synchronizer]]
+    primary_synchronizer: Optional[DataSourceBuilder[Synchronizer]]
     """The primary synchronizer for the data system."""
 
-    secondary_synchronizer: Optional[Builder[Synchronizer]] = None
+    secondary_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
     """The secondary synchronizers for the data system."""
 
     data_store_mode: DataStoreMode = DataStoreMode.READ_WRITE
@@ -180,7 +193,7 @@ class DataSystemConfig:
     data_store: Optional[FeatureStore] = None
     """The (optional) persistent data store instance."""
 
-    fdv1_fallback_synchronizer: Optional[Builder[Synchronizer]] = None
+    fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
     """An optional fallback synchronizer that will read from FDv1"""
 
 
@@ -441,7 +454,7 @@ class Config:
         return self.__event_processor_class
 
     @property
-    def feature_requester_class(self) -> Callable:
+    def feature_requester_class(self) -> Optional[Callable]:
         return self.__feature_requester_class
 
     @property
@@ -595,4 +608,4 @@ class Config:
             log.warning("Missing or blank SDK key")
 
 
-__all__ = ['Config', 'BigSegmentsConfig', 'DataSystemConfig', 'HTTPConfig']
+__all__ = ['Config', 'BigSegmentsConfig', 'DataSourceBuilder', 'DataSystemConfig', 'HTTPConfig']

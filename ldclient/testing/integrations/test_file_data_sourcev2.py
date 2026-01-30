@@ -123,7 +123,7 @@ def test_creates_valid_initializer():
     path = make_temp_file(all_properties_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Success)
@@ -152,7 +152,7 @@ def test_creates_valid_initializer():
 def test_initializer_handles_missing_file():
     """Test that initializer returns error for missing file."""
     file_source = Files.new_data_source_v2(paths=['no-such-file.json'])
-    initializer = file_source(Config(sdk_key="dummy"))
+    initializer = file_source.build(Config(sdk_key="dummy"))
 
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
     assert isinstance(result, _Fail)
@@ -164,7 +164,7 @@ def test_initializer_handles_invalid_json():
     path = make_temp_file('{"flagValues":{')
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Fail)
@@ -179,7 +179,7 @@ def test_initializer_handles_duplicate_keys():
     path2 = make_temp_file(flag_only_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path1, path2])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Fail)
@@ -195,7 +195,7 @@ def test_initializer_loads_multiple_files():
     path2 = make_temp_file(segment_only_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path1, path2])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Success)
@@ -219,7 +219,7 @@ def test_initializer_loads_yaml():
     path = make_temp_file(all_properties_yaml)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Success)
@@ -235,7 +235,7 @@ def test_initializer_handles_flag_values():
     path = make_temp_file(flag_values_only_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Success)
@@ -259,7 +259,7 @@ def test_creates_valid_synchronizer():
     path = make_temp_file(all_properties_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
-        synchronizer = file_source(Config(sdk_key="dummy"))
+        synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
         update_count = 0
@@ -303,7 +303,7 @@ def test_synchronizer_detects_file_changes():
     path = make_temp_file(flag_only_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
-        synchronizer = file_source(Config(sdk_key="dummy"))
+        synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
         update_event = threading.Event()
@@ -351,7 +351,7 @@ def test_synchronizer_reports_error_on_invalid_file_update():
     path = make_temp_file(flag_only_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
-        synchronizer = file_source(Config(sdk_key="dummy"))
+        synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
         update_event = threading.Event()
@@ -396,7 +396,7 @@ def test_synchronizer_can_be_stopped():
     path = make_temp_file(all_properties_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        synchronizer = file_source(Config(sdk_key="dummy"))
+        synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
 
@@ -430,7 +430,7 @@ def test_fetch_after_stop_returns_error():
     path = make_temp_file(all_properties_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         # First fetch should work
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -452,7 +452,7 @@ def test_source_name_property():
     path = make_temp_file(all_properties_json)
     try:
         file_source = Files.new_data_source_v2(paths=[path])
-        source = file_source(Config(sdk_key="dummy"))
+        source = file_source.build(Config(sdk_key="dummy"))
 
         assert source.name == "FileDataV2"
     finally:
@@ -466,7 +466,7 @@ def test_accepts_single_path_string():
     try:
         # Pass a single string instead of a list
         file_source = Files.new_data_source_v2(paths=path)
-        initializer = file_source(Config(sdk_key="dummy"))
+        initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Success)

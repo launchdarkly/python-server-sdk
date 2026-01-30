@@ -4,7 +4,7 @@ from queue import Queue
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from ldclient.config import Builder, Config, DataSystemConfig
+from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.impl.datasystem import (
     DataAvailability,
@@ -275,7 +275,7 @@ class FDv2(DataSystem):
         """
         self._config = config
         self._data_system_config = data_system_config
-        self._primary_synchronizer_builder: Optional[Builder[Synchronizer]] = data_system_config.primary_synchronizer
+        self._primary_synchronizer_builder: Optional[DataSourceBuilder[Synchronizer]] = data_system_config.primary_synchronizer
         self._secondary_synchronizer_builder = data_system_config.secondary_synchronizer
         self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
         self._disabled = self._config.offline
@@ -398,7 +398,7 @@ class FDv2(DataSystem):
                 return
 
             try:
-                initializer = initializer_builder(self._config)
+                initializer = initializer_builder.build(self._config)
                 log.info("Attempting to initialize via %s", initializer.name)
 
                 basis_result = initializer.fetch(self._store)
@@ -435,7 +435,7 @@ class FDv2(DataSystem):
                     # Try primary synchronizer
                     try:
                         with self._lock.write():
-                            primary_sync = self._primary_synchronizer_builder(self._config)
+                            primary_sync = self._primary_synchronizer_builder.build(self._config)
                             if isinstance(primary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
                                 primary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
                             self._active_synchronizer = primary_sync
@@ -470,7 +470,7 @@ class FDv2(DataSystem):
                             continue
 
                         with self._lock.write():
-                            secondary_sync = self._secondary_synchronizer_builder(self._config)
+                            secondary_sync = self._secondary_synchronizer_builder.build(self._config)
                             if isinstance(secondary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
                                 secondary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
                             log.info("Secondary synchronizer %s is starting", secondary_sync.name)

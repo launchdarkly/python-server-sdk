@@ -3,8 +3,9 @@ import os
 import threading
 import traceback
 from queue import Empty, Queue
-from typing import Generator
+from typing import Generator, Optional
 
+from ldclient.config import Config, DataSourceBuilder
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import _Fail, _Success, current_time_millis, log
 from ldclient.interfaces import (
@@ -65,7 +66,7 @@ class _FileDataSourceV2:
     and segments in JSON or YAML format.
     """
 
-    def __init__(self, paths, poll_interval=1, force_polling=False):
+    def __init__(self, paths, poll_interval: float = 1, force_polling=False):
         """
         Initialize the file data source.
 
@@ -77,7 +78,7 @@ class _FileDataSourceV2:
         self._poll_interval = poll_interval
         self._force_polling = force_polling
         self._closed = False
-        self._update_queue = Queue()
+        self._update_queue: Queue[Optional[Update]] = Queue()
         self._lock = threading.Lock()
         self._auto_updater = None
 
@@ -436,3 +437,28 @@ class _PollingAutoUpdaterV2:
                 )
                 ret[path] = None
         return ret
+
+
+class FileDataSourceV2Builder(DataSourceBuilder):  # pylint: disable=too-few-public-methods
+    DEFAULT_POLL_INTERVAL = 1
+
+    def __init__(self, paths: str | list[str]):
+        self.__paths = paths
+        self.__poll_interval: Optional[float] = None
+        self.__force_polling = False
+
+    def poll_interval(self, interval: float) -> 'FileDataSourceV2Builder':
+        self.__poll_interval = interval
+        return self
+
+    def force_polling(self, force: bool) -> 'FileDataSourceV2Builder':
+        self.__force_polling = force
+        return self
+
+    def build(self, config: Config) -> _FileDataSourceV2:  # pylint: disable=unused-argument
+        """Builds the FileDataSourceV2 instance."""
+        return _FileDataSourceV2(
+            self.__paths,
+            self.__poll_interval or self.DEFAULT_POLL_INTERVAL,
+            self.__force_polling
+        )

@@ -22,7 +22,7 @@ from ldclient.testing.mock_components import MockSelectorStore
 def test_creates_valid_initializer():
     """Test that TestDataV2 creates a working initializer"""
     td = TestDataV2.data_source()
-    initializer = td.build_initializer(Config(sdk_key="dummy"))
+    initializer = td.builder.build(Config(sdk_key="dummy"))
 
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
     assert isinstance(result, _Success)
@@ -37,7 +37,7 @@ def test_creates_valid_initializer():
 def test_creates_valid_synchronizer():
     """Test that TestDataV2 creates a working synchronizer"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer(Config(sdk_key="dummy"))
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
     update_count = 0
@@ -241,7 +241,7 @@ def test_initializer_fetches_flag_data():
     td = TestDataV2.data_source()
     td.update(td.flag('some-flag').variation_for_all(True))
 
-    initializer = td.build_initializer(Config(sdk_key="dummy"))
+    initializer = td.builder.build(Config(sdk_key="dummy"))
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Success)
@@ -261,7 +261,7 @@ def test_synchronizer_yields_initial_data():
     td = TestDataV2.data_source()
     td.update(td.flag('initial-flag').variation_for_all(False))
 
-    synchronizer = td.build_synchronizer(Config(sdk_key="dummy"))
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     update_iter = iter(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
     initial_update = next(update_iter)
@@ -280,7 +280,7 @@ def test_synchronizer_yields_initial_data():
 def test_synchronizer_receives_updates():
     """Test that synchronizer receives flag updates"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer(Config(sdk_key="dummy"))
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
     update_count = 0
@@ -324,8 +324,8 @@ def test_synchronizer_receives_updates():
 def test_multiple_synchronizers_receive_updates():
     """Test that multiple synchronizers receive the same updates"""
     td = TestDataV2.data_source()
-    sync1 = td.build_synchronizer(Config(sdk_key="dummy"))
-    sync2 = td.build_synchronizer(Config(sdk_key="dummy"))
+    sync1 = td.builder.build(Config(sdk_key="dummy"))
+    sync2 = td.builder.build(Config(sdk_key="dummy"))
 
     updates1 = []
     updates2 = []
@@ -370,7 +370,7 @@ def test_multiple_synchronizers_receive_updates():
 def test_closed_synchronizer_stops_yielding():
     """Test that closed synchronizer stops yielding updates"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer(Config(sdk_key="dummy"))
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
 
@@ -402,7 +402,7 @@ def test_initializer_can_sync():
     td = TestDataV2.data_source()
     td.update(td.flag('test-flag').variation_for_all(True))
 
-    initializer = td.build_initializer(Config(sdk_key="dummy"))
+    initializer = td.builder.build(Config(sdk_key="dummy"))
     sync_gen = initializer.sync(MockSelectorStore(Selector.no_selector()))
 
     # Should get initial update with data
@@ -442,7 +442,7 @@ def test_version_increment():
 def test_error_handling_in_fetch():
     """Test error handling in the fetch method"""
     td = TestDataV2.data_source()
-    initializer = td.build_initializer(Config(sdk_key="dummy"))
+    initializer = td.builder.build(Config(sdk_key="dummy"))
 
     # Close the initializer to trigger error condition
     initializer.stop()

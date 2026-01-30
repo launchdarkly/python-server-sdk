@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
-from ldclient.config import Config
+from ldclient.config import Config, DataSourceBuilder
 from ldclient.context import Context
 from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
     _TestDataSourceV2
@@ -559,8 +559,8 @@ class TestDataV2:
 
         # Configure the data system with TestDataV2 as both initializer and synchronizer
         data_config = datasystem_config.custom()
-        data_config.initializers([td.build_initializer])
-        data_config.synchronizers(td.build_synchronizer)
+        data_config.initializers([td.builder])
+        data_config.synchronizers(td.builder)
 
         config = Config(
             sdk_key,
@@ -679,18 +679,22 @@ class TestDataV2:
         with self._lock.write():
             self._instances.append(instance)
 
-    def build_initializer(self, _: Config) -> _TestDataSourceV2:
+    @property
+    def builder(self) -> DataSourceBuilder:
         """
-        Creates an initializer that can be used with the FDv2 data system.
+        Creates a builder that can be used with the FDv2 data system.
 
-        :return: a test data initializer
+        :return: a test data data source builder
         """
-        return _TestDataSourceV2(self)
+        return TestDataSourceBuilder(self)
 
-    def build_synchronizer(self, _: Config) -> _TestDataSourceV2:
-        """
-        Creates a synchronizer that can be used with the FDv2 data system.
 
-        :return: a test data synchronizer
-        """
-        return _TestDataSourceV2(self)
+class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: disable=too-few-public-methods
+    """Builder for TestDataV2 data sources that implements the DataSourceBuilder protocol."""
+
+    def __init__(self, test_data: TestDataV2):
+        self._test_data = test_data
+
+    def build(self, config: Config) -> _TestDataSourceV2:  # pylint: disable=unused-argument
+        """Builds the TestDataSourceV2 instance."""
+        return _TestDataSourceV2(self._test_data)

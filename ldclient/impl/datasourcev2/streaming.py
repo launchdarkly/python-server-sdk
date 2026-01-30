@@ -17,7 +17,7 @@ from ld_eventsource.config import (
 )
 from ld_eventsource.errors import HTTPStatusError
 
-from ldclient.config import Config
+from ldclient.config import Config, DataSourceBuilder, HTTPConfig
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
@@ -26,7 +26,7 @@ from ldclient.impl.datasystem.protocolv2 import (
     Goodbye,
     PutObject
 )
-from ldclient.impl.http import HTTPFactory, _http_factory
+from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
@@ -57,23 +57,29 @@ JITTER_RATIO = 0.5
 
 STREAMING_ENDPOINT = "/sdk/stream"
 
-SseClientBuilder = Callable[[Config, SelectorStore], SSEClient]
+SseClientBuilder = Callable[[str, HTTPConfig, float, Config, SelectorStore], SSEClient]
 
 
-def create_sse_client(config: Config, ss: SelectorStore) -> SSEClient:
+def create_sse_client(
+    base_uri: str,
+    http_options: HTTPConfig,
+    initial_reconnect_delay: float,
+    config: Config,
+    ss: SelectorStore
+) -> SSEClient:
     """ "
     create_sse_client creates an SSEClient instance configured to connect
     to the LaunchDarkly streaming endpoint.
     """
-    uri = config.stream_base_uri + STREAMING_ENDPOINT
+    uri = base_uri + STREAMING_ENDPOINT
     if config.payload_filter_key is not None:
         uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
 
     # We don't want the stream to use the same read timeout as the rest of the SDK.
-    http_factory = _http_factory(config)
+    base_headers = _base_headers(config)
     stream_http_factory = HTTPFactory(
-        http_factory.base_headers,
-        http_factory.http_config,
+        base_headers,
+        http_options,
         override_read_timeout=STREAM_READ_TIMEOUT,
     )
 
@@ -84,14 +90,14 @@ def create_sse_client(config: Config, ss: SelectorStore) -> SSEClient:
     return SSEClient(
         connect=ConnectStrategy.http(
             url=uri,
-            headers=http_factory.base_headers,
+            headers=base_headers,
             pool=stream_http_factory.create_pool_manager(1, uri),
             urllib3_request_options={"timeout": stream_http_factory.timeout},
             query_params=query_params
         ),
         # we'll make error-handling decisions when we see a Fault
         error_strategy=ErrorStrategy.always_continue(),
-        initial_retry_delay=config.initial_reconnect_delay,
+        initial_retry_delay=initial_reconnect_delay,
         retry_delay_strategy=RetryDelayStrategy.default(
             max_delay=MAX_RETRY_DELAY,
             backoff_multiplier=2,
@@ -111,7 +117,15 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
     from the streaming data source.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self,
+                 uri: str,
+                 http_options: HTTPConfig,
+                 initial_reconnect_delay: float,
+                 config: Config):
+        self.__uri = uri
+        self.__http_options = http_options
+        self.__initial_reconnect_delay = initial_reconnect_delay
+
         self._sse_client_builder = create_sse_client
         self._config = config
         self._sse: Optional[SSEClient] = None
@@ -135,7 +149,14 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        self._sse = self._sse_client_builder(self._config, ss)
+        self._sse = self._sse_client_builder(
+            self.__uri,
+            self.__http_options,
+            self.__initial_reconnect_delay,
+            self._config,
+            ss
+        )
+
         if self._sse is None:
             log.error("Failed to create SSE client for streaming updates.")
             return
@@ -403,14 +424,36 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         return (update, True)
 
 
-class StreamingDataSourceBuilder:  # disable: pylint: disable=too-few-public-methods
+class StreamingDataSourceBuilder(DataSourceBuilder):
     """
     Builder for a StreamingDataSource.
     """
 
-    def __init__(self, config: Config):
-        self._config = config
+    def __init__(self):
+        self.__base_uri: Optional[str] = None
+        self.__initial_reconnect_delay: Optional[float] = None
+        self.__http_options: Optional[HTTPConfig] = None
 
-    def build(self) -> StreamingDataSource:
+    def base_uri(self, uri: str) -> 'StreamingDataSourceBuilder':
+        """Sets the base URI for the streaming data source."""
+        self.__base_uri = uri.rstrip('/')
+        return self
+
+    def initial_reconnect_delay(self, delay: float) -> 'StreamingDataSourceBuilder':
+        """Sets the initial reconnect delay for the streaming data source."""
+        self.__initial_reconnect_delay = delay
+        return self
+
+    def http_options(self, http_options: HTTPConfig) -> 'StreamingDataSourceBuilder':
+        """Sets the HTTP options for the streaming data source."""
+        self.__http_options = http_options
+        return self
+
+    def build(self, config: Config) -> StreamingDataSource:
         """Builds a StreamingDataSource instance with the configured parameters."""
-        return StreamingDataSource(self._config)
+        return StreamingDataSource(
+            self.__base_uri or config.stream_base_uri,
+            self.__http_options or config.http,
+            self.__initial_reconnect_delay or config.initial_reconnect_delay,
+            config
+        )

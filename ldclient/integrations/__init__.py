@@ -7,7 +7,7 @@ from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient import log
-from ldclient.config import Builder, Config
+from ldclient.config import Config, DataSourceBuilder
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import (
@@ -21,7 +21,7 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
 )
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.impl.integrations.files.file_data_sourcev2 import (
-    _FileDataSourceV2
+    FileDataSourceV2Builder
 )
 from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
@@ -274,7 +274,7 @@ class Files:
         return lambda config, store, ready: _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)
 
     @staticmethod
-    def new_data_source_v2(paths: List[str], poll_interval: float = 1, force_polling: bool = False) -> Builder[Any]:
+    def new_data_source_v2(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
         """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
 
         This type is not stable, and not subject to any backwards
@@ -328,6 +328,10 @@ class Files:
         :param force_polling: (default: false) True if the data source should implement file watching via
           polling the filesystem even if a native mechanism is available. This is mainly for SDK testing.
 
-        :return: a builder function that creates the file data source
+        :return: a builder that creates the file data source
         """
-        return lambda config: _FileDataSourceV2(paths, poll_interval, force_polling)
+        return (
+            FileDataSourceV2Builder(paths)
+            .poll_interval(poll_interval)
+            .force_polling(force_polling)
+        )
