@@ -1,5 +1,6 @@
 import time
 from copy import copy
+from enum import Enum
 from queue import Queue
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
@@ -253,6 +254,27 @@ class FeatureStoreClientWrapper(FeatureStore):
             self.store.close()
 
 
+class ConditionDirective(str, Enum):
+    """
+    ConditionDirective represents the possible directives that can be returned from a condition check.
+    """
+
+    FALLBACK = "fallback"
+    """
+    FALLBACK suggests that this data source should be abandoned in favor of the next one.
+    """
+
+    RECOVER = "recover"
+    """
+    RECOVER suggests that we should try to return to the primary data source.
+    """
+
+    CONTINUE = "continue"
+    """
+    CONTINUE suggests that no action is needed and the current data source should keep running.
+    """
+
+
 class FDv2(DataSystem):
     """
     FDv2 is an implementation of the DataSystem interface that uses the Flag Delivery V2 protocol
@@ -275,8 +297,7 @@ class FDv2(DataSystem):
         """
         self._config = config
         self._data_system_config = data_system_config
-        self._primary_synchronizer_builder: Optional[DataSourceBuilder[Synchronizer]] = data_system_config.primary_synchronizer
-        self._secondary_synchronizer_builder = data_system_config.secondary_synchronizer
+        self._synchronizers: List[DataSourceBuilder[Synchronizer]] = list(data_system_config.synchronizers) if data_system_config.synchronizers else []
         self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
         self._disabled = self._config.offline
 
@@ -315,7 +336,7 @@ class FDv2(DataSystem):
         # Track configuration
         self._configured_with_data_sources = (
             (data_system_config.initializers is not None and len(data_system_config.initializers) > 0)
-            or data_system_config.primary_synchronizer is not None
+            or len(self._synchronizers) > 0
         )
 
     def start(self, set_on_ready: Event):
@@ -422,70 +443,64 @@ class FDv2(DataSystem):
 
     def _run_synchronizers(self, set_on_ready: Event):
         """Run synchronizers to keep data up-to-date."""
-        # If no primary synchronizer configured, just set ready and return
-        if self._data_system_config.primary_synchronizer is None:
-            if not set_on_ready.is_set():
-                set_on_ready.set()
+        # If no synchronizers configured, just set ready and return
+        if len(self._synchronizers) == 0:
+            set_on_ready.set()
             return
 
         def synchronizer_loop(self: 'FDv2'):
             try:
+                # Make a working copy of the synchronizers list
+                synchronizers_list = list(self._synchronizers)
+                current_index = 0
+
                 # Always ensure ready event is set when we exit
-                while not self._stop_event.is_set() and self._primary_synchronizer_builder is not None:
-                    # Try primary synchronizer
+                while not self._stop_event.is_set() and len(synchronizers_list) > 0:
                     try:
                         with self._lock.write():
-                            primary_sync = self._primary_synchronizer_builder.build(self._config)
-                            if isinstance(primary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
-                                primary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
-                            self._active_synchronizer = primary_sync
+                            synchronizer: Synchronizer = synchronizers_list[current_index].build(self._config)
+                            if isinstance(synchronizer, DiagnosticSource) and self._diagnostic_accumulator is not None:
+                                synchronizer.set_diagnostic_accumulator(self._diagnostic_accumulator)
+                            self._active_synchronizer = synchronizer
 
-                        log.info("Primary synchronizer %s is starting", primary_sync.name)
+                        log.info("Synchronizer %s (index %d) is starting", synchronizer.name, current_index)
 
-                        remove_sync, fallback_v1 = self._consume_synchronizer_results(
-                            primary_sync, set_on_ready, self._fallback_condition
+                        # Determine which condition to check based on current position
+                        def combined_condition(status: DataSourceStatus) -> ConditionDirective:
+                            # Recovery condition: only applies when not at first synchronizer
+                            if current_index > 0 and self._recovery_condition(status):
+                                return ConditionDirective.RECOVER
+                            # Fallback condition: applies at any position
+                            if self._fallback_condition(status):
+                                return ConditionDirective.FALLBACK
+                            return ConditionDirective.CONTINUE
+
+                        remove_sync, fallback_v1, directive = self._consume_synchronizer_results(
+                            synchronizer, set_on_ready, combined_condition
                         )
 
-                        if remove_sync:
-                            self._primary_synchronizer_builder = self._secondary_synchronizer_builder
-                            self._secondary_synchronizer_builder = None
-
-                            if fallback_v1:
-                                self._primary_synchronizer_builder = self._fdv1_fallback_synchronizer_builder
-
-                            if self._primary_synchronizer_builder is None:
-                                log.warning("No more synchronizers available")
+                        if fallback_v1:
+                            # Abandon all synchronizers and use only fdv1 fallback
+                            log.info("Reverting to FDv1 fallback synchronizer")
+                            if self._fdv1_fallback_synchronizer_builder is not None:
+                                synchronizers_list = [self._fdv1_fallback_synchronizer_builder]
+                                current_index = 0
+                            else:
+                                log.warning("No FDv1 fallback synchronizer available")
+                                synchronizers_list = []
                                 self._data_source_status_provider.update_status(
                                     DataSourceState.OFF,
                                     self._data_source_status_provider.status.error
                                 )
                                 break
-                        else:
-                            log.info("Fallback condition met")
-
-                        if self._stop_event.is_set():
-                            break
-
-                        if self._secondary_synchronizer_builder is None:
                             continue
 
-                        with self._lock.write():
-                            secondary_sync = self._secondary_synchronizer_builder.build(self._config)
-                            if isinstance(secondary_sync, DiagnosticSource) and self._diagnostic_accumulator is not None:
-                                secondary_sync.set_diagnostic_accumulator(self._diagnostic_accumulator)
-                            log.info("Secondary synchronizer %s is starting", secondary_sync.name)
-                            self._active_synchronizer = secondary_sync
-
-                        remove_sync, fallback_v1 = self._consume_synchronizer_results(
-                            secondary_sync, set_on_ready, self._recovery_condition
-                        )
-
                         if remove_sync:
-                            self._secondary_synchronizer_builder = None
-                            if fallback_v1:
-                                self._primary_synchronizer_builder = self._fdv1_fallback_synchronizer_builder
+                            # Permanent failure - remove synchronizer from list
+                            log.warning("Synchronizer %s permanently failed, removing from list", synchronizer.name)
+                            del synchronizers_list[current_index]
 
-                            if self._primary_synchronizer_builder is None:
+                            if len(synchronizers_list) == 0:
                                 log.warning("No more synchronizers available")
                                 self._data_source_status_provider.update_status(
                                     DataSourceState.OFF,
@@ -493,9 +508,25 @@ class FDv2(DataSystem):
                                 )
                                 break
 
-                        log.info("Recovery condition met, returning to primary synchronizer")
+                            # Adjust index if we're now beyond the end of the list
+                            # If we deleted the last synchronizer, wrap to the beginning
+                            if current_index >= len(synchronizers_list):
+                                current_index = 0
+                            # Note: If we deleted a middle element, current_index now points to
+                            # what was the next element (shifted down), which is correct
+                            continue
+
+                        # Condition was met - determine next synchronizer based on directive
+                        if directive == ConditionDirective.RECOVER:
+                            log.info("Recovery condition met, returning to first synchronizer")
+                            current_index = 0
+                        elif directive == ConditionDirective.FALLBACK:
+                            # Fallback to next synchronizer (wraps to 0 at end)
+                            current_index = (current_index + 1) % len(synchronizers_list)
+                            log.info("Fallback condition met, moving to synchronizer at index %d", current_index)
+
                     except Exception as e:
-                        log.error("Failed to build synchronizer: %s", e)
+                        log.error("Failed to build or run synchronizer: %s", e)
                         break
 
             except Exception as e:
@@ -521,12 +552,12 @@ class FDv2(DataSystem):
         self,
         synchronizer: Synchronizer,
         set_on_ready: Event,
-        condition_func: Callable[[DataSourceStatus], bool]
-    ) -> tuple[bool, bool]:
+        condition_func: Callable[[DataSourceStatus], ConditionDirective]
+    ) -> tuple[bool, bool, ConditionDirective]:
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
-        :return: Tuple of (should_remove_sync, fallback_to_fdv1)
+        :return: Tuple of (should_remove_sync, fallback_to_fdv1, directive)
         """
         action_queue: Queue = Queue()
         timer = RepeatingTask(
@@ -563,13 +594,14 @@ class FDv2(DataSystem):
                     if update == "check":
                         # Check condition periodically
                         current_status = self._data_source_status_provider.status
-                        if condition_func(current_status):
-                            return False, False
+                        directive = condition_func(current_status)
+                        if directive != ConditionDirective.CONTINUE:
+                            return False, False, directive
                     continue
 
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
-                    return False, False
+                    return False, False, ConditionDirective.CONTINUE
 
                 # Handle the update
                 if update.change_set is not None:
@@ -584,25 +616,29 @@ class FDv2(DataSystem):
 
                 # Check if we should revert to FDv1 immediately
                 if update.revert_to_fdv1:
-                    return True, True
+                    return True, True, ConditionDirective.FALLBACK
 
                 # Check for OFF state indicating permanent failure
                 if update.state == DataSourceState.OFF:
-                    return True, False
+                    return True, False, ConditionDirective.FALLBACK
         except Exception as e:
             log.error("Error consuming synchronizer results: %s", e)
-            return True, False
+            return True, False, ConditionDirective.FALLBACK
         finally:
             synchronizer.stop()
             timer.stop()
 
             sync_reader.join(0.5)
 
-        return True, False
+        # If we reach here, the synchronizer's iterator completed normally (no more updates)
+        # For continuous synchronizers (streaming/polling), this is unexpected and indicates
+        # the synchronizer can't provide more updates, so we should remove it and fall back
+        return True, False, ConditionDirective.FALLBACK
 
     def _fallback_condition(self, status: DataSourceStatus) -> bool:
         """
-        Determine if we should fallback to secondary synchronizer.
+        Determine if we should fallback to the next synchronizer in the list.
+        This applies at any position in the synchronizers list.
 
         :param status: Current data source status
         :return: True if fallback condition is met
@@ -620,7 +656,8 @@ class FDv2(DataSystem):
 
     def _recovery_condition(self, status: DataSourceStatus) -> bool:
         """
-        Determine if we should try to recover to primary synchronizer.
+        Determine if we should try to recover to the first (preferred) synchronizer.
+        This only applies when not already at the first synchronizer (index > 0).
 
         :param status: Current data source status
         :return: True if recovery condition is met
