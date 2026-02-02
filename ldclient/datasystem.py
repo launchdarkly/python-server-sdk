@@ -7,7 +7,6 @@ from typing import List, Optional
 from ldclient.config import DataSourceBuilder, DataSystemConfig
 from ldclient.impl.datasourcev2.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
-    PollingDataSource,
     PollingDataSourceBuilder
 )
 from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder

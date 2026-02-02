@@ -54,7 +54,7 @@ class ClientEntity:
                     if polling is not None:
                         polling_builder = polling_ds_builder()
                         _set_optional_value(polling, "baseUri", polling_builder.base_uri)
-                        _set_optional_time(polling, "pollingIntervalMs", polling_builder.poll_interval)
+                        _set_optional_time(polling, "pollIntervalMs", polling_builder.poll_interval)
                         initializers.append(polling_builder)
 
                 datasystem.initializers(initializers)
