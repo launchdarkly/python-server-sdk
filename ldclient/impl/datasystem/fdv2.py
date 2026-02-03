@@ -259,6 +259,11 @@ class ConditionDirective(str, Enum):
     ConditionDirective represents the possible directives that can be returned from a condition check.
     """
 
+    REMOVE = "remove"
+    """
+    REMOVE suggests that the current data source should be permanently removed from consideration.
+    """
+
     FALLBACK = "fallback"
     """
     FALLBACK suggests that this data source should be abandoned in favor of the next one.
@@ -269,9 +274,9 @@ class ConditionDirective(str, Enum):
     RECOVER suggests that we should try to return to the primary data source.
     """
 
-    CONTINUE = "continue"
+    FDV1 = "fdv1"
     """
-    CONTINUE suggests that no action is needed and the current data source should keep running.
+    FDV1 suggests that we should immediately revert to the FDv1 fallback synchronizer.
     """
 
 
@@ -459,27 +464,17 @@ class FDv2(DataSystem):
                     try:
                         with self._lock.write():
                             synchronizer: Synchronizer = synchronizers_list[current_index].build(self._config)
+                            self._active_synchronizer = synchronizer
                             if isinstance(synchronizer, DiagnosticSource) and self._diagnostic_accumulator is not None:
                                 synchronizer.set_diagnostic_accumulator(self._diagnostic_accumulator)
-                            self._active_synchronizer = synchronizer
 
                         log.info("Synchronizer %s (index %d) is starting", synchronizer.name, current_index)
 
-                        # Determine which condition to check based on current position
-                        def combined_condition(status: DataSourceStatus) -> ConditionDirective:
-                            # Recovery condition: only applies when not at first synchronizer
-                            if current_index > 0 and self._recovery_condition(status):
-                                return ConditionDirective.RECOVER
-                            # Fallback condition: applies at any position
-                            if self._fallback_condition(status):
-                                return ConditionDirective.FALLBACK
-                            return ConditionDirective.CONTINUE
-
-                        remove_sync, fallback_v1, directive = self._consume_synchronizer_results(
-                            synchronizer, set_on_ready, combined_condition
+                        directive = self._consume_synchronizer_results(
+                            synchronizer, set_on_ready, current_index != 0
                         )
 
-                        if fallback_v1:
+                        if directive == ConditionDirective.FDV1:
                             # Abandon all synchronizers and use only fdv1 fallback
                             log.info("Reverting to FDv1 fallback synchronizer")
                             if self._fdv1_fallback_synchronizer_builder is not None:
@@ -494,8 +489,7 @@ class FDv2(DataSystem):
                                 )
                                 break
                             continue
-
-                        if remove_sync:
+                        elif directive == ConditionDirective.REMOVE:
                             # Permanent failure - remove synchronizer from list
                             log.warning("Synchronizer %s permanently failed, removing from list", synchronizer.name)
                             del synchronizers_list[current_index]
@@ -515,9 +509,8 @@ class FDv2(DataSystem):
                             # Note: If we deleted a middle element, current_index now points to
                             # what was the next element (shifted down), which is correct
                             continue
-
                         # Condition was met - determine next synchronizer based on directive
-                        if directive == ConditionDirective.RECOVER:
+                        elif directive == ConditionDirective.RECOVER:
                             log.info("Recovery condition met, returning to first synchronizer")
                             current_index = 0
                         elif directive == ConditionDirective.FALLBACK:
@@ -552,8 +545,8 @@ class FDv2(DataSystem):
         self,
         synchronizer: Synchronizer,
         set_on_ready: Event,
-        condition_func: Callable[[DataSourceStatus], ConditionDirective]
-    ) -> tuple[bool, bool, ConditionDirective]:
+        check_recovery: bool,
+    ) -> ConditionDirective:
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
@@ -594,14 +587,15 @@ class FDv2(DataSystem):
                     if update == "check":
                         # Check condition periodically
                         current_status = self._data_source_status_provider.status
-                        directive = condition_func(current_status)
-                        if directive != ConditionDirective.CONTINUE:
-                            return False, False, directive
+                        if check_recovery and self._recovery_condition(current_status):
+                            return ConditionDirective.RECOVER
+                        if self._fallback_condition(current_status):
+                            return ConditionDirective.FALLBACK
                     continue
 
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
-                    return False, False, ConditionDirective.CONTINUE
+                    return ConditionDirective.FALLBACK
 
                 # Handle the update
                 if update.change_set is not None:
@@ -616,14 +610,14 @@ class FDv2(DataSystem):
 
                 # Check if we should revert to FDv1 immediately
                 if update.revert_to_fdv1:
-                    return True, True, ConditionDirective.FALLBACK
+                    return ConditionDirective.FDV1
 
                 # Check for OFF state indicating permanent failure
                 if update.state == DataSourceState.OFF:
-                    return True, False, ConditionDirective.FALLBACK
+                    return ConditionDirective.REMOVE
         except Exception as e:
             log.error("Error consuming synchronizer results: %s", e)
-            return True, False, ConditionDirective.FALLBACK
+            return ConditionDirective.REMOVE
         finally:
             synchronizer.stop()
             timer.stop()
@@ -633,7 +627,7 @@ class FDv2(DataSystem):
         # If we reach here, the synchronizer's iterator completed normally (no more updates)
         # For continuous synchronizers (streaming/polling), this is unexpected and indicates
         # the synchronizer can't provide more updates, so we should remove it and fall back
-        return True, False, ConditionDirective.FALLBACK
+        return ConditionDirective.REMOVE
 
     def _fallback_condition(self, status: DataSourceStatus) -> bool:
         """
