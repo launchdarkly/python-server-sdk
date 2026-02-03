@@ -209,7 +209,7 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
 
     assert updates[0].change_set is not None
     assert len(updates[0].change_set.changes) == 0
-    assert updates[0].change_set.selector is not None
+    assert updates[0].change_set.selector.is_defined()
     assert updates[0].change_set.selector.version == 300
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -241,7 +241,7 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
     assert updates[0].change_set.changes[0].key == "flag-key"
     assert updates[0].change_set.changes[0].object == {"key": "flag-key"}
     assert updates[0].change_set.changes[0].version == 100
-    assert updates[0].change_set.selector is not None
+    assert updates[0].change_set.selector.is_defined()
     assert updates[0].change_set.selector.version == 300
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -272,7 +272,7 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
     assert updates[0].change_set.changes[0].kind == ObjectKind.FLAG
     assert updates[0].change_set.changes[0].key == "flag-key"
     assert updates[0].change_set.changes[0].version == 101
-    assert updates[0].change_set.selector is not None
+    assert updates[0].change_set.selector.is_defined()
     assert updates[0].change_set.selector.version == 300
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -299,7 +299,7 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
 
     assert updates[0].change_set is not None
     assert len(updates[0].change_set.changes) == 0
-    assert updates[0].change_set.selector is not None
+    assert updates[0].change_set.selector.is_defined()
     assert updates[0].change_set.selector.version == 300
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -326,7 +326,7 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
 
     assert updates[0].change_set is not None
     assert len(updates[0].change_set.changes) == 0
-    assert updates[0].change_set.selector is not None
+    assert updates[0].change_set.selector.is_defined()
     assert updates[0].change_set.selector.version == 300
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL

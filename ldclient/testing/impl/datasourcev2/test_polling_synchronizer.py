@@ -142,7 +142,7 @@ def test_handles_empty_changeset():
 
     assert valid.change_set is not None
     assert len(valid.change_set.changes) == 0
-    assert valid.change_set.selector is not None
+    assert valid.change_set.selector.is_defined()
     assert valid.change_set.selector.version == 300
     assert valid.change_set.selector.state == "p:SOMETHING:300"
     assert valid.change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -175,7 +175,7 @@ def test_handles_put_objects():
     assert valid.change_set.changes[0].key == "flag-key"
     assert valid.change_set.changes[0].object == {"key": "flag-key"}
     assert valid.change_set.changes[0].version == 100
-    assert valid.change_set.selector is not None
+    assert valid.change_set.selector.is_defined()
     assert valid.change_set.selector.version == 300
     assert valid.change_set.selector.state == "p:SOMETHING:300"
     assert valid.change_set.intent_code == IntentCode.TRANSFER_FULL
@@ -205,7 +205,7 @@ def test_handles_delete_objects():
     assert valid.change_set.changes[0].kind == ObjectKind.FLAG
     assert valid.change_set.changes[0].key == "flag-key"
     assert valid.change_set.changes[0].version == 101
-    assert valid.change_set.selector is not None
+    assert valid.change_set.selector.is_defined()
     assert valid.change_set.selector.version == 300
     assert valid.change_set.selector.state == "p:SOMETHING:300"
     assert valid.change_set.intent_code == IntentCode.TRANSFER_FULL

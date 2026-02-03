@@ -414,7 +414,7 @@ class FDv2(DataSystem):
                 self._store.apply(basis.change_set, basis.persist)
 
                 # Set ready event if an only if a selector is defined for the changeset
-                if basis.change_set.selector is not None and basis.change_set.selector.is_defined():
+                if basis.change_set.selector.is_defined():
                     set_on_ready.set()
                     return
             except Exception as e:

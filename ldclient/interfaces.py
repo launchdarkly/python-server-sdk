@@ -1346,7 +1346,7 @@ class ChangeSet:
 
     intent_code: IntentCode
     changes: List[Change]
-    selector: Optional[Selector]
+    selector: Selector
 
 
 @dataclass(frozen=True)

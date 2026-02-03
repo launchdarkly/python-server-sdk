@@ -46,7 +46,6 @@ def test_transfer_none():
     change_set = result.value
     assert change_set.intent_code == IntentCode.TRANSFER_NONE
     assert len(change_set.changes) == 0
-    assert change_set.selector is not None
     assert not change_set.selector.is_defined()
 
 
@@ -59,7 +58,7 @@ def test_transfer_full_with_empty_payload():
     change_set = result.value
     assert change_set.intent_code == IntentCode.TRANSFER_FULL
     assert len(change_set.changes) == 0
-    assert change_set.selector is not None
+    assert change_set.selector.is_defined()
     assert change_set.selector.state == "(p:5A46PZ79FQ9D08YYKT79DECDNV:461)"
     assert change_set.selector.version == 461
 
@@ -87,7 +86,7 @@ def test_processes_put_object():
     assert change_set.changes[0].version == 461
     assert isinstance(change_set.changes[0].object, dict)
 
-    assert change_set.selector is not None
+    assert change_set.selector.is_defined()
     assert change_set.selector.state == "(p:5A46PZ79FQ9D08YYKT79DECDNV:461)"
     assert change_set.selector.version == 461
 
@@ -107,7 +106,7 @@ def test_processes_delete_object():
     assert change_set.changes[0].version == 461
     assert change_set.changes[0].object is None
 
-    assert change_set.selector is not None
+    assert change_set.selector.is_defined()
     assert change_set.selector.state == "(p:5A46PZ79FQ9D08YYKT79DECDNV:461)"
     assert change_set.selector.version == 461
 
@@ -169,7 +168,6 @@ def test_fdv1_payload_empty_flags_and_segments():
     assert change_set.intent_code == IntentCode.TRANSFER_FULL
     assert len(change_set.changes) == 0
     # FDv1 doesn't use selectors
-    assert change_set.selector is not None
     assert not change_set.selector.is_defined()
 
 
