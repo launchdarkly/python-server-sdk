@@ -7,8 +7,8 @@ from ldclient.impl.datasourcev2.polling import (
     PollingDataSource,
     PollingResult,
     Selector,
-    polling_payload_to_changeset,
-    fdv1_polling_payload_to_changeset
+    fdv1_polling_payload_to_changeset,
+    polling_payload_to_changeset
 )
 from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
 from ldclient.interfaces import ChangeSetBuilder, IntentCode

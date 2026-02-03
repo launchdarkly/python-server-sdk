@@ -221,7 +221,7 @@ class PollingDataSource(Initializer, Synchronizer):
 
             basis = Basis(
                 change_set=change_set,
-                persist=change_set.selector.is_defined(),
+                persist=change_set.selector is not None and change_set.selector.is_defined(),
                 environment_id=env_id,
             )
 
