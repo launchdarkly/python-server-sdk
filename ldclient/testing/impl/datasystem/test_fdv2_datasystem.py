@@ -7,7 +7,7 @@ from typing import List
 
 from mock import Mock
 
-from ldclient.config import Config, DataSystemConfig
+from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.datasystem import file_ds_builder
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
@@ -22,6 +22,16 @@ from ldclient.interfaces import (
 from ldclient.versioned_data_kind import FEATURES
 
 
+class MockDataSourceBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-methods
+    """A simple wrapper to turn a mock Synchronizer into a DataSourceBuilder."""
+
+    def __init__(self, mock_synchronizer: Synchronizer):
+        self._mock = mock_synchronizer
+
+    def build(self, config: Config) -> Synchronizer:  # pylint: disable=unused-argument
+        return self._mock
+
+
 def test_two_phase_init():
     td_initializer = TestDataV2.data_source()
     td_initializer.update(td_initializer.flag("feature-flag").on(True))
@@ -33,8 +43,8 @@ def test_two_phase_init():
     td_synchronizer.update(td_initializer.flag("feature-flag").on(True))
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
     data_system_config = DataSystemConfig(
-        initializers=[td_initializer.build_initializer],
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        initializers=[td_initializer.builder],
+        primary_synchronizer=td_synchronizer.builder,
     )
 
     set_on_ready = Event()
@@ -73,7 +83,7 @@ def test_can_stop_fdv2():
     td = TestDataV2.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=td.build_synchronizer,
+        primary_synchronizer=td.builder,
     )
 
     set_on_ready = Event()
@@ -102,7 +112,7 @@ def test_fdv2_data_availability_is_refreshed_with_data():
     td = TestDataV2.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=td.build_synchronizer,
+        primary_synchronizer=td.builder,
     )
 
     set_on_ready = Event()
@@ -121,9 +131,9 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
     td = TestDataV2.data_source()
     td.update(td.flag("feature-flag").on(True))
     data_system_config = DataSystemConfig(
-        initializers=[td.build_initializer],
-        primary_synchronizer=lambda _: mock,  # Primary synchronizer is None to force fallback
-        secondary_synchronizer=td.build_synchronizer,
+        initializers=[td.builder],
+        primary_synchronizer=MockDataSourceBuilder(mock),  # Primary synchronizer is None to force fallback
+        secondary_synchronizer=td.builder,
     )
 
     changed = Event()
@@ -157,9 +167,9 @@ def test_fdv2_shutdown_down_if_both_synchronizers_fail():
     td = TestDataV2.data_source()
     td.update(td.flag("feature-flag").on(True))
     data_system_config = DataSystemConfig(
-        initializers=[td.build_initializer],
-        primary_synchronizer=lambda _: mock,  # Primary synchronizer is None to force fallback
-        secondary_synchronizer=lambda _: mock,  # Secondary synchronizer also fails
+        initializers=[td.builder],
+        primary_synchronizer=MockDataSourceBuilder(mock),  # Primary synchronizer is None to force fallback
+        secondary_synchronizer=MockDataSourceBuilder(mock),  # Secondary synchronizer also fails
     )
 
     changed = Event()
@@ -202,8 +212,8 @@ def test_fdv2_falls_back_to_fdv1_on_polling_error_with_header():
 
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=lambda _: mock_primary,
-        fdv1_fallback_synchronizer=td_fdv1.build_synchronizer,
+        primary_synchronizer=MockDataSourceBuilder(mock_primary),
+        fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
     changed = Event()
@@ -252,8 +262,8 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
 
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=lambda _: mock_primary,
-        fdv1_fallback_synchronizer=td_fdv1.build_synchronizer,
+        primary_synchronizer=MockDataSourceBuilder(mock_primary),
+        fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
     changed = Event()
@@ -309,9 +319,9 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
     td_fdv1.update(td_fdv1.flag("fdv1-replacement-flag").on(True))
 
     data_system_config = DataSystemConfig(
-        initializers=[td_initializer.build_initializer],
-        primary_synchronizer=lambda _: mock_primary,
-        fdv1_fallback_synchronizer=td_fdv1.build_synchronizer,
+        initializers=[td_initializer.builder],
+        primary_synchronizer=MockDataSourceBuilder(mock_primary),
+        fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
     changed = Event()
@@ -370,9 +380,9 @@ def test_fdv2_no_fallback_without_header():
 
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=lambda _: mock_primary,
-        secondary_synchronizer=lambda _: mock_secondary,
-        fdv1_fallback_synchronizer=td_fdv1.build_synchronizer,
+        primary_synchronizer=MockDataSourceBuilder(mock_primary),
+        secondary_synchronizer=MockDataSourceBuilder(mock_secondary),
+        fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
     set_on_ready = Event()
@@ -414,8 +424,8 @@ def test_fdv2_stays_on_fdv1_after_fallback():
 
     data_system_config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=lambda _: mock_primary,
-        fdv1_fallback_synchronizer=td_fdv1.build_synchronizer,
+        primary_synchronizer=MockDataSourceBuilder(mock_primary),
+        fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
     set_on_ready = Event()
@@ -469,8 +479,8 @@ def test_fdv2_initializer_should_run_until_success():
         td_synchronizer = TestDataV2.data_source()
 
         data_system_config = DataSystemConfig(
-            initializers=[file_ds_builder([path]), td_initializer.build_initializer],
-            primary_synchronizer=td_synchronizer.build_synchronizer,
+            initializers=[file_ds_builder([path]), td_initializer.builder],
+            primary_synchronizer=td_synchronizer.builder,
         )
 
         set_on_ready = Event()
@@ -525,7 +535,7 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
         td_synchronizer = TestDataV2.data_source()
 
         data_system_config = DataSystemConfig(
-            initializers=[td_initializer.build_initializer, file_ds_builder([path])],
+            initializers=[td_initializer.builder, file_ds_builder([path])],
             primary_synchronizer=None,
         )
 

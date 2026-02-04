@@ -13,14 +13,14 @@ from urllib import parse
 
 import urllib3
 
-from ldclient.config import Config
+from ldclient.config import Config, DataSourceBuilder, HTTPConfig
 from ldclient.impl.datasource.feature_requester import LATEST_ALL_URI
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
     PutObject
 )
-from ldclient.impl.http import _http_factory
+from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
@@ -245,11 +245,13 @@ class Urllib3PollingRequester(Requester):
     requests.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, base_uri: str, http_options: HTTPConfig):
         self._etag = None
-        self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
+        factory = HTTPFactory(_base_headers(config), http_options)
+        self._http = factory.create_pool_manager(1, base_uri)
+        self._http_options = http_options
         self._config = config
-        self._poll_uri = config.base_uri + POLLING_ENDPOINT
+        self._poll_uri = base_uri + POLLING_ENDPOINT
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
@@ -280,8 +282,8 @@ class Urllib3PollingRequester(Requester):
             uri,
             headers=hdrs,
             timeout=urllib3.Timeout(
-                connect=self._config.http.connect_timeout,
-                read=self._config.http.read_timeout,
+                connect=self._http_options.connect_timeout,
+                read=self._http_options.read_timeout,
             ),
             retries=1,
         )
@@ -377,31 +379,93 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
     return _Fail(error="didn't receive any known protocol events in polling payload")
 
 
-class PollingDataSourceBuilder:
+class PollingDataSourceBuilder(DataSourceBuilder):
     """
     Builder for a PollingDataSource.
     """
 
-    def __init__(self, config: Config):
-        self._config = config
-        self._requester: Optional[Requester] = None
+    def __init__(self):
+        self.__base_uri: Optional[str] = None
+        self.__poll_interval: Optional[float] = None
+        self.__http_options: Optional[HTTPConfig] = None
+        self.__requester: Optional[Requester] = None
 
-    def requester(self, requester: Requester) -> "PollingDataSourceBuilder":
-        """Sets a custom Requester for the PollingDataSource."""
-        self._requester = requester
+    def base_uri(self, uri: str) -> 'PollingDataSourceBuilder':
+        """Sets the base URI for the streaming data source."""
+        self.__base_uri = uri.rstrip('/')
         return self
 
-    def build(self) -> PollingDataSource:
+    def poll_interval(self, poll_interval: float) -> 'PollingDataSourceBuilder':
+        """Sets the polling interval for the PollingDataSource."""
+        self.__poll_interval = poll_interval
+        return self
+
+    def http_options(self, http_options: HTTPConfig) -> 'PollingDataSourceBuilder':
+        """Sets the HTTP options for the streaming data source."""
+        self.__http_options = http_options
+        return self
+
+    def requester(self, requester: Requester) -> 'PollingDataSourceBuilder':
+        """Sets a custom Requester for the PollingDataSource."""
+        self.__requester = requester
+        return self
+
+    def build(self, config: Config) -> PollingDataSource:
         """Builds the PollingDataSource with the configured parameters."""
         requester = (
-            self._requester
-            if self._requester is not None
-            else Urllib3PollingRequester(self._config)
+            self.__requester
+            if self.__requester is not None
+            else Urllib3PollingRequester(
+                config,
+                self.__base_uri or config.base_uri,
+                self.__http_options or config.http
+            )
         )
 
         return PollingDataSource(
-            poll_interval=self._config.poll_interval, requester=requester
+            poll_interval=self.__poll_interval or config.poll_interval,
+            requester=requester
         )
+
+
+class FallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
+    """
+    Builder for a PollingDataSource that falls back to Flag Delivery v1.
+    """
+
+    def __init__(self):
+        self.__base_uri: Optional[str] = None
+        self.__poll_interval: Optional[float] = None
+        self.__http_options: Optional[HTTPConfig] = None
+
+    def base_uri(self, uri: str) -> 'FallbackToFDv1PollingDataSourceBuilder':
+        """Sets the base URI for the data source."""
+        self.__base_uri = uri.rstrip('/')
+        return self
+
+    def poll_interval(self, poll_interval: float) -> 'FallbackToFDv1PollingDataSourceBuilder':
+        """Sets the polling interval for the data source."""
+        self.__poll_interval = poll_interval
+        return self
+
+    def http_options(self, http_options: HTTPConfig) -> 'FallbackToFDv1PollingDataSourceBuilder':
+        """Sets the HTTP options for the data source."""
+        self.__http_options = http_options
+        return self
+
+    def build(self, config: Config) -> PollingDataSource:
+        """Builds the PollingDataSource with the configured parameters."""
+        builder = PollingDataSourceBuilder()
+        builder.requester(
+            Urllib3FDv1PollingRequester(
+                config,
+                self.__base_uri or config.base_uri,
+                self.__http_options or config.http
+            )
+        )
+        builder.poll_interval(self.__poll_interval or config.poll_interval)
+
+        return builder.build(config)
 
 
 # pylint: disable=too-few-public-methods
@@ -411,11 +475,14 @@ class Urllib3FDv1PollingRequester(Requester):
     requests.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, base_uri: str, http_options: HTTPConfig):
         self._etag = None
-        self._http = _http_factory(config).create_pool_manager(1, config.base_uri)
+        self._http = HTTPFactory(_base_headers(config), http_options).create_pool_manager(
+            1, base_uri
+        )
+        self._http_options = http_options
         self._config = config
-        self._poll_uri = config.base_uri + LATEST_ALL_URI
+        self._poll_uri = base_uri + LATEST_ALL_URI
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
@@ -443,8 +510,8 @@ class Urllib3FDv1PollingRequester(Requester):
             uri,
             headers=hdrs,
             timeout=urllib3.Timeout(
-                connect=self._config.http.connect_timeout,
-                read=self._config.http.read_timeout,
+                connect=self._http_options.connect_timeout,
+                read=self._http_options.read_timeout,
             ),
             retries=1,
         )
