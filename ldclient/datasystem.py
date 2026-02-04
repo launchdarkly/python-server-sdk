@@ -28,8 +28,7 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
 
     def __init__(self) -> None:
         self._initializers: Optional[List[DataSourceBuilder[Initializer]]] = None
-        self._primary_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
-        self._secondary_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
+        self._synchronizers: List[DataSourceBuilder[Synchronizer]] = []
         self._fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
         self._store_mode: DataStoreMode = DataStoreMode.READ_ONLY
         self._data_store: Optional[FeatureStore] = None
@@ -43,14 +42,23 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
 
     def synchronizers(
         self,
-        primary: DataSourceBuilder[Synchronizer],
-        secondary: Optional[DataSourceBuilder[Synchronizer]] = None,
+        *sync_builders: DataSourceBuilder[Synchronizer]
     ) -> "ConfigBuilder":
         """
         Sets the synchronizers for the data system.
+
+        Accepts one or more synchronizer builders, ordered by preference.
+        The first synchronizer is the most preferred, with subsequent
+        synchronizers serving as fallbacks in order of decreasing preference.
+
+        Examples:
+            builder.synchronizers(streaming_builder)
+            builder.synchronizers(streaming_builder, polling_builder)
+            builder.synchronizers(sync1, sync2, sync3)
         """
-        self._primary_synchronizer = primary
-        self._secondary_synchronizer = secondary
+        if len(sync_builders) == 0:
+            raise ValueError("At least one synchronizer must be provided")
+        self._synchronizers = list(sync_builders)
         return self
 
     def fdv1_compatible_synchronizer(
@@ -76,13 +84,9 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         """
         Builds the data system configuration.
         """
-        if self._secondary_synchronizer is not None and self._primary_synchronizer is None:
-            raise ValueError("Primary synchronizer must be set if secondary is set")
-
         return DataSystemConfig(
             initializers=self._initializers,
-            primary_synchronizer=self._primary_synchronizer,
-            secondary_synchronizer=self._secondary_synchronizer,
+            synchronizers=self._synchronizers if len(self._synchronizers) > 0 else None,
             fdv1_fallback_synchronizer=self._fdv1_fallback_synchronizer,
             data_store_mode=self._store_mode,
             data_store=self._data_store,
