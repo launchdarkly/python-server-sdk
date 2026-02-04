@@ -488,23 +488,25 @@ class LDClient:
             return
         return self._event_processor.flush()
 
-    def variation(self, key: str, context: Context, default: Any) -> Any:
+    def variation(self, key: str, context: Context, default: Any, send_events: bool = True) -> Any:
         """Calculates the value of a feature flag for a given context.
 
         :param key: the unique key for the feature flag
         :param context: the evaluation context
         :param default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
+        :param send_events: whether to send evaluation events to LaunchDarkly. Defaults to True.
+          Set to False to evaluate the flag without generating analytics events.
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
 
         def evaluate():
-            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
+            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default, send_events)
             return _EvaluationWithHookResult(evaluation_detail=detail)
 
         return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation", block=evaluate).evaluation_detail.value
 
-    def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
+    def variation_detail(self, key: str, context: Context, default: Any, send_events: bool = True) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
         describes the way the value was determined.
 
@@ -515,12 +517,14 @@ class LDClient:
         :param context: the evaluation context
         :param default: the default value of the flag, to be used if the value is not
           available from LaunchDarkly
+        :param send_events: whether to send evaluation events to LaunchDarkly. Defaults to True.
+          Set to False to evaluate the flag without generating analytics events.
         :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
           flag value and evaluation reason
         """
 
         def evaluate():
-            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons, send_events)
             return _EvaluationWithHookResult(evaluation_detail=detail)
 
         return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation_detail", block=evaluate).evaluation_detail
@@ -555,7 +559,7 @@ class LDClient:
         hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage.value, method="migration_variation", block=evaluate)
         return hook_result.results['default_stage'], hook_result.results['tracker']
 
-    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory, send_events: bool = True) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
@@ -567,7 +571,8 @@ class LDClient:
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
-                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+                if send_events:
+                    self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
                 return EvaluationDetail(default, None, reason), None
 
         if not context.valid:
@@ -580,27 +585,32 @@ class LDClient:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
             reason = error_reason('EXCEPTION')
-            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+            if send_events:
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason), None
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
-            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+            if send_events:
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason), None
         else:
             try:
                 result = self._evaluator.evaluate(flag, context, event_factory)
-                for event in result.events or []:
-                    self._send_event(event)
+                if send_events:
+                    for event in result.events or []:
+                        self._send_event(event)
                 detail = result.detail
                 if detail.is_default_value():
                     detail = EvaluationDetail(default, None, detail.reason)
-                self._send_event(event_factory.new_eval_event(flag, context, detail, default))
+                if send_events:
+                    self._send_event(event_factory.new_eval_event(flag, context, detail, default))
                 return detail, flag
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
-                self._send_event(event_factory.new_default_event(flag, context, default, reason))
+                if send_events:
+                    self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
     def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
