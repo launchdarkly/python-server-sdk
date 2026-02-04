@@ -2,22 +2,16 @@
 Configuration for LaunchDarkly's data acquisition strategy.
 """
 
-from typing import Callable, List, Optional, TypeVar
+from typing import List, Optional
 
-from ldclient.config import Config as LDConfig
-from ldclient.config import DataSystemConfig
+from ldclient.config import DataSourceBuilder, DataSystemConfig
 from ldclient.impl.datasourcev2.polling import (
-    PollingDataSource,
-    PollingDataSourceBuilder,
-    Urllib3FDv1PollingRequester,
-    Urllib3PollingRequester
+    FallbackToFDv1PollingDataSourceBuilder,
+    PollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.streaming import (
-    StreamingDataSource,
-    StreamingDataSourceBuilder
-)
+from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder
 from ldclient.impl.integrations.files.file_data_sourcev2 import (
-    _FileDataSourceV2
+    FileDataSourceV2Builder
 )
 from ldclient.interfaces import (
     DataStoreMode,
@@ -26,10 +20,6 @@ from ldclient.interfaces import (
     Synchronizer
 )
 
-T = TypeVar("T")
-
-Builder = Callable[[LDConfig], T]
-
 
 class ConfigBuilder:  # pylint: disable=too-few-public-methods
     """
@@ -37,14 +27,13 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
     """
 
     def __init__(self) -> None:
-        self._initializers: Optional[List[Builder[Initializer]]] = None
-        self._primary_synchronizer: Optional[Builder[Synchronizer]] = None
-        self._secondary_synchronizer: Optional[Builder[Synchronizer]] = None
-        self._fdv1_fallback_synchronizer: Optional[Builder[Synchronizer]] = None
+        self._initializers: Optional[List[DataSourceBuilder[Initializer]]] = None
+        self._synchronizers: List[DataSourceBuilder[Synchronizer]] = []
+        self._fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
         self._store_mode: DataStoreMode = DataStoreMode.READ_ONLY
         self._data_store: Optional[FeatureStore] = None
 
-    def initializers(self, initializers: Optional[List[Builder[Initializer]]]) -> "ConfigBuilder":
+    def initializers(self, initializers: Optional[List[DataSourceBuilder[Initializer]]]) -> "ConfigBuilder":
         """
         Sets the initializers for the data system.
         """
@@ -53,19 +42,28 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
 
     def synchronizers(
         self,
-        primary: Builder[Synchronizer],
-        secondary: Optional[Builder[Synchronizer]] = None,
+        *sync_builders: DataSourceBuilder[Synchronizer]
     ) -> "ConfigBuilder":
         """
         Sets the synchronizers for the data system.
+
+        Accepts one or more synchronizer builders, ordered by preference.
+        The first synchronizer is the most preferred, with subsequent
+        synchronizers serving as fallbacks in order of decreasing preference.
+
+        Examples:
+            builder.synchronizers(streaming_builder)
+            builder.synchronizers(streaming_builder, polling_builder)
+            builder.synchronizers(sync1, sync2, sync3)
         """
-        self._primary_synchronizer = primary
-        self._secondary_synchronizer = secondary
+        if len(sync_builders) == 0:
+            raise ValueError("At least one synchronizer must be provided")
+        self._synchronizers = list(sync_builders)
         return self
 
     def fdv1_compatible_synchronizer(
             self,
-            fallback: Builder[Synchronizer]
+            fallback: DataSourceBuilder[Synchronizer]
     ) -> "ConfigBuilder":
         """
         Configures the SDK with a fallback synchronizer that is compatible with
@@ -86,53 +84,41 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         """
         Builds the data system configuration.
         """
-        if self._secondary_synchronizer is not None and self._primary_synchronizer is None:
-            raise ValueError("Primary synchronizer must be set if secondary is set")
-
         return DataSystemConfig(
             initializers=self._initializers,
-            primary_synchronizer=self._primary_synchronizer,
-            secondary_synchronizer=self._secondary_synchronizer,
+            synchronizers=self._synchronizers if len(self._synchronizers) > 0 else None,
             fdv1_fallback_synchronizer=self._fdv1_fallback_synchronizer,
             data_store_mode=self._store_mode,
             data_store=self._data_store,
         )
 
 
-def polling_ds_builder() -> Builder[PollingDataSource]:
-    def builder(config: LDConfig) -> PollingDataSource:
-        requester = Urllib3PollingRequester(config)
-        polling_ds = PollingDataSourceBuilder(config)
-        polling_ds.requester(requester)
-
-        return polling_ds.build()
-
-    return builder
+def polling_ds_builder() -> PollingDataSourceBuilder:
+    """
+    Returns a builder for a polling data source.
+    """
+    return PollingDataSourceBuilder()
 
 
-def fdv1_fallback_ds_builder() -> Builder[PollingDataSource]:
-    def builder(config: LDConfig) -> PollingDataSource:
-        requester = Urllib3FDv1PollingRequester(config)
-        polling_ds = PollingDataSourceBuilder(config)
-        polling_ds.requester(requester)
-
-        return polling_ds.build()
-
-    return builder
+def fdv1_fallback_ds_builder() -> FallbackToFDv1PollingDataSourceBuilder:
+    """
+    Returns a builder for a Flag Delivery v1 compatible fallback polling data source.
+    """
+    return FallbackToFDv1PollingDataSourceBuilder()
 
 
-def streaming_ds_builder() -> Builder[StreamingDataSource]:
-    def builder(config: LDConfig) -> StreamingDataSource:
-        return StreamingDataSourceBuilder(config).build()
+def streaming_ds_builder() -> StreamingDataSourceBuilder:
+    """
+    Returns a builder for a streaming data source.
+    """
+    return StreamingDataSourceBuilder()
 
-    return builder
 
-
-def file_ds_builder(paths: List[str]) -> Builder[Initializer]:
-    def builder(_: LDConfig) -> Initializer:
-        return _FileDataSourceV2(paths)
-
-    return builder
+def file_ds_builder(paths: List[str]) -> FileDataSourceV2Builder:
+    """
+    Returns a builder for a file-based data source.
+    """
+    return FileDataSourceV2Builder(paths)
 
 
 def default() -> ConfigBuilder:
@@ -185,7 +171,7 @@ def polling() -> ConfigBuilder:
     streaming, but may be necessary in some network environments.
     """
 
-    polling_builder: Builder[Synchronizer] = polling_ds_builder()
+    polling_builder: DataSourceBuilder[Synchronizer] = polling_ds_builder()
     fallback = fdv1_fallback_ds_builder()
 
     builder = ConfigBuilder()
