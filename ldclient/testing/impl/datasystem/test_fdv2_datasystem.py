@@ -552,3 +552,157 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
         fdv2.stop()
     finally:
         os.remove(path)
+
+
+def test_fdv2_availability_offline():
+    """Test that FDv2 returns DEFAULTS for target availability and data availability when offline."""
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=None,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy", offline=True), data_system_config)
+
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+    assert fdv2.target_availability == DataAvailability.DEFAULTS
+
+
+def test_fdv2_availability_with_data_sources_no_store():
+    """Test that FDv2 returns DEFAULTS for data and REFRESHED for target when configured with data sources but no store and uninitialized."""
+    td = TestDataV2.data_source()
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=td.build_synchronizer,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is not initialized, and we have data sources configured
+    assert not fdv2._store.is_initialized()
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+    assert fdv2.target_availability == DataAvailability.REFRESHED
+
+
+def test_fdv2_availability_no_data_sources_with_readonly_store_uninitialized():
+    """Test that FDv2 returns DEFAULTS for both when no data sources and read-only store is uninitialized."""
+    from ldclient.interfaces import DataStoreMode
+    from ldclient.testing.impl.datasystem.test_fdv2_persistence import (
+        StubFeatureStore
+    )
+
+    store = StubFeatureStore()
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=None,
+        data_store=store,
+        data_store_mode=DataStoreMode.READ_ONLY,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is not initialized
+    assert not store.initialized
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+    assert fdv2.target_availability == DataAvailability.CACHED
+
+
+def test_fdv2_availability_no_data_sources_with_readonly_store_initialized():
+    """Test that FDv2 returns CACHED for both when no data sources and read-only store is initialized."""
+    from ldclient.interfaces import DataStoreMode
+    from ldclient.testing.impl.datasystem.test_fdv2_persistence import (
+        StubFeatureStore
+    )
+
+    store = StubFeatureStore()
+    store.init({FEATURES: {}})
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=None,
+        data_store=store,
+        data_store_mode=DataStoreMode.READ_ONLY,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is initialized
+    assert store.initialized
+    assert fdv2.data_availability == DataAvailability.CACHED
+    assert fdv2.target_availability == DataAvailability.CACHED
+
+
+def test_fdv2_availability_no_data_sources_with_readwrite_store_initialized():
+    """Test that FDv2 returns CACHED for both when no data sources and read-write store is initialized."""
+    from ldclient.interfaces import DataStoreMode
+    from ldclient.testing.impl.datasystem.test_fdv2_persistence import (
+        StubFeatureStore
+    )
+
+    store = StubFeatureStore()
+    store.init({FEATURES: {}})
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=None,
+        data_store=store,
+        data_store_mode=DataStoreMode.READ_WRITE,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is initialized
+    assert store.initialized
+    assert fdv2.data_availability == DataAvailability.CACHED
+    assert fdv2.target_availability == DataAvailability.CACHED
+
+
+def test_fdv2_availability_with_data_sources_and_store_uninitialized():
+    """Test that FDv2 returns DEFAULTS for data and REFRESHED for target when data sources configured with uninitialized store."""
+    from ldclient.interfaces import DataStoreMode
+    from ldclient.testing.impl.datasystem.test_fdv2_persistence import (
+        StubFeatureStore
+    )
+
+    td = TestDataV2.data_source()
+    store = StubFeatureStore()
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=td.build_synchronizer,
+        data_store=store,
+        data_store_mode=DataStoreMode.READ_WRITE,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is not initialized
+    assert not store.initialized
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+    assert fdv2.target_availability == DataAvailability.REFRESHED
+
+
+def test_fdv2_availability_with_data_sources_and_store_initialized():
+    """Test that FDv2 returns CACHED for data and REFRESHED for target when data sources configured with initialized store."""
+    from ldclient.interfaces import DataStoreMode
+    from ldclient.testing.impl.datasystem.test_fdv2_persistence import (
+        StubFeatureStore
+    )
+
+    td = TestDataV2.data_source()
+    store = StubFeatureStore()
+    store.init({FEATURES: {}})
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        primary_synchronizer=td.build_synchronizer,
+        data_store=store,
+        data_store_mode=DataStoreMode.READ_WRITE,
+    )
+
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # Store is initialized but selector not defined yet (synchronizer not started)
+    assert store.initialized
+    assert fdv2.data_availability == DataAvailability.CACHED
+    assert fdv2.target_availability == DataAvailability.REFRESHED
