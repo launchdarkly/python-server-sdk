@@ -4,6 +4,7 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
+import warnings
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, List, Optional, Protocol, Set, TypeVar
@@ -357,8 +358,11 @@ class Config:
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
         The key will not be updated if the provided key contains invalid characters.
 
+        DEPRECATED: This method is deprecated and will be removed in a future version.
+
         :param new_sdk_key: the new SDK key
         """
+        warnings.warn("copy_with_new_sdk_key is deprecated and will be removed in a future version", DeprecationWarning, stacklevel=2)
         return Config(
             sdk_key=new_sdk_key,
             base_uri=self.__base_uri,
