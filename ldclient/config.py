@@ -362,7 +362,7 @@ class Config:
 
         :param new_sdk_key: the new SDK key
         """
-        warnings.warn("copy_with_new_sdk_key is deprecated and will be removed in a future version", DeprecationWarning)
+        warnings.warn("copy_with_new_sdk_key is deprecated and will be removed in a future version", DeprecationWarning, stacklevel=2)
         return Config(
             sdk_key=new_sdk_key,
             base_uri=self.__base_uri,
