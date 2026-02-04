@@ -153,7 +153,7 @@ class FlagBuilder:
     # consider it part of the public API, but it is still called from TestData.
     def _copy(self) -> 'FlagBuilder':
         """Creates a deep copy of the flag builder. Subsequent updates to the
-        original ``FlagBuilder`` object will not update the copy and vise versa.
+        original ``FlagBuilder`` object will not update the copy and vice versa.
 
         :return: a copy of the flag builder object
         """

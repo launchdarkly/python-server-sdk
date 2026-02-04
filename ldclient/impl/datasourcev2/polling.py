@@ -14,14 +14,13 @@ from urllib import parse
 import urllib3
 
 from ldclient.config import Config, DataSourceBuilder, HTTPConfig
-from ldclient.impl.datasource.feature_requester import LATEST_ALL_URI
+from ldclient.impl.datasource.feature_requester import FDV1_POLLING_ENDPOINT
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
     PutObject
 )
 from ldclient.impl.http import HTTPFactory, _base_headers
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
@@ -52,7 +51,7 @@ from ldclient.interfaces import (
     Update
 )
 
-POLLING_ENDPOINT = "/sdk/poll"
+FDV2_POLLING_ENDPOINT = "/sdk/poll"
 
 
 PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
@@ -95,9 +94,6 @@ class PollingDataSource(Initializer, Synchronizer):
         self._poll_interval = poll_interval
         self._interrupt_event = Event()
         self._stop = Event()
-        self._task = RepeatingTask(
-            "ldclient.datasource.polling", poll_interval, 0, self._poll
-        )
 
     @property
     def name(self) -> str:
@@ -193,7 +189,6 @@ class PollingDataSource(Initializer, Synchronizer):
         """Stops the synchronizer."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
-        self._task.stop()
         self._stop.set()
 
     def _poll(self, ss: SelectorStore) -> BasisResult:
@@ -226,7 +221,7 @@ class PollingDataSource(Initializer, Synchronizer):
 
             basis = Basis(
                 change_set=change_set,
-                persist=change_set.selector is not None,
+                persist=change_set.selector is not None and change_set.selector.is_defined(),
                 environment_id=env_id,
             )
 
@@ -251,7 +246,7 @@ class Urllib3PollingRequester(Requester):
         self._http = factory.create_pool_manager(1, base_uri)
         self._http_options = http_options
         self._config = config
-        self._poll_uri = base_uri + POLLING_ENDPOINT
+        self._poll_uri = base_uri + FDV2_POLLING_ENDPOINT
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
@@ -482,7 +477,7 @@ class Urllib3FDv1PollingRequester(Requester):
         )
         self._http_options = http_options
         self._config = config
-        self._poll_uri = base_uri + LATEST_ALL_URI
+        self._poll_uri = base_uri + FDV1_POLLING_ENDPOINT
 
     def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
