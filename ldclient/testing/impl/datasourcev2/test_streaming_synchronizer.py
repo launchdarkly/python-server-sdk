@@ -10,8 +10,9 @@ from ld_eventsource.actions import Action, Start
 from ld_eventsource.http import HTTPStatusError
 from ld_eventsource.sse_client import Event, Fault
 
-from ldclient.config import Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.impl.datasourcev2.streaming import (
+    STREAMING_ENDPOINT,
     SSEClient,
     SseClientBuilder,
     StreamingDataSource
@@ -41,10 +42,27 @@ from ldclient.testing.mock_components import MockSelectorStore
 def list_sse_client(
     events: Iterable[Action],  # pylint: disable=redefined-outer-name
 ) -> SseClientBuilder:
-    def builder(config: Config, ss: SelectorStore) -> SSEClient:
+    def builder(
+        base_uri: str,  # pylint: disable=unused-argument
+        http_options: HTTPConfig,  # pylint: disable=unused-argument
+        initial_reconnect_delay: float,
+        config: Config,  # pylint: disable=unused-argument
+        ss: SelectorStore  # pylint: disable=unused-argument
+    ) -> SSEClient:
         return ListBasedSseClient(events)
 
     return builder
+
+
+def make_streaming_data_source() -> StreamingDataSource:
+    """Helper to create a StreamingDataSource with the new constructor signature."""
+    config = Config("key")
+    return StreamingDataSource(
+        config.stream_base_uri + STREAMING_ENDPOINT,
+        config.http,
+        config.initial_reconnect_delay,
+        config
+    )
 
 
 class ListBasedSseClient:
@@ -90,7 +108,7 @@ def test_ignores_unknown_events():
         pass
 
     unknown_named_event = Event(event="Unknown")
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = list_sse_client([UnknownTypeOfEvent(), unknown_named_event])
 
     assert len(list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))) == 0
@@ -98,7 +116,7 @@ def test_ignores_unknown_events():
 
 def test_ignores_faults_without_errors():
     errorless_fault = Fault(error=None)
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = list_sse_client([errorless_fault])
 
     assert len(list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))) == 0
@@ -177,7 +195,7 @@ def test_handles_no_changes():
         data=json.dumps(server_intent.to_dict()),
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = list_sse_client([intent_event])
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -197,7 +215,7 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -224,7 +242,7 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -256,7 +274,7 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -287,7 +305,7 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -314,7 +332,7 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -343,7 +361,7 @@ def test_error_resets(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -367,7 +385,7 @@ def test_handles_out_of_order(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -398,7 +416,7 @@ def test_invalid_json_decoding(events):  # pylint: disable=redefined-outer-name
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -433,7 +451,7 @@ def test_stops_on_unrecoverable_status_code(
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -469,7 +487,7 @@ def test_continues_on_recoverable_status_code(
             events[EventName.PAYLOAD_TRANSFERRED],
         ]
     )
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -504,7 +522,7 @@ def test_envid_from_start_action(events):  # pylint: disable=redefined-outer-nam
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -529,7 +547,7 @@ def test_envid_not_cleared_from_next_start(events):  # pylint: disable=redefined
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -554,7 +572,7 @@ def test_envid_preserved_across_events(events):  # pylint: disable=redefined-out
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -571,7 +589,7 @@ def test_envid_from_fallback_header():
 
     builder = list_sse_client([start_action])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -588,7 +606,7 @@ def test_envid_from_fault_action():
 
     builder = list_sse_client([fault_action])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -608,7 +626,7 @@ def test_envid_not_cleared_from_next_error():
 
     builder = list_sse_client([fault_action_with_headers, fault_action_without_headers])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -631,7 +649,7 @@ def test_envid_from_fault_with_fallback():
 
     builder = list_sse_client([fault_action])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -654,7 +672,7 @@ def test_envid_from_recoverable_fault(events):  # pylint: disable=redefined-oute
         ]
     )
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
@@ -687,7 +705,7 @@ def test_envid_missing_when_no_headers():
 
     builder = list_sse_client([start_action, intent_event])
 
-    synchronizer = StreamingDataSource(Config(sdk_key="key"))
+    synchronizer = make_streaming_data_source()
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 

@@ -141,7 +141,7 @@ def test_persistent_store_read_only_mode():
         data_store_mode=DataStoreMode.READ_ONLY,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -188,7 +188,7 @@ def test_persistent_store_read_write_mode():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -221,7 +221,7 @@ def test_persistent_store_delta_updates_read_write():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -276,7 +276,7 @@ def test_persistent_store_delta_updates_read_only():
         data_store_mode=DataStoreMode.READ_ONLY,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -327,8 +327,8 @@ def test_persistent_store_with_initializer_and_synchronizer():
     data_system_config = DataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
-        initializers=[td_initializer.build_initializer],
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        initializers=[td_initializer.builder],
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -450,7 +450,7 @@ def test_data_store_status_provider():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -482,7 +482,7 @@ def test_data_store_status_monitoring_not_enabled_by_default():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
@@ -504,7 +504,7 @@ def test_data_store_status_monitoring_enabled_when_supported():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
@@ -523,7 +523,7 @@ def test_no_persistent_store_status_provider_without_store():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=None,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -554,7 +554,7 @@ def test_persistent_store_outage_recovery_flushes_on_recovery():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -608,7 +608,7 @@ def test_persistent_store_outage_recovery_no_flush_when_not_stale():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()
@@ -642,7 +642,7 @@ def test_persistent_store_outage_recovery_no_flush_when_unavailable():
         data_store_mode=DataStoreMode.READ_WRITE,
         data_store=persistent_store,
         initializers=None,
-        primary_synchronizer=td_synchronizer.build_synchronizer,
+        synchronizers=[td_synchronizer.builder],
     )
 
     set_on_ready = Event()

@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import requests
@@ -51,56 +52,38 @@ class ClientEntity:
                 for init_config in init_configs:
                     polling = init_config.get('polling')
                     if polling is not None:
-                        if polling.get("baseUri") is not None:
-                            opts["base_uri"] = polling["baseUri"]
-                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-                        polling = polling_ds_builder()
-                        initializers.append(polling)
+                        polling_builder = polling_ds_builder()
+                        _set_optional_value(polling, "baseUri", polling_builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", polling_builder.poll_interval)
+                        initializers.append(polling_builder)
 
                 datasystem.initializers(initializers)
-            sync_config = datasystem_config.get('synchronizers')
-            if sync_config is not None:
-                primary = sync_config.get('primary')
-                secondary = sync_config.get('secondary')
-
-                primary_builder = None
-                secondary_builder = None
+            sync_configs = datasystem_config.get('synchronizers')
+            if sync_configs is not None:
+                sync_builders = []
                 fallback_builder = None
 
-                if primary is not None:
-                    streaming = primary.get('streaming')
+                for sync_config in sync_configs:
+                    streaming = sync_config.get('streaming')
                     if streaming is not None:
-                        primary_builder = streaming_ds_builder()
-                        if streaming.get("baseUri") is not None:
-                            opts["stream_uri"] = streaming["baseUri"]
-                        _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
-                        primary_builder = streaming_ds_builder()
-                    elif primary.get('polling') is not None:
-                        polling = primary.get('polling')
-                        if polling.get("baseUri") is not None:
-                            opts["base_uri"] = polling["baseUri"]
-                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-                        primary_builder = polling_ds_builder()
-                        fallback_builder = fdv1_fallback_ds_builder()
+                        builder = streaming_ds_builder()
+                        _set_optional_value(streaming, "baseUri", builder.base_uri)
+                        _set_optional_time(streaming, "initialRetryDelayMs", builder.initial_reconnect_delay)
+                        sync_builders.append(builder)
+                    elif sync_config.get('polling') is not None:
+                        polling = sync_config.get('polling')
 
-                if secondary is not None:
-                    streaming = secondary.get('streaming')
-                    if streaming is not None:
-                        secondary_builder = streaming_ds_builder()
-                        if streaming.get("baseUri") is not None:
-                            opts["stream_uri"] = streaming["baseUri"]
-                        _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
-                        secondary_builder = streaming_ds_builder()
-                    elif secondary.get('polling') is not None:
-                        polling = secondary.get('polling')
-                        if polling.get("baseUri") is not None:
-                            opts["base_uri"] = polling["baseUri"]
-                        _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-                        secondary_builder = polling_ds_builder()
-                        fallback_builder = fdv1_fallback_ds_builder()
+                        builder = polling_ds_builder()
+                        _set_optional_value(polling, "baseUri", builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", builder.poll_interval)
+                        sync_builders.append(builder)
 
-                if primary_builder is not None:
-                    datasystem.synchronizers(primary_builder, secondary_builder)
+                        fallback_builder = fdv1_fallback_ds_builder()
+                        _set_optional_value(polling, "baseUri", fallback_builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", fallback_builder.poll_interval)
+
+                if sync_builders:
+                    datasystem.synchronizers(*sync_builders)
                 if fallback_builder is not None:
                     datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
@@ -307,7 +290,16 @@ class ClientEntity:
 def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
     if params_in.get(name_in) is not None:
         params_out[name_out] = params_in[name_in] / 1000.0
-    return None
+
+
+def _set_optional_time(params_in: dict, name_in: str, func: Callable[[float], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in] / 1000.0)
+
+
+def _set_optional_value(params_in: dict, name_in: str, func: Callable[[Any], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in])
 
 
 def _create_persistent_store(persistent_store_config: dict):
