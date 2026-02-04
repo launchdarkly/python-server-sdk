@@ -268,7 +268,7 @@ class Store:
                 log.error("Store: couldn't apply changeset: %s", str(e))
 
     def _set_basis(
-        self, collections: Collections, selector: Optional[Selector], persist: bool
+        self, collections: Collections, selector: Selector, persist: bool
     ) -> None:
         """
         Set the basis of the store. Any existing data is discarded.
@@ -310,7 +310,7 @@ class Store:
             self._send_change_events(affected_items)
 
     def _apply_delta(
-        self, collections: Collections, selector: Optional[Selector], persist: bool
+        self, collections: Collections, selector: Selector, persist: bool
     ) -> None:
         """
         Apply a delta update to the store.
