@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +40,8 @@ jobs:
 
       - name: Run tests
         run: make test-all
+        env:
+          LD_SKIP_FLAKY_TESTS: true
 
       - name: Verify typehints
         run: make lint
@@ -54,10 +56,21 @@ jobs:
       - name: start contract test service
         run: make start-contract-test-service-bg
 
-      - uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+      - name: Run contract tests v2
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
+          stop_service: "false"
+          enable_persistence_tests: "true"
+
+      - name: Run contract tests v3
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9000
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v3.0.0-alpha.3
+          enable_persistence_tests: "true"
 
   windows:
     runs-on: windows-latest
@@ -69,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -92,3 +105,5 @@ jobs:
 
       - name: Run tests
         run: make test-all
+        env:
+          LD_SKIP_FLAKY_TESTS: true

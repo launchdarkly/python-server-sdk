@@ -57,11 +57,8 @@ class TestData:
 
     def __call__(self, config, store, ready):
         data_source = _TestDataSource(store, self, ready)
-        try:
-            self._lock.lock()
+        with self._lock.write():
             self._instances.append(data_source)
-        finally:
-            self._lock.unlock()
 
         return data_source
 
@@ -89,14 +86,11 @@ class TestData:
         :param str key: the flag key
         :return: the flag configuration builder object
         """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
             else:
                 return FlagBuilder(key).boolean_flag()
-        finally:
-            self._lock.runlock()
 
     def update(self, flag_builder: 'FlagBuilder') -> 'TestData':
         """Updates the test data with the specified flag configuration.
@@ -113,9 +107,7 @@ class TestData:
         :param flag_builder: a flag configuration builder
         :return: self (the TestData object)
         """
-        try:
-            self._lock.lock()
-
+        with self._lock.write():
             old_version = 0
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
@@ -126,8 +118,6 @@ class TestData:
 
             self._current_flags[flag_builder._key] = new_flag
             self._flag_builders[flag_builder._key] = flag_builder._copy()
-        finally:
-            self._lock.unlock()
 
         for instance in self._instances:
             instance.upsert(new_flag)
@@ -138,11 +128,8 @@ class TestData:
         return {FEATURES: copy.copy(self._current_flags)}
 
     def _closed_instance(self, instance):
-        try:
-            self._lock.lock()
+        with self._lock.write():
             self._instances.remove(instance)
-        finally:
-            self._lock.unlock()
 
 
 class FlagBuilder:
@@ -166,7 +153,7 @@ class FlagBuilder:
     # consider it part of the public API, but it is still called from TestData.
     def _copy(self) -> 'FlagBuilder':
         """Creates a deep copy of the flag builder. Subsequent updates to the
-        original ``FlagBuilder`` object will not update the copy and vise versa.
+        original ``FlagBuilder`` object will not update the copy and vice versa.
 
         :return: a copy of the flag builder object
         """

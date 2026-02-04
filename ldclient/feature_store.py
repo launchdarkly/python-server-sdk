@@ -77,8 +77,7 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
 
     def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         """ """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             itemsOfKind = self._items[kind]
             item = itemsOfKind.get(key)
             if item is None:
@@ -88,17 +87,12 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
                 log.debug("Attempted to get deleted key %s in '%s', returning None", key, kind.namespace)
                 return callback(None)
             return callback(item)
-        finally:
-            self._lock.runlock()
 
     def all(self, kind, callback):
         """ """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             itemsOfKind = self._items[kind]
             return callback(dict((k, i) for k, i in itemsOfKind.items() if ('deleted' not in i) or not i['deleted']))
-        finally:
-            self._lock.runlock()
 
     def init(self, all_data):
         """ """
@@ -108,51 +102,39 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             for key, item in items.items():
                 items_decoded[key] = kind.decode(item)
             all_decoded[kind] = items_decoded
-        try:
-            self._lock.rlock()
+        with self._lock.write():
             self._items.clear()
             self._items.update(all_decoded)
             self._initialized = True
             for k in all_data:
                 log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
-        finally:
-            self._lock.runlock()
 
     # noinspection PyShadowingNames
     def delete(self, kind, key: str, version: int):
         """ """
-        try:
-            self._lock.rlock()
+        with self._lock.write():
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < version:
                 i = {'deleted': True, 'version': version}
                 itemsOfKind[key] = i
-        finally:
-            self._lock.runlock()
 
     def upsert(self, kind, item):
         """ """
         decoded_item = kind.decode(item)
         key = item['key']
-        try:
-            self._lock.rlock()
+        with self._lock.write():
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < item['version']:
                 itemsOfKind[key] = decoded_item
                 log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
-        finally:
-            self._lock.runlock()
 
     @property
     def initialized(self) -> bool:
         """ """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             return self._initialized
-        finally:
-            self._lock.runlock()
 
     def describe_configuration(self, config):
         return 'memory'

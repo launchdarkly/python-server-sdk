@@ -125,3 +125,85 @@ class TestRedisBigSegmentStore(BigSegmentStoreTestBase):
     @property
     def tester_class(self):
         return RedisBigSegmentStoreTester
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_feature_store_max_connections_is_not_used():
+    """Test that the max_connections parameter is NOT passed to the Redis connection pool."""
+    custom_max_connections = 42
+    store = Redis.new_feature_store(max_connections=custom_max_connections)
+
+    # Access the connection pool through the wrapper's core
+    actual_max_connections = store._core._pool.max_connections
+
+    # Should NOT be our custom value since the parameter is unused
+    assert actual_max_connections != custom_max_connections, \
+        f"Expected max_connections to NOT be {custom_max_connections}, but it was set"
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_big_segment_store_max_connections_is_not_used():
+    """Test that the max_connections parameter is NOT passed to the Redis connection pool."""
+    custom_max_connections = 42
+    store = Redis.new_big_segment_store(max_connections=custom_max_connections)
+
+    # Access the connection pool directly from the store
+    actual_max_connections = store._pool.max_connections
+
+    # Should NOT be our custom value since the parameter is unused
+    assert actual_max_connections != custom_max_connections, \
+        f"Expected max_connections to NOT be {custom_max_connections}, but it was set"
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_feature_store_max_connections_warns_when_non_default(caplog):
+    """Test that a warning is logged when max_connections differs from the default."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
+    custom_max_connections = 42
+    Redis.new_feature_store(max_connections=custom_max_connections)
+
+    assert any("max_connections parameter is not used" in record.message for record in caplog.records), \
+        "Expected warning that parameter is not used"
+    assert any("redis_opts" in record.message for record in caplog.records), \
+        "Expected warning to mention redis_opts"
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_big_segment_store_max_connections_warns_when_non_default(caplog):
+    """Test that a warning is logged when max_connections differs from the default."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
+    custom_max_connections = 42
+    Redis.new_big_segment_store(max_connections=custom_max_connections)
+
+    assert any("max_connections parameter is not used" in record.message for record in caplog.records), \
+        "Expected warning that parameter is not used"
+    assert any("redis_opts" in record.message for record in caplog.records), \
+        "Expected warning to mention redis_opts"
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_feature_store_max_connections_no_warn_when_default(caplog):
+    """Test that no warning is logged when max_connections is the default value."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
+    Redis.new_feature_store(max_connections=Redis.DEFAULT_MAX_CONNECTIONS)
+
+    assert not any("max_connections parameter is not used" in record.message for record in caplog.records), \
+        "Expected no warning when using default value"
+
+
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+def test_big_segment_store_max_connections_no_warn_when_default(caplog):
+    """Test that no warning is logged when max_connections is the default value."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
+    Redis.new_big_segment_store(max_connections=Redis.DEFAULT_MAX_CONNECTIONS)
+
+    assert not any("max_connections parameter is not used" in record.message for record in caplog.records), \
+        "Expected no warning when using default value"

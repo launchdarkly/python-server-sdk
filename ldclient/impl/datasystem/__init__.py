@@ -4,19 +4,16 @@ v2), as well as types for v1 and v2 specific protocols.
 """
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 from threading import Event
-from typing import Generator, Optional, Protocol
+from typing import Protocol, runtime_checkable
 
-from ldclient.impl.datasystem.protocolv2 import Basis, ChangeSet
-from ldclient.impl.util import _Result
+from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
-    DataSourceErrorInfo,
-    DataSourceState,
     DataSourceStatusProvider,
     DataStoreStatusProvider,
-    FlagTracker
+    FlagTracker,
+    ReadOnlyStore
 )
 
 
@@ -115,13 +112,9 @@ class DataSystem(Protocol):
 
     @property
     @abstractmethod
-    def flag_tracker(self) -> FlagTracker:
+    def flag_change_listeners(self) -> Listeners:
         """
-        Returns an interface for tracking changes in feature flag configurations.
-
-        The :class:`ldclient.interfaces.FlagTracker` contains methods for
-        requesting notifications about feature flag changes using an event
-        listener model.
+        Returns the collection of listeners for flag change events.
         """
         raise NotImplementedError
 
@@ -141,59 +134,31 @@ class DataSystem(Protocol):
         """
         raise NotImplementedError
 
-
-BasisResult = _Result[Basis, str]
-
-
-class Initializer(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    Initializer represents a component capable of retrieving a single data
-    result, such as from the LD polling API.
-
-    The intent of initializers is to quickly fetch an initial set of data,
-    which may be stale but is fast to retrieve. This initial data serves as a
-    foundation for a Synchronizer to build upon, enabling it to provide updates
-    as new changes occur.
-    """
-
+    @property
     @abstractmethod
-    def fetch(self) -> BasisResult:
+    def store(self) -> ReadOnlyStore:
         """
-        fetch should retrieve the initial data set for the data source, returning
-        a Basis object on success, or an error message on failure.
+        Returns the data store used by the data system.
         """
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
-class Update:
-    """
-    Update represents the results of a synchronizer's ongoing sync
-    method.
-    """
+class DiagnosticAccumulator(Protocol):
+    def record_stream_init(self, timestamp, duration, failed):
+        raise NotImplementedError
 
-    state: DataSourceState
-    change_set: Optional[ChangeSet] = None
-    error: Optional[DataSourceErrorInfo] = None
-    revert_to_fdv1: bool = False
-    environment_id: Optional[str] = None
+    def record_events_in_batch(self, events_in_batch):
+        raise NotImplementedError
+
+    def create_event_and_reset(self, dropped_events, deduplicated_users):
+        raise NotImplementedError
 
 
-class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
-    """
-    Synchronizer represents a component capable of synchronizing data from an external
-    data source, such as a streaming or polling API.
-
-    It is responsible for yielding Update objects that represent the current state
-    of the data source, including any changes that have occurred since the last
-    synchronization.
-    """
-
+@runtime_checkable
+class DiagnosticSource(Protocol):
     @abstractmethod
-    def sync(self) -> Generator[Update, None, None]:
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
-        sync should begin the synchronization process for the data source, yielding
-        Update objects until the connection is closed or an unrecoverable error
-        occurs.
+        Set the diagnostic_accumulator to be used for reporting diagnostic events.
         """
         raise NotImplementedError

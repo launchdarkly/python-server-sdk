@@ -4,18 +4,26 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
+from dataclasses import dataclass
 from threading import Event
-from typing import Callable, List, Optional, Set
+from typing import Callable, List, Optional, Protocol, Set, TypeVar
 import warnings
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
-from ldclient.impl.util import log, validate_application_info
+from ldclient.impl.util import (
+    log,
+    validate_application_info,
+    validate_sdk_key_format
+)
 from ldclient.interfaces import (
     BigSegmentStore,
     DataSourceUpdateSink,
+    DataStoreMode,
     EventProcessor,
     FeatureStore,
+    Initializer,
+    Synchronizer,
     UpdateProcessor
 )
 from ldclient.plugin import Plugin
@@ -85,11 +93,11 @@ class BigSegmentsConfig:
 
 
 class HTTPConfig:
-    """Advanced HTTP configuration options for the SDK client.
+    """Advanced HTTP configuration options for the SDK client / data sources.
 
     This class groups together HTTP/HTTPS-related configuration properties that rarely need to be changed.
     If you need to set these, construct an ``HTTPConfig`` instance and pass it as the ``http`` parameter when
-    you construct the main :class:`Config` for the SDK client.
+    you construct the main :class:`Config` for the SDK client, or to the appropriate data source builder method.
     """
 
     def __init__(
@@ -149,6 +157,48 @@ class HTTPConfig:
         return self.__disable_ssl_verification
 
 
+T_co = TypeVar("T_co", covariant=True)
+
+
+class DataSourceBuilder(Protocol[T_co]):  # pylint: disable=too-few-public-methods
+    """
+    Protocol for building data sources.
+    """
+
+    def build(self, config: 'Config') -> T_co:
+        """
+        Builds the data source.
+
+        :param config: the SDK configuration
+        :return: the built data source
+        """
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class DataSystemConfig:
+    """Configuration for LaunchDarkly's data acquisition strategy."""
+
+    initializers: Optional[List[DataSourceBuilder[Initializer]]]
+    """The initializers for the data system."""
+
+    synchronizers: Optional[List[DataSourceBuilder[Synchronizer]]]
+    """
+    The synchronizers for the data system, ordered by preference.
+    The first synchronizer is the most preferred, with subsequent synchronizers
+    serving as fallbacks in order of decreasing preference.
+    """
+
+    data_store_mode: DataStoreMode = DataStoreMode.READ_WRITE
+    """The data store mode specifies the mode in which the persistent store will operate, if present."""
+
+    data_store: Optional[FeatureStore] = None
+    """The (optional) persistent data store instance."""
+
+    fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
+    """An optional fallback synchronizer that will read from FDv1"""
+
+
 class Config:
     """Advanced configuration options for the SDK client.
 
@@ -191,6 +241,7 @@ class Config:
         enable_event_compression: bool = False,
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
+        datasystem_config: Optional[DataSystemConfig] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -261,8 +312,9 @@ class Config:
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
+        :param datasystem_config: Configuration for the upcoming enhanced data system design. This is experimental and should not be set without direction from LaunchDarkly support.
         """
-        self.__sdk_key = sdk_key
+        self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
         self.__base_uri = base_uri.rstrip('/')
         self.__events_uri = events_uri.rstrip('/')
@@ -300,9 +352,11 @@ class Config:
         self.__payload_filter_key = payload_filter_key
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
         self._instance_id: Optional[str] = None
+        self._datasystem_config = datasystem_config
 
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
+        The key will not be updated if the provided key contains invalid characters.
 
         DEPRECATED: This method is deprecated and will be removed in a future version.
 
@@ -405,7 +459,7 @@ class Config:
         return self.__event_processor_class
 
     @property
-    def feature_requester_class(self) -> Callable:
+    def feature_requester_class(self) -> Optional[Callable]:
         return self.__feature_requester_class
 
     @property
@@ -545,9 +599,18 @@ class Config:
         """
         return self._data_source_update_sink
 
+    @property
+    def datasystem_config(self) -> Optional[DataSystemConfig]:
+        """
+        Configuration for the upcoming enhanced data system design. This is
+        experimental and should not be set without direction from LaunchDarkly
+        support.
+        """
+        return self._datasystem_config
+
     def _validate(self):
-        if self.offline is False and self.sdk_key is None or self.sdk_key == '':
-            log.warning("Missing or blank sdk_key.")
+        if self.offline is False and self.sdk_key == '':
+            log.warning("Missing or blank SDK key")
 
 
-__all__ = ['Config', 'BigSegmentsConfig', 'HTTPConfig']
+__all__ = ['Config', 'BigSegmentsConfig', 'DataSourceBuilder', 'DataSystemConfig', 'HTTPConfig']

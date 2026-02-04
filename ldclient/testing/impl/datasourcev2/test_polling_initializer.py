@@ -7,10 +7,12 @@ from ldclient.impl.datasourcev2.polling import (
     PollingDataSource,
     PollingResult,
     Selector,
+    fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )
-from ldclient.impl.datasystem.protocolv2 import ChangeSetBuilder, IntentCode
 from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
+from ldclient.interfaces import ChangeSetBuilder, IntentCode
+from ldclient.testing.mock_components import MockSelectorStore
 
 
 class MockExceptionThrowingPollingRequester:  # pylint: disable=too-few-public-methods
@@ -30,14 +32,14 @@ def test_polling_has_a_name():
     mock_requester = MockPollingRequester(_Fail(error="failure message"))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    assert ds.name() == "PollingDataSourceV2"
+    assert ds.name == "PollingDataSourceV2"
 
 
 def test_error_is_returned_on_failure():
     mock_requester = MockPollingRequester(_Fail(error="failure message"))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Fail)
     assert result.error == "failure message"
@@ -50,7 +52,7 @@ def test_error_is_recoverable():
     )
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Fail)
     assert result.error is not None
@@ -64,7 +66,7 @@ def test_error_is_unrecoverable():
     )
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Fail)
     assert result.error is not None
@@ -78,7 +80,7 @@ def test_handles_transfer_none():
     )
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Success)
     assert result.value is not None
@@ -92,7 +94,7 @@ def test_handles_uncaught_exception():
     mock_requester = MockExceptionThrowingPollingRequester()
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Fail)
     assert result.error is not None
@@ -111,7 +113,7 @@ def test_handles_transfer_full():
     mock_requester = MockPollingRequester(_Success(value=(change_set_result.value, {})))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Success)
     assert result.value is not None
@@ -129,7 +131,7 @@ def test_handles_transfer_changes():
     mock_requester = MockPollingRequester(_Success(value=(change_set_result.value, {})))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    result = ds.fetch()
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Success)
     assert result.value is not None
@@ -137,3 +139,33 @@ def test_handles_transfer_changes():
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_CHANGES
     assert len(result.value.change_set.changes) == 1
     assert result.value.persist is True
+
+
+def test_handles_fdv1_payload():
+    """Test that FDv1 payloads have persist set to False."""
+    fdv1_data = {
+        "flags": {
+            "test-flag": {
+                "key": "test-flag",
+                "version": 1,
+                "on": True,
+                "variations": [True, False]
+            }
+        },
+        "segments": {}
+    }
+    change_set_result = fdv1_polling_payload_to_changeset(fdv1_data)
+    assert isinstance(change_set_result, _Success)
+
+    mock_requester = MockPollingRequester(_Success(value=(change_set_result.value, {})))
+    ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
+
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
+
+    assert isinstance(result, _Success)
+    assert result.value is not None
+
+    assert result.value.change_set.intent_code == IntentCode.TRANSFER_FULL
+    assert len(result.value.change_set.changes) == 1
+    # FDv1 payloads should not be persisted because they have no selector
+    assert result.value.persist is False

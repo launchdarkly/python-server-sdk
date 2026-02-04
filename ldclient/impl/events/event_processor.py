@@ -218,7 +218,7 @@ class EventPayloadSendTask:
             json_body = json.dumps(output_events, separators=(',', ':'))
             log.debug('Sending events payload: ' + json_body)
             payload_id = str(uuid.uuid4())
-            r = _post_events_with_retry(self._http, self._config, self._config.events_uri, payload_id, json_body, "%d events" % len(self._payload.events))
+            r = _post_events_with_retry(self._http, self._config, self._config.events_uri, payload_id, json_body, "%d events" % len(output_events))
             if r:
                 self._response_fn(r)
             return r

@@ -4,14 +4,17 @@ from typing import Callable
 
 import pytest
 
-from ldclient.impl.datasystem.protocolv2 import (
-    ChangeType,
-    IntentCode,
-    ObjectKind
-)
+from ldclient.config import Config
 from ldclient.impl.util import _Fail, _Success
 from ldclient.integrations.test_datav2 import FlagBuilderV2, TestDataV2
-from ldclient.interfaces import DataSourceState
+from ldclient.interfaces import (
+    ChangeType,
+    DataSourceState,
+    IntentCode,
+    ObjectKind,
+    Selector
+)
+from ldclient.testing.mock_components import MockSelectorStore
 
 # Test Data + Data Source V2
 
@@ -19,9 +22,9 @@ from ldclient.interfaces import DataSourceState
 def test_creates_valid_initializer():
     """Test that TestDataV2 creates a working initializer"""
     td = TestDataV2.data_source()
-    initializer = td.build_initializer()
+    initializer = td.builder.build(Config(sdk_key="dummy"))
 
-    result = initializer.fetch()
+    result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
     assert isinstance(result, _Success)
 
     basis = result.value
@@ -34,14 +37,14 @@ def test_creates_valid_initializer():
 def test_creates_valid_synchronizer():
     """Test that TestDataV2 creates a working synchronizer"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer()
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
     update_count = 0
 
     def collect_updates():
         nonlocal update_count
-        for update in synchronizer.sync():
+        for update in synchronizer.sync(MockSelectorStore(Selector.no_selector())):
             updates.append(update)
             update_count += 1
 
@@ -50,7 +53,7 @@ def test_creates_valid_synchronizer():
                 assert update.state == DataSourceState.VALID
                 assert update.change_set is not None
                 assert update.change_set.intent_code == IntentCode.TRANSFER_FULL
-                synchronizer.close()
+                synchronizer.stop()
                 break
 
     # Start the synchronizer in a thread with timeout to prevent hanging
@@ -62,7 +65,7 @@ def test_creates_valid_synchronizer():
 
     # Ensure thread completed successfully
     if sync_thread.is_alive():
-        synchronizer.close()
+        synchronizer.stop()
         sync_thread.join()
         pytest.fail("Synchronizer test timed out after 5 seconds")
 
@@ -238,8 +241,8 @@ def test_initializer_fetches_flag_data():
     td = TestDataV2.data_source()
     td.update(td.flag('some-flag').variation_for_all(True))
 
-    initializer = td.build_initializer()
-    result = initializer.fetch()
+    initializer = td.builder.build(Config(sdk_key="dummy"))
+    result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
 
     assert isinstance(result, _Success)
     basis = result.value
@@ -258,9 +261,9 @@ def test_synchronizer_yields_initial_data():
     td = TestDataV2.data_source()
     td.update(td.flag('initial-flag').variation_for_all(False))
 
-    synchronizer = td.build_synchronizer()
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
-    update_iter = iter(synchronizer.sync())
+    update_iter = iter(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
     initial_update = next(update_iter)
 
     assert initial_update.state == DataSourceState.VALID
@@ -271,25 +274,25 @@ def test_synchronizer_yields_initial_data():
     change = initial_update.change_set.changes[0]
     assert change.key == 'initial-flag'
 
-    synchronizer.close()
+    synchronizer.stop()
 
 
 def test_synchronizer_receives_updates():
     """Test that synchronizer receives flag updates"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer()
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
     update_count = 0
 
     def collect_updates():
         nonlocal update_count
-        for update in synchronizer.sync():
+        for update in synchronizer.sync(MockSelectorStore(Selector.no_selector())):
             updates.append(update)
             update_count += 1
 
             if update_count >= 2:
-                synchronizer.close()
+                synchronizer.stop()
                 break
 
     # Start the synchronizer in a thread
@@ -321,24 +324,24 @@ def test_synchronizer_receives_updates():
 def test_multiple_synchronizers_receive_updates():
     """Test that multiple synchronizers receive the same updates"""
     td = TestDataV2.data_source()
-    sync1 = td.build_synchronizer()
-    sync2 = td.build_synchronizer()
+    sync1 = td.builder.build(Config(sdk_key="dummy"))
+    sync2 = td.builder.build(Config(sdk_key="dummy"))
 
     updates1 = []
     updates2 = []
 
     def collect_updates_1():
-        for update in sync1.sync():
+        for update in sync1.sync(MockSelectorStore(Selector.no_selector())):
             updates1.append(update)
             if len(updates1) >= 2:
-                sync1.close()
+                sync1.stop()
                 break
 
     def collect_updates_2():
-        for update in sync2.sync():
+        for update in sync2.sync(MockSelectorStore(Selector.no_selector())):
             updates2.append(update)
             if len(updates2) >= 2:
-                sync2.close()
+                sync2.stop()
                 break
 
     # Start both synchronizers
@@ -367,14 +370,14 @@ def test_multiple_synchronizers_receive_updates():
 def test_closed_synchronizer_stops_yielding():
     """Test that closed synchronizer stops yielding updates"""
     td = TestDataV2.data_source()
-    synchronizer = td.build_synchronizer()
+    synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
 
     # Get initial update then close
-    for update in synchronizer.sync():
+    for update in synchronizer.sync(MockSelectorStore(Selector.no_selector())):
         updates.append(update)
-        synchronizer.close()
+        synchronizer.stop()
         break
 
     assert len(updates) == 1
@@ -384,7 +387,7 @@ def test_closed_synchronizer_stops_yielding():
 
     # Try to get more updates - should get an error state indicating closure
     additional_updates = []
-    for update in synchronizer.sync():
+    for update in synchronizer.sync(MockSelectorStore(Selector.no_selector())):
         additional_updates.append(update)
         break
 
@@ -399,12 +402,13 @@ def test_initializer_can_sync():
     td = TestDataV2.data_source()
     td.update(td.flag('test-flag').variation_for_all(True))
 
-    initializer = td.build_initializer()
-    sync_gen = initializer.sync()
+    initializer = td.builder.build(Config(sdk_key="dummy"))
+    sync_gen = initializer.sync(MockSelectorStore(Selector.no_selector()))
 
     # Should get initial update with data
     initial_update = next(sync_gen)
     assert initial_update.state == DataSourceState.VALID
+    assert initial_update.change_set is not None
     assert initial_update.change_set.intent_code == IntentCode.TRANSFER_FULL
     assert len(initial_update.change_set.changes) == 1
     assert initial_update.change_set.changes[0].key == 'test-flag'
@@ -438,11 +442,11 @@ def test_version_increment():
 def test_error_handling_in_fetch():
     """Test error handling in the fetch method"""
     td = TestDataV2.data_source()
-    initializer = td.build_initializer()
+    initializer = td.builder.build(Config(sdk_key="dummy"))
 
     # Close the initializer to trigger error condition
-    initializer.close()
+    initializer.stop()
 
-    result = initializer.fetch()
+    result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
     assert isinstance(result, _Fail)
     assert "TestDataV2 source has been closed" in result.error

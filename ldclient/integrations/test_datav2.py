@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
+from ldclient.config import Config, DataSourceBuilder
 from ldclient.context import Context
 from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
     _TestDataSourceV2
@@ -181,7 +182,7 @@ class FlagBuilderV2:
     def _copy(self) -> FlagBuilderV2:
         """
         Creates a deep copy of the flag builder. Subsequent updates to the
-        original ``FlagBuilderV2`` object will not update the copy and vise versa.
+        original ``FlagBuilderV2`` object will not update the copy and vice versa.
 
         :return: a copy of the flag builder object
         """
@@ -550,17 +551,21 @@ class TestDataV2:
     ::
 
         from ldclient.impl.datasystem import config as datasystem_config
+        from ldclient.integrations.test_datav2 import TestDataV2
+
 
         td = TestDataV2.data_source()
         td.update(td.flag('flag-key-1').variation_for_all(True))
 
         # Configure the data system with TestDataV2 as both initializer and synchronizer
         data_config = datasystem_config.custom()
-        data_config.initializers([lambda: td.build_initializer()])
-        data_config.synchronizers(lambda: td.build_synchronizer())
+        data_config.initializers([td.builder])
+        data_config.synchronizers(td.builder)
 
-        # TODO(fdv2): This will be integrated with the main Config in a future version
-        # For now, TestDataV2 is primarily intended for unit testing scenarios
+        config = Config(
+            sdk_key,
+            datasystem_config=data_config.build(),
+        )
 
         # flags can be updated at any time:
         td.update(td.flag('flag-key-1').
@@ -612,14 +617,11 @@ class TestDataV2:
         :param str key: the flag key
         :return: the flag configuration builder object
         """
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
 
             return FlagBuilderV2(key).boolean_flag()
-        finally:
-            self._lock.runlock()
 
     def update(self, flag_builder: FlagBuilderV2) -> TestDataV2:
         """
@@ -638,9 +640,7 @@ class TestDataV2:
         :return: self (the TestDataV2 object)
         """
         instances_copy = []
-        try:
-            self._lock.lock()
-
+        with self._lock.write():
             old_version = 0
             if flag_builder._key in self._current_flags:
                 old_flag = self._current_flags[flag_builder._key]
@@ -654,8 +654,6 @@ class TestDataV2:
 
             # Create a copy of instances while holding the lock to avoid race conditions
             instances_copy = list(self._instances)
-        finally:
-            self._lock.unlock()
 
         for instance in instances_copy:
             instance.upsert_flag(new_flag)
@@ -663,48 +661,40 @@ class TestDataV2:
         return self
 
     def _make_init_data(self) -> Dict[str, Any]:
-        try:
-            self._lock.rlock()
+        with self._lock.read():
             return copy.copy(self._current_flags)
-        finally:
-            self._lock.runlock()
 
     def _get_version(self) -> int:
-        try:
-            self._lock.lock()
+        with self._lock.write():
             version = self._version
             self._version += 1
             return version
-        finally:
-            self._lock.unlock()
 
     def _closed_instance(self, instance):
-        try:
-            self._lock.lock()
+        with self._lock.write():
             if instance in self._instances:
                 self._instances.remove(instance)
-        finally:
-            self._lock.unlock()
 
     def _add_instance(self, instance):
-        try:
-            self._lock.lock()
+        with self._lock.write():
             self._instances.append(instance)
-        finally:
-            self._lock.unlock()
 
-    def build_initializer(self) -> _TestDataSourceV2:
+    @property
+    def builder(self) -> DataSourceBuilder:
         """
-        Creates an initializer that can be used with the FDv2 data system.
+        Creates a builder that can be used with the FDv2 data system.
 
-        :return: a test data initializer
+        :return: a test data data source builder
         """
-        return _TestDataSourceV2(self)
+        return TestDataSourceBuilder(self)
 
-    def build_synchronizer(self) -> _TestDataSourceV2:
-        """
-        Creates a synchronizer that can be used with the FDv2 data system.
 
-        :return: a test data synchronizer
-        """
-        return _TestDataSourceV2(self)
+class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: disable=too-few-public-methods
+    """Builder for TestDataV2 data sources that implements the DataSourceBuilder protocol."""
+
+    def __init__(self, test_data: TestDataV2):
+        self._test_data = test_data
+
+    def build(self, config: Config) -> _TestDataSourceV2:  # pylint: disable=unused-argument
+        """Builds the TestDataSourceV2 instance."""
+        return _TestDataSourceV2(self._test_data)

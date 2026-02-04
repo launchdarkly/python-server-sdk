@@ -37,17 +37,16 @@ def set_config(config: Config):
     global __config
     global __client
     global __lock
-    try:
-        __lock.lock()
-        if __client:
-            log.info("Reinitializing LaunchDarkly Client " + VERSION + " with new config")
-            new_client = LDClient(config=config, start_wait=start_wait)
-            old_client = __client
-            __client = new_client
-            old_client.close()
-    finally:
-        __config = config
-        __lock.unlock()
+    with __lock.write():
+        try:
+            if __client:
+                log.info("Reinitializing LaunchDarkly Client " + VERSION + " with new config")
+                new_client = LDClient(config=config, start_wait=start_wait)
+                old_client = __client
+                __client = new_client
+                old_client.close()
+        finally:
+            __config = config
 
 
 def get() -> LDClient:
@@ -63,35 +62,27 @@ def get() -> LDClient:
     global __config
     global __client
     global __lock
-    try:
-        __lock.rlock()
+    with __lock.read():
         if __client:
             return __client
         if __config is None:
             raise Exception("set_config was not called")
-    finally:
-        __lock.runlock()
 
-    try:
-        __lock.lock()
+    with __lock.write():
         if not __client:
             log.info("Initializing LaunchDarkly Client " + VERSION)
             __client = LDClient(config=__config, start_wait=start_wait)
         return __client
-    finally:
-        __lock.unlock()
 
 
 # for testing only
 def _reset_client():
     global __client
     global __lock
-    try:
-        __lock.lock()
+    c = None
+    with __lock.write():
         c = __client
         __client = None
-    finally:
-        __lock.unlock()
     if c:
         c.close()
 

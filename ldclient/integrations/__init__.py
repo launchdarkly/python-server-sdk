@@ -3,8 +3,11 @@ This submodule contains factory/configuration methods for integrating the SDK wi
 other than LaunchDarkly.
 """
 
-from typing import Any, Dict, List, Mapping, Optional
+from threading import Event
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from ldclient import log
+from ldclient.config import Config, DataSourceBuilder
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.integrations.consul.consul_feature_store import (
@@ -17,13 +20,16 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBFeatureStoreCore
 )
 from ldclient.impl.integrations.files.file_data_source import _FileDataSource
+from ldclient.impl.integrations.files.file_data_sourcev2 import (
+    FileDataSourceV2Builder
+)
 from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
 )
 from ldclient.impl.integrations.redis.redis_feature_store import (
     _RedisFeatureStoreCore
 )
-from ldclient.interfaces import BigSegmentStore
+from ldclient.interfaces import BigSegmentStore, FeatureStore, UpdateProcessor
 
 
 class Consul:
@@ -163,11 +169,20 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
+        :param max_connections: (deprecated and unused) This parameter is not used. To configure
+          the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """
+
+        if max_connections != Redis.DEFAULT_MAX_CONNECTIONS:
+            log.warning(
+                "The max_connections parameter is not used and will be removed in a future version. "
+                "Please set max_connections in redis_opts instead, e.g., redis_opts={'max_connections': %d}",
+                max_connections
+            )
 
         core = _RedisFeatureStoreCore(url, prefix, redis_opts)
         wrapper = CachingStoreWrapper(core, caching)
@@ -195,9 +210,18 @@ class Redis:
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
           ``DEFAULT_PREFIX``
+        :param max_connections: (deprecated and unused) This parameter is not used. To configure
+          the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """
+
+        if max_connections != Redis.DEFAULT_MAX_CONNECTIONS:
+            log.warning(
+                "The max_connections parameter is not used and will be removed in a future version. "
+                "Please set max_connections in redis_opts instead, e.g., redis_opts={'max_connections': %d}",
+                max_connections
+            )
 
         return _RedisBigSegmentStore(url, prefix, redis_opts)
 
@@ -206,7 +230,7 @@ class Files:
     """Provides factory methods for integrations with filesystem data."""
 
     @staticmethod
-    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> object:
+    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> Optional[Callable[[Config, FeatureStore, Event], UpdateProcessor]]:
         """Provides a way to use local files as a source of feature flag state. This would typically be
         used in a test environment, to operate using a predetermined feature flag state without an
         actual LaunchDarkly connection.
@@ -248,3 +272,66 @@ class Files:
         :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property
         """
         return lambda config, store, ready: _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)
+
+    @staticmethod
+    def new_data_source_v2(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
+        """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
+
+        This type is not stable, and not subject to any backwards
+        compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+        Do not use it.
+        You have been warned.
+
+        This returns a builder that can be used with the FDv2 data system configuration as both an
+        Initializer and a Synchronizer. When used as an Initializer, it reads files once. When used
+        as a Synchronizer, it watches for file changes and automatically updates when files are modified.
+
+        To use this component with the FDv2 data system, call ``new_data_source_v2`` and use the returned
+        builder with the custom data system configuration:
+        ::
+
+            from ldclient.integrations import Files
+            from ldclient.impl.datasystem.config import custom
+
+            file_source = Files.new_data_source_v2(paths=['my_flags.json'])
+
+            # Use as initializer only
+            data_system = custom().initializers([file_source]).build()
+            config = Config(data_system=data_system)
+
+            # Use as synchronizer only
+            data_system = custom().synchronizers(file_source).build()
+            config = Config(data_system=data_system)
+
+            # Use as both initializer and synchronizer
+            data_system = custom().initializers([file_source]).synchronizers(file_source).build()
+            config = Config(data_system=data_system)
+
+        This will cause the client not to connect to LaunchDarkly to get feature flags. The
+        client may still make network connections to send analytics events, unless you have disabled
+        this in your configuration with ``send_events`` or ``offline``.
+
+        The format of the data files is the same as for the v1 file data source, described in the
+        SDK Reference Guide on `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
+        Note that in order to use YAML, you will need to install the ``pyyaml`` package.
+
+        If the data source encounters any error in any file-- malformed content, a missing file, or a
+        duplicate key-- it will not load flags from any of the files.
+
+        :param paths: the paths of the source files for loading flag data. These may be absolute paths
+          or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``
+          package is installed, in which case YAML is also allowed.
+        :param poll_interval: (default: 1) the minimum interval, in seconds, between checks for file
+          modifications when used as a Synchronizer. Only applies if the native file-watching mechanism
+          from ``watchdog`` is not being used.
+        :param force_polling: (default: false) True if the data source should implement file watching via
+          polling the filesystem even if a native mechanism is available. This is mainly for SDK testing.
+
+        :return: a builder that creates the file data source
+        """
+        return (
+            FileDataSourceV2Builder(paths)
+            .poll_interval(poll_interval)
+            .force_polling(force_polling)
+        )

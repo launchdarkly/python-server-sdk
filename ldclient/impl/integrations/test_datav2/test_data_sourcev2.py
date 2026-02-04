@@ -2,19 +2,19 @@ import threading
 from queue import Empty, Queue
 from typing import Generator
 
-from ldclient.impl.datasystem import BasisResult, Update
-from ldclient.impl.datasystem.protocolv2 import (
-    Basis,
-    ChangeSetBuilder,
-    IntentCode,
-    ObjectKind,
-    Selector
-)
 from ldclient.impl.util import _Fail, _Success, current_time_millis
 from ldclient.interfaces import (
+    Basis,
+    BasisResult,
+    ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState
+    DataSourceState,
+    IntentCode,
+    ObjectKind,
+    Selector,
+    SelectorStore,
+    Update
 )
 
 
@@ -42,7 +42,12 @@ class _TestDataSourceV2:
         # - Added to `upsert_flag` to address potential race conditions.
         # - The `sync` method relies on Queue's thread-safe properties for updates.
 
-    def fetch(self) -> BasisResult:
+    @property
+    def name(self) -> str:
+        """Return the name of this data source."""
+        return "TestDataV2"
+
+    def fetch(self, ss: SelectorStore) -> BasisResult:
         """
         Implementation of the Initializer.fetch method.
 
@@ -64,28 +69,21 @@ class _TestDataSourceV2:
                 # Add all flags to the changeset
                 for key, flag_data in init_data.items():
                     builder.add_put(
-                        ObjectKind.FLAG,
-                        key,
-                        flag_data.get('version', 1),
-                        flag_data
+                        ObjectKind.FLAG, key, flag_data.get("version", 1), flag_data
                     )
 
                 # Create selector for this version
                 selector = Selector.new_selector(str(version), version)
                 change_set = builder.finish(selector)
 
-                basis = Basis(
-                    change_set=change_set,
-                    persist=False,
-                    environment_id=None
-                )
+                basis = Basis(change_set=change_set, persist=False, environment_id=None)
 
                 return _Success(basis)
 
         except Exception as e:
             return _Fail(f"Error fetching test data: {str(e)}")
 
-    def sync(self) -> Generator[Update, None, None]:
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
         """
         Implementation of the Synchronizer.sync method.
 
@@ -93,7 +91,7 @@ class _TestDataSourceV2:
         """
 
         # First yield initial data
-        initial_result = self.fetch()
+        initial_result = self.fetch(ss)
         if isinstance(initial_result, _Fail):
             yield Update(
                 state=DataSourceState.OFF,
@@ -101,15 +99,14 @@ class _TestDataSourceV2:
                     kind=DataSourceErrorKind.STORE_ERROR,
                     status_code=0,
                     time=current_time_millis(),
-                    message=initial_result.error
-                )
+                    message=initial_result.error,
+                ),
             )
             return
 
         # Yield the initial successful state
         yield Update(
-            state=DataSourceState.VALID,
-            change_set=initial_result.value.change_set
+            state=DataSourceState.VALID, change_set=initial_result.value.change_set
         )
 
         # Continue yielding updates as they arrive
@@ -133,13 +130,13 @@ class _TestDataSourceV2:
                         kind=DataSourceErrorKind.UNKNOWN,
                         status_code=0,
                         time=current_time_millis(),
-                        message=f"Error in test data synchronizer: {str(e)}"
-                    )
+                        message=f"Error in test data synchronizer: {str(e)}",
+                    ),
                 )
                 break
 
-    def close(self):
-        """Close the data source and clean up resources."""
+    def stop(self):
+        """Stop the data source and clean up resources"""
         with self._lock:
             if self._closed:
                 return
@@ -170,9 +167,9 @@ class _TestDataSourceV2:
                 # Add the updated flag
                 builder.add_put(
                     ObjectKind.FLAG,
-                    flag_data['key'],
-                    flag_data.get('version', 1),
-                    flag_data
+                    flag_data["key"],
+                    flag_data.get("version", 1),
+                    flag_data,
                 )
 
                 # Create selector for this version
@@ -180,10 +177,7 @@ class _TestDataSourceV2:
                 change_set = builder.finish(selector)
 
                 # Queue the update
-                update = Update(
-                    state=DataSourceState.VALID,
-                    change_set=change_set
-                )
+                update = Update(state=DataSourceState.VALID, change_set=change_set)
 
                 self._update_queue.put(update)
 
@@ -195,7 +189,7 @@ class _TestDataSourceV2:
                         kind=DataSourceErrorKind.STORE_ERROR,
                         status_code=0,
                         time=current_time_millis(),
-                        message=f"Error processing flag update: {str(e)}"
-                    )
+                        message=f"Error processing flag update: {str(e)}",
+                    ),
                 )
                 self._update_queue.put(error_update)

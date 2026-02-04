@@ -1,4 +1,5 @@
 import threading
+from contextlib import contextmanager
 
 
 class ReadWriteLock:
@@ -38,3 +39,33 @@ class ReadWriteLock:
     def unlock(self):
         """Release a write lock."""
         self._read_ready.release()
+
+    @contextmanager
+    def read(self):
+        """Context manager for acquiring a read lock.
+
+        Usage:
+            with lock.read():
+                # read lock held here
+                pass
+        """
+        self.rlock()
+        try:
+            yield self
+        finally:
+            self.runlock()
+
+    @contextmanager
+    def write(self):
+        """Context manager for acquiring a write lock.
+
+        Usage:
+            with lock.write():
+                # write lock held here
+                pass
+        """
+        self.lock()
+        try:
+            yield self
+        finally:
+            self.unlock()

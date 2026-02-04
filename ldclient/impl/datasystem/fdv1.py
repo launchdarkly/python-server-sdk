@@ -13,24 +13,27 @@ from ldclient.impl.datastore.status import (
     DataStoreStatusProviderImpl,
     DataStoreUpdateSinkImpl
 )
-from ldclient.impl.datasystem import DataAvailability
+from ldclient.impl.datasystem import (
+    DataAvailability,
+    DataSystem,
+    DiagnosticAccumulator
+)
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
 from ldclient.interfaces import (
-    DataSourceState,
-    DataSourceStatus,
     DataSourceStatusProvider,
     DataStoreStatusProvider,
     FeatureStore,
     FlagTracker,
+    ReadOnlyStore,
     UpdateProcessor
 )
 
 # Delayed import inside __init__ to avoid circular dependency with ldclient.client
 
 
-class FDv1:
+class FDv1(DataSystem):
     """
     FDv1 wires the existing v1 data source and store behavior behind the
     generic DataSystem surface.
@@ -57,10 +60,6 @@ class FDv1:
         # Set up data source plumbing
         self._data_source_listeners = Listeners()
         self._flag_change_listeners = Listeners()
-        self._flag_tracker_impl = FlagTrackerImpl(
-            self._flag_change_listeners,
-            lambda key, context: None,  # Replaced by client to use its evaluation method
-        )
         self._data_source_update_sink = DataSourceUpdateSinkImpl(
             self._store_wrapper,
             self._data_source_listeners,
@@ -77,21 +76,7 @@ class FDv1:
         self._update_processor: Optional[UpdateProcessor] = None
 
         # Diagnostic accumulator provided by client for streaming metrics
-        self._diagnostic_accumulator = None
-
-        # Track current data availability
-        self._data_availability: DataAvailability = (
-            DataAvailability.CACHED
-            if getattr(self._store_wrapper, "initialized", False)
-            else DataAvailability.DEFAULTS
-        )
-
-        # React to data source status updates to adjust availability
-        def _on_status_change(status: DataSourceStatus):
-            if status.state == DataSourceState.VALID:
-                self._data_availability = DataAvailability.REFRESHED
-
-        self._data_source_status_provider_impl.add_listener(_on_status_change)
+        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
 
     def start(self, set_on_ready: Event):
         """
@@ -110,18 +95,10 @@ class FDv1:
             self._update_processor.stop()
 
     @property
-    def store(self) -> FeatureStore:
+    def store(self) -> ReadOnlyStore:
         return self._store_wrapper
 
-    def set_flag_value_eval_fn(self, eval_fn):
-        """
-        Injects the flag value evaluation function used by the flag tracker to
-        compute FlagValueChange events. The function signature should be
-        (key: str, context: Context) -> Any.
-        """
-        self._flag_tracker_impl = FlagTrackerImpl(self._flag_change_listeners, eval_fn)
-
-    def set_diagnostic_accumulator(self, diagnostic_accumulator):
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
         This should be called before start() to ensure metrics are collected.
@@ -137,12 +114,21 @@ class FDv1:
         return self._data_store_status_provider_impl
 
     @property
-    def flag_tracker(self) -> FlagTracker:
-        return self._flag_tracker_impl
+    def flag_change_listeners(self) -> Listeners:
+        return self._flag_change_listeners
 
     @property
     def data_availability(self) -> DataAvailability:
-        return self._data_availability
+        if self._config.offline:
+            return DataAvailability.DEFAULTS
+
+        if self._update_processor is not None and self._update_processor.initialized():
+            return DataAvailability.REFRESHED
+
+        if self._store_wrapper.initialized:
+            return DataAvailability.CACHED
+
+        return DataAvailability.DEFAULTS
 
     @property
     def target_availability(self) -> DataAvailability:

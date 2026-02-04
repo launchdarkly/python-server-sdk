@@ -3,15 +3,58 @@ This submodule contains interfaces for various components of the SDK.
 
 They may be useful in writing new implementations of these components, or for testing.
 """
-
 from abc import ABCMeta, abstractmethod, abstractproperty
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Generator, List, Mapping, Optional, Protocol
 
 from ldclient.context import Context
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.util import _Result
 
 from .versioned_data_kind import VersionedDataKind
+
+
+class DataStoreMode(Enum):
+    """
+    DataStoreMode represents the mode of operation of a Data Store in FDV2
+    mode.
+
+    This enum is not stable, and not subject to any backwards compatibility
+    guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    READ_ONLY = 'read-only'
+    """
+    READ_ONLY indicates that the data store is read-only. Data will never be
+    written back to the store by the SDK.
+    """
+
+    READ_WRITE = 'read-write'
+    """
+    READ_WRITE indicates that the data store is read-write. Data from
+    initializers/synchronizers may be written to the store as necessary.
+    """
+
+
+class ReadOnlyStore(Protocol):
+    """ReadOnlyStore is a read-only interface for a feature store."""
+
+    @abstractmethod
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        raise NotImplementedError
+
+    @abstractmethod
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def initialized(self) -> bool:
+        raise NotImplementedError
 
 
 class FeatureStore:
@@ -144,6 +187,28 @@ class FeatureStore:
     #     until it returns true.
     #
     #     :return: true if the underlying data store is reachable
+    #     """
+
+    # WARN: This isn't a required method on a FeatureStore. The SDK will
+    # check if the provided store responds to this method, and if it does,
+    # will call it during shutdown to release any resources (such as database
+    # connections or connection pools) that the store may be using.
+    #
+    # @abstractmethod
+    # def close(self):
+    #     """
+    #     Releases any resources used by the data store implementation.
+    #
+    #     This method will be called by the SDK during shutdown to ensure proper
+    #     cleanup of resources such as database connections, connection pools,
+    #     network sockets, or other resources that should be explicitly released.
+    #
+    #     Implementations should be idempotent - calling close() multiple times
+    #     should be safe and have no additional effect after the first call.
+    #
+    #     This is particularly important for persistent data stores that maintain
+    #     connection pools or other long-lived resources that should be properly
+    #     cleaned up when the SDK is shut down.
     #     """
 
 
@@ -923,8 +988,8 @@ class DataStoreStatus:
     __metaclass__ = ABCMeta
 
     def __init__(self, available: bool, stale: bool):
-        self.__available = available
-        self.__stale = stale
+        self._available = available
+        self._stale = stale
 
     @property
     def available(self) -> bool:
@@ -939,7 +1004,7 @@ class DataStoreStatus:
 
         :return: if store is available
         """
-        return self.__available
+        return self._available
 
     @property
     def stale(self) -> bool:
@@ -952,7 +1017,18 @@ class DataStoreStatus:
 
         :return: true if data should be rewritten
         """
-        return self.__stale
+        return self._stale
+
+    def __eq__(self, other):
+        """
+        Ensures two instances of DataStoreStatus are the same if their properties are the same.
+
+        :param other: The other instance to compare
+        :return: True if instances are equal, False otherwise
+        """
+        if isinstance(other, DataStoreStatus):
+            return self._available == other._available and self._stale == other._stale
+        return False
 
 
 class DataStoreUpdateSink:
@@ -1062,3 +1138,557 @@ class DataStoreStatusProvider:
 
         :param listener: the listener to remove; if no such listener was added, this does nothing
         """
+
+
+class EventName(str, Enum):
+    """
+    EventName represents the name of an event that can be sent by the server for FDv2.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    PUT_OBJECT = "put-object"
+    """
+    Specifies that an object should be added to the data set with upsert semantics.
+    """
+
+    DELETE_OBJECT = "delete-object"
+    """
+    Specifies that an object should be removed from the data set.
+    """
+
+    SERVER_INTENT = "server-intent"
+    """
+    Specifies the server's intent.
+    """
+
+    PAYLOAD_TRANSFERRED = "payload-transferred"
+    """
+    Specifies that that all data required to bring the existing data set to
+    a new version has been transferred.
+    """
+
+    HEARTBEAT = "heart-beat"
+    """
+    Keeps the connection alive.
+    """
+
+    GOODBYE = "goodbye"
+    """
+    Specifies that the server is about to close the connection.
+    """
+
+    ERROR = "error"
+    """
+    Specifies that an error occurred while serving the connection.
+    """
+
+
+@dataclass(frozen=True)
+class Selector:
+    """
+    Selector represents a particular snapshot of data.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    state: str = ""
+    version: int = 0
+
+    @staticmethod
+    def no_selector() -> "Selector":
+        """
+        Returns an empty Selector.
+        """
+        return Selector()
+
+    def is_defined(self) -> bool:
+        """
+        Returns True if the Selector has a value.
+        """
+        return self != Selector.no_selector()
+
+    def name(self) -> str:
+        """
+        Event method.
+        """
+        return EventName.PAYLOAD_TRANSFERRED
+
+    @staticmethod
+    def new_selector(state: str, version: int) -> "Selector":
+        """
+        Creates a new Selector from a state string and version.
+        """
+        return Selector(state=state, version=version)
+
+    def to_dict(self) -> dict:
+        """
+        Serializes the Selector to a JSON-compatible dictionary.
+        """
+        return {"state": self.state, "version": self.version}
+
+    @staticmethod
+    def from_dict(data: dict) -> "Selector":
+        """
+        Deserializes a Selector from a JSON-compatible dictionary.
+        """
+        state = data.get("state")
+        version = data.get("version")
+
+        if state is None or version is None:
+            raise ValueError("Missing required fields in Selector JSON.")
+
+        return Selector(state=state, version=version)
+
+
+class ChangeType(Enum):
+    """
+    ChangeType specifies if an object is being upserted or deleted.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    PUT = "put"
+    """
+    Represents an object being upserted.
+    """
+
+    DELETE = "delete"
+    """
+    Represents an object being deleted.
+    """
+
+
+class ObjectKind(str, Enum):
+    """
+    ObjectKind represents the kind of object.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    FLAG = "flag"
+    SEGMENT = "segment"
+
+
+@dataclass(frozen=True)
+class Change:
+    """
+    Change represents a change to a piece of data, such as an update or deletion.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    action: ChangeType
+    kind: ObjectKind
+    key: str
+    version: int
+    object: Optional[dict] = None
+
+
+class IntentCode(str, Enum):
+    """
+    IntentCode represents the various intents that can be sent by the server.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    TRANSFER_FULL = "xfer-full"
+    """
+    The server intends to send a full data set.
+    """
+    TRANSFER_CHANGES = "xfer-changes"
+    """
+    The server intends to send only the necessary changes to bring an existing
+    data set up-to-date.
+    """
+
+    TRANSFER_NONE = "none"
+    """
+    The server intends to send no data (payload is up to date).
+    """
+
+
+@dataclass(frozen=True)
+class ChangeSet:
+    """
+    ChangeSet represents a list of changes to be applied.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    intent_code: IntentCode
+    changes: List[Change]
+    selector: Selector
+
+
+@dataclass(frozen=True)
+class Basis:
+    """
+    Basis represents the initial payload of data that a data source can
+    provide. Initializers provide this via fetch, whereas Synchronizers provide
+    it asynchronously.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    change_set: ChangeSet
+    persist: bool
+    environment_id: Optional[str] = None
+
+
+class ChangeSetBuilder:
+    """
+    ChangeSetBuilder is a helper for constructing a ChangeSet.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    def __init__(self):
+        """
+        Initializes a new ChangeSetBuilder.
+        """
+        self.intent = None
+        self.changes = []
+
+    @staticmethod
+    def no_changes() -> "ChangeSet":
+        """
+        Represents an intent that the current data is up-to-date and doesn't
+        require changes.
+        """
+        return ChangeSet(
+            intent_code=IntentCode.TRANSFER_NONE, selector=Selector.no_selector(), changes=[]
+        )
+
+    @staticmethod
+    def empty(selector) -> "ChangeSet":
+        """
+        Returns an empty ChangeSet, which is useful for initializing a client
+        without data or for clearing out all existing data.
+        """
+        return ChangeSet(
+            intent_code=IntentCode.TRANSFER_FULL, selector=selector, changes=[]
+        )
+
+    def start(self, intent: IntentCode):
+        """
+        Begins a new change set with a given intent.
+        """
+        self.intent = intent
+        self.changes = []
+
+    def expect_changes(self):
+        """
+        Ensures that the current ChangeSetBuilder is prepared to handle changes.
+
+        If a data source's initial connection reflects an updated status, we
+        need to keep the provided server intent. This allows subsequent changes
+        to come down the line without an explicit server intent.
+
+        However, to maintain logical consistency, we need to ensure that the intent
+        is set to IntentTransferChanges.
+        """
+        if self.intent is None:
+            raise ValueError("changeset: cannot expect changes without a server-intent")
+
+        if self.intent != IntentCode.TRANSFER_NONE:
+            return
+
+        self.intent = IntentCode.TRANSFER_CHANGES
+
+    def reset(self):
+        """
+        Clears any existing changes while preserving the current intent.
+        """
+        self.changes = []
+
+    def finish(self, selector) -> ChangeSet:
+        """
+        Identifies a changeset with a selector and returns the completed
+        changeset. Clears any existing changes while preserving the current
+        intent, so the builder can be reused.
+        """
+        if self.intent is None:
+            raise ValueError("changeset: cannot complete without a server-intent")
+
+        changeset = ChangeSet(
+            intent_code=self.intent, selector=selector, changes=self.changes
+        )
+        self.changes = []
+
+        # Once a full transfer has been processed, all future changes should be
+        # assumed to be changes. Flag delivery can override this behavior by
+        # sending a new server intent to any connected stream.
+        if self.intent == IntentCode.TRANSFER_FULL:
+            self.intent = IntentCode.TRANSFER_CHANGES
+
+        return changeset
+
+    def add_put(self, kind, key, version, obj):
+        """
+        Adds a new object to the changeset.
+        """
+        self.changes.append(
+            Change(
+                action=ChangeType.PUT, kind=kind, key=key, version=version, object=obj
+            )
+        )
+
+    def add_delete(self, kind, key, version):
+        """
+        Adds a deletion to the changeset.
+        """
+        self.changes.append(
+            Change(action=ChangeType.DELETE, kind=kind, key=key, version=version)
+        )
+
+
+@dataclass(frozen=True)
+class Payload:
+    """
+    Payload represents a payload delivered in a streaming response.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    id: str
+    target: int
+    code: IntentCode
+    reason: str
+
+    def to_dict(self) -> dict:
+        """
+        Serializes the Payload to a JSON-compatible dictionary.
+        """
+        return {
+            "id": self.id,
+            "target": self.target,
+            "intentCode": self.code.value,
+            "reason": self.reason,
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> "Payload":
+        """
+        Create a Payload from a dictionary representation.
+        """
+        intent_code = data.get("intentCode")
+
+        if intent_code is None or not isinstance(intent_code, str):
+            raise ValueError(
+                "Invalid data for Payload: 'intentCode' key is missing or not a string"
+            )
+
+        return Payload(
+            id=data.get("id", ""),
+            target=data.get("target", 0),
+            code=IntentCode(intent_code),
+            reason=data.get("reason", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ServerIntent:
+    """
+    ServerIntent represents the type of change associated with the payload
+    (e.g., transfer full, transfer changes, etc.)
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    payload: Payload
+
+    def to_dict(self) -> dict:
+        """
+        Serializes the ServerIntent to a JSON-compatible dictionary.
+        """
+        return {
+            "payloads": [self.payload.to_dict()],
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> "ServerIntent":
+        """
+        Create a ServerIntent from a dictionary representation.
+        """
+        if "payloads" not in data or not isinstance(data["payloads"], list):
+            raise ValueError(
+                "Invalid data for ServerIntent: 'payloads' key is missing or not a list"
+            )
+        if len(data["payloads"]) != 1:
+            raise ValueError(
+                "Invalid data for ServerIntent: expected exactly one payload"
+            )
+
+        payload = data["payloads"][0]
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid payload in ServerIntent: expected a dictionary")
+
+        return ServerIntent(payload=Payload.from_dict(payload))
+
+
+class SelectorStore(Protocol):
+    """
+    SelectorStore represents a component capable of providing Selectors
+    for data retrieval.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    @abstractmethod
+    def selector(self) -> Selector:
+        """
+        get_selector should return a Selector object that defines the criteria
+        for data retrieval.
+        """
+        raise NotImplementedError
+
+
+BasisResult = _Result[Basis, str]
+
+
+class Initializer(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Initializer represents a component capable of retrieving a single data
+    result, such as from the LD polling API.
+
+    The intent of initializers is to quickly fetch an initial set of data,
+    which may be stale but is fast to retrieve. This initial data serves as a
+    foundation for a Synchronizer to build upon, enabling it to provide updates
+    as new changes occur.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the initializer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def fetch(self, ss: SelectorStore) -> BasisResult:
+        """
+        fetch should retrieve the initial data set for the data source, returning
+        a Basis object on success, or an error message on failure.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
+        """
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Update:
+    """
+    Update represents the results of a synchronizer's ongoing sync
+    method.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+
+    state: DataSourceState
+    change_set: Optional[ChangeSet] = None
+    error: Optional[DataSourceErrorInfo] = None
+    revert_to_fdv1: bool = False
+    environment_id: Optional[str] = None
+
+
+class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Synchronizer represents a component capable of synchronizing data from an external
+    data source, such as a streaming or polling API.
+
+    It is responsible for yielding Update objects that represent the current state
+    of the data source, including any changes that have occurred since the last
+    synchronization.
+
+    This type is not stable, and not subject to any backwards
+    compatibility guarantees or semantic versioning. It is not suitable for production usage.
+
+    Do not use it.
+    You have been warned.
+    """
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the synchronizer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
+        """
+        sync should begin the synchronization process for the data source, yielding
+        Update objects until the connection is closed or an unrecoverable error
+        occurs.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def stop(self):
+        """
+        stop should halt the synchronization process, causing the sync method
+        to exit as soon as possible.
+        """
+        raise NotImplementedError

@@ -2,6 +2,62 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.14.1](https://github.com/launchdarkly/python-server-sdk/compare/9.14.0...9.14.1) (2025-12-15)
+
+
+### Bug Fixes
+
+* Remove all synchronizers in daemon mode ([#388](https://github.com/launchdarkly/python-server-sdk/issues/388)) ([441a5ec](https://github.com/launchdarkly/python-server-sdk/commit/441a5ecb3d3f1428801c44b875b32ef396df2fa3))
+
+## [9.14.0](https://github.com/launchdarkly/python-server-sdk/compare/9.13.1...9.14.0) (2025-12-04)
+
+
+### Features
+
+* adding data system option to create file datasource intializer ([e5b121f](https://github.com/launchdarkly/python-server-sdk/commit/e5b121f92a09fcaf717f88b426348798961ab62e))
+* adding file data source as an intializer ([#381](https://github.com/launchdarkly/python-server-sdk/issues/381)) ([3700d1d](https://github.com/launchdarkly/python-server-sdk/commit/3700d1ddd9ef6c7a505ec24783c71753cea89abb))
+
+
+### Bug Fixes
+
+* Add warning if relying on Redis `max_connections` parameter ([#387](https://github.com/launchdarkly/python-server-sdk/issues/387)) ([e6395fa](https://github.com/launchdarkly/python-server-sdk/commit/e6395fa5316bef1c0d2829b4cc4b655fece8b8ea)), closes [#386](https://github.com/launchdarkly/python-server-sdk/issues/386)
+* modified initializer behavior to spec ([064f65c](https://github.com/launchdarkly/python-server-sdk/commit/064f65c76135c385a6fdcb0209caa0e7a8cf872c))
+
+## [9.13.1](https://github.com/launchdarkly/python-server-sdk/compare/9.13.0...9.13.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* Include ldclient.datasystem in docs ([#379](https://github.com/launchdarkly/python-server-sdk/issues/379)) ([318c6fe](https://github.com/launchdarkly/python-server-sdk/commit/318c6fea0738d296713768afc8e08ee9b2360dc2))
+
+## [9.13.0](https://github.com/launchdarkly/python-server-sdk/compare/9.12.3...9.13.0) (2025-11-19)
+
+
+### Features
+
+* **experimental:** Release EAP support for FDv2 data system ([#376](https://github.com/launchdarkly/python-server-sdk/issues/376)) ([0e7c32b](https://github.com/launchdarkly/python-server-sdk/commit/0e7c32b4df12daef25e9b2e9b637225c3e74a2dd))
+
+## [9.12.3](https://github.com/launchdarkly/python-server-sdk/compare/9.12.2...9.12.3) (2025-10-30)
+
+
+### Bug Fixes
+
+* Fix overly generic type hint on File data source ([#365](https://github.com/launchdarkly/python-server-sdk/issues/365)) ([52a7499](https://github.com/launchdarkly/python-server-sdk/commit/52a7499f7cf1d4311f89fa98e65bca670e127aa6)), closes [#364](https://github.com/launchdarkly/python-server-sdk/issues/364)
+
+## [9.12.2](https://github.com/launchdarkly/python-server-sdk/compare/9.12.1...9.12.2) (2025-10-27)
+
+
+### Bug Fixes
+
+* Fix incorrect event count in failure message ([#359](https://github.com/launchdarkly/python-server-sdk/issues/359)) ([91f4163](https://github.com/launchdarkly/python-server-sdk/commit/91f416329bd3e53a622ce58caa63cdd6cdcc8896))
+
+## [9.12.1](https://github.com/launchdarkly/python-server-sdk/compare/9.12.0...9.12.1) (2025-09-30)
+
+
+### Bug Fixes
+
+* Add validation format check for SDK key ([#351](https://github.com/launchdarkly/python-server-sdk/issues/351))
+
 ## [9.12.0](https://github.com/launchdarkly/python-server-sdk/compare/9.11.1...9.12.0) (2025-07-11)
 
 

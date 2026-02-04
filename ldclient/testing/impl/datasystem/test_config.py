@@ -1,12 +1,11 @@
 import dataclasses
-from unittest.mock import MagicMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
 from ldclient.config import Config as LDConfig
-from ldclient.impl.datasystem import Initializer, Synchronizer
-from ldclient.impl.datasystem.config import (
-    Config,
+from ldclient.config import DataSystemConfig
+from ldclient.datasystem import (
     ConfigBuilder,
     custom,
     default,
@@ -27,19 +26,18 @@ def test_config_builder_initializers():
 
 
 def test_config_builder_synchronizers_primary_only():
-    """Test that primary synchronizer can be set without secondary."""
+    """Test that a single synchronizer can be set."""
     builder = ConfigBuilder()
     mock_synchronizer = Mock()
 
     result = builder.synchronizers(mock_synchronizer)
 
     assert result is builder  # Method chaining
-    assert builder._primary_synchronizer == mock_synchronizer
-    assert builder._secondary_synchronizer is None
+    assert builder._synchronizers == [mock_synchronizer]
 
 
 def test_config_builder_synchronizers_with_secondary():
-    """Test that both primary and secondary synchronizers can be set."""
+    """Test that multiple synchronizers can be set."""
     builder = ConfigBuilder()
     mock_primary = Mock()
     mock_secondary = Mock()
@@ -47,8 +45,7 @@ def test_config_builder_synchronizers_with_secondary():
     result = builder.synchronizers(mock_primary, mock_secondary)
 
     assert result is builder  # Method chaining
-    assert builder._primary_synchronizer == mock_primary
-    assert builder._secondary_synchronizer == mock_secondary
+    assert builder._synchronizers == [mock_primary, mock_secondary]
 
 
 def test_config_builder_build_success():
@@ -63,29 +60,9 @@ def test_config_builder_build_success():
 
     config = builder.build()
 
-    assert isinstance(config, Config)
+    assert isinstance(config, DataSystemConfig)
     assert config.initializers == [mock_initializer]
-    assert config.primary_synchronizer == mock_primary
-    assert config.secondary_synchronizer == mock_secondary
-
-
-def test_config_builder_build_missing_primary_synchronizer():
-    """Test that build fails when primary synchronizer is not set."""
-    builder = ConfigBuilder()
-
-    with pytest.raises(ValueError, match="Primary synchronizer must be set"):
-        builder.build()
-
-
-def test_config_builder_build_with_initializers_only():
-    """Test that build fails when only initializers are set."""
-    builder = ConfigBuilder()
-    mock_initializer = Mock()
-
-    builder.initializers([mock_initializer])
-
-    with pytest.raises(ValueError, match="Primary synchronizer must be set"):
-        builder.build()
+    assert config.synchronizers == [mock_primary, mock_secondary]
 
 
 def test_config_builder_method_chaining():
@@ -104,12 +81,11 @@ def test_config_builder_method_chaining():
 
 
 def test_config_builder_default_state():
-    """Test that ConfigBuilder starts with all fields as None."""
+    """Test that ConfigBuilder starts with all fields as None or empty."""
     builder = ConfigBuilder()
 
     assert builder._initializers is None
-    assert builder._primary_synchronizer is None
-    assert builder._secondary_synchronizer is None
+    assert builder._synchronizers == []
 
 
 def test_config_builder_multiple_calls():
@@ -131,7 +107,7 @@ def test_config_builder_multiple_calls():
     config = builder.build()
 
     assert config.initializers == [mock_initializer2]
-    assert config.primary_synchronizer == mock_primary2
+    assert config.synchronizers == [mock_primary2]
 
 
 def test_custom_builder():
@@ -146,9 +122,7 @@ def test_custom_builder():
 
 def test_default_config_builder():
     """Test that default() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = default(mock_ld_config)
+    builder = default()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests
@@ -157,9 +131,7 @@ def test_default_config_builder():
 
 def test_streaming_config_builder():
     """Test that streaming() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = streaming(mock_ld_config)
+    builder = streaming()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests
@@ -168,9 +140,7 @@ def test_streaming_config_builder():
 
 def test_polling_config_builder():
     """Test that polling() returns a properly configured ConfigBuilder."""
-    mock_ld_config = Mock(spec=LDConfig)
-
-    builder = polling(mock_ld_config)
+    builder = polling()
 
     assert isinstance(builder, ConfigBuilder)
     # The actual implementation details would be tested in integration tests
@@ -178,44 +148,64 @@ def test_polling_config_builder():
 
 
 def test_config_dataclass_immutability():
-    """Test that Config instances are immutable (frozen dataclass)."""
-    mock_primary = Mock()
-    mock_secondary = Mock()
+    """Test that DataSystemConfig instances are immutable (frozen dataclass)."""
+    mock_sync1 = Mock()
+    mock_sync2 = Mock()
 
-    config = Config(
+    config = DataSystemConfig(
         initializers=None,
-        primary_synchronizer=mock_primary,
-        secondary_synchronizer=mock_secondary,
+        synchronizers=[mock_sync1, mock_sync2],
     )
 
     # Attempting to modify attributes should raise an error
     with pytest.raises(dataclasses.FrozenInstanceError):
-        config.primary_synchronizer = Mock()
+        config.synchronizers = []
 
 
 def test_config_builder_with_none_initializers():
     """Test that initializers can be explicitly set to None."""
     builder = ConfigBuilder()
-    mock_primary = Mock()
+    mock_sync = Mock()
 
     builder.initializers(None)
-    builder.synchronizers(mock_primary)
+    builder.synchronizers(mock_sync)
 
     config = builder.build()
 
     assert config.initializers is None
-    assert config.primary_synchronizer == mock_primary
+    assert config.synchronizers == [mock_sync]
 
 
 def test_config_builder_with_empty_initializers_list():
     """Test that empty list of initializers is handled correctly."""
     builder = ConfigBuilder()
-    mock_primary = Mock()
+    mock_sync = Mock()
 
     builder.initializers([])
-    builder.synchronizers(mock_primary)
+    builder.synchronizers(mock_sync)
 
     config = builder.build()
 
     assert config.initializers == []
-    assert config.primary_synchronizer == mock_primary
+    assert config.synchronizers == [mock_sync]
+
+
+def test_config_builder_synchronizers_no_args():
+    """Test that calling synchronizers with no arguments raises an error."""
+    builder = ConfigBuilder()
+
+    with pytest.raises(ValueError, match="At least one synchronizer must be provided"):
+        builder.synchronizers()
+
+
+def test_config_builder_synchronizers_multiple():
+    """Test that more than two synchronizers can be set."""
+    builder = ConfigBuilder()
+    mock_sync1 = Mock()
+    mock_sync2 = Mock()
+    mock_sync3 = Mock()
+
+    result = builder.synchronizers(mock_sync1, mock_sync2, mock_sync3)
+
+    assert result is builder  # Method chaining
+    assert builder._synchronizers == [mock_sync1, mock_sync2, mock_sync3]

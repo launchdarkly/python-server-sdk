@@ -54,6 +54,9 @@ class EvaluationDetail:
         * ``errorKind``: further describes the nature of the error if the kind was ``ERROR``,
           e.g. ``"FLAG_NOT_FOUND"``
 
+        * ``inExperiment``: This is true if the evaluation resulted in an experiment rollout and
+          served one of the variations in the experiment. Otherwise it is false.
+
         * ``bigSegmentsStatus``: describes the validity of Big Segment information, if and only if
           the flag evaluation required querying at least one Big Segment; otherwise it returns None.
           Allowable values are defined in :class:`BigSegmentsStatus`. For more information, read the

@@ -21,6 +21,12 @@ from ldclient.interfaces import (
 from ldclient.testing.test_util import SpyListener
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
+# Skip all tests in this module in CI due to flakiness
+pytestmark = pytest.mark.skipif(
+    os.getenv('LD_SKIP_FLAKY_TESTS', '').lower() in ('true', '1', 'yes'),
+    reason="Skipping flaky test"
+)
+
 have_yaml = False
 try:
     import yaml

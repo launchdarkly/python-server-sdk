@@ -30,6 +30,8 @@ from ldclient.impl.datastore.status import (
     DataStoreStatusProviderImpl,
     DataStoreUpdateSinkImpl
 )
+from ldclient.impl.datasystem import DataAvailability, DataSystem
+from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
@@ -51,7 +53,8 @@ from ldclient.interfaces import (
     DataStoreStatusProvider,
     DataStoreUpdateSink,
     FeatureStore,
-    FlagTracker
+    FlagTracker,
+    ReadOnlyStore
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import (
@@ -108,13 +111,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
             raise
 
     def __update_availability(self, available: bool):
-        try:
-            self.__lock.lock()
+        with self.__lock.write():
             if available == self.__last_available:
                 return
             self.__last_available = available
-        finally:
-            self.__lock.unlock()
 
         status = DataStoreStatus(available, False)
 
@@ -124,23 +124,19 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__store_update_sink.update_status(status)
 
         if available:
-            try:
-                self.__lock.lock()
+            with self.__lock.write():
                 if self.__poller is not None:
                     self.__poller.stop()
                     self.__poller = None
-            finally:
-                self.__lock.unlock()
 
             return
 
         log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
         task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
-        self.__lock.lock()
-        self.__poller = task
-        self.__poller.start()
-        self.__lock.unlock()
+        with self.__lock.write():
+            self.__poller = task
+            self.__poller.start()
 
     def __check_availability(self):
         try:
@@ -249,14 +245,19 @@ class LDClient:
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
-        # Initialize data system (FDv1) to encapsulate v1 data plumbing
-        from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
-            FDv1
-        )
+        datasystem_config = self._config.datasystem_config
+        if datasystem_config is None:
+            # Initialize data system (FDv1) to encapsulate v1 data plumbing
+            from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
+                FDv1
+            )
 
-        self._data_system = FDv1(self._config)
-        # Provide flag evaluation function for value-change tracking
-        self._data_system.set_flag_value_eval_fn(
+            self._data_system: DataSystem = FDv1(self._config)
+        else:
+            self._data_system = FDv2(self._config, datasystem_config)
+
+        self.__flag_tracker = FlagTrackerImpl(
+            self._data_system.flag_change_listeners,
             lambda key, context: self.variation(key, context, None)
         )
         # Expose providers and store from data system
@@ -264,15 +265,13 @@ class LDClient:
         self.__data_source_status_provider = (
             self._data_system.data_source_status_provider
         )
-        self.__flag_tracker = self._data_system.flag_tracker
-        self._store = self._data_system.store  # type: FeatureStore
 
         big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(self._store, FEATURES, key),
-            lambda key: _get_store_item(self._store, SEGMENTS, key),
+            lambda key: _get_store_item(self._data_system.store, FEATURES, key),
+            lambda key: _get_store_item(self._data_system.store, SEGMENTS, key),
             lambda key: big_segment_store_manager.get_user_membership(key),
             log,
         )
@@ -286,7 +285,7 @@ class LDClient:
         diagnostic_accumulator = self._set_event_processor(self._config)
 
         # Pass diagnostic accumulator to data system for streaming metrics
-        self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)
+        self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)  # type: ignore
 
         self.__register_plugins(environment_metadata)
 
@@ -475,11 +474,7 @@ class LDClient:
         if self.is_offline() or self._config.use_ldd:
             return True
 
-        return (
-            self._data_system._update_processor.initialized()
-            if self._data_system._update_processor
-            else False
-        )
+        return self._data_system.data_availability.at_least(DataAvailability.CACHED)
 
     def flush(self):
         """Flushes all pending analytics events.
@@ -566,8 +561,8 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if not self.is_initialized():
-            if self._store.initialized:
+        if self._data_system.data_availability != DataAvailability.REFRESHED:
+            if self._data_system.data_availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -580,7 +575,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._store, FEATURES, key)
+            flag = _get_store_item(self._data_system.store, FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
@@ -637,8 +632,8 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        if not self.is_initialized():
-            if self._store.initialized:
+        if self._data_system.data_availability != DataAvailability.REFRESHED:
+            if self._data_system.data_availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
@@ -653,7 +648,7 @@ class LDClient:
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
-            flags_map = self._store.all(FEATURES, lambda x: x)
+            flags_map = self._data_system.store.all(FEATURES, lambda x: x)
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
@@ -715,9 +710,8 @@ class LDClient:
         if not isinstance(hook, Hook):
             return
 
-        self.__hooks_lock.lock()
-        self.__hooks.append(hook)
-        self.__hooks_lock.unlock()
+        with self.__hooks_lock.write():
+            self.__hooks.append(hook)
 
     def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], _EvaluationWithHookResult]) -> _EvaluationWithHookResult:
         """
@@ -731,15 +725,11 @@ class LDClient:
         # :return:
         """
         hooks = []  # type: List[Hook]
-        try:
-            self.__hooks_lock.rlock()
-
+        with self.__hooks_lock.read():
             if len(self.__hooks) == 0:
                 return block()
 
             hooks = self.__hooks.copy()
-        finally:
-            self.__hooks_lock.runlock()
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
         hook_data = self.__execute_before_evaluation(hooks, series_context)

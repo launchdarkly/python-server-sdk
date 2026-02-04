@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Protocol
 
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
@@ -27,16 +27,12 @@ class DataStoreUpdateSinkImpl(DataStoreUpdateSink):
         return self.__listeners
 
     def status(self) -> DataStoreStatus:
-        self.__lock.rlock()
-        status = copy(self.__status)
-        self.__lock.runlock()
-
-        return status
+        with self.__lock.read():
+            return copy(self.__status)
 
     def update_status(self, status: DataStoreStatus):
-        self.__lock.lock()
-        old_value, self.__status = self.__status, status
-        self.__lock.unlock()
+        with self.__lock.write():
+            old_value, self.__status = self.__status, status
 
         if old_value != status:
             self.__listeners.notify(status)

@@ -1,5 +1,8 @@
 import json
 import logging
+import sys
+from typing import Any, Callable
+from urllib.parse import urlparse
 
 import requests
 from big_segment_store_fixture import BigSegmentStoreFixture
@@ -15,6 +18,16 @@ from ldclient import (
     Stage
 )
 from ldclient.config import BigSegmentsConfig
+from ldclient.datasystem import (
+    custom,
+    fdv1_fallback_ds_builder,
+    polling_ds_builder,
+    streaming_ds_builder
+)
+from ldclient.feature_store import CacheConfig
+from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
+from ldclient.integrations import Consul, DynamoDB, Redis
+from ldclient.interfaces import DataStoreMode
 
 
 class ClientEntity:
@@ -29,14 +42,77 @@ class ClientEntity:
                 'version': tags.get('applicationVersion', ''),
             }
 
-        if config.get("streaming") is not None:
+        datasystem_config = config.get('dataSystem')
+        if datasystem_config is not None:
+            datasystem = custom()
+
+            init_configs = datasystem_config.get('initializers')
+            if init_configs is not None:
+                initializers = []
+                for init_config in init_configs:
+                    polling = init_config.get('polling')
+                    if polling is not None:
+                        polling_builder = polling_ds_builder()
+                        _set_optional_value(polling, "baseUri", polling_builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", polling_builder.poll_interval)
+                        initializers.append(polling_builder)
+
+                datasystem.initializers(initializers)
+            sync_configs = datasystem_config.get('synchronizers')
+            if sync_configs is not None:
+                sync_builders = []
+                fallback_builder = None
+
+                for sync_config in sync_configs:
+                    streaming = sync_config.get('streaming')
+                    if streaming is not None:
+                        builder = streaming_ds_builder()
+                        _set_optional_value(streaming, "baseUri", builder.base_uri)
+                        _set_optional_time(streaming, "initialRetryDelayMs", builder.initial_reconnect_delay)
+                        sync_builders.append(builder)
+                    elif sync_config.get('polling') is not None:
+                        polling = sync_config.get('polling')
+
+                        builder = polling_ds_builder()
+                        _set_optional_value(polling, "baseUri", builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", builder.poll_interval)
+                        sync_builders.append(builder)
+
+                        fallback_builder = fdv1_fallback_ds_builder()
+                        _set_optional_value(polling, "baseUri", fallback_builder.base_uri)
+                        _set_optional_time(polling, "pollIntervalMs", fallback_builder.poll_interval)
+
+                if sync_builders:
+                    datasystem.synchronizers(*sync_builders)
+                if fallback_builder is not None:
+                    datasystem.fdv1_compatible_synchronizer(fallback_builder)
+
+            if datasystem_config.get("payloadFilter") is not None:
+                opts["payload_filter_key"] = datasystem_config["payloadFilter"]
+
+            # Handle persistent data store configuration for dataSystem
+            store_config = datasystem_config.get("store")
+            if store_config is not None:
+                persistent_store_config = store_config.get("persistentDataStore")
+                if persistent_store_config is not None:
+                    store = _create_persistent_store(persistent_store_config)
+
+                    # Parse store mode (0 = READ_ONLY, 1 = READ_WRITE)
+                    store_mode_value = datasystem_config.get("storeMode", 0)
+                    store_mode = DataStoreMode.READ_WRITE if store_mode_value == 1 else DataStoreMode.READ_ONLY
+
+                    datasystem.data_store(store, store_mode)
+
+            opts["datasystem_config"] = datasystem.build()
+
+        elif config.get("streaming") is not None:
             streaming = config["streaming"]
             if streaming.get("baseUri") is not None:
                 opts["stream_uri"] = streaming["baseUri"]
             if streaming.get("filter") is not None:
                 opts["payload_filter_key"] = streaming["filter"]
             _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
-        else:
+        elif config.get("polling") is not None:
             opts['stream'] = False
             polling = config["polling"]
             if polling.get("baseUri") is not None:
@@ -44,6 +120,8 @@ class ClientEntity:
             if polling.get("filter") is not None:
                 opts["payload_filter_key"] = polling["filter"]
             _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
+        else:
+            opts['use_ldd'] = True
 
         if config.get("events") is not None:
             events = config["events"]
@@ -72,6 +150,9 @@ class ClientEntity:
             _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = BigSegmentsConfig(**big_config)
+
+        if config.get("persistentDataStore") is not None:
+            opts["feature_store"] = _create_persistent_store(config["persistentDataStore"])
 
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)
@@ -209,4 +290,82 @@ class ClientEntity:
 def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
     if params_in.get(name_in) is not None:
         params_out[name_out] = params_in[name_in] / 1000.0
-    return None
+
+
+def _set_optional_time(params_in: dict, name_in: str, func: Callable[[float], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in] / 1000.0)
+
+
+def _set_optional_value(params_in: dict, name_in: str, func: Callable[[Any], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in])
+
+
+def _create_persistent_store(persistent_store_config: dict):
+    """
+    Creates a persistent store instance based on the configuration.
+    Used for both v2 and v3 (dataSystem) configurations.
+    """
+    store_params = persistent_store_config["store"]
+    store_type = store_params["type"]
+    dsn = store_params["dsn"]
+    prefix = store_params.get("prefix")
+
+    # Parse cache configuration
+    cache_config = persistent_store_config.get("cache", {})
+    cache_mode = cache_config.get("mode", "ttl")
+
+    if cache_mode == "off":
+        caching = CacheConfig.disabled()
+    elif cache_mode == "infinite":
+        caching = CacheConfig(expiration=sys.maxsize)
+    elif cache_mode == "ttl":
+        ttl_seconds = cache_config.get("ttl", 15)
+        caching = CacheConfig(expiration=ttl_seconds)
+    else:
+        caching = CacheConfig.default()
+
+    # Create the appropriate store based on type
+    if store_type == "redis":
+        return Redis.new_feature_store(
+            url=dsn,
+            prefix=prefix or Redis.DEFAULT_PREFIX,
+            caching=caching
+        )
+    elif store_type == "dynamodb":
+        # Parse endpoint from DSN (handle URLs without scheme)
+        parsed = urlparse(dsn) if '://' in dsn else urlparse(f'http://{dsn}')
+        endpoint_url = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Import boto3 for DynamoDB configuration
+        import boto3
+
+        # Create DynamoDB client with test credentials
+        dynamodb_opts = {
+            'endpoint_url': endpoint_url,
+            'region_name': 'us-east-1',
+            'aws_access_key_id': 'dummy',
+            'aws_secret_access_key': 'dummy'
+        }
+
+        return DynamoDB.new_feature_store(
+            table_name="sdk-contract-tests",
+            prefix=prefix,
+            dynamodb_opts=dynamodb_opts,
+            caching=caching
+        )
+    elif store_type == "consul":
+        # Parse host and port from DSN
+        parsed = urlparse(dsn) if '://' in dsn else urlparse(f'http://{dsn}')
+        host = parsed.hostname or 'localhost'
+        port = parsed.port or 8500
+
+        return Consul.new_feature_store(
+            host=host,
+            port=port,
+            prefix=prefix,
+            caching=caching
+        )
+    else:
+        raise ValueError(f"Unsupported data store type: {store_type}")
