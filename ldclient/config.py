@@ -4,10 +4,10 @@ This submodule contains the :class:`Config` class for custom configuration of th
 Note that the same class can also be imported from the ``ldclient.client`` submodule.
 """
 
+import warnings
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, List, Optional, Protocol, Set, TypeVar
-import warnings
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
