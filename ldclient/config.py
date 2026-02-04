@@ -6,6 +6,7 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 
 from threading import Event
 from typing import Callable, List, Optional, Set
+import warnings
 
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
@@ -303,8 +304,11 @@ class Config:
     def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
 
+        DEPRECATED: This method is deprecated and will be removed in a future version.
+
         :param new_sdk_key: the new SDK key
         """
+        warnings.warn("copy_with_new_sdk_key is deprecated and will be removed in a future version", DeprecationWarning)
         return Config(
             sdk_key=new_sdk_key,
             base_uri=self.__base_uri,
@@ -333,12 +337,6 @@ class Config:
             wrapper_version=self.__wrapper_version,
             http=self.__http,
             big_segments=self.__big_segments,
-            application=self.__application,
-            hooks=self.__hooks,
-            plugins=self.__plugins,
-            enable_event_compression=self.__enable_event_compression,
-            omit_anonymous_contexts=self.__omit_anonymous_contexts,
-            payload_filter_key=self.__payload_filter_key,
         )
 
     # for internal use only - probably should be part of the client logic
