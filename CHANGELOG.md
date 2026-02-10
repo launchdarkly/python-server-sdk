@@ -2,6 +2,35 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.15.0](https://github.com/launchdarkly/python-server-sdk/compare/9.14.1...9.15.0) (2026-02-10)
+
+
+### ⚠ BREAKING CHANGES
+
+**Note:** The following breaking changes apply only to FDv2 (Flag Delivery v2) early access features, which are not subject to semantic versioning and may change without a major version bump.
+
+* Update ChangeSet to always require a Selector ([#405](https://github.com/launchdarkly/python-server-sdk/issues/405)) ([5dc4f81](https://github.com/launchdarkly/python-server-sdk/commit/5dc4f81688e814045373edb244e0420fa572d922))
+  * The `ChangeSetBuilder.finish()` method now requires a `Selector` parameter.
+* Update DataSystemConfig to accept list of synchronizers ([#404](https://github.com/launchdarkly/python-server-sdk/issues/404)) ([c73ad14](https://github.com/launchdarkly/python-server-sdk/commit/c73ad14090ef1378af1bfbe626a74eb369e3cac8))
+  * The `DataSystemConfig.synchronizers` field now accepts a list of synchronizers, and the `ConfigBuilder.synchronizers()` method accepts variadic arguments.
+
+### Features
+
+* Drop support for python 3.9 ([#393](https://github.com/launchdarkly/python-server-sdk/issues/393)) ([5b761bd](https://github.com/launchdarkly/python-server-sdk/commit/5b761bd306e1e6973b59cea3f7657463de0204d1))
+
+
+### Bug Fixes
+
+* Add context manager for clearer, safer locks ([#396](https://github.com/launchdarkly/python-server-sdk/issues/396)) ([beca0fa](https://github.com/launchdarkly/python-server-sdk/commit/beca0fa4985f385cb3328408528e14696ec7c70f))
+* Address potential race condition in FeatureStore update_availability ([#391](https://github.com/launchdarkly/python-server-sdk/issues/391)) ([31cf487](https://github.com/launchdarkly/python-server-sdk/commit/31cf4875c35f08177105a16f65140acabe93d3da))
+* Allow modifying fdv2 data source options independent of main config ([#403](https://github.com/launchdarkly/python-server-sdk/issues/403)) ([d78079e](https://github.com/launchdarkly/python-server-sdk/commit/d78079e7f340690c17f39ef73dd9a45e6f365fd7))
+* Mark copy_with_new_sdk_key method as deprecated ([#353](https://github.com/launchdarkly/python-server-sdk/issues/353)) ([e471ccc](https://github.com/launchdarkly/python-server-sdk/commit/e471ccc3d5f4c37452d8a2ebba58248ca0a155dd))
+* Prevent immediate polling on recoverable error ([#399](https://github.com/launchdarkly/python-server-sdk/issues/399)) ([da565a2](https://github.com/launchdarkly/python-server-sdk/commit/da565a2dce67fc386396686dd2017819e2c4edfb))
+* Redis store is considered initialized when `$inited` key is written ([e99a27d](https://github.com/launchdarkly/python-server-sdk/commit/e99a27d48f1fc2bd81b1791fd57cb1a8ab754569))
+* Stop FeatureStoreClientWrapper poller on close ([#397](https://github.com/launchdarkly/python-server-sdk/issues/397)) ([468afdf](https://github.com/launchdarkly/python-server-sdk/commit/468afdfef32f74f7cc82cb61f01f5674054da9db))
+* Update reason documentation with inExperiment value ([#401](https://github.com/launchdarkly/python-server-sdk/issues/401)) ([cbfc3dd](https://github.com/launchdarkly/python-server-sdk/commit/cbfc3dd8876eae9ffa352ec12a1131a64110c08a))
+* Update Redis to write missing `$inited` key ([e99a27d](https://github.com/launchdarkly/python-server-sdk/commit/e99a27d48f1fc2bd81b1791fd57cb1a8ab754569))
+
 ## [9.14.1](https://github.com/launchdarkly/python-server-sdk/compare/9.14.0...9.14.1) (2025-12-15)
 
 
