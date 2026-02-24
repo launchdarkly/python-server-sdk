@@ -656,20 +656,12 @@ class FDv2(DataSystem):
         :param status: Current data source status
         :return: True if recovery condition is met
         """
-        interrupted_at_runtime = (
-            status.state == DataSourceState.INTERRUPTED
-            and time.time() - status.since > 60  # 1 minute
-        )
         healthy_for_too_long = (
             status.state == DataSourceState.VALID
             and time.time() - status.since > 300  # 5 minutes
         )
-        cannot_initialize = (
-            status.state == DataSourceState.INITIALIZING
-            and time.time() - status.since > 10  # 10 seconds
-        )
 
-        return interrupted_at_runtime or healthy_for_too_long or cannot_initialize
+        return healthy_for_too_long
 
     def _persistent_store_outage_recovery(self, data_store_status: DataStoreStatus):
         """
