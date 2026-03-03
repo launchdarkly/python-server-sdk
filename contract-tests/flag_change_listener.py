@@ -63,12 +63,11 @@ class ListenerRegistry:
 
         # add_flag_value_change_listener returns the underlying listener
         # that must be passed to remove_listener to unsubscribe
-        underlying_listener = self._tracker.add_flag_value_change_listener(flag_key, context, on_value_change)
-
         with self._lock:
             if listener_id in self._listeners:
                 self._tracker.remove_listener(self._listeners[listener_id])
 
+            underlying_listener = self._tracker.add_flag_value_change_listener(flag_key, context, on_value_change)
             self._listeners[listener_id] = underlying_listener
 
     def unregister(self, listener_id: str) -> bool:
