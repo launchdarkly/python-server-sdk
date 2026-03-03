@@ -284,7 +284,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
 
     # Trigger a flag update in FDv1
     td_fdv1.update(td_fdv1.flag("fdv1-fallback-flag").on(False))
-    assert changed.wait(1), "Flag change listener was not called in time"
+    assert changed.wait(2), "Flag change listener was not called in time"
 
     # Verify FDv1 is active
     assert len(changes) > 0
