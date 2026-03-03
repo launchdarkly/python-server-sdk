@@ -36,9 +36,8 @@ class ListenerRegistry:
             if listener_id in self._listeners:
                 self._tracker.remove_listener(self._listeners[listener_id])
 
+            self._tracker.add_listener(on_flag_change)
             self._listeners[listener_id] = on_flag_change
-
-        self._tracker.add_listener(on_flag_change)
 
     def register_flag_value_change_listener(
         self,
