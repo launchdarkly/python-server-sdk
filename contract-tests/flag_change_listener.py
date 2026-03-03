@@ -1,6 +1,6 @@
 import logging
 import threading
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 import requests
 
