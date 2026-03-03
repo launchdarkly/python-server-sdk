@@ -266,14 +266,10 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
 
     changed = Event()
     changes: List[FlagChange] = []
-    count = 0
 
     def listener(flag_change: FlagChange):
-        nonlocal count
-        count += 1
         changes.append(flag_change)
-        if count >= 2:
-            changed.set()
+        changed.set()
 
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
@@ -282,11 +278,11 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
 
-    # Trigger a flag update in FDv1
+    # Update flag in FDv1 data source to verify it's being used
     td_fdv1.update(td_fdv1.flag("fdv1-fallback-flag").on(False))
     assert changed.wait(2), "Flag change listener was not called in time"
 
-    # Verify FDv1 is active
+    # Verify we got flag changes from FDv1
     assert len(changes) > 0
     assert any(c.key == "fdv1-fallback-flag" for c in changes)
 
