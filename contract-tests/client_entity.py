@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import requests
 from big_segment_store_fixture import BigSegmentStoreFixture
+from flag_change_listener import ListenerRegistry
 from hook import PostingHook
 
 from ldclient import *
@@ -158,6 +159,7 @@ class ClientEntity:
         config = Config(**opts)
 
         self.client = client.LDClient(config, start_wait / 1000.0)
+        self.listeners = ListenerRegistry(self.client.flag_tracker)
 
     def is_initializing(self) -> bool:
         return self.client.is_initialized()
@@ -282,7 +284,25 @@ class ClientEntity:
         result = migrator.write(params["key"], Context.from_dict(params["context"]), Stage.from_str(params["defaultStage"]), params["payload"])
         return {"result": result.authoritative.value if result.authoritative.is_success() else result.authoritative.error}
 
+    def register_flag_change_listener(self, params: dict):
+        self.listeners.register_flag_change_listener(
+            listener_id=params['listenerId'],
+            callback_uri=params['callbackUri'],
+        )
+
+    def register_flag_value_change_listener(self, params: dict):
+        self.listeners.register_flag_value_change_listener(
+            listener_id=params["listenerId"],
+            flag_key=params["flagKey"],
+            context=Context.from_dict(params["context"]),
+            callback_uri=params["callbackUri"],
+        )
+
+    def unregister_listener(self, params: dict) -> bool:
+        return self.listeners.unregister(params['listenerId'])
+
     def close(self):
+        self.listeners.close_all()
         self.client.close()
         self.log.info('Test ended')
 

@@ -82,6 +82,8 @@ def status():
             'persistent-data-store-redis',
             'persistent-data-store-dynamodb',
             'persistent-data-store-consul',
+            'flag-change-listeners',
+            'flag-value-change-listeners',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
@@ -150,6 +152,13 @@ def post_client_command(id):
         response = client.migration_variation(sub_params)
     elif command == "migrationOperation":
         response = client.migration_operation(sub_params)
+    elif command == "registerFlagChangeListener":
+        client.register_flag_change_listener(sub_params)
+    elif command == "registerFlagValueChangeListener":
+        client.register_flag_value_change_listener(sub_params)
+    elif command == "unregisterListener":
+        if not client.unregister_listener(sub_params):
+            return 'no listener with id "%s"' % sub_params['listenerId'], 400
     else:
         return '', 400
 
