@@ -44,7 +44,6 @@ class ListenerRegistry:
         listener_id: str,
         flag_key: str,
         context: Context,
-        default_value,
         callback_uri: str,
     ):
         """Register a flag value change listener that fires when the evaluated value changes."""

@@ -292,11 +292,10 @@ class ClientEntity:
 
     def register_flag_value_change_listener(self, params: dict):
         self.listeners.register_flag_value_change_listener(
-            listener_id=params['listenerId'],
-            flag_key=params['flagKey'],
-            context=Context.from_dict(params['context']),
-            default_value=params['defaultValue'],
-            callback_uri=params['callbackUri'],
+            listener_id=params["listenerId"],
+            flag_key=params["flagKey"],
+            context=Context.from_dict(params["context"]),
+            callback_uri=params["callbackUri"],
         )
 
     def unregister_listener(self, params: dict) -> bool:
