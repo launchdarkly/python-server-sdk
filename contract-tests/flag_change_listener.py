@@ -72,18 +72,15 @@ class ListenerRegistry:
         """Unregister a previously registered listener. Returns False if not found."""
         with self._lock:
             listener = self._listeners.pop(listener_id, None)
+            if listener is None:
+                return False
 
-        if listener is None:
-            return False
-
-        self._tracker.remove_listener(listener)
-        return True
+            self._tracker.remove_listener(listener)
+            return True
 
     def close_all(self):
         """Unregister all listeners. Called when the SDK client entity shuts down."""
         with self._lock:
-            listeners = dict(self._listeners)
+            for listener in self._listeners.values():
+                self._tracker.remove_listener(listener)
             self._listeners.clear()
-
-        for listener in listeners.values():
-            self._tracker.remove_listener(listener)
