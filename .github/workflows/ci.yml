@@ -97,8 +97,15 @@ jobs:
           consul: true
           dynamodb: true
 
-      - name: Wait for Consul to be ready
+      - name: Start Consul dev agent
         run: |
+          # The chocolatey package installs Consul as a Windows service which
+          # conflicts with the dev agent started by the persistent-stores action.
+          # Stop the service so the dev agent can bind to port 8500.
+          Stop-Service consul -ErrorAction SilentlyContinue
+          Set-Service consul -StartupType Disabled -ErrorAction SilentlyContinue
+          Start-Process consul -ArgumentList 'agent', '-dev', '-http-port=8500'
+
           $timeout = 30
           $elapsed = 0
           while ($elapsed -lt $timeout) {
