@@ -91,37 +91,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@0fbe701c3f75ea37148aa949bf0e25f170fcb461
         with:
           redis: true
           consul: true
           dynamodb: true
-
-      - name: Start Consul dev agent
-        run: |
-          # The chocolatey package installs Consul as a Windows service which
-          # conflicts with the dev agent started by the persistent-stores action.
-          # Stop the service so the dev agent can bind to port 8500.
-          Stop-Service consul -ErrorAction SilentlyContinue
-          Set-Service consul -StartupType Disabled -ErrorAction SilentlyContinue
-          Start-Process consul -ArgumentList 'agent', '-dev', '-http-port=8500'
-
-          $timeout = 30
-          $elapsed = 0
-          while ($elapsed -lt $timeout) {
-            try {
-              $response = Invoke-RestMethod -Uri 'http://127.0.0.1:8500/v1/status/leader' -TimeoutSec 2
-              if ($response -and $response -ne '""') {
-                Write-Host "Consul is ready (leader: $response)"
-                exit 0
-              }
-            } catch {}
-            Write-Host "Waiting for Consul to elect a leader... ($elapsed/$timeout seconds)"
-            Start-Sleep -Seconds 1
-            $elapsed++
-          }
-          Write-Error "Consul did not become ready within $timeout seconds"
-          exit 1
 
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
