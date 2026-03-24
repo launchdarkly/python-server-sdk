@@ -97,6 +97,25 @@ jobs:
           consul: true
           dynamodb: true
 
+      - name: Wait for Consul to be ready
+        run: |
+          $timeout = 30
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            try {
+              $response = Invoke-RestMethod -Uri 'http://127.0.0.1:8500/v1/status/leader' -TimeoutSec 2
+              if ($response -and $response -ne '""') {
+                Write-Host "Consul is ready (leader: $response)"
+                exit 0
+              }
+            } catch {}
+            Write-Host "Waiting for Consul to elect a leader... ($elapsed/$timeout seconds)"
+            Start-Sleep -Seconds 1
+            $elapsed++
+          }
+          Write-Error "Consul did not become ready within $timeout seconds"
+          exit 1
+
       - name: Install poetry
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
