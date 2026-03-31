@@ -8,8 +8,7 @@
         "ldclient/version.py",
         "PROVENANCE.md"
       ],
-      "include-component-in-tag": false,
-      "force-tag-creation": true
+      "include-component-in-tag": false
     }
   }
 }
