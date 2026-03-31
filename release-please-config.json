@@ -9,7 +9,8 @@
         "PROVENANCE.md"
       ],
       "include-component-in-tag": false,
-      "draft": true
+      "draft": true,
+      "force-tag-creation": true
     }
   }
 }
