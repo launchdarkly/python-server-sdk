@@ -6,6 +6,15 @@ on:
         description: "Is this a dry run? If so no package will be published."
         type: boolean
         required: true
+      tag:
+        description: 'Tag of an existing draft release to upload artifacts to.'
+        type: string
+        required: false
+      publish_release:
+        description: 'Publish (un-draft) the release after all artifacts are uploaded?'
+        type: boolean
+        required: false
+        default: true
 
 jobs:
   build-publish:
@@ -14,6 +23,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      attestations: write # Needed for artifact attestations
     outputs:
       package-hashes: ${{ steps.build.outputs.package-hashes}}
     steps:
@@ -41,13 +51,31 @@ jobs:
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
-  release-provenance:
-    needs: ["build-publish"]
+      - name: Generate checksums file
+        if: ${{ !inputs.dry_run }}
+        env:
+          HASHES: ${{ steps.build.outputs.package-hashes }}
+        run: |
+          echo "$HASHES" | base64 -d > checksums.txt
+
+      - name: Attest build provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@v4
+        with:
+          subject-checksums: checksums.txt
+
+  publish-release:
+    needs: ['build-publish']
+    if: ${{ !inputs.dry_run && inputs.publish_release }}
+    runs-on: ubuntu-latest
     permissions:
-      actions: read
-      id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563 # v2.0.0
-    with:
-      base64-subjects: "${{ needs.build-publish.outputs.package-hashes }}"
-      upload-assets: ${{ !inputs.dry_run }}
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ inputs.tag }}
+        run: >
+          gh release edit "$TAG_NAME"
+          --repo ${{ github.repository }}
+          --draft=false

@@ -11,6 +11,7 @@ jobs:
       id-token: write # Needed if using OIDC to get release secrets.
       contents: write # Contents and pull-requests are for release-please to make releases.
       pull-requests: write
+      attestations: write # Needed for artifact attestations
     outputs:
       release-created: ${{ steps.release.outputs.release_created }}
       upload-tag-name: ${{ steps.release.outputs.tag_name }}
@@ -22,7 +23,23 @@ jobs:
       - uses: actions/checkout@v4
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
-          fetch-depth: 0 # Full history is required for proper changelog generation
+          fetch-depth: 0
+
+      - name: Create release tag
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists, skipping creation."
+          else
+            echo "Creating tag ${TAG_NAME}."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "${TAG_NAME}"
+            git push origin "${TAG_NAME}"
+          fi
 
       - uses: actions/setup-python@v5
         if: ${{ steps.release.outputs.releases_created == 'true' }}
@@ -53,15 +70,31 @@ jobs:
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
-  release-provenance:
-    needs: ["release-package"]
+      - name: Generate checksums file
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        env:
+          HASHES: ${{ steps.build.outputs.package-hashes }}
+        run: |
+          echo "$HASHES" | base64 -d > checksums.txt
+
+      - name: Attest build provenance
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        uses: actions/attest@v4
+        with:
+          subject-checksums: checksums.txt
+
+  publish-release:
+    needs: ['release-package']
     if: ${{ needs.release-package.outputs.release-created == 'true' }}
+    runs-on: ubuntu-latest
     permissions:
-      actions: read
-      id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563 # v2.0.0
-    with:
-      base64-subjects: "${{ needs.release-package.outputs.package-hashes }}"
-      upload-assets: true
-      upload-tag-name: ${{ needs.release-package.outputs.upload-tag-name }}
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-package.outputs.upload-tag-name }}
+        run: >
+          gh release edit "$TAG_NAME"
+          --repo ${{ github.repository }}
+          --draft=false
