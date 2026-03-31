@@ -15,7 +15,6 @@ jobs:
     outputs:
       release-created: ${{ steps.release.outputs.release_created }}
       upload-tag-name: ${{ steps.release.outputs.tag_name }}
-      package-hashes: ${{ steps.build.outputs.package-hashes}}
     steps:
       - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
@@ -54,15 +53,8 @@ jobs:
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
-      - name: Generate checksums file
-        if: ${{ steps.release.outputs.releases_created == 'true' }}
-        env:
-          HASHES: ${{ steps.build.outputs.package-hashes }}
-        run: |
-          echo "$HASHES" | base64 -d > checksums.txt
-
       - name: Attest build provenance
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: actions/attest@v4
         with:
-          subject-checksums: checksums.txt
+          subject-path: 'dist/*'

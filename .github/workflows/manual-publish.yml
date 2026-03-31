@@ -19,8 +19,6 @@ jobs:
       id-token: write
       contents: read
       attestations: write # Needed for artifact attestations
-    outputs:
-      package-hashes: ${{ steps.build.outputs.package-hashes}}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,15 +44,8 @@ jobs:
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
-      - name: Generate checksums file
-        if: ${{ !inputs.dry_run }}
-        env:
-          HASHES: ${{ steps.build.outputs.package-hashes }}
-        run: |
-          echo "$HASHES" | base64 -d > checksums.txt
-
       - name: Attest build provenance
         if: ${{ !inputs.dry_run }}
         uses: actions/attest@v4
         with:
-          subject-checksums: checksums.txt
+          subject-path: 'dist/*'
