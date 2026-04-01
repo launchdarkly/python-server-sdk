@@ -18,7 +18,7 @@ SDK_VERSION=9.15.0
 $ pip download --only-binary=:all: launchdarkly-server-sdk==${SDK_VERSION}
 
 # Verify provenance using the GitHub CLI
-$ gh attestation verify launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl -R launchdarkly/python-server-sdk
+$ gh attestation verify launchdarkly_server_sdk-${SDK_VERSION}-py3-none-any.whl --owner launchdarkly
 ```
 
 Below is a sample of expected output.
@@ -26,11 +26,24 @@ Below is a sample of expected output.
 ```
 Loaded digest sha256:... for file://launchdarkly_server_sdk-9.15.0-py3-none-any.whl
 Loaded 1 attestation from GitHub API
+
+The following policy criteria will be enforced:
+- Predicate type must match:................ https://slsa.dev/provenance/v1
+- Source Repository Owner URI must match:... https://github.com/launchdarkly
+- Subject Alternative Name must match regex: (?i)^https://github.com/launchdarkly/
+- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
+
 ✓ Verification succeeded!
 
-launchdarkly_server_sdk-9.15.0-py3-none-any.whl was attested by a trusted GitHub Actions workflow
+The following 1 attestation matched the policy criteria
+
+- Attestation #1
+  - Build repo:..... launchdarkly/python-server-sdk
+  - Build workflow:. .github/workflows/release-please.yml
+  - Signer repo:.... launchdarkly/python-server-sdk
+  - Signer workflow: .github/workflows/release-please.yml
 ```
 
 For more information, see [GitHub's documentation on verifying artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds#verifying-artifact-attestations-with-the-github-cli).
 
-**Note:** These instructions do not apply when building our SDKs from source.  
+**Note:** These instructions do not apply when building our SDKs from source.    
