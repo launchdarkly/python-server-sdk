@@ -35,13 +35,13 @@ jobs:
         id: build
 
       - name: Publish package distributions to PyPI
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ format('{0}', inputs.dry_run) == 'false' }}
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
       - name: Attest build provenance
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ format('{0}', inputs.dry_run) == 'false' }}
         uses: actions/attest@v4
         with:
           subject-path: 'dist/*'
