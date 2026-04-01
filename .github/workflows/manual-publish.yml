@@ -41,7 +41,7 @@ jobs:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
       - name: Attest build provenance
-        if: ${{ !inputs.dry_run }}
+        if: ${{ inputs.dry_run == false }}
         uses: actions/attest@v4
         with:
           subject-path: 'dist/*'
