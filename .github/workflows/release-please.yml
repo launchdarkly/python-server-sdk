@@ -5,67 +5,33 @@ on:
     branches: [main]
 
 jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    outputs:
-      releases_created: ${{ steps.release.outputs.releases_created }}
-    steps:
-      # Create any releases first, then create tags, and then optionally create any new PRs.
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
-        id: release
-        with:
-          skip-github-pull-request: true
-
-      # Need the repository content to be able to create and push a tag.
-      - uses: actions/checkout@v4
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-
-      - name: Create release tag
-        if: ${{ steps.release.outputs.release_created == 'true' }}
-        env:
-          TAG_NAME: ${{ steps.release.outputs.tag_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api "repos/${{ github.repository }}/git/ref/tags/${TAG_NAME}" >/dev/null 2>&1; then
-            echo "Tag ${TAG_NAME} already exists, skipping creation."
-          else
-            echo "Creating tag ${TAG_NAME}."
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag "${TAG_NAME}"
-            git push origin "${TAG_NAME}"
-          fi
-
-      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
-        if: ${{ steps.release.outputs.release_created != 'true' }}
-        id: release-prs
-        with:
-          skip-github-release: true
-
   release-package:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write # Needed if using OIDC to get release secrets.
       contents: write # Contents and pull-requests are for release-please to make releases.
+      pull-requests: write
       attestations: write # Needed for artifact attestations
     steps:
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        id: release
+
       - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           python-version: "3.10"
 
       - name: Install poetry
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439 # v3.0.0
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         name: "Get PyPI token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
@@ -73,15 +39,19 @@ jobs:
 
       - uses: ./.github/actions/build
         id: build
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
 
       - uses: ./.github/actions/build-docs
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
 
       - name: Publish package distributions to PyPI
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
       - name: Attest build provenance
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: actions/attest@v4
         with:
           subject-path: 'dist/*'
