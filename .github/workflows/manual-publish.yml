@@ -32,7 +32,6 @@ jobs:
           ssm_parameter_pairs: "/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN"
 
       - uses: ./.github/actions/build
-        id: build
 
       - name: Publish package distributions to PyPI
         if: ${{ format('{0}', inputs.dry_run) == 'false' }}
