@@ -14,8 +14,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    outputs:
-      package-hashes: ${{ steps.build.outputs.package-hashes}}
+      attestations: write # Needed for artifact attestations
     steps:
       - uses: actions/checkout@v4
 
@@ -33,21 +32,15 @@ jobs:
           ssm_parameter_pairs: "/production/common/releasing/pypi/token = PYPI_AUTH_TOKEN"
 
       - uses: ./.github/actions/build
-        id: build
 
       - name: Publish package distributions to PyPI
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ format('{0}', inputs.dry_run) == 'false' }}
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 
-  release-provenance:
-    needs: ["build-publish"]
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@5a775b367a56d5bd118a224a811bba288150a563 # v2.0.0
-    with:
-      base64-subjects: "${{ needs.build-publish.outputs.package-hashes }}"
-      upload-assets: ${{ !inputs.dry_run }}
+      - name: Attest build provenance
+        if: ${{ format('{0}', inputs.dry_run) == 'false' }}
+        uses: actions/attest@v4
+        with:
+          subject-path: 'dist/*'
