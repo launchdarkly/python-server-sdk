@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.15.1](https://github.com/launchdarkly/python-server-sdk/compare/9.15.0...9.15.1) (2026-04-10)
+
+
+### Bug Fixes
+
+* Improve fallback behavior when using custom data system configuration ([#407](https://github.com/launchdarkly/python-server-sdk/issues/407)) ([60272b2](https://github.com/launchdarkly/python-server-sdk/commit/60272b2881847de04a5b771e6d28f3deefc1222d))
+
 ## [9.15.0](https://github.com/launchdarkly/python-server-sdk/compare/9.14.1...9.15.0) (2026-02-10)
 
 
