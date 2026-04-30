@@ -289,12 +289,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
         if msg.event == EventName.GOODBYE:
             goodbye = Goodbye.from_dict(json.loads(msg.data))
-            if not goodbye.silent:
-                log.error(
-                    "SSE server received error: %s (%s)",
-                    goodbye.reason,
-                    goodbye.catastrophe,
-                )
+            log.info("SSE server sent goodbye: %s", goodbye.reason)
 
             return None
 
