@@ -166,6 +166,11 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._connection_attempt_start_time = time()
 
         envid = None
+        # fallback_requested is set when a Start action carries
+        # X-LD-FD-Fallback: true. We finish applying the current payload
+        # before halting, so consumers can serve the server-provided data
+        # while FDv1 takes over.
+        fallback_requested = False
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -186,17 +191,9 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 continue
 
             if isinstance(action, Start) and action.headers is not None:
-                fallback = action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 envid = action.headers.get(_LD_ENVID_HEADER, envid)
-
-                if fallback:
-                    self._record_stream_init(True)
-                    yield Update(
-                        state=DataSourceState.OFF,
-                        revert_to_fdv1=True,
-                        environment_id=envid,
-                    )
-                    break
+                if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                    fallback_requested = True
 
             if not isinstance(action, Event):
                 continue
@@ -206,6 +203,18 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 if update is not None:
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
+                    if fallback_requested:
+                        # Decorate the completed update with the fallback signal,
+                        # then halt — the consumer will switch to FDv1.
+                        update = Update(
+                            state=update.state,
+                            change_set=update.change_set,
+                            error=update.error,
+                            fallback_to_fdv1=True,
+                            environment_id=update.environment_id,
+                        )
+                        yield update
+                        break
                     yield update
             except json.decoder.JSONDecodeError as e:
                 log.info(
@@ -229,7 +238,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     error=DataSourceErrorInfo(
                         DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                     ),
-                    revert_to_fdv1=False,
+                    fallback_to_fdv1=False,
                     environment_id=envid,
                 )
 
@@ -353,7 +362,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 error=DataSourceErrorInfo(
                     DataSourceErrorKind.INVALID_DATA, 0, time(), str(error)
                 ),
-                revert_to_fdv1=False,
+                fallback_to_fdv1=False,
                 environment_id=envid,
             )
             return (update, True)
@@ -377,7 +386,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 update = Update(
                     state=DataSourceState.OFF,
                     error=error_info,
-                    revert_to_fdv1=True,
+                    fallback_to_fdv1=True,
                     environment_id=envid,
                 )
                 self.stop()
@@ -394,7 +403,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     else DataSourceState.OFF
                 ),
                 error=error_info,
-                revert_to_fdv1=False,
+                fallback_to_fdv1=False,
                 environment_id=envid,
             )
 
@@ -416,7 +425,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             error=DataSourceErrorInfo(
                 DataSourceErrorKind.UNKNOWN, 0, time(), str(error)
             ),
-            revert_to_fdv1=False,
+            fallback_to_fdv1=False,
             environment_id=envid,
         )
         # no stacktrace here because, for a typical connection error, it'll

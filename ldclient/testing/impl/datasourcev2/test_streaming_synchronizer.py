@@ -202,7 +202,7 @@ def test_handles_no_changes():
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
     assert updates[0].change_set is None
 
@@ -222,7 +222,7 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -249,7 +249,7 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -281,7 +281,7 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -312,7 +312,7 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -339,7 +339,7 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -368,7 +368,7 @@ def test_error_resets(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -392,7 +392,7 @@ def test_handles_out_of_order(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.INTERRUPTED
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -423,7 +423,7 @@ def test_invalid_json_decoding(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 2
     assert updates[0].state == DataSourceState.INTERRUPTED
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -458,7 +458,7 @@ def test_stops_on_unrecoverable_status_code(
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -583,8 +583,10 @@ def test_envid_preserved_across_events(events):  # pylint: disable=redefined-out
     assert len(updates[0].change_set.changes) == 1
 
 
-def test_envid_from_fallback_header():
-    """Test that environment ID is captured when fallback header is present"""
+def test_fallback_header_with_no_payload_emits_no_update():
+    """A Start carrying X-LD-FD-Fallback with no following payload events
+    must not synthesize an Update. The directive only fires once a payload
+    has been applied or an error has been observed."""
     start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-fallback', _LD_FD_FALLBACK_HEADER: 'true'})
 
     builder = list_sse_client([start_action])
@@ -593,10 +595,35 @@ def test_envid_from_fallback_header():
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
+    assert updates == []
+
+
+def test_fallback_header_with_payload_emits_valid_with_fallback(events):  # pylint: disable=redefined-outer-name
+    """When the response carries X-LD-FD-Fallback: true and a valid SSE
+    payload, the synchronizer must apply the payload and then emit a single
+    Valid update with fallback_to_fdv1=True so the consumer can hand off to
+    the FDv1 Fallback Synchronizer."""
+    start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-fallback', _LD_FD_FALLBACK_HEADER: 'true'})
+
+    builder = list_sse_client(
+        [
+            start_action,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PUT_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
     assert len(updates) == 1
-    assert updates[0].state == DataSourceState.OFF
-    assert updates[0].revert_to_fdv1 is True
+    assert updates[0].state == DataSourceState.VALID
+    assert updates[0].fallback_to_fdv1 is True
     assert updates[0].environment_id == 'test-env-fallback'
+    assert updates[0].change_set is not None
+    assert len(updates[0].change_set.changes) == 1
 
 
 def test_envid_from_fault_action():
@@ -655,7 +682,7 @@ def test_envid_from_fault_with_fallback():
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
-    assert updates[0].revert_to_fdv1 is True
+    assert updates[0].fallback_to_fdv1 is True
     assert updates[0].environment_id == 'test-env-503'
 
 
