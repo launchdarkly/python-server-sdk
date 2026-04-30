@@ -120,8 +120,6 @@ class Goodbye:
     """
 
     reason: str
-    silent: bool
-    catastrophe: bool
 
     def to_dict(self) -> dict:
         """
@@ -129,8 +127,6 @@ class Goodbye:
         """
         return {
             "reason": self.reason,
-            "silent": self.silent,
-            "catastrophe": self.catastrophe,
         }
 
     @staticmethod
@@ -139,13 +135,11 @@ class Goodbye:
         Deserializes a Goodbye event from a JSON-compatible dictionary.
         """
         reason = data.get("reason")
-        silent = data.get("silent")
-        catastrophe = data.get("catastrophe")
 
-        if reason is None or silent is None or catastrophe is None:
+        if reason is None:
             raise ValueError("Missing required fields in Goodbye JSON.")
 
-        return Goodbye(reason=reason, silent=silent, catastrophe=catastrophe)
+        return Goodbye(reason=reason)
 
 
 @dataclass(frozen=True)

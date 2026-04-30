@@ -156,7 +156,7 @@ def events() -> dict:
         data=json.dumps(selector.to_dict()),
     )
 
-    goodbye = Goodbye(reason="test reason", silent=True, catastrophe=False)
+    goodbye = Goodbye(reason="test reason")
     goodbye_event = Event(
         event=EventName.GOODBYE,
         data=json.dumps(goodbye.to_dict()),
