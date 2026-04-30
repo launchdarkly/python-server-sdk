@@ -62,7 +62,6 @@ class ClientEntity:
             sync_configs = datasystem_config.get('synchronizers')
             if sync_configs is not None:
                 sync_builders = []
-                fallback_builder = None
 
                 for sync_config in sync_configs:
                     streaming = sync_config.get('streaming')
@@ -79,14 +78,18 @@ class ClientEntity:
                         _set_optional_time(polling, "pollIntervalMs", builder.poll_interval)
                         sync_builders.append(builder)
 
-                        fallback_builder = fdv1_fallback_ds_builder()
-                        _set_optional_value(polling, "baseUri", fallback_builder.base_uri)
-                        _set_optional_time(polling, "pollIntervalMs", fallback_builder.poll_interval)
-
                 if sync_builders:
                     datasystem.synchronizers(*sync_builders)
-                if fallback_builder is not None:
-                    datasystem.fdv1_compatible_synchronizer(fallback_builder)
+
+            # The FDv1 Fallback Synchronizer is engaged only in response to a
+            # server-directed FDv1 Fallback Directive; it is configured separately
+            # from the FDv2 Primary/Fallback synchronizer chain.
+            fdv1_fallback_config = datasystem_config.get('fdv1Fallback')
+            if fdv1_fallback_config is not None:
+                fallback_builder = fdv1_fallback_ds_builder()
+                _set_optional_value(fdv1_fallback_config, "baseUri", fallback_builder.base_uri)
+                _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
+                datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
             if datasystem_config.get("payloadFilter") is not None:
                 opts["payload_filter_key"] = datasystem_config["payloadFilter"]
