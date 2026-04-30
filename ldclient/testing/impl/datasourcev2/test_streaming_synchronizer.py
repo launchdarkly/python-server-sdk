@@ -626,6 +626,65 @@ def test_fallback_header_with_payload_emits_valid_with_fallback(events):  # pyli
     assert len(updates[0].change_set.changes) == 1
 
 
+def test_streaming_closes_underlying_pool_on_fallback(events):  # pylint: disable=redefined-outer-name
+    """When the FDv1 Fallback Directive engages, the underlying urllib3
+    connection pool must be torn down so the FDv2 streaming TCP connection
+    is actually closed. ``SSEClient.close()`` only releases the connection
+    back to the pool via a half-close; on Python 3.10 that leaves the socket
+    open until GC, which the spec forbids -- the Primary Synchronizer must
+    be terminated promptly when the directive fires."""
+    pool_close_calls = []
+
+    class TrackingPool:
+        """Stand-in PoolManager that records calls to clear() and exposes a
+        keys()-iterable pools attribute matching urllib3's RecentlyUsedContainer."""
+
+        def __init__(self):
+            self.cleared = False
+            self.connection_pool = TrackingConnectionPool()
+            self.pools = TrackingPoolDict({"key": self.connection_pool})
+
+        def clear(self):
+            self.cleared = True
+
+    class TrackingConnectionPool:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+            pool_close_calls.append(self)
+
+    class TrackingPoolDict:
+        def __init__(self, items):
+            self._items = items
+
+        def keys(self):
+            return list(self._items.keys())
+
+        def get(self, key):
+            return self._items.get(key)
+
+    tracking_pool = TrackingPool()
+
+    def builder(*_args, **_kwargs):
+        return ListBasedSseClient([
+            Start(headers={_LD_FD_FALLBACK_HEADER: 'true'}),
+            events[EventName.SERVER_INTENT],
+            events[EventName.PUT_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]), tracking_pool
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    assert tracking_pool.cleared is True
+    assert tracking_pool.connection_pool.closed is True
+
+
 def test_envid_from_fault_action():
     """Test that environment ID is captured from Fault action headers"""
     error = HTTPStatusError(401, headers={_LD_ENVID_HEADER: 'test-env-fault'})
