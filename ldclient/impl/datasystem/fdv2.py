@@ -486,8 +486,9 @@ class FDv2(DataSystem):
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
 
-                # Set ready event if an only if a selector is defined for the changeset
-                if basis.change_set.selector.is_defined():
+                # Set ready event if and only if a selector is defined for the changeset
+                selector_defined = basis.change_set.selector.is_defined()
+                if selector_defined:
                     set_on_ready.set()
 
                 if basis.fallback_to_fdv1:
@@ -497,7 +498,7 @@ class FDv2(DataSystem):
                     )
                     return True
 
-                if basis.change_set.selector.is_defined():
+                if selector_defined:
                     return False
             except Exception as e:
                 log.error("Initializer failed with exception: %s", e)

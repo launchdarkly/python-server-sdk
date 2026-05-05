@@ -13,7 +13,6 @@ from ld_eventsource.sse_client import Event, Fault
 from ldclient.config import Config, HTTPConfig
 from ldclient.impl.datasourcev2.streaming import (
     STREAMING_ENDPOINT,
-    SSEClient,
     SseClientBuilder,
     StreamingDataSource
 )
@@ -48,8 +47,8 @@ def list_sse_client(
         initial_reconnect_delay: float,
         config: Config,  # pylint: disable=unused-argument
         ss: SelectorStore  # pylint: disable=unused-argument
-    ) -> SSEClient:
-        return ListBasedSseClient(events)
+    ):
+        return ListBasedSseClient(events), None
 
     return builder
 
@@ -743,7 +742,7 @@ def test_streaming_closes_underlying_pool_on_fallback(events):  # pylint: disabl
         ]), tracking_pool
 
     synchronizer = make_streaming_data_source()
-    synchronizer._sse_client_builder = builder
+    synchronizer._sse_client_builder = builder  # type: ignore[assignment]
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert len(updates) == 1

@@ -163,7 +163,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self.__http_options = http_options
         self.__initial_reconnect_delay = initial_reconnect_delay
 
-        self._sse_client_builder = create_sse_client
+        self._sse_client_builder: SseClientBuilder = create_sse_client
         self._config = config
         self._sse: Optional[SSEClient] = None
         self._sse_pool: Optional[urllib3.PoolManager] = None
@@ -187,19 +187,13 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        builder_result = self._sse_client_builder(
+        self._sse, self._sse_pool = self._sse_client_builder(
             self.__uri,
             self.__http_options,
             self.__initial_reconnect_delay,
             self._config,
             ss
         )
-        # Tests may inject a builder that returns either an SSEClient directly
-        # or a (client, pool) tuple. Accept both.
-        if isinstance(builder_result, tuple):
-            self._sse, self._sse_pool = builder_result
-        else:
-            self._sse, self._sse_pool = builder_result, None
 
         if self._sse is None:
             log.error("Failed to create SSE client for streaming updates.")
