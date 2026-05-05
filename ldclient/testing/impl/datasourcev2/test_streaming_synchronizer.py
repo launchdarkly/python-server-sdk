@@ -626,6 +626,73 @@ def test_fallback_header_with_payload_emits_valid_with_fallback(events):  # pyli
     assert len(updates[0].change_set.changes) == 1
 
 
+def test_fallback_latched_on_start_carries_through_unrecoverable_fault():
+    """Once a Start latches the FDv1 directive, an unrecoverable Fault that
+    follows must propagate the directive even when the error itself does not
+    carry the header. The directive is one-way and terminal, so the latched
+    state from the original Start drives the Update emitted on shutdown --
+    losing it would silently strand the consumer on FDv2 instead of handing
+    off to the FDv1 Fallback Synchronizer."""
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+    # 401 is unrecoverable and the error carries no fallback header itself.
+    error = HTTPStatusError(401)
+    fault_action = Fault(error=error)
+
+    builder = list_sse_client([start_action, fault_action])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.OFF
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].error is not None
+    assert updates[0].error.status_code == 401
+
+
+def test_fallback_latched_on_start_carries_through_recoverable_fault():
+    """A recoverable Fault arriving after the directive was latched must also
+    propagate the signal and halt the stream -- the directive overrides the
+    ordinary retry policy because it is terminal."""
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+    # 408 is recoverable; without the latch we would retry transparently.
+    fault_action = Fault(error=HTTPStatusError(408))
+
+    builder = list_sse_client([start_action, fault_action])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    # 408 is recoverable so the Update from _handle_error is INTERRUPTED, but
+    # the latched directive must still drive the consumer to FDv1.
+    assert updates[0].state == DataSourceState.INTERRUPTED
+
+
+def test_fallback_latched_on_start_carries_through_malformed_event(events):  # pylint: disable=redefined-outer-name
+    """A malformed event (JSONDecodeError) after the directive was latched
+    must propagate the signal on the resulting Interrupted Update."""
+    bad_event = Event(event=EventName.PUT_OBJECT, data="not valid json")
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+
+    builder = list_sse_client([start_action, events[EventName.SERVER_INTENT], bad_event])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    # The malformed-event update must surface the latched directive so the
+    # consumer can hand off to FDv1 instead of trying to keep the FDv2 stream.
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].error is not None
+    assert updates[0].error.kind == DataSourceErrorKind.INVALID_DATA
+
+
 def test_streaming_closes_underlying_pool_on_fallback(events):  # pylint: disable=redefined-outer-name
     """When the FDv1 Fallback Directive engages, the underlying urllib3
     connection pool must be torn down so the FDv2 streaming TCP connection

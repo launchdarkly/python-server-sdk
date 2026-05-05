@@ -213,8 +213,25 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         # fallback_requested is set when a Start action carries
         # X-LD-FD-Fallback: true. We finish applying the current payload
         # before halting, so consumers can serve the server-provided data
-        # while FDv1 takes over.
+        # while FDv1 takes over. The latch is one-way and terminal: once
+        # set, any subsequent payload-completing event or error must carry
+        # the signal forward and halt the stream, even if the failure path
+        # itself doesn't see the directive header.
         fallback_requested = False
+
+        def _with_fallback_signal(update: Update) -> Update:
+            """Return ``update`` decorated with ``fallback_to_fdv1=True`` when
+            the directive has been latched. Idempotent if already set."""
+            if not fallback_requested or update.fallback_to_fdv1:
+                return update
+            return Update(
+                state=update.state,
+                change_set=update.change_set,
+                error=update.error,
+                fallback_to_fdv1=True,
+                environment_id=update.environment_id,
+            )
+
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -228,9 +245,12 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(action.error, envid)
                 if update is not None:
-                    yield update
+                    yield _with_fallback_signal(update)
 
-                if not should_continue:
+                # The FDv1 Fallback Directive is one-way and terminal: if it
+                # was latched on a prior Start, we must not keep retrying the
+                # FDv2 endpoint even when the failure itself looks recoverable.
+                if fallback_requested or not should_continue:
                     break
                 continue
 
@@ -248,16 +268,10 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
                     if fallback_requested:
-                        # Decorate the completed update with the fallback signal,
+                        # The completed update is the natural moment to honor
+                        # the latched directive: yield once with the signal,
                         # then halt — the consumer will switch to FDv1.
-                        update = Update(
-                            state=update.state,
-                            change_set=update.change_set,
-                            error=update.error,
-                            fallback_to_fdv1=True,
-                            environment_id=update.environment_id,
-                        )
-                        yield update
+                        yield _with_fallback_signal(update)
                         break
                     yield update
             except json.decoder.JSONDecodeError as e:
@@ -268,8 +282,8 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(e, envid)
                 if update is not None:
-                    yield update
-                if not should_continue:
+                    yield _with_fallback_signal(update)
+                if fallback_requested or not should_continue:
                     break
             except Exception as e:  # pylint: disable=broad-except
                 log.info(
@@ -277,14 +291,16 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 )
                 self._sse.interrupt()
 
-                yield Update(
+                yield _with_fallback_signal(Update(
                     state=DataSourceState.INTERRUPTED,
                     error=DataSourceErrorInfo(
                         DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                     ),
                     fallback_to_fdv1=False,
                     environment_id=envid,
-                )
+                ))
+                if fallback_requested:
+                    break
 
         self._sse.close()
         # Force-close the underlying urllib3 pool. SSEClient.close() only does a
