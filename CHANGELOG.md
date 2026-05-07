@@ -2,6 +2,19 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.16.0](https://github.com/launchdarkly/python-server-sdk/compare/9.15.1...9.16.0) (2026-05-07)
+
+
+### Features
+
+* Drop persistent-store cache after FDv2 in-memory store init ([#426](https://github.com/launchdarkly/python-server-sdk/issues/426)) ([563b87a](https://github.com/launchdarkly/python-server-sdk/commit/563b87acc024e5196fba24064b0df802facda407))
+
+
+### Bug Fixes
+
+* align FDv2 goodbye event with spec (reason-only) ([#422](https://github.com/launchdarkly/python-server-sdk/issues/422)) ([84b442d](https://github.com/launchdarkly/python-server-sdk/commit/84b442da7e773f58e5ff43d7a84c67ef0439816a))
+* honor server-directed FDv1 Fallback Directive in initializer phase ([#423](https://github.com/launchdarkly/python-server-sdk/issues/423)) ([7c49bc0](https://github.com/launchdarkly/python-server-sdk/commit/7c49bc04c22089109da6c5efe143e5bfcfd780b8))
+
 ## [9.15.1](https://github.com/launchdarkly/python-server-sdk/compare/9.15.0...9.15.1) (2026-04-10)
 
 
