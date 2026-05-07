@@ -153,11 +153,15 @@ class FeatureStoreClientWrapper(FeatureStore):
         return self.store.initialized
 
     def disable_cache(self) -> None:
-        # In-process state change; intentionally bypasses __wrapper so a
-        # successful disable doesn't flap the data store's availability state.
-        inner = self.store
-        if hasattr(inner, "disable_cache"):
-            inner.disable_cache()  # type: ignore[attr-defined]
+        def _do_disable():
+            try:
+                inner = self.store
+                if hasattr(inner, "disable_cache"):
+                    inner.disable_cache()  # type: ignore[attr-defined]
+            except Exception as e:
+                log.warning("disable_cache failed on inner store: %s", e)
+
+        self.__wrapper(_do_disable)
 
     def __wrapper(self, fn: Callable):
         try:
