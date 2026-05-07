@@ -298,6 +298,18 @@ class Store:
         # Switch to memory store as active
         self._active_store = self._memory_store
 
+        # In-memory store is now authoritative. Replace the persistent-store
+        # cache with a no-op so we don't hold a duplicate copy of every flag.
+        # Done before persistent_store.init() below so the wrapper's init can
+        # skip its decode loop now that the cache is disabled.
+        if self._persistent_store is not None and hasattr(
+            self._persistent_store, "disable_cache"
+        ):
+            try:
+                self._persistent_store.disable_cache()  # type: ignore[attr-defined]
+            except Exception as e:
+                log.warning("Failed to disable persistent store cache: %s", e)
+
         # Persist to persistent store if configured and writable
         if self._should_persist():
             self._persistent_store.init(collections)  # type: ignore
