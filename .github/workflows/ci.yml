@@ -69,7 +69,7 @@ jobs:
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
-          version: v3.0.0-alpha.4
+          version: v3.0.0-alpha.6
           enable_persistence_tests: "true"
 
   windows:

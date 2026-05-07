@@ -116,7 +116,7 @@ def test_handles_no_changes():
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id is None
     assert valid.change_set is not None
     assert valid.change_set.intent_code == IntentCode.TRANSFER_NONE
@@ -137,7 +137,7 @@ def test_handles_empty_changeset():
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id is None
 
     assert valid.change_set is not None
@@ -165,7 +165,7 @@ def test_handles_put_objects():
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id is None
 
     assert valid.change_set is not None
@@ -196,7 +196,7 @@ def test_handles_delete_objects():
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id is None
 
     assert valid.change_set is not None
@@ -234,7 +234,7 @@ def test_generic_error_interrupts_and_recovers():
     assert interrupted.error.kind == DataSourceErrorKind.NETWORK_ERROR
     assert interrupted.error.status_code == 0
     assert interrupted.error.message == "error for test"
-    assert interrupted.revert_to_fdv1 is False
+    assert interrupted.fallback_to_fdv1 is False
     assert interrupted.environment_id is None
 
     assert valid.change_set is not None
@@ -267,12 +267,12 @@ def test_recoverable_error_continues():
     assert interrupted.error is not None
     assert interrupted.error.kind == DataSourceErrorKind.ERROR_RESPONSE
     assert interrupted.error.status_code == 408
-    assert interrupted.revert_to_fdv1 is False
+    assert interrupted.fallback_to_fdv1 is False
     assert interrupted.environment_id is None
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id is None
 
     assert valid.change_set is not None
@@ -303,7 +303,7 @@ def test_unrecoverable_error_shuts_down():
     assert off.error is not None
     assert off.error.kind == DataSourceErrorKind.ERROR_RESPONSE
     assert off.error.status_code == 401
-    assert off.revert_to_fdv1 is False
+    assert off.fallback_to_fdv1 is False
     assert off.environment_id is None
     assert off.change_set is None
 
@@ -328,7 +328,7 @@ def test_envid_from_success_headers():
 
     assert valid.state == DataSourceState.VALID
     assert valid.error is None
-    assert valid.revert_to_fdv1 is False
+    assert valid.fallback_to_fdv1 is False
     assert valid.environment_id == 'test-env-polling-123'
 
 
@@ -370,7 +370,7 @@ def test_envid_from_fallback_headers():
     valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
     assert valid.state == DataSourceState.VALID
-    assert valid.revert_to_fdv1 is True
+    assert valid.fallback_to_fdv1 is True
     assert valid.environment_id == 'test-env-fallback'
 
 
@@ -449,7 +449,7 @@ def test_envid_from_error_with_fallback():
     off = next(sync)
 
     assert off.state == DataSourceState.OFF
-    assert off.revert_to_fdv1 is True
+    assert off.fallback_to_fdv1 is True
     assert off.environment_id == 'test-env-503'
 
 
@@ -478,3 +478,27 @@ def test_envid_from_generic_error_with_headers():
     assert interrupted.error.kind == DataSourceErrorKind.NETWORK_ERROR
 
     assert valid.state == DataSourceState.VALID
+
+
+def test_synchronizer_generic_error_with_fallback_header_halts():
+    """A non-HTTP error (e.g. malformed JSON) carrying X-LD-FD-Fallback: true
+    must halt the synchronizer and emit OFF + fallback_to_fdv1=True rather
+    than retrying the FDv2 endpoint."""
+    headers_error = {
+        _LD_ENVID_HEADER: 'test-env-generic',
+        _LD_FD_FALLBACK_HEADER: 'true',
+    }
+    _failure = _Fail(error="malformed body", headers=headers_error)
+
+    synchronizer = PollingDataSource(
+        poll_interval=0.01,
+        requester=ListBasedRequester(results=iter([_failure])),
+    )
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.OFF
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].environment_id == 'test-env-generic'
+    assert updates[0].error is not None
+    assert updates[0].error.kind == DataSourceErrorKind.NETWORK_ERROR

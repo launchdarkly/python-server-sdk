@@ -139,7 +139,7 @@ class PollingDataSource(Initializer, Synchronizer):
                         yield Update(
                             state=DataSourceState.OFF,
                             error=error_info,
-                            revert_to_fdv1=True,
+                            fallback_to_fdv1=True,
                             environment_id=envid,
                         )
                         break
@@ -168,6 +168,17 @@ class PollingDataSource(Initializer, Synchronizer):
                     message=result.error,
                 )
 
+                # Even a non-HTTP error (e.g. malformed JSON) can carry the fallback
+                # header. If so, halt rather than retrying the FDv2 endpoint.
+                if fallback:
+                    yield Update(
+                        state=DataSourceState.OFF,
+                        error=error_info,
+                        fallback_to_fdv1=True,
+                        environment_id=envid,
+                    )
+                    break
+
                 yield Update(
                     state=DataSourceState.INTERRUPTED,
                     error=error_info,
@@ -179,7 +190,7 @@ class PollingDataSource(Initializer, Synchronizer):
                     state=DataSourceState.VALID,
                     change_set=change_set,
                     environment_id=headers.get(_LD_ENVID_HEADER),
-                    revert_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
+                    fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 )
 
             if self._interrupt_event.wait(self._poll_interval):
@@ -204,13 +215,18 @@ class PollingDataSource(Initializer, Synchronizer):
                     if is_http_error_recoverable(status_code):
                         log.warning(http_error_message_result)
 
+                    # Forward any response headers so callers (e.g. FDv2 datasystem)
+                    # can read the X-LD-FD-Fallback directive even on error.
                     return _Fail(
-                        error=http_error_message_result, exception=result.exception
+                        error=http_error_message_result,
+                        exception=result.exception,
+                        headers=result.headers,
                     )
 
                 return _Fail(
                     error=result.error or "Failed to request payload",
                     exception=result.exception,
+                    headers=result.headers,
                 )
 
             (change_set, headers) = result.value
@@ -223,6 +239,7 @@ class PollingDataSource(Initializer, Synchronizer):
                 change_set=change_set,
                 persist=change_set.selector.is_defined(),
                 environment_id=env_id,
+                fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true',
             )
 
             return _Success(value=basis)

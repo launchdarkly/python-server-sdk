@@ -11,11 +11,20 @@ from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.datasystem import file_ds_builder
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
+from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, _Success
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import (
+    Basis,
+    BasisResult,
+    ChangeSetBuilder,
     DataSourceState,
     DataSourceStatus,
     FlagChange,
+    Initializer,
+    IntentCode,
+    ObjectKind,
+    Selector,
+    SelectorStore,
     Synchronizer,
     Update
 )
@@ -30,6 +39,31 @@ class MockDataSourceBuilder(DataSourceBuilder):  # pylint: disable=too-few-publi
 
     def build(self, config: Config) -> Synchronizer:  # pylint: disable=unused-argument
         return self._mock
+
+
+class _StaticInitializer(Initializer):
+    """A test initializer that returns a fixed BasisResult."""
+
+    def __init__(self, name: str, result: BasisResult):
+        self._name = name
+        self._result = result
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def fetch(self, ss: SelectorStore) -> BasisResult:  # pylint: disable=unused-argument
+        return self._result
+
+
+class _InitializerBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-methods
+    """Wraps a static Initializer as a DataSourceBuilder."""
+
+    def __init__(self, initializer: Initializer):
+        self._initializer = initializer
+
+    def build(self, config: Config) -> Initializer:  # pylint: disable=unused-argument
+        return self._initializer
 
 
 def test_two_phase_init():
@@ -196,11 +230,11 @@ def test_fdv2_falls_back_to_fdv1_on_polling_error_with_header():
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
 
-    # Simulate a synchronizer that yields an OFF state with revert_to_fdv1=True
+    # Simulate a synchronizer that yields an OFF state with fallback_to_fdv1=True
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,
-            revert_to_fdv1=True
+            fallback_to_fdv1=True
         )
     ])
 
@@ -250,7 +284,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.VALID,
-            revert_to_fdv1=True
+            fallback_to_fdv1=True
         )
     ])
 
@@ -304,7 +338,7 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,
-            revert_to_fdv1=True
+            fallback_to_fdv1=True
         )
     ])
 
@@ -353,7 +387,7 @@ def test_fdv2_no_fallback_without_header():
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.INTERRUPTED,
-            revert_to_fdv1=False  # No fallback
+            fallback_to_fdv1=False  # No fallback
         )
     ])
 
@@ -364,7 +398,7 @@ def test_fdv2_no_fallback_without_header():
     mock_secondary.sync.return_value = iter([
         Update(
             state=DataSourceState.VALID,
-            revert_to_fdv1=False
+            fallback_to_fdv1=False
         )
     ])
 
@@ -407,7 +441,7 @@ def test_fdv2_stays_on_fdv1_after_fallback():
     mock_primary.sync.return_value = iter([
         Update(
             state=DataSourceState.OFF,
-            revert_to_fdv1=True
+            fallback_to_fdv1=True
         )
     ])
 
@@ -548,3 +582,171 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
         fdv2.stop()
     finally:
         os.remove(path)
+
+
+def _basis_with_one_flag(flag_key: str, fallback_to_fdv1: bool) -> Basis:
+    """Builds a Basis containing a single flag, optionally carrying the FDv1 fallback signal."""
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    builder.add_put(
+        ObjectKind.FLAG,
+        flag_key,
+        1,
+        {"key": flag_key, "version": 1, "on": True, "variations": [True, False]},
+    )
+    change_set = builder.finish(Selector(state="initializer-state", version=1))
+    return Basis(
+        change_set=change_set,
+        persist=True,
+        environment_id=None,
+        fallback_to_fdv1=fallback_to_fdv1,
+    )
+
+
+def test_fdv2_initializer_fallback_with_payload_engages_fdv1_synchronizer():
+    """
+    When an initializer returns a successful Basis carrying the FDv1 fallback
+    signal, the SDK must apply the payload, skip configured FDv2 synchronizers,
+    and run the FDv1 Fallback Synchronizer instead.
+    """
+    init = _StaticInitializer(
+        "fallback-initializer",
+        _Success(value=_basis_with_one_flag("init-flag", fallback_to_fdv1=True)),
+    )
+
+    # FDv2 streaming synchronizer that should never produce updates because we
+    # were directed to fall back during initialization.
+    fdv2_sync_mock: Synchronizer = Mock()
+    fdv2_sync_mock.name = "fdv2-sync-should-not-run"
+    fdv2_sync_mock.stop = Mock()
+    fdv2_sync_mock.sync.return_value = iter([])
+
+    td_fdv1 = TestDataV2.data_source()
+    td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
+
+    data_system_config = DataSystemConfig(
+        initializers=[_InitializerBuilder(init)],
+        synchronizers=[MockDataSourceBuilder(fdv2_sync_mock)],
+        fdv1_fallback_synchronizer=td_fdv1.builder,
+    )
+
+    fdv1_flag_seen = Event()
+    init_flag_seen = Event()
+
+    def listener(flag_change: FlagChange):
+        if flag_change.key == "init-flag":
+            init_flag_seen.set()
+        elif flag_change.key == "fdv1-flag":
+            fdv1_flag_seen.set()
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.flag_change_listeners.add(listener)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+    # The initializer's payload must be applied before the handoff.
+    assert init_flag_seen.wait(1), "Initializer payload was not applied before fallback"
+    # The configured FDv2 synchronizer must not run after a directive.
+    fdv2_sync_mock.sync.assert_not_called()
+    # And the FDv1 Fallback Synchronizer must take over.
+    assert fdv1_flag_seen.wait(1), "FDv1 fallback synchronizer did not run after directive"
+
+
+def test_fdv2_initializer_fallback_without_fdv1_configured_transitions_to_off():
+    """
+    When an initializer signals FDv1 fallback but no FDv1 Fallback Synchronizer
+    is configured, the data source status must transition to OFF rather than
+    silently dropping the directive or stalling at INITIALIZING.
+    """
+    init = _StaticInitializer(
+        "fallback-initializer-no-fdv1",
+        _Fail(
+            error="boom",
+            exception=None,
+            headers={_LD_FD_FALLBACK_HEADER: 'true'},
+        ),
+    )
+
+    # An FDv2 synchronizer that would otherwise be tried -- it must not run.
+    fdv2_sync_mock: Synchronizer = Mock()
+    fdv2_sync_mock.name = "fdv2-sync-should-not-run"
+    fdv2_sync_mock.stop = Mock()
+    fdv2_sync_mock.sync.return_value = iter([])
+
+    data_system_config = DataSystemConfig(
+        initializers=[_InitializerBuilder(init)],
+        synchronizers=[MockDataSourceBuilder(fdv2_sync_mock)],
+        fdv1_fallback_synchronizer=None,
+    )
+
+    off = Event()
+
+    def listener(status: DataSourceStatus):
+        if status.state == DataSourceState.OFF:
+            off.set()
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.data_source_status_provider.add_listener(listener)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+    assert off.wait(1), "Data source did not transition to OFF after directive without fallback"
+    fdv2_sync_mock.sync.assert_not_called()
+
+
+def test_fdv2_synchronizer_fallback_on_success_with_payload():
+    """
+    When a synchronizer emits a Valid update carrying both a ChangeSet and the
+    FDv1 fallback signal, the SDK must apply the payload before terminally
+    handing off to the FDv1 Fallback Synchronizer.
+    """
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    builder.add_put(
+        ObjectKind.FLAG,
+        "fdv2-payload-flag",
+        1,
+        {"key": "fdv2-payload-flag", "version": 1, "on": True, "variations": [True, False]},
+    )
+    change_set = builder.finish(Selector(state="state", version=1))
+
+    mock_primary: Synchronizer = Mock()
+    mock_primary.name = "mock-primary"
+    mock_primary.stop = Mock()
+    mock_primary.sync.return_value = iter([
+        Update(
+            state=DataSourceState.VALID,
+            change_set=change_set,
+            fallback_to_fdv1=True,
+        )
+    ])
+
+    td_fdv1 = TestDataV2.data_source()
+    td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        synchronizers=[MockDataSourceBuilder(mock_primary)],
+        fdv1_fallback_synchronizer=td_fdv1.builder,
+    )
+
+    fdv1_flag_seen = Event()
+    payload_flag_seen = Event()
+
+    def listener(flag_change: FlagChange):
+        if flag_change.key == "fdv2-payload-flag":
+            payload_flag_seen.set()
+        elif flag_change.key == "fdv1-flag":
+            fdv1_flag_seen.set()
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.flag_change_listeners.add(listener)
+    fdv2.start(set_on_ready)
+
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+    # The Valid update's payload must be applied before the handoff.
+    assert payload_flag_seen.wait(1), "FDv2 payload was not applied before fallback"
+    assert fdv1_flag_seen.wait(1), "FDv1 fallback synchronizer did not run after directive"

@@ -8,6 +8,7 @@ from time import time
 from typing import Callable, Generator, Optional, Tuple
 from urllib import parse
 
+import urllib3
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault, Start
 from ld_eventsource.config import (
@@ -57,7 +58,10 @@ JITTER_RATIO = 0.5
 
 STREAMING_ENDPOINT = "/sdk/stream"
 
-SseClientBuilder = Callable[[str, HTTPConfig, float, Config, SelectorStore], SSEClient]
+SseClientBuilder = Callable[
+    [str, HTTPConfig, float, Config, SelectorStore],
+    Tuple[SSEClient, Optional[urllib3.PoolManager]],
+]
 
 
 def create_sse_client(
@@ -66,10 +70,17 @@ def create_sse_client(
     initial_reconnect_delay: float,
     config: Config,
     ss: SelectorStore
-) -> SSEClient:
+) -> Tuple[SSEClient, Optional[urllib3.PoolManager]]:
     """ "
     create_sse_client creates an SSEClient instance configured to connect
-    to the LaunchDarkly streaming endpoint.
+    to the LaunchDarkly streaming endpoint, along with the urllib3 PoolManager
+    backing it. The pool is returned alongside the client so the caller can
+    force-close any pooled connections on shutdown -- ``SSEClient.close()``
+    only releases the connection back to the pool via ``urllib3.HTTPResponse
+    .shutdown()`` (which performs a half-close on the local read side) plus
+    ``release_conn()``, neither of which actually closes the underlying TCP
+    socket on Python 3.10. Closing the pool ensures the server observes the
+    client's disconnect when the FDv1 Fallback Directive engages.
     """
     uri = base_uri + STREAMING_ENDPOINT
     if config.payload_filter_key is not None:
@@ -87,11 +98,12 @@ def create_sse_client(
         selector = ss.selector()
         return {"basis": selector.state} if selector.is_defined() else {}
 
-    return SSEClient(
+    pool = stream_http_factory.create_pool_manager(1, uri)
+    sse_client = SSEClient(
         connect=ConnectStrategy.http(
             url=uri,
             headers=base_headers,
-            pool=stream_http_factory.create_pool_manager(1, uri),
+            pool=pool,
             urllib3_request_options={"timeout": stream_http_factory.timeout},
             query_params=query_params
         ),
@@ -106,6 +118,31 @@ def create_sse_client(
         retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
         logger=log,
     )
+    return sse_client, pool
+
+
+def _close_pool_manager(pool: Optional[urllib3.PoolManager]) -> None:
+    """Close every pooled connection in ``pool`` so the underlying TCP sockets
+    are torn down. ``HTTPConnectionPool.close()`` drains its queue and calls
+    ``conn.close()`` on each connection, which sends the FIN that the server
+    is waiting on. ``PoolManager.clear()`` alone doesn't do this -- it just
+    drops the dict of pools without closing the connections inside them."""
+    if pool is None:
+        return
+    try:
+        # ``RecentlyUsedContainer`` deliberately disallows iteration; ``keys()``
+        # returns a thread-safe snapshot. We look each one up to close its
+        # underlying ``HTTPConnectionPool``.
+        for key in list(pool.pools.keys()):
+            try:
+                connection_pool = pool.pools.get(key)
+                if connection_pool is not None:
+                    connection_pool.close()
+            except Exception:  # pylint: disable=broad-except
+                log.debug("Error closing streaming connection pool", exc_info=True)
+        pool.clear()
+    except Exception:  # pylint: disable=broad-except
+        log.debug("Error closing streaming pool manager", exc_info=True)
 
 
 class StreamingDataSource(Synchronizer, DiagnosticSource):
@@ -126,9 +163,10 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self.__http_options = http_options
         self.__initial_reconnect_delay = initial_reconnect_delay
 
-        self._sse_client_builder = create_sse_client
+        self._sse_client_builder: SseClientBuilder = create_sse_client
         self._config = config
         self._sse: Optional[SSEClient] = None
+        self._sse_pool: Optional[urllib3.PoolManager] = None
         self._running = False
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
         self._connection_attempt_start_time: Optional[float] = None
@@ -149,7 +187,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        self._sse = self._sse_client_builder(
+        self._sse, self._sse_pool = self._sse_client_builder(
             self.__uri,
             self.__http_options,
             self.__initial_reconnect_delay,
@@ -166,6 +204,28 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._connection_attempt_start_time = time()
 
         envid = None
+        # fallback_requested is set when a Start action carries
+        # X-LD-FD-Fallback: true. We finish applying the current payload
+        # before halting, so consumers can serve the server-provided data
+        # while FDv1 takes over. The latch is one-way and terminal: once
+        # set, any subsequent payload-completing event or error must carry
+        # the signal forward and halt the stream, even if the failure path
+        # itself doesn't see the directive header.
+        fallback_requested = False
+
+        def _with_fallback_signal(update: Update) -> Update:
+            """Return ``update`` decorated with ``fallback_to_fdv1=True`` when
+            the directive has been latched. Idempotent if already set."""
+            if not fallback_requested or update.fallback_to_fdv1:
+                return update
+            return Update(
+                state=update.state,
+                change_set=update.change_set,
+                error=update.error,
+                fallback_to_fdv1=True,
+                environment_id=update.environment_id,
+            )
+
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -179,24 +239,19 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(action.error, envid)
                 if update is not None:
-                    yield update
+                    yield _with_fallback_signal(update)
 
-                if not should_continue:
+                # The FDv1 Fallback Directive is one-way and terminal: if it
+                # was latched on a prior Start, we must not keep retrying the
+                # FDv2 endpoint even when the failure itself looks recoverable.
+                if fallback_requested or not should_continue:
                     break
                 continue
 
             if isinstance(action, Start) and action.headers is not None:
-                fallback = action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 envid = action.headers.get(_LD_ENVID_HEADER, envid)
-
-                if fallback:
-                    self._record_stream_init(True)
-                    yield Update(
-                        state=DataSourceState.OFF,
-                        revert_to_fdv1=True,
-                        environment_id=envid,
-                    )
-                    break
+                if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                    fallback_requested = True
 
             if not isinstance(action, Event):
                 continue
@@ -206,6 +261,12 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 if update is not None:
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
+                    if fallback_requested:
+                        # The completed update is the natural moment to honor
+                        # the latched directive: yield once with the signal,
+                        # then halt — the consumer will switch to FDv1.
+                        yield _with_fallback_signal(update)
+                        break
                     yield update
             except json.decoder.JSONDecodeError as e:
                 log.info(
@@ -215,8 +276,8 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(e, envid)
                 if update is not None:
-                    yield update
-                if not should_continue:
+                    yield _with_fallback_signal(update)
+                if fallback_requested or not should_continue:
                     break
             except Exception as e:  # pylint: disable=broad-except
                 log.info(
@@ -224,16 +285,25 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 )
                 self._sse.interrupt()
 
-                yield Update(
+                yield _with_fallback_signal(Update(
                     state=DataSourceState.INTERRUPTED,
                     error=DataSourceErrorInfo(
                         DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                     ),
-                    revert_to_fdv1=False,
+                    fallback_to_fdv1=False,
                     environment_id=envid,
-                )
+                ))
+                if fallback_requested:
+                    break
 
         self._sse.close()
+        # Force-close the underlying urllib3 pool. SSEClient.close() only does a
+        # half-close on the local read side and releases the connection back to
+        # the pool, which on Python 3.10 leaves the TCP socket open until the
+        # response object is garbage-collected. The FDv1 Fallback Directive
+        # requires the Primary Synchronizer to be terminated promptly, so we
+        # tear down the pool here to send the FIN the server is waiting on.
+        _close_pool_manager(self._sse_pool)
 
     def stop(self):
         """
@@ -243,6 +313,10 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._running = False
         if self._sse:
             self._sse.close()
+        # See _close_pool_manager docstring: this is what actually severs the
+        # TCP connection. ``stop()`` may be called from a different thread than
+        # the one running ``sync()``; close() is idempotent on the pool.
+        _close_pool_manager(self._sse_pool)
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:
@@ -348,7 +422,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 error=DataSourceErrorInfo(
                     DataSourceErrorKind.INVALID_DATA, 0, time(), str(error)
                 ),
-                revert_to_fdv1=False,
+                fallback_to_fdv1=False,
                 environment_id=envid,
             )
             return (update, True)
@@ -372,7 +446,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 update = Update(
                     state=DataSourceState.OFF,
                     error=error_info,
-                    revert_to_fdv1=True,
+                    fallback_to_fdv1=True,
                     environment_id=envid,
                 )
                 self.stop()
@@ -389,7 +463,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     else DataSourceState.OFF
                 ),
                 error=error_info,
-                revert_to_fdv1=False,
+                fallback_to_fdv1=False,
                 environment_id=envid,
             )
 
@@ -411,7 +485,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             error=DataSourceErrorInfo(
                 DataSourceErrorKind.UNKNOWN, 0, time(), str(error)
             ),
-            revert_to_fdv1=False,
+            fallback_to_fdv1=False,
             environment_id=envid,
         )
         # no stacktrace here because, for a typical connection error, it'll

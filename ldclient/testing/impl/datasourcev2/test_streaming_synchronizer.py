@@ -13,7 +13,6 @@ from ld_eventsource.sse_client import Event, Fault
 from ldclient.config import Config, HTTPConfig
 from ldclient.impl.datasourcev2.streaming import (
     STREAMING_ENDPOINT,
-    SSEClient,
     SseClientBuilder,
     StreamingDataSource
 )
@@ -48,8 +47,8 @@ def list_sse_client(
         initial_reconnect_delay: float,
         config: Config,  # pylint: disable=unused-argument
         ss: SelectorStore  # pylint: disable=unused-argument
-    ) -> SSEClient:
-        return ListBasedSseClient(events)
+    ):
+        return ListBasedSseClient(events), None
 
     return builder
 
@@ -202,7 +201,7 @@ def test_handles_no_changes():
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
     assert updates[0].change_set is None
 
@@ -222,7 +221,7 @@ def test_handles_empty_changeset(events):  # pylint: disable=redefined-outer-nam
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -249,7 +248,7 @@ def test_handles_put_objects(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -281,7 +280,7 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -312,7 +311,7 @@ def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -339,7 +338,7 @@ def test_swallows_heartbeat(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -368,7 +367,7 @@ def test_error_resets(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].error is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].change_set is not None
@@ -392,7 +391,7 @@ def test_handles_out_of_order(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.INTERRUPTED
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -423,7 +422,7 @@ def test_invalid_json_decoding(events):  # pylint: disable=redefined-outer-name
     assert len(updates) == 2
     assert updates[0].state == DataSourceState.INTERRUPTED
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -458,7 +457,7 @@ def test_stops_on_unrecoverable_status_code(
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
     assert updates[0].change_set is None
-    assert updates[0].revert_to_fdv1 is False
+    assert updates[0].fallback_to_fdv1 is False
     assert updates[0].environment_id is None
 
     assert updates[0].error is not None
@@ -583,8 +582,10 @@ def test_envid_preserved_across_events(events):  # pylint: disable=redefined-out
     assert len(updates[0].change_set.changes) == 1
 
 
-def test_envid_from_fallback_header():
-    """Test that environment ID is captured when fallback header is present"""
+def test_fallback_header_with_no_payload_emits_no_update():
+    """A Start carrying X-LD-FD-Fallback with no following payload events
+    must not synthesize an Update. The directive only fires once a payload
+    has been applied or an error has been observed."""
     start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-fallback', _LD_FD_FALLBACK_HEADER: 'true'})
 
     builder = list_sse_client([start_action])
@@ -593,10 +594,161 @@ def test_envid_from_fallback_header():
     synchronizer._sse_client_builder = builder
     updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
+    assert updates == []
+
+
+def test_fallback_header_with_payload_emits_valid_with_fallback(events):  # pylint: disable=redefined-outer-name
+    """When the response carries X-LD-FD-Fallback: true and a valid SSE
+    payload, the synchronizer must apply the payload and then emit a single
+    Valid update with fallback_to_fdv1=True so the consumer can hand off to
+    the FDv1 Fallback Synchronizer."""
+    start_action = Start(headers={_LD_ENVID_HEADER: 'test-env-fallback', _LD_FD_FALLBACK_HEADER: 'true'})
+
+    builder = list_sse_client(
+        [
+            start_action,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PUT_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.VALID
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].environment_id == 'test-env-fallback'
+    assert updates[0].change_set is not None
+    assert len(updates[0].change_set.changes) == 1
+
+
+def test_fallback_latched_on_start_carries_through_unrecoverable_fault():
+    """Once a Start latches the FDv1 directive, an unrecoverable Fault that
+    follows must propagate the directive even when the error itself does not
+    carry the header. The directive is one-way and terminal, so the latched
+    state from the original Start drives the Update emitted on shutdown --
+    losing it would silently strand the consumer on FDv2 instead of handing
+    off to the FDv1 Fallback Synchronizer."""
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+    # 401 is unrecoverable and the error carries no fallback header itself.
+    error = HTTPStatusError(401)
+    fault_action = Fault(error=error)
+
+    builder = list_sse_client([start_action, fault_action])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
-    assert updates[0].revert_to_fdv1 is True
-    assert updates[0].environment_id == 'test-env-fallback'
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].error is not None
+    assert updates[0].error.status_code == 401
+
+
+def test_fallback_latched_on_start_carries_through_recoverable_fault():
+    """A recoverable Fault arriving after the directive was latched must also
+    propagate the signal and halt the stream -- the directive overrides the
+    ordinary retry policy because it is terminal."""
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+    # 408 is recoverable; without the latch we would retry transparently.
+    fault_action = Fault(error=HTTPStatusError(408))
+
+    builder = list_sse_client([start_action, fault_action])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    # 408 is recoverable so the Update from _handle_error is INTERRUPTED, but
+    # the latched directive must still drive the consumer to FDv1.
+    assert updates[0].state == DataSourceState.INTERRUPTED
+
+
+def test_fallback_latched_on_start_carries_through_malformed_event(events):  # pylint: disable=redefined-outer-name
+    """A malformed event (JSONDecodeError) after the directive was latched
+    must propagate the signal on the resulting Interrupted Update."""
+    bad_event = Event(event=EventName.PUT_OBJECT, data="not valid json")
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true'})
+
+    builder = list_sse_client([start_action, events[EventName.SERVER_INTENT], bad_event])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    # The malformed-event update must surface the latched directive so the
+    # consumer can hand off to FDv1 instead of trying to keep the FDv2 stream.
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].error is not None
+    assert updates[0].error.kind == DataSourceErrorKind.INVALID_DATA
+
+
+def test_streaming_closes_underlying_pool_on_fallback(events):  # pylint: disable=redefined-outer-name
+    """When the FDv1 Fallback Directive engages, the underlying urllib3
+    connection pool must be torn down so the FDv2 streaming TCP connection
+    is actually closed. ``SSEClient.close()`` only releases the connection
+    back to the pool via a half-close; on Python 3.10 that leaves the socket
+    open until GC, which the spec forbids -- the Primary Synchronizer must
+    be terminated promptly when the directive fires."""
+    pool_close_calls = []
+
+    class TrackingPool:
+        """Stand-in PoolManager that records calls to clear() and exposes a
+        keys()-iterable pools attribute matching urllib3's RecentlyUsedContainer."""
+
+        def __init__(self):
+            self.cleared = False
+            self.connection_pool = TrackingConnectionPool()
+            self.pools = TrackingPoolDict({"key": self.connection_pool})
+
+        def clear(self):
+            self.cleared = True
+
+    class TrackingConnectionPool:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+            pool_close_calls.append(self)
+
+    class TrackingPoolDict:
+        def __init__(self, items):
+            self._items = items
+
+        def keys(self):
+            return list(self._items.keys())
+
+        def get(self, key):
+            return self._items.get(key)
+
+    tracking_pool = TrackingPool()
+
+    def builder(*_args, **_kwargs):
+        return ListBasedSseClient([
+            Start(headers={_LD_FD_FALLBACK_HEADER: 'true'}),
+            events[EventName.SERVER_INTENT],
+            events[EventName.PUT_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]), tracking_pool
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder  # type: ignore[assignment]
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    assert tracking_pool.cleared is True
+    assert tracking_pool.connection_pool.closed is True
 
 
 def test_envid_from_fault_action():
@@ -655,7 +807,7 @@ def test_envid_from_fault_with_fallback():
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.OFF
-    assert updates[0].revert_to_fdv1 is True
+    assert updates[0].fallback_to_fdv1 is True
     assert updates[0].environment_id == 'test-env-503'
 
 

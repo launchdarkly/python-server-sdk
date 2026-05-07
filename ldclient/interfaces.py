@@ -1366,6 +1366,13 @@ class Basis:
     change_set: ChangeSet
     persist: bool
     environment_id: Optional[str] = None
+    fallback_to_fdv1: bool = False
+    """
+    Indicates that the LaunchDarkly server has directed the SDK to fall
+    back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
+    response header). When True, callers must apply ``change_set`` first
+    and then terminally switch to the FDv1 Fallback Synchronizer.
+    """
 
 
 class ChangeSetBuilder:
@@ -1647,7 +1654,14 @@ class Update:
     state: DataSourceState
     change_set: Optional[ChangeSet] = None
     error: Optional[DataSourceErrorInfo] = None
-    revert_to_fdv1: bool = False
+    fallback_to_fdv1: bool = False
+    """
+    Indicates that the LaunchDarkly server has directed the SDK to fall
+    back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
+    response header). When True, callers must apply any accompanying
+    ``change_set`` first and then terminally switch to the FDv1 Fallback
+    Synchronizer. The flag may ride along on Valid or Off updates.
+    """
     environment_id: Optional[str] = None
 
 

@@ -18,9 +18,10 @@ from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.util import _Fail, log
+from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
 from ldclient.interfaces import (
     DataSourceErrorInfo,
+    DataSourceErrorKind,
     DataSourceState,
     DataSourceStatus,
     DataSourceStatusProvider,
@@ -276,7 +277,7 @@ class ConditionDirective(str, Enum):
 
     FDV1 = "fdv1"
     """
-    FDV1 suggests that we should immediately revert to the FDv1 fallback synchronizer.
+    FDV1 suggests that we should immediately fall back to the FDv1 Fallback Synchronizer.
     """
 
 
@@ -403,7 +404,26 @@ class FDv2(DataSystem):
             )
 
             # Run initializers first
-            self._run_initializers(set_on_ready)
+            fallback_requested = self._run_initializers(set_on_ready)
+
+            # If an initializer asked the SDK to fall back to FDv1, halt the
+            # configured FDv2 chain and switch terminally to the FDv1 Fallback
+            # Synchronizer (or transition to OFF if none is configured).
+            if fallback_requested:
+                if self._fdv1_fallback_synchronizer_builder is not None:
+                    log.warning("Falling back to FDv1 protocol")
+                    self._synchronizers = [self._fdv1_fallback_synchronizer_builder]
+                else:
+                    log.warning(
+                        "Initializer requested FDv1 fallback but none configured"
+                    )
+                    self._synchronizers = []
+                    self._data_source_status_provider.update_status(
+                        DataSourceState.OFF,
+                        self._data_source_status_provider.status.error,
+                    )
+                    set_on_ready.set()
+                    return
 
             # Run synchronizers
             self._run_synchronizers(set_on_ready)
@@ -414,14 +434,22 @@ class FDv2(DataSystem):
             if not set_on_ready.is_set():
                 set_on_ready.set()
 
-    def _run_initializers(self, set_on_ready: Event):
-        """Run initializers to get initial data."""
+    def _run_initializers(self, set_on_ready: Event) -> bool:
+        """
+        Run initializers to get initial data.
+
+        Returns True when an initializer requested the FDv1 Fallback Directive
+        (via the X-LD-FD-Fallback response header). When that happens, any
+        accompanying payload is applied first so evaluations can serve the
+        server-provided data while the FDv1 synchronizer spins up; the caller
+        is then responsible for switching to the FDv1 Fallback Synchronizer.
+        """
         if self._data_system_config.initializers is None:
-            return
+            return False
 
         for initializer_builder in self._data_system_config.initializers:
             if self._stop_event.is_set():
-                return
+                return False
 
             try:
                 initializer = initializer_builder.build(self._config)
@@ -431,6 +459,25 @@ class FDv2(DataSystem):
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
+                    # An error response can still carry the FDv1 fallback directive.
+                    if basis_result.headers is not None and \
+                            basis_result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                        log.warning(
+                            "Initializer %s requested fallback to FDv1 protocol",
+                            initializer.name,
+                        )
+                        # Surface the underlying error on the status so
+                        # programmatic monitors can see why FDv2 shut down.
+                        self._data_source_status_provider.update_status(
+                            DataSourceState.INITIALIZING,
+                            DataSourceErrorInfo(
+                                kind=DataSourceErrorKind.UNKNOWN,
+                                status_code=0,
+                                time=time.time(),
+                                message=basis_result.error,
+                            ),
+                        )
+                        return True
                     continue
 
                 basis = basis_result.value
@@ -439,12 +486,23 @@ class FDv2(DataSystem):
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
 
-                # Set ready event if an only if a selector is defined for the changeset
-                if basis.change_set.selector.is_defined():
+                # Set ready event if and only if a selector is defined for the changeset
+                selector_defined = basis.change_set.selector.is_defined()
+                if selector_defined:
                     set_on_ready.set()
-                    return
+
+                if basis.fallback_to_fdv1:
+                    log.warning(
+                        "Initializer %s requested fallback to FDv1 protocol",
+                        initializer.name,
+                    )
+                    return True
+
+                if selector_defined:
+                    return False
             except Exception as e:
                 log.error("Initializer failed with exception: %s", e)
+        return False
 
     def _run_synchronizers(self, set_on_ready: Event):
         """Run synchronizers to keep data up-to-date."""
@@ -476,12 +534,12 @@ class FDv2(DataSystem):
 
                         if directive == ConditionDirective.FDV1:
                             # Abandon all synchronizers and use only fdv1 fallback
-                            log.info("Reverting to FDv1 fallback synchronizer")
+                            log.warning("Falling back to FDv1 protocol")
                             if self._fdv1_fallback_synchronizer_builder is not None:
                                 synchronizers_list = [self._fdv1_fallback_synchronizer_builder]
                                 current_index = 0
                             else:
-                                log.warning("No FDv1 fallback synchronizer available")
+                                log.warning("Synchronizer requested FDv1 fallback but none configured")
                                 synchronizers_list = []
                                 self._data_source_status_provider.update_status(
                                     DataSourceState.OFF,
@@ -608,8 +666,11 @@ class FDv2(DataSystem):
                 # Update status
                 self._data_source_status_provider.update_status(update.state, update.error)
 
-                # Check if we should revert to FDv1 immediately
-                if update.revert_to_fdv1:
+                # Check if we should fall back to FDv1 immediately. fallback_to_fdv1
+                # may ride along on a Valid update (payload + directive in the same
+                # response), in which case the ChangeSet has already been applied
+                # above before we hand off.
+                if update.fallback_to_fdv1:
                     return ConditionDirective.FDV1
 
                 # Check for OFF state indicating permanent failure
