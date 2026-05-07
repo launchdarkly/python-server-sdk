@@ -62,7 +62,11 @@ class Consul:
           to set any of them besides host and port, as defined in the
           `python-consul API <https://python-consul.readthedocs.io/en/latest/#consul>`_
         :param caching: specifies whether local caching should be enabled and if so,
-          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          on :class:`ldclient.config.Config`), the cache is automatically disabled
+          once the in-memory store has been initialized, so these settings only
+          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         """
         core = _ConsulFeatureStoreCore(host, port, prefix, consul_opts)
         return CachingStoreWrapper(core, caching)
@@ -100,7 +104,11 @@ class DynamoDB:
         :param dynamodb_opts: optional parameters for configuring the DynamoDB client, as defined in
           the `boto3 API <https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client>`_
         :param caching: specifies whether local caching should be enabled and if so,
-          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          on :class:`ldclient.config.Config`), the cache is automatically disabled
+          once the in-memory store has been initialized, so these settings only
+          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         """
         core = _DynamoDBFeatureStoreCore(table_name, prefix, dynamodb_opts)
         return CachingStoreWrapper(core, caching)
@@ -172,7 +180,11 @@ class Redis:
         :param max_connections: (deprecated and unused) This parameter is not used. To configure
           the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param caching: specifies whether local caching should be enabled and if so,
-          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          on :class:`ldclient.config.Config`), the cache is automatically disabled
+          once the in-memory store has been initialized, so these settings only
+          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """

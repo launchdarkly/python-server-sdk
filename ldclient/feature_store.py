@@ -16,7 +16,16 @@ from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class CacheConfig:
-    """Encapsulates caching parameters for feature store implementations that support local caching."""
+    """Encapsulates caching parameters for feature store implementations that support local caching.
+
+    Note: when the SDK is configured to use FDv2 (by setting ``datasystem_config``
+    on :class:`ldclient.config.Config`), the persistent-store cache is
+    automatically replaced with a no-op once the in-memory store has been
+    initialized. The TTL and capacity configured here therefore only affect
+    the brief bootstrap window before the first set of flag data has been
+    received. Under FDv1 (the default data system) the cache continues to
+    behave as it always has.
+    """
 
     DEFAULT_EXPIRATION = 15.0
     DEFAULT_CAPACITY = 1000
