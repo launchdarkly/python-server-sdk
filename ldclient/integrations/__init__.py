@@ -289,12 +289,6 @@ class Files:
     def new_data_source_v2(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
         """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
 
-        This type is not stable, and not subject to any backwards
-        compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-        Do not use it.
-        You have been warned.
-
         This returns a builder that can be used with the FDv2 data system configuration as both an
         Initializer and a Synchronizer. When used as an Initializer, it reads files once. When used
         as a Synchronizer, it watches for file changes and automatically updates when files are modified.
