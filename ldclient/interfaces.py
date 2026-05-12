@@ -19,12 +19,6 @@ class DataStoreMode(Enum):
     """
     DataStoreMode represents the mode of operation of a Data Store in FDV2
     mode.
-
-    This enum is not stable, and not subject to any backwards compatibility
-    guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     READ_ONLY = 'read-only'
@@ -1143,12 +1137,6 @@ class DataStoreStatusProvider:
 class EventName(str, Enum):
     """
     EventName represents the name of an event that can be sent by the server for FDv2.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     PUT_OBJECT = "put-object"
@@ -1192,12 +1180,6 @@ class EventName(str, Enum):
 class Selector:
     """
     Selector represents a particular snapshot of data.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     state: str = ""
@@ -1252,12 +1234,6 @@ class Selector:
 class ChangeType(Enum):
     """
     ChangeType specifies if an object is being upserted or deleted.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     PUT = "put"
@@ -1274,12 +1250,6 @@ class ChangeType(Enum):
 class ObjectKind(str, Enum):
     """
     ObjectKind represents the kind of object.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     FLAG = "flag"
@@ -1290,12 +1260,6 @@ class ObjectKind(str, Enum):
 class Change:
     """
     Change represents a change to a piece of data, such as an update or deletion.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     action: ChangeType
@@ -1308,12 +1272,6 @@ class Change:
 class IntentCode(str, Enum):
     """
     IntentCode represents the various intents that can be sent by the server.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     TRANSFER_FULL = "xfer-full"
@@ -1336,12 +1294,6 @@ class IntentCode(str, Enum):
 class ChangeSet:
     """
     ChangeSet represents a list of changes to be applied.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     intent_code: IntentCode
@@ -1355,12 +1307,6 @@ class Basis:
     Basis represents the initial payload of data that a data source can
     provide. Initializers provide this via fetch, whereas Synchronizers provide
     it asynchronously.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     change_set: ChangeSet
@@ -1378,12 +1324,6 @@ class Basis:
 class ChangeSetBuilder:
     """
     ChangeSetBuilder is a helper for constructing a ChangeSet.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     def __init__(self):
@@ -1490,12 +1430,6 @@ class ChangeSetBuilder:
 class Payload:
     """
     Payload represents a payload delivered in a streaming response.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     id: str
@@ -1539,12 +1473,6 @@ class ServerIntent:
     """
     ServerIntent represents the type of change associated with the payload
     (e.g., transfer full, transfer changes, etc.)
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     payload: Payload
@@ -1582,12 +1510,6 @@ class SelectorStore(Protocol):
     """
     SelectorStore represents a component capable of providing Selectors
     for data retrieval.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     @abstractmethod
@@ -1611,12 +1533,6 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
     which may be stale but is fast to retrieve. This initial data serves as a
     foundation for a Synchronizer to build upon, enabling it to provide updates
     as new changes occur.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     @property
@@ -1643,12 +1559,6 @@ class Update:
     """
     Update represents the results of a synchronizer's ongoing sync
     method.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     state: DataSourceState
@@ -1673,12 +1583,6 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
     It is responsible for yielding Update objects that represent the current state
     of the data source, including any changes that have occurred since the last
     synchronization.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
     @property
     @abstractmethod

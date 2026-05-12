@@ -12,12 +12,6 @@ from ldclient.interfaces import EventName, ObjectKind
 class DeleteObject:
     """
     Specifies the deletion of a particular object.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     version: int
@@ -59,12 +53,6 @@ class DeleteObject:
 class PutObject:
     """
     Specifies the addition of a particular object with upsert semantics.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     version: int
@@ -111,12 +99,6 @@ class PutObject:
 class Goodbye:
     """
     Goodbye represents a goodbye event.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     reason: str
@@ -146,12 +128,6 @@ class Goodbye:
 class Error:
     """
     Error represents an error event.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     payload_id: str
