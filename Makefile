@@ -59,9 +59,6 @@ docs: #! Generate sphinx-based documentation
 
 .PHONY: install-contract-tests-deps
 install-contract-tests-deps:
-	# --all-extras is required because persistence integrations (redis, consul, dynamodb)
-	# are optional extras, not group deps. uv sync --group alone would strip them.
-	# See https://github.com/astral-sh/uv/issues/7033 for a future fix.
 	uv sync --all-extras --group contract-tests
 
 .PHONY: start-contract-test-service
