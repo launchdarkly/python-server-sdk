@@ -19,7 +19,7 @@ help: #! Show this help message
 
 .PHONY: install
 install:
-	@poetry install --all-extras
+	@uv sync --all-extras
 
 #
 # Quality control checks
@@ -28,20 +28,20 @@ install:
 .PHONY: test
 test: #! Run unit tests
 test: install
-	@LD_SKIP_DATABASE_TESTS=1 poetry run pytest $(PYTEST_FLAGS)
+	@LD_SKIP_DATABASE_TESTS=1 uv run pytest $(PYTEST_FLAGS)
 
 .PHONY: test-all
 test-all: #! Run unit tests (including database integrations)
 test-all: install
-	@poetry run pytest $(PYTEST_FLAGS)
+	@uv run pytest $(PYTEST_FLAGS)
 
 .PHONY: lint
 lint: #! Run type analysis and linting checks
 lint: install
 	@mkdir -p .mypy_cache
-	@poetry run mypy ldclient
-	@poetry run isort --check --atomic ldclient contract-tests
-	@poetry run pycodestyle ldclient contract-tests
+	@uv run mypy ldclient
+	@uv run isort --check --atomic ldclient contract-tests
+	@uv run pycodestyle ldclient contract-tests
 
 #
 # Documentation generation
@@ -49,9 +49,9 @@ lint: install
 
 .PHONY: docs
 docs: #! Generate sphinx-based documentation
-	@poetry install --with docs
+	@uv sync --group docs
 	@cd docs
-	@poetry run $(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+	@uv run $(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 #
 # Contract test service commands
@@ -59,11 +59,11 @@ docs: #! Generate sphinx-based documentation
 
 .PHONY: install-contract-tests-deps
 install-contract-tests-deps:
-	poetry install --with contract-tests
+	uv sync --group contract-tests
 
 .PHONY: start-contract-test-service
 start-contract-test-service: install-contract-tests-deps
-	@cd contract-tests && poetry run python service.py $(PORT)
+	@cd contract-tests && uv run python service.py $(PORT)
 
 .PHONY: start-contract-test-service-bg
 start-contract-test-service-bg:

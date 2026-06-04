@@ -22,8 +22,10 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install poetry
-        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439 # v3.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
         name: "Get PyPI token"

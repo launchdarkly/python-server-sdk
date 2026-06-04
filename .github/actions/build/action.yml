@@ -6,4 +6,4 @@ runs:
   steps:
     - name: Build distribution files
       shell: bash
-      run: poetry build
+      run: uv build
