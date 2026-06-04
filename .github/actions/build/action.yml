@@ -6,4 +6,4 @@ runs:
   steps:
     - name: Build distribution files
       shell: bash
-      run: uv build
+      run: uv build --out-dir dist

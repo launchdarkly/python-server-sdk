@@ -21,8 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -31,11 +32,6 @@ jobs:
           redis: true
           consul: true
           dynamodb: true
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
-        with:
-          enable-cache: true
 
       - uses: ./.github/actions/build
       - uses: ./.github/actions/build-docs
@@ -88,8 +84,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -98,11 +95,6 @@ jobs:
           redis: true
           consul: true
           dynamodb: true
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
-        with:
-          enable-cache: true
 
       - name: Install requirements
         run: uv sync --all-extras
