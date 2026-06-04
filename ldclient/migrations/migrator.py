@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import concurrent.futures
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime
 from random import Random
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
@@ -25,13 +25,11 @@ if TYPE_CHECKING:
     from ldclient import Context, LDClient
 
 
-class Migrator:
+class Migrator(ABC):
     """
     A migrator is the interface through which migration support is executed. A
     migrator is configured through the :class:`MigratorBuilder`.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def read(self, key: str, context: Context, default_stage: Stage, payload: Optional[Any] = None) -> OperationResult:

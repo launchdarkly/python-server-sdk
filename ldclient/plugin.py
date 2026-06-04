@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional
 
@@ -58,7 +58,7 @@ class PluginMetadata:
     name: str  #: A name representing the plugin instance
 
 
-class Plugin:
+class Plugin(ABC):
     """
     Abstract base class for extending SDK functionality via plugins.
 
@@ -71,8 +71,6 @@ class Plugin:
     Plugins provide an interface which allows for initialization, access to
     credentials, and hook registration in a single interface.
     """
-
-    __metaclass__ = ABCMeta
 
     @property
     @abstractmethod

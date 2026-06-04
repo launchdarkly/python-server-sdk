@@ -1,4 +1,4 @@
-from abc import abstractmethod, abstractproperty
+from abc import abstractmethod
 from os import environ
 from typing import List
 
@@ -66,7 +66,8 @@ class BigSegmentStoreTestScope:
 
 @pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
 class BigSegmentStoreTestBase:
-    @abstractproperty
+    @property
+    @abstractmethod
     def tester_class(self):
         pass
 
