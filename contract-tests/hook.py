@@ -3,7 +3,7 @@ from typing import Optional
 import requests
 
 from ldclient.evaluation import EvaluationDetail
-from ldclient.hook import EvaluationSeriesContext, Hook
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
 
 
 class PostingHook(Hook):
@@ -12,6 +12,10 @@ class PostingHook(Hook):
         self.__callback = callback
         self.__data = data
         self.__errors = errors
+
+    @property
+    def metadata(self) -> Metadata:
+        return Metadata(name=self.__name)
 
     def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
         return self.__post("beforeEvaluation", series_context, data, None)
