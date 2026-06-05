@@ -21,8 +21,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -31,9 +32,6 @@ jobs:
           redis: true
           consul: true
           dynamodb: true
-
-      - name: Install poetry
-        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
 
       - uses: ./.github/actions/build
       - uses: ./.github/actions/build-docs
@@ -86,8 +84,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -97,11 +96,8 @@ jobs:
           consul: true
           dynamodb: true
 
-      - name: Install poetry
-        uses: abatilo/actions-poetry@7b6d33e44b4f08d7021a1dee3c044e9c253d6439
-
       - name: Install requirements
-        run: poetry install --all-extras
+        run: uv sync --all-extras
 
       - name: Run tests
         run: make test-all
