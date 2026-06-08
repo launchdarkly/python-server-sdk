@@ -16,7 +16,7 @@ jobs:
       contents: read
       attestations: write # Needed for artifact attestations
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up uv
         uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4.0
@@ -39,6 +39,6 @@ jobs:
 
       - name: Attest build provenance
         if: ${{ format('{0}', inputs.dry_run) == 'false' }}
-        uses: actions/attest@v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-path: 'dist/*'
