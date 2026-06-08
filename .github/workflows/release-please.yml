@@ -16,7 +16,7 @@ jobs:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
 
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           fetch-depth: 0
@@ -48,6 +48,6 @@ jobs:
 
       - name: Attest build provenance
         if: ${{ steps.release.outputs.releases_created == 'true' }}
-        uses: actions/attest@v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-path: 'dist/*'
