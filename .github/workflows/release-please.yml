@@ -16,7 +16,7 @@ jobs:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.3.1
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         with:
           fetch-depth: 0
@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: "3.10"
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         name: "Get PyPI token"
         with:
@@ -48,6 +48,6 @@ jobs:
 
       - name: Attest build provenance
         if: ${{ steps.release.outputs.releases_created == 'true' }}
-        uses: actions/attest@v4
+        uses: actions/attest@v4.1.0
         with:
           subject-path: 'dist/*'
