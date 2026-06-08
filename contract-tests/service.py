@@ -84,6 +84,7 @@ def status():
             'persistent-data-store-consul',
             'flag-change-listeners',
             'flag-value-change-listeners',
+            'fdv1-fallback',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}

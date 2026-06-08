@@ -14,21 +14,20 @@ We encourage pull requests and other contributions from the community. Before su
 
 ### Setup
 
-This project is built using [poetry](https://python-poetry.org/). To learn more about the basics of working with this tool, read [Poetry's basic usage guide](https://python-poetry.org/docs/basic-usage/).
+This project is built using [uv](https://docs.astral.sh/uv/). To learn more about the basics of working with this tool, read [uv's getting started guide](https://docs.astral.sh/uv/getting-started/).
 
 To begin development, ensure your dependencies are installed and (optionally) activate the virtualenv.
 
 ```
-poetry install
-eval $(poetry env activate)
+uv sync
+source .venv/bin/activate
 ```
 
 This library defines several extra dependencies to optionally enhance the SDK's capabilities. Use the following commands to install one or more of the available extras.
 
 ```
-poetry install --extras "redis consul dynamodb test-filesource"
-poetry install -E redis -E consul -E dynamodb -E test-filesource
-poetry install --all-extras
+uv sync --extra redis --extra consul --extra dynamodb --extra test-filesource
+uv sync --all-extras
 ```
 
 ### Testing

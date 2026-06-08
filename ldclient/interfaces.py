@@ -3,7 +3,7 @@ This submodule contains interfaces for various components of the SDK.
 
 They may be useful in writing new implementations of these components, or for testing.
 """
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Generator, List, Mapping, Optional, Protocol
@@ -19,12 +19,6 @@ class DataStoreMode(Enum):
     """
     DataStoreMode represents the mode of operation of a Data Store in FDV2
     mode.
-
-    This enum is not stable, and not subject to any backwards compatibility
-    guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     READ_ONLY = 'read-only'
@@ -57,7 +51,7 @@ class ReadOnlyStore(Protocol):
         raise NotImplementedError
 
 
-class FeatureStore:
+class FeatureStore(ABC):
     """
     Interface for a versioned store for feature flags and related objects received from LaunchDarkly.
     Implementations should permit concurrent access and updates.
@@ -72,8 +66,6 @@ class FeatureStore:
     These semantics support the primary use case for the store, which synchronizes a collection
     of objects based on update messages that may be received out-of-order.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
@@ -131,7 +123,8 @@ class FeatureStore:
         :param item: The object to update or insert
         """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def initialized(self) -> bool:
         """
         Returns whether the store has been initialized yet or not
@@ -212,7 +205,7 @@ class FeatureStore:
     #     """
 
 
-class FeatureStoreCore:
+class FeatureStoreCore(ABC):
     """
     Interface for a simplified subset of the functionality of :class:`FeatureStore`, to be used
     in conjunction with :class:`ldclient.feature_store_helpers.CachingStoreWrapper`. This allows
@@ -220,8 +213,6 @@ class FeatureStoreCore:
     commonly be needed in any such implementation, such as caching. Instead, they can implement
     only ``FeatureStoreCore`` and then create a ``CachingStoreWrapper``.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def get_internal(self, kind: VersionedDataKind, key: str) -> dict:
@@ -327,14 +318,12 @@ class BackgroundOperation:
         return True
 
 
-class UpdateProcessor(BackgroundOperation):
+class UpdateProcessor(BackgroundOperation, ABC):
     """
     Interface for the component that obtains feature flag data in some way and passes it to a
     :class:`FeatureStore`. The built-in implementations of this are the client's standard streaming
     or polling behavior. For testing purposes, there is also :func:`ldclient.integrations.Files.new_data_source()`.
     """
-
-    __metaclass__ = ABCMeta
 
     def initialized(self) -> bool:  # type: ignore[empty-body]
         """
@@ -342,13 +331,11 @@ class UpdateProcessor(BackgroundOperation):
         """
 
 
-class EventProcessor:
+class EventProcessor(ABC):
     """
     Interface for the component that buffers analytics events and sends them to LaunchDarkly.
     The default implementation can be replaced for testing purposes.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def send_event(self, event):
@@ -372,13 +359,11 @@ class EventProcessor:
         """
 
 
-class FeatureRequester:
+class FeatureRequester(ABC):
     """
     Interface for the component that acquires feature flag data in polling mode. The default
     implementation can be replaced for testing purposes.
     """
-
-    __metaclass__ = ABCMeta
 
     def get_all(self):
         """
@@ -537,7 +522,8 @@ class BigSegmentStoreStatusProvider:
     might return incorrect values. Use :func:`add_listener()` to register a callback for notifications.
     """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def status(self) -> BigSegmentStoreStatus:
         """
         Gets the current status of the store.
@@ -719,7 +705,7 @@ class DataSourceStatus:
         return self.__last_error
 
 
-class DataSourceStatusProvider:
+class DataSourceStatusProvider(ABC):
     """
     An interface for querying the status of the SDK's data source. The data source is the component
     that receives updates to feature flag data; normally this is a streaming connection, but it
@@ -730,9 +716,8 @@ class DataSourceStatusProvider:
     implement this interface.
     """
 
-    __metaclass__ = ABCMeta
-
-    @abstractproperty
+    @property
+    @abstractmethod
     def status(self) -> DataSourceStatus:
         """
         Returns the current status of the data source.
@@ -771,7 +756,7 @@ class DataSourceStatusProvider:
         pass
 
 
-class DataSourceUpdateSink:
+class DataSourceUpdateSink(ABC):
     """
     Interface that a data source implementation will use to push data into
     the SDK.
@@ -780,8 +765,6 @@ class DataSourceUpdateSink:
     the data store directly, so that the SDK can perform any other
     necessary operations that must happen when data is updated.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
@@ -898,15 +881,13 @@ class FlagValueChange:
         return self.__new_value
 
 
-class FlagTracker:
+class FlagTracker(ABC):
     """
     An interface for tracking changes in feature flag configurations.
 
     An implementation of this interface is returned by :class:`ldclient.client.LDClient.flag_tracker`.
     Application code never needs to implement this interface.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def add_listener(self, listener: Callable[[FlagChange], None]):
@@ -985,8 +966,6 @@ class DataStoreStatus:
     Information about the data store's status.
     """
 
-    __metaclass__ = ABCMeta
-
     def __init__(self, available: bool, stale: bool):
         self._available = available
         self._stale = stale
@@ -1031,13 +1010,11 @@ class DataStoreStatus:
         return False
 
 
-class DataStoreUpdateSink:
+class DataStoreUpdateSink(ABC):
     """
     Interface that a data store implementation can use to report information
     back to the SDK.
     """
-
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def status(self) -> DataStoreStatus:
@@ -1058,7 +1035,8 @@ class DataStoreUpdateSink:
         """
         pass
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def listeners(self) -> Listeners:
         """
         Access the listeners associated with this sink instance.
@@ -1066,7 +1044,7 @@ class DataStoreUpdateSink:
         pass
 
 
-class DataStoreStatusProvider:
+class DataStoreStatusProvider(ABC):
     """
     An interface for querying the status of a persistent data store.
 
@@ -1074,9 +1052,8 @@ class DataStoreStatusProvider:
     Application code should not implement this interface.
     """
 
-    __metaclass__ = ABCMeta
-
-    @abstractproperty
+    @property
+    @abstractmethod
     def status(self) -> DataStoreStatus:
         """
         Returns the current status of the store.
@@ -1143,12 +1120,6 @@ class DataStoreStatusProvider:
 class EventName(str, Enum):
     """
     EventName represents the name of an event that can be sent by the server for FDv2.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     PUT_OBJECT = "put-object"
@@ -1192,12 +1163,6 @@ class EventName(str, Enum):
 class Selector:
     """
     Selector represents a particular snapshot of data.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     state: str = ""
@@ -1252,12 +1217,6 @@ class Selector:
 class ChangeType(Enum):
     """
     ChangeType specifies if an object is being upserted or deleted.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     PUT = "put"
@@ -1274,12 +1233,6 @@ class ChangeType(Enum):
 class ObjectKind(str, Enum):
     """
     ObjectKind represents the kind of object.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     FLAG = "flag"
@@ -1290,12 +1243,6 @@ class ObjectKind(str, Enum):
 class Change:
     """
     Change represents a change to a piece of data, such as an update or deletion.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     action: ChangeType
@@ -1308,12 +1255,6 @@ class Change:
 class IntentCode(str, Enum):
     """
     IntentCode represents the various intents that can be sent by the server.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     TRANSFER_FULL = "xfer-full"
@@ -1336,12 +1277,6 @@ class IntentCode(str, Enum):
 class ChangeSet:
     """
     ChangeSet represents a list of changes to be applied.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     intent_code: IntentCode
@@ -1355,28 +1290,23 @@ class Basis:
     Basis represents the initial payload of data that a data source can
     provide. Initializers provide this via fetch, whereas Synchronizers provide
     it asynchronously.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     change_set: ChangeSet
     persist: bool
     environment_id: Optional[str] = None
+    fallback_to_fdv1: bool = False
+    """
+    Indicates that the LaunchDarkly server has directed the SDK to fall
+    back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
+    response header). When True, callers must apply ``change_set`` first
+    and then terminally switch to the FDv1 Fallback Synchronizer.
+    """
 
 
 class ChangeSetBuilder:
     """
     ChangeSetBuilder is a helper for constructing a ChangeSet.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     def __init__(self):
@@ -1483,12 +1413,6 @@ class ChangeSetBuilder:
 class Payload:
     """
     Payload represents a payload delivered in a streaming response.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     id: str
@@ -1532,12 +1456,6 @@ class ServerIntent:
     """
     ServerIntent represents the type of change associated with the payload
     (e.g., transfer full, transfer changes, etc.)
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     payload: Payload
@@ -1575,12 +1493,6 @@ class SelectorStore(Protocol):
     """
     SelectorStore represents a component capable of providing Selectors
     for data retrieval.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     @abstractmethod
@@ -1604,12 +1516,6 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
     which may be stale but is fast to retrieve. This initial data serves as a
     foundation for a Synchronizer to build upon, enabling it to provide updates
     as new changes occur.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     @property
@@ -1636,18 +1542,19 @@ class Update:
     """
     Update represents the results of a synchronizer's ongoing sync
     method.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     state: DataSourceState
     change_set: Optional[ChangeSet] = None
     error: Optional[DataSourceErrorInfo] = None
-    revert_to_fdv1: bool = False
+    fallback_to_fdv1: bool = False
+    """
+    Indicates that the LaunchDarkly server has directed the SDK to fall
+    back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
+    response header). When True, callers must apply any accompanying
+    ``change_set`` first and then terminally switch to the FDv1 Fallback
+    Synchronizer. The flag may ride along on Valid or Off updates.
+    """
     environment_id: Optional[str] = None
 
 
@@ -1659,12 +1566,6 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
     It is responsible for yielding Update objects that represent the current state
     of the data source, including any changes that have occurred since the last
     synchronization.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
     @property
     @abstractmethod

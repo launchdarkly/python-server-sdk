@@ -1,13 +1,13 @@
-[tool.poetry]
+[project]
 name = "launchdarkly-server-sdk"
-version = "9.15.0"
+version = "9.15.1"
 description = "LaunchDarkly SDK for Python"
-authors = ["LaunchDarkly <dev@launchdarkly.com>"]
+authors = [
+    {name = "LaunchDarkly", email = "dev@launchdarkly.com"}
+]
 license = "Apache-2.0"
 readme = "README.md"
-homepage = "https://docs.launchdarkly.com/sdk/server-side/python"
-repository = "https://github.com/launchdarkly/python-server-sdk"
-documentation = "https://launchdarkly-python-sdk.readthedocs.io/en/latest/"
+requires-python = ">=3.10"
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
@@ -21,74 +21,63 @@ classifiers = [
     "Topic :: Software Development",
     "Topic :: Software Development :: Libraries",
 ]
-packages = [ { include = "ldclient" } ]
-exclude = [
-    { path = "ldclient/testing", format = "wheel" }
+dependencies = [
+    "certifi>=2018.4.16",
+    "expiringdict>=1.1.4",
+    "pyRFC3339>=1.0",
+    "semver>=2.10.2",
+    "urllib3>=1.26.0,<3",
+    "launchdarkly-eventsource>=1.5.0,<2.0.0",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.10"
-certifi = ">=2018.4.16"
-expiringdict = ">=1.1.4"
-pyRFC3339 = ">=1.0"
-semver = ">=2.10.2"
-urllib3 = ">=1.26.0,<3"
-launchdarkly-eventsource = ">=1.5.0,<2.0.0"
+[project.urls]
+Homepage = "https://docs.launchdarkly.com/sdk/server-side/python"
+Repository = "https://github.com/launchdarkly/python-server-sdk"
+Documentation = "https://launchdarkly-python-sdk.readthedocs.io/en/latest/"
 
-redis = { version = ">=2.10.5", optional = true }
-python-consul = { version = ">=1.0.1", optional = true }
-boto3 = { version = ">=1.9.71", optional = true }
-pyyaml = { version = ">=5.3.1", optional = true }
-watchdog = { version = ">=3.0.0", optional = true }
+[project.optional-dependencies]
+redis = ["redis>=2.10.5"]
+consul = ["python-consul>=1.0.1"]
+dynamodb = ["boto3>=1.9.71"]
+test-filesource = ["pyyaml>=5.3.1", "watchdog>=3.0.0"]
 
-[tool.poetry.extras]
-redis = ["redis"]
-consul = ["python-consul"]
-dynamodb = ["boto3"]
-test-filesource = ["pyyaml", "watchdog"]
-
-
-[tool.poetry.group.dev.dependencies]
-mock = ">=2.0.0"
-pytest = "^8.0.0"
-redis = ">=2.10.5,<5.0.0"
-boto3 = ">=1.9.71,<2.0.0"
-coverage = ">=4.4"
-jsonpickle = ">1.4.1"
-pytest-cov = ">=2.4.0"
-pytest-mypy = "==0.10.3"
-mypy = "==1.8.0"
-pycodestyle = "^2.12.1"
-isort = "^5.13.2"
-
-
-[tool.poetry.group.contract-tests]
-optional = true
-
-[tool.poetry.group.contract-tests.dependencies]
-Flask = "<4"
-requests = ">=2.31.0"
-urllib3 = ">=1.26.0,<3"
-
-
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.docs.dependencies]
-sphinx = ">=6,<8"
-sphinx-rtd-theme = ">=1.3,<3.0"
-expiringdict = ">=1.1.4"
-pyrfc3339 = ">=1.0"
-jsonpickle = ">1.4.1"
-semver = ">=2.7.9"
-urllib3 = ">=1.26.0"
-jinja2 = "3.1.3"
+[dependency-groups]
+dev = [
+    "mock>=2.0.0",
+    "pytest>=8.0.0,<9",
+    "redis>=2.10.5,<5.0.0",
+    "boto3>=1.9.71,<2.0.0",
+    "coverage>=4.4",
+    "jsonpickle>1.4.1",
+    "pytest-cov>=2.4.0",
+    "pytest-mypy==0.10.3",
+    "mypy==1.8.0",
+    "pycodestyle>=2.12.1,<3",
+    "isort>=5.13.2,<6",
+    "types-PyYAML>=6.0",
+    "types-mock>=5.0",
+    "types-redis>=4.0",
+    "types-setuptools>=68.0",
+]
+contract-tests = [
+    "Flask<4",
+    "requests>=2.31.0",
+    "urllib3>=1.26.0,<3",
+]
+docs = [
+    "sphinx>=6,<8",
+    "sphinx-rtd-theme>=1.3,<3.0",
+    "expiringdict>=1.1.4",
+    "pyrfc3339>=1.0",
+    "jsonpickle>1.4.1",
+    "semver>=2.7.9",
+    "urllib3>=1.26.0",
+    "jinja2==3.1.3",
+]
 
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
-install_types = true
-non_interactive = true
 
 [tool.isort]
 multi_line_output = 3
@@ -99,5 +88,9 @@ addopts = ["-ra"]
 
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ldclient"]
+exclude = ["ldclient/testing"]

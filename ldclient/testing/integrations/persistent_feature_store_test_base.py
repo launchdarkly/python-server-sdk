@@ -1,4 +1,4 @@
-from abc import abstractmethod, abstractproperty
+from abc import abstractmethod
 
 import pytest
 
@@ -46,7 +46,8 @@ class PersistentFeatureStoreTester(FeatureStoreTester):
 
 @pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
 class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
-    @abstractproperty
+    @property
+    @abstractmethod
     def tester_class(self):
         pass
 

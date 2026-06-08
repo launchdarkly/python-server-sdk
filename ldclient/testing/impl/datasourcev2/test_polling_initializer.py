@@ -10,7 +10,12 @@ from ldclient.impl.datasourcev2.polling import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )
-from ldclient.impl.util import UnsuccessfulResponseException, _Fail, _Success
+from ldclient.impl.util import (
+    _LD_FD_FALLBACK_HEADER,
+    UnsuccessfulResponseException,
+    _Fail,
+    _Success
+)
 from ldclient.interfaces import ChangeSetBuilder, IntentCode
 from ldclient.testing.mock_components import MockSelectorStore
 
@@ -139,6 +144,58 @@ def test_handles_transfer_changes():
     assert result.value.change_set.intent_code == IntentCode.TRANSFER_CHANGES
     assert len(result.value.change_set.changes) == 1
     assert result.value.persist is True
+
+
+def test_initializer_carries_fallback_signal_on_successful_response():
+    """A 200 OK with X-LD-FD-Fallback: true must produce a Basis with
+    fallback_to_fdv1=True so the caller can apply the payload first and then
+    switch terminally to the FDv1 Fallback Synchronizer."""
+    change_set = ChangeSetBuilder.no_changes()
+    headers = {_LD_FD_FALLBACK_HEADER: 'true'}
+    mock_requester = MockPollingRequester(_Success(value=(change_set, headers)))
+    ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
+
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
+
+    assert isinstance(result, _Success)
+    assert result.value is not None
+    assert result.value.fallback_to_fdv1 is True
+
+
+def test_initializer_propagates_fallback_signal_on_error_response():
+    """An error response carrying X-LD-FD-Fallback: true must propagate the
+    response headers in the _Fail so the FDv2 datasystem can detect the
+    directive even when no payload was delivered."""
+    headers = {_LD_FD_FALLBACK_HEADER: 'true'}
+    mock_requester = MockPollingRequester(
+        _Fail(
+            error="failure message",
+            exception=UnsuccessfulResponseException(500),
+            headers=headers,
+        )
+    )
+    ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
+
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
+
+    assert isinstance(result, _Fail)
+    assert result.headers is not None
+    assert result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
+
+
+def test_initializer_basis_default_fallback_is_false():
+    """A response without the fallback header must produce a Basis with
+    fallback_to_fdv1=False."""
+    change_set = ChangeSetBuilder.no_changes()
+    headers: dict = {}
+    mock_requester = MockPollingRequester(_Success(value=(change_set, headers)))
+    ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
+
+    result = ds.fetch(MockSelectorStore(Selector.no_selector()))
+
+    assert isinstance(result, _Success)
+    assert result.value is not None
+    assert result.value.fallback_to_fdv1 is False
 
 
 def test_handles_fdv1_payload():

@@ -72,5 +72,6 @@ test-packaging-venv
 .vscode/
 .python-version
 
-# Poetry
-poetry.lock
+# uv — lock file is not committed for libraries (only for applications)
+uv.lock
+.venv/

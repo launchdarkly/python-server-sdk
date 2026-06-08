@@ -12,12 +12,6 @@ from ldclient.interfaces import EventName, ObjectKind
 class DeleteObject:
     """
     Specifies the deletion of a particular object.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     version: int
@@ -59,12 +53,6 @@ class DeleteObject:
 class PutObject:
     """
     Specifies the addition of a particular object with upsert semantics.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     version: int
@@ -111,17 +99,9 @@ class PutObject:
 class Goodbye:
     """
     Goodbye represents a goodbye event.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     reason: str
-    silent: bool
-    catastrophe: bool
 
     def to_dict(self) -> dict:
         """
@@ -129,8 +109,6 @@ class Goodbye:
         """
         return {
             "reason": self.reason,
-            "silent": self.silent,
-            "catastrophe": self.catastrophe,
         }
 
     @staticmethod
@@ -139,25 +117,17 @@ class Goodbye:
         Deserializes a Goodbye event from a JSON-compatible dictionary.
         """
         reason = data.get("reason")
-        silent = data.get("silent")
-        catastrophe = data.get("catastrophe")
 
-        if reason is None or silent is None or catastrophe is None:
+        if reason is None:
             raise ValueError("Missing required fields in Goodbye JSON.")
 
-        return Goodbye(reason=reason, silent=silent, catastrophe=catastrophe)
+        return Goodbye(reason=reason)
 
 
 @dataclass(frozen=True)
 class Error:
     """
     Error represents an error event.
-
-    This type is not stable, and not subject to any backwards
-    compatibility guarantees or semantic versioning. It is not suitable for production usage.
-
-    Do not use it.
-    You have been warned.
     """
 
     payload_id: str

@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,7 +28,7 @@ class Metadata:
     name: str  #: A name representing a hook instance.
 
 
-class Hook:
+class Hook(ABC):
     """
     Abstract class for extending SDK functionality via hooks.
 
@@ -39,9 +39,8 @@ class Hook:
     customer integrations.
     """
 
-    __metaclass__ = ABCMeta
-
-    @abstractproperty
+    @property
+    @abstractmethod
     def metadata(self) -> Metadata:
         """
         Get metadata about the hook implementation.
