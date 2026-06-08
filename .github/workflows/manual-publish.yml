@@ -16,14 +16,14 @@ jobs:
       contents: read
       attestations: write # Needed for artifact attestations
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.3.1
 
       - name: Set up uv
         uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a # v7.4.0
         with:
           python-version: "3.10"
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1
         name: "Get PyPI token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
@@ -39,6 +39,6 @@ jobs:
 
       - name: Attest build provenance
         if: ${{ format('{0}', inputs.dry_run) == 'false' }}
-        uses: actions/attest@v4
+        uses: actions/attest@v4.1.0
         with:
           subject-path: 'dist/*'
