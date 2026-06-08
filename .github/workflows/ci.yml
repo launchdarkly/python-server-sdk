@@ -90,7 +90,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@dcd7d2facac601fe74f1d9c57da89ae7ae735d96
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@a14500d6c2585d643807dc1764a4bd2d206c398f
         with:
           redis: true
           consul: true
