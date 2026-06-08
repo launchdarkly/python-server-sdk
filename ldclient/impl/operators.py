@@ -37,6 +37,10 @@ def _semver_operator(clause_preprocessed: Optional[ClausePreprocessedValue], con
 
 
 def _in(context_value: Any, clause_value: Any, clause_preprocessed: Optional[ClausePreprocessedValue]) -> bool:
+    # bool is a subtype of int in Python, so True == 1 and False == 0. A value should only match a
+    # clause value of the same JSON type, so a boolean and a number must never be considered equal.
+    if isinstance(context_value, bool) != isinstance(clause_value, bool):
+        return False
     return context_value == clause_value
 
 
