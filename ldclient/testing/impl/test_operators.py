@@ -33,6 +33,17 @@ from ldclient.testing.builders import *
         ["endsWith", "z", "xyz", False],
         ["contains", "xyz", "y", True],
         ["contains", "y", "xyz", False],
+        # booleans and numbers must remain distinct (bool is a subtype of int in Python)
+        ["in", True, True, True],
+        ["in", False, False, True],
+        ["in", True, 1, False],
+        ["in", 1, True, False],
+        ["in", True, 1.0, False],
+        ["in", 1.0, True, False],
+        ["in", False, 0, False],
+        ["in", 0, False, False],
+        ["in", False, 0.0, False],
+        ["in", 0.0, False, False],
         # mixed strings and numbers
         ["in", "99", 99, False],
         ["in", 99, "99", False],
