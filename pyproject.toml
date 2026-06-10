@@ -65,7 +65,7 @@ contract-tests = [
     "urllib3>=1.26.0,<3",
 ]
 docs = [
-    "sphinx>=6,<8",
+    "sphinx>=6,<9",
     "sphinx-rtd-theme>=1.3,<4.0",
     "expiringdict>=1.1.4",
     "pyrfc3339>=1.0",
