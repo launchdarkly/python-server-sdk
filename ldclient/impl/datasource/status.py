@@ -55,8 +55,8 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
     def upsert(self, kind: VersionedDataKind, item: dict):
         self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
 
-        # TODO(sc-212471): We only want to do this if the store successfully
-        # updates the record.
+        # TODO(SDK-62): We only want to do this if the store successfully wrote the record,
+        # which requires upsert to return a bool result (breaking change).
         key = item.get('key', '')
         self.__update_dependency_for_single_item(kind, key, item)
 

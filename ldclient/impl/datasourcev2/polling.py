@@ -303,7 +303,7 @@ class Urllib3PollingRequester(Requester):
 
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status),
+                f"HTTP error {response.status}", UnsuccessfulResponseException(response.status),
                 headers=headers,
             )
 
@@ -531,7 +531,7 @@ class Urllib3FDv1PollingRequester(Requester):
         headers = response.headers
         if response.status >= 400:
             return _Fail(
-                f"HTTP error {response}", UnsuccessfulResponseException(response.status),
+                f"HTTP error {response.status}", UnsuccessfulResponseException(response.status),
                 headers=headers
             )
 
