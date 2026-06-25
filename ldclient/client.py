@@ -2,8 +2,6 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
-import hashlib
-import hmac
 import threading
 import traceback
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
@@ -19,6 +17,11 @@ from ldclient.hook import (
     _EvaluationWithHookResult
 )
 from ldclient.impl.big_segments import BigSegmentStoreManager
+from ldclient.impl.client_common import (
+    get_environment_metadata,
+    get_plugin_hooks
+)
+from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.status import (
@@ -57,12 +60,7 @@ from ldclient.interfaces import (
     ReadOnlyStore
 )
 from ldclient.migrations import OpTracker, Stage
-from ldclient.plugin import (
-    ApplicationMetadata,
-    EnvironmentMetadata,
-    SdkMetadata
-)
-from ldclient.version import VERSION
+from ldclient.plugin import EnvironmentMetadata
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 from .impl import AnyNum
@@ -239,8 +237,8 @@ class LDClient:
         self.__start_up(start_wait)
 
     def __start_up(self, start_wait: float):
-        environment_metadata = self.__get_environment_metadata()
-        plugin_hooks = self.__get_plugin_hooks(environment_metadata)
+        environment_metadata = get_environment_metadata(self._config, "python-server-sdk")
+        plugin_hooks = get_plugin_hooks(self._config, environment_metadata)
 
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
@@ -304,36 +302,6 @@ class LDClient:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
-
-    def __get_environment_metadata(self) -> EnvironmentMetadata:
-        sdk_metadata = SdkMetadata(
-            name="python-server-sdk",
-            version=VERSION,
-            wrapper_name=self._config.wrapper_name,
-            wrapper_version=self._config.wrapper_version
-        )
-
-        application_metadata = None
-        if self._config.application:
-            application_metadata = ApplicationMetadata(
-                id=self._config.application.get('id'),
-                version=self._config.application.get('version'),
-            )
-
-        return EnvironmentMetadata(
-            sdk=sdk_metadata,
-            application=application_metadata,
-            sdk_key=self._config.sdk_key
-        )
-
-    def __get_plugin_hooks(self, environment_metadata: EnvironmentMetadata) -> List[Hook]:
-        hooks = []
-        for plugin in self._config.plugins:
-            try:
-                hooks.extend(plugin.get_hooks(environment_metadata))
-            except Exception as e:
-                log.error("Error getting hooks from plugin %s: %s", plugin.metadata.name, e)
-        return hooks
 
     def __register_plugins(self, environment_metadata: EnvironmentMetadata):
         for plugin in self._config.plugins:
@@ -693,10 +661,7 @@ class LDClient:
         :param context: the evaluation context
         :return: the hash string
         """
-        if not context.valid:
-            log.warning("Context was invalid for secure_mode_hash (%s); returning empty hash" % context.error)
-            return ""
-        return hmac.new(str(self._config.sdk_key).encode(), context.fully_qualified_key.encode(), hashlib.sha256).hexdigest()
+        return _secure_mode_hash(self._config, context)
 
     def add_hook(self, hook: Hook):
         """
