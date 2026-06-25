@@ -3,6 +3,7 @@
 - [ ] I have added test coverage for new or changed functionality
 - [ ] I have followed the repository's [pull request submission guidelines](../blob/main/CONTRIBUTING.md#submitting-pull-requests)
 - [ ] I have validated my changes against all supported platform versions
+- [ ] Sync/async parity: matching changes made to `async_*` siblings (or N/A)
 
 **Related issues**
 

@@ -5,6 +5,9 @@ from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.config import Config, DataSourceBuilder, DataSourceBuilderConfig
 from ldclient.context import Context
+from ldclient.impl.integrations.test_datav2.async_test_data_sourcev2 import (
+    _AsyncTestDataSourceV2
+)
 from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
     _TestDataSourceV2
 )
@@ -682,6 +685,15 @@ class TestDataV2:
         """
         return TestDataSourceBuilder(self)
 
+    @property
+    def async_builder(self) -> DataSourceBuilder:
+        """
+        Creates a builder that can be used with the async FDv2 data system.
+
+        :return: an async test data data source builder
+        """
+        return AsyncTestDataSourceBuilder(self)
+
 
 class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: disable=too-few-public-methods
     """Builder for TestDataV2 data sources that implements the DataSourceBuilder protocol."""
@@ -692,3 +704,14 @@ class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: di
     def build(self, config: DataSourceBuilderConfig) -> _TestDataSourceV2:  # pylint: disable=unused-argument
         """Builds the TestDataSourceV2 instance."""
         return _TestDataSourceV2(self._test_data)
+
+
+class AsyncTestDataSourceBuilder(DataSourceBuilder[_AsyncTestDataSourceV2]):  # pylint: disable=too-few-public-methods
+    """Builder for async TestDataV2 data sources that implements the DataSourceBuilder protocol."""
+
+    def __init__(self, test_data: TestDataV2):
+        self._test_data = test_data
+
+    def build(self, config: DataSourceBuilderConfig) -> _AsyncTestDataSourceV2:  # pylint: disable=unused-argument
+        """Builds the async TestDataSourceV2 instance."""
+        return _AsyncTestDataSourceV2(self._test_data)

@@ -5,19 +5,29 @@ These classes contain no I/O and are used by both the sync (event_processor.py)
 and async (async_event_processor.py) implementations.
 """
 
+from calendar import timegm
 from collections import namedtuple
-from typing import Any, Dict, List
+from email.utils import parsedate
+from typing import Any, Callable, Dict, List, Optional
 
 from ldclient.config import PrivateAttributesConfig
 from ldclient.context import Context
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
 from ldclient.impl.events.types import (
+    EventInput,
     EventInputCustom,
     EventInputEvaluation,
     EventInputIdentify
 )
-from ldclient.impl.util import log, timedelta_millis
+from ldclient.impl.lru_cache import SimpleLRUCache
+from ldclient.impl.sampler import Sampler
+from ldclient.impl.util import (
+    current_time_millis,
+    is_http_error_recoverable,
+    log,
+    timedelta_millis
+)
 from ldclient.migrations.tracker import MigrationOpEvent
 
 # ---------------------------------------------------------------------------
@@ -224,3 +234,110 @@ class EventOutputFormatter:
         if e.prereq_of is not None:
             out['prereqOf'] = e.prereq_of.key
         return out
+
+
+# ---------------------------------------------------------------------------
+# EventDispatcherBase — pure event-handling logic shared by both dispatchers
+# ---------------------------------------------------------------------------
+
+class EventDispatcherBase:
+    """
+    Pure event-handling methods shared by the sync and async EventDispatcher
+    implementations. These methods perform no I/O.
+
+    This class does not define ``__init__``. Subclasses are responsible for
+    setting the following attributes, which these methods rely on:
+    ``_disabled``, ``_outbox`` (an :class:`EventBuffer`), ``_sampler``,
+    ``_context_keys``, ``_last_known_past_time``, ``_omit_anonymous_contexts``,
+    and ``_deduplicated_contexts``.
+    """
+
+    _disabled: bool
+    _outbox: EventBuffer
+    _sampler: Sampler
+    _context_keys: SimpleLRUCache
+    _last_known_past_time: int
+    _omit_anonymous_contexts: bool
+    _deduplicated_contexts: int
+
+    def _process_event(self, event: EventInput):
+        if self._disabled:
+            return
+
+        # Decide whether to add the event to the payload. Feature events may be added twice, once for
+        # the event (if tracked) and once for debugging.
+        context: Optional[Context] = None
+        full_event: Any = None
+        debug_event: Optional[DebugEvent] = None
+        sampling_ratio = 1 if event.sampling_ratio is None else event.sampling_ratio
+
+        if isinstance(event, EventInputEvaluation):
+            context = event.context
+            if not event.exclude_from_summaries:
+                self._outbox.add_to_summary(event)
+            if event.track_events:
+                full_event = event
+            if self._should_debug_event(event):
+                debug_event = DebugEvent(event)
+        elif isinstance(event, EventInputIdentify):
+            if self._omit_anonymous_contexts:
+                context = event.context.without_anonymous_contexts()
+                if not context.valid:
+                    return
+
+                event = EventInputIdentify(event.timestamp, context, event.sampling_ratio)
+
+            full_event = event
+        elif isinstance(event, EventInputCustom):
+            context = event.context
+            full_event = event
+        elif isinstance(event, MigrationOpEvent):
+            full_event = event
+
+        self._get_indexable_context(event, lambda c: self._outbox.add_event(IndexEvent(event.timestamp, c)))
+
+        if full_event and self._sampler.sample(sampling_ratio):
+            self._outbox.add_event(full_event)
+
+        if debug_event and self._sampler.sample(sampling_ratio):
+            self._outbox.add_event(debug_event)
+
+    def _get_indexable_context(self, event: EventInput, block: Callable[[Context], None]):
+        if event.context is None:
+            return
+
+        context = event.context
+        if self._omit_anonymous_contexts:
+            context = context.without_anonymous_contexts()
+
+        if not context.valid:
+            return
+
+        already_seen = self._context_keys.put(context.fully_qualified_key, True)
+        if already_seen:
+            self._deduplicated_contexts += 1
+            return
+        elif isinstance(event, EventInputIdentify) or isinstance(event, MigrationOpEvent):
+            return
+
+        block(context)
+
+    def _should_debug_event(self, event: EventInputEvaluation):
+        if event.flag is None:
+            return False
+        debug_until = event.flag.debug_events_until_date
+        if debug_until is not None:
+            last_past = self._last_known_past_time
+            if debug_until > last_past and debug_until > current_time_millis():
+                return True
+        return False
+
+    def _handle_response(self, r):
+        server_date_str = r.headers.get('Date')
+        if server_date_str is not None:
+            server_date = parsedate(server_date_str)
+            if server_date is not None:
+                timestamp = int(timegm(server_date) * 1000)
+                self._last_known_past_time = timestamp
+        if r.status > 299 and not is_http_error_recoverable(r.status):
+            self._disabled = True

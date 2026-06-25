@@ -1,6 +1,5 @@
 import json
 import time
-from collections import namedtuple
 from threading import Thread
 from typing import Optional
 from urllib import parse
@@ -14,6 +13,11 @@ from ld_eventsource.config import (
 )
 from ld_eventsource.errors import HTTPStatusError
 
+from ldclient.impl.datasource.datasource_common import (
+    STREAM_ALL_PATH,
+    parse_path,
+    sink_or_store
+)
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.util import (
     http_error_message,
@@ -35,10 +39,6 @@ stream_read_timeout = 5 * 60
 MAX_RETRY_DELAY = 30
 BACKOFF_RESET_INTERVAL = 60
 JITTER_RATIO = 0.5
-
-STREAM_ALL_PATH = '/all'
-
-ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
@@ -65,7 +65,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if isinstance(action, Event):
                 message_ok = False
                 try:
-                    message_ok = self._process_message(self._sink_or_store(), action)
+                    message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
                 except json.decoder.JSONDecodeError as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
                     self._sse.interrupt()
@@ -135,12 +135,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
         self._data_source_update_sink.update_status(DataSourceState.OFF, error)
 
-    def _sink_or_store(self):
-        if self._data_source_update_sink is None:
-            return self._store
-
-        return self._data_source_update_sink
-
     def initialized(self):
         return self._running and self._ready.is_set() is True and self._store.initialized is True
 
@@ -157,7 +151,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             path = payload['path']
             obj = payload['data']
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
-            target = StreamingUpdateProcessor._parse_path(path)
+            target = parse_path(path)
             if target is not None:
                 store.upsert(target.kind, obj)
             else:
@@ -168,7 +162,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # noinspection PyShadowingNames
             version = payload['version']
             log.debug("Received delete event for %s, New version: [%d]", path, version)
-            target = StreamingUpdateProcessor._parse_path(path)
+            target = parse_path(path)
             if target is not None:
                 store.delete(target.kind, target.key, version)
             else:
@@ -219,13 +213,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
         self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
         return True
-
-    @staticmethod
-    def _parse_path(path: str):
-        for kind in [FEATURES, SEGMENTS]:
-            if path.startswith(kind.stream_api_path):
-                return ParsedPath(kind=kind, key=path[len(kind.stream_api_path):])
-        return None
 
     # magic methods for "with" statement (used in testing)
     def __enter__(self):

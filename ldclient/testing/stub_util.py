@@ -110,6 +110,11 @@ class MockResponse:
     def headers(self):
         return self._headers
 
+    @property
+    def data(self):
+        # The HTTPTransport shim reads the body of every response
+        return b''
+
 
 class MockHttp:
     def __init__(self):

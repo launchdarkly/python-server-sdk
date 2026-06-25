@@ -14,7 +14,9 @@ from ldclient.impl.datasystem.fdv2_common import (
     ConditionDirective,
     DataSourceStatusProviderImpl,
     DataStoreStatusProviderImpl,
-    FeatureStoreClientWrapper
+    FeatureStoreClientWrapper,
+    fallback_condition,
+    recovery_condition
 )
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.flag_tracker import FlagTrackerImpl
@@ -26,7 +28,6 @@ from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    DataSourceStatus,
     DataSourceStatusProvider,
     DataStoreMode,
     DataStoreStatus,
@@ -402,9 +403,9 @@ class FDv2(DataSystem):
                     if update == "check":
                         # Check condition periodically
                         current_status = self._data_source_status_provider.status
-                        if check_recovery and self._recovery_condition(current_status):
+                        if check_recovery and recovery_condition(current_status):
                             return ConditionDirective.RECOVER
-                        if self._fallback_condition(current_status):
+                        if fallback_condition(current_status):
                             return ConditionDirective.FALLBACK
                     continue
 
@@ -446,40 +447,6 @@ class FDv2(DataSystem):
         # For continuous synchronizers (streaming/polling), this is unexpected and indicates
         # the synchronizer can't provide more updates, so we should remove it and fall back
         return ConditionDirective.REMOVE
-
-    def _fallback_condition(self, status: DataSourceStatus) -> bool:
-        """
-        Determine if we should fallback to the next synchronizer in the list.
-        This applies at any position in the synchronizers list.
-
-        :param status: Current data source status
-        :return: True if fallback condition is met
-        """
-        interrupted_at_runtime = (
-            status.state == DataSourceState.INTERRUPTED
-            and time.time() - status.since > 60  # 1 minute
-        )
-        cannot_initialize = (
-            status.state == DataSourceState.INITIALIZING
-            and time.time() - status.since > 10  # 10 seconds
-        )
-
-        return interrupted_at_runtime or cannot_initialize
-
-    def _recovery_condition(self, status: DataSourceStatus) -> bool:
-        """
-        Determine if we should try to recover to the first (preferred) synchronizer.
-        This only applies when not already at the first synchronizer (index > 0).
-
-        :param status: Current data source status
-        :return: True if recovery condition is met
-        """
-        healthy_for_too_long = (
-            status.state == DataSourceState.VALID
-            and time.time() - status.since > 300  # 5 minutes
-        )
-
-        return healthy_for_too_long
 
     def _persistent_store_outage_recovery(self, data_store_status: DataStoreStatus):
         """

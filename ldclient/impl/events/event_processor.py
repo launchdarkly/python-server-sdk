@@ -7,30 +7,20 @@ import json
 import queue
 import time
 import uuid
-from calendar import timegm
 from collections import namedtuple
-from email.utils import parsedate
 from random import Random
 from threading import Event, Lock, Thread
-from typing import Any, Callable, Optional
 
 import urllib3
 
 from ldclient.config import Config
-from ldclient.context import Context
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_processor_common import (
-    DebugEvent,
     EventBuffer,
-    EventOutputFormatter,
-    IndexEvent
+    EventDispatcherBase,
+    EventOutputFormatter
 )
-from ldclient.impl.events.types import (
-    EventInput,
-    EventInputCustom,
-    EventInputEvaluation,
-    EventInputIdentify
-)
+from ldclient.impl.events.types import EventInput
 from ldclient.impl.fixed_thread_pool import FixedThreadPool
 from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
@@ -39,12 +29,9 @@ from ldclient.impl.sampler import Sampler
 from ldclient.impl.util import (
     _headers,
     check_if_error_is_recoverable_and_log,
-    current_time_millis,
-    is_http_error_recoverable,
     log
 )
 from ldclient.interfaces import EventProcessor
-from ldclient.migrations.tracker import MigrationOpEvent
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 4
@@ -98,7 +85,7 @@ class DiagnosticEventSendTask:
             log.warning('Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
 
 
-class EventDispatcher:
+class EventDispatcher(EventDispatcherBase):
     def __init__(self, inbox, config, http_client, diagnostic_accumulator=None):
         self._inbox = inbox
         self._config = config
@@ -150,78 +137,6 @@ class EventDispatcher:
             except Exception as e:
                 log.error('Unhandled exception in event processor', exc_info=True)
 
-    def _process_event(self, event: EventInput):
-        if self._disabled:
-            return
-
-        # Decide whether to add the event to the payload. Feature events may be added twice, once for
-        # the event (if tracked) and once for debugging.
-        context = None  # type: Optional[Context]
-        full_event = None  # type: Any
-        debug_event = None  # type: Optional[DebugEvent]
-        sampling_ratio = 1 if event.sampling_ratio is None else event.sampling_ratio
-
-        if isinstance(event, EventInputEvaluation):
-            context = event.context
-            if not event.exclude_from_summaries:
-                self._outbox.add_to_summary(event)
-            if event.track_events:
-                full_event = event
-            if self._should_debug_event(event):
-                debug_event = DebugEvent(event)
-        elif isinstance(event, EventInputIdentify):
-            if self._omit_anonymous_contexts:
-                context = event.context.without_anonymous_contexts()
-                if not context.valid:
-                    return
-
-                event = EventInputIdentify(event.timestamp, context, event.sampling_ratio)
-
-            full_event = event
-        elif isinstance(event, EventInputCustom):
-            context = event.context
-            full_event = event
-        elif isinstance(event, MigrationOpEvent):
-            full_event = event
-
-        self._get_indexable_context(event, lambda c: self._outbox.add_event(IndexEvent(event.timestamp, c)))
-
-        if full_event and self._sampler.sample(sampling_ratio):
-            self._outbox.add_event(full_event)
-
-        if debug_event and self._sampler.sample(sampling_ratio):
-            self._outbox.add_event(debug_event)
-
-    def _get_indexable_context(self, event: EventInput, block: Callable[[Context], None]):
-        if event.context is None:
-            return
-
-        context = event.context
-        if self._omit_anonymous_contexts:
-            context = context.without_anonymous_contexts()
-
-        if not context.valid:
-            return
-
-        already_seen = self._context_keys.put(context.fully_qualified_key, True)
-        if already_seen:
-            self._deduplicated_contexts += 1
-            return
-        elif isinstance(event, EventInputIdentify) or isinstance(event, MigrationOpEvent):
-            return
-
-        block(context)
-
-    def _should_debug_event(self, event: EventInputEvaluation):
-        if event.flag is None:
-            return False
-        debug_until = event.flag.debug_events_until_date
-        if debug_until is not None:
-            last_past = self._last_known_past_time
-            if debug_until > last_past and debug_until > current_time_millis():
-                return True
-        return False
-
     def _trigger_flush(self):
         if self._disabled:
             return
@@ -236,17 +151,6 @@ class EventDispatcher:
             else:
                 # We're already at our limit of concurrent flushes; leave the events in the buffer.
                 pass
-
-    def _handle_response(self, r):
-        server_date_str = r.headers.get('Date')
-        if server_date_str is not None:
-            server_date = parsedate(server_date_str)
-            if server_date is not None:
-                timestamp = int(timegm(server_date) * 1000)
-                self._last_known_past_time = timestamp
-        if r.status > 299 and not is_http_error_recoverable(r.status):
-            self._disabled = True
-            return
 
     def _send_and_reset_diagnostics(self):
         if self._diagnostic_accumulator is not None:

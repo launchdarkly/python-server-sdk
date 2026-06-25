@@ -238,7 +238,7 @@ class LDClient:
 
     def __start_up(self, start_wait: float):
         environment_metadata = get_environment_metadata(self._config, "python-server-sdk")
-        plugin_hooks = get_plugin_hooks(self._config, environment_metadata)
+        plugin_hooks = get_plugin_hooks(self._config.plugins, environment_metadata)
 
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]

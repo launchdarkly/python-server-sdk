@@ -23,14 +23,8 @@ from ldclient.config import (
     DataSourceBuilderConfig,
     HTTPConfig
 )
+from ldclient.impl.datasourcev2.streaming_common import process_message
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.datasystem.protocolv2 import (
-    DeleteObject,
-    Error,
-    EventName,
-    Goodbye,
-    PutObject
-)
 from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
@@ -44,10 +38,7 @@ from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    IntentCode,
-    Selector,
     SelectorStore,
-    ServerIntent,
     Synchronizer,
     Update
 )
@@ -261,7 +252,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 continue
 
             try:
-                update = self._process_message(action, change_set_builder, envid)
+                update = process_message(action, change_set_builder, envid)
                 if update is not None:
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
@@ -327,76 +318,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             current_time = int(time() * 1000)
             elapsed = current_time - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
-
-    # pylint: disable=too-many-return-statements
-    def _process_message(
-        self, msg: Event, change_set_builder: ChangeSetBuilder, envid: Optional[str]
-    ) -> Optional[Update]:
-        """
-        Processes a single message from the SSE stream and returns an Update
-        object if applicable.
-
-        This method may raise exceptions if the message is malformed or if an
-        error occurs while processing the message. The caller should handle these
-        exceptions appropriately.
-        """
-        if msg.event == EventName.HEARTBEAT:
-            return None
-
-        if msg.event == EventName.SERVER_INTENT:
-            server_intent = ServerIntent.from_dict(json.loads(msg.data))
-            change_set_builder.start(server_intent.payload.code)
-
-            if server_intent.payload.code == IntentCode.TRANSFER_NONE:
-                change_set_builder.expect_changes()
-                return Update(
-                    state=DataSourceState.VALID,
-                    environment_id=envid,
-                )
-            return None
-
-        if msg.event == EventName.PUT_OBJECT:
-            put = PutObject.from_dict(json.loads(msg.data))
-            change_set_builder.add_put(put.kind, put.key, put.version, put.object)
-            return None
-
-        if msg.event == EventName.DELETE_OBJECT:
-            delete = DeleteObject.from_dict(json.loads(msg.data))
-            change_set_builder.add_delete(delete.kind, delete.key, delete.version)
-            return None
-
-        if msg.event == EventName.GOODBYE:
-            goodbye = Goodbye.from_dict(json.loads(msg.data))
-            log.info("SSE server sent goodbye: %s", goodbye.reason)
-
-            return None
-
-        if msg.event == EventName.ERROR:
-            error = Error.from_dict(json.loads(msg.data))
-            log.error("Error on %s: %s", error.payload_id, error.reason)
-
-            # The protocol should "reset" any previous change events it has
-            # received, but should continue to operate under the assumption the
-            # last server intent was in effect.
-            #
-            # The server may choose to send a new server-intent, at which point
-            # we will set that as well.
-            change_set_builder.reset()
-
-            return None
-
-        if msg.event == EventName.PAYLOAD_TRANSFERRED:
-            selector = Selector.from_dict(json.loads(msg.data))
-            change_set = change_set_builder.finish(selector)
-
-            return Update(
-                state=DataSourceState.VALID,
-                change_set=change_set,
-                environment_id=envid,
-            )
-
-        log.info("Unexpected event found in stream: %s", msg.event)
-        return None
 
     def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
         """
