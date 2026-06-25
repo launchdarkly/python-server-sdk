@@ -99,4 +99,4 @@ class PollingUpdateProcessor(UpdateProcessor):
             log.exception('Error: Exception encountered when updating flags. %s' % e)
 
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e)))
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e)))
