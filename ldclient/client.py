@@ -473,9 +473,6 @@ class LDClient:
         not be current, so this does not guarantee that the flag data is up to date; if you need to know
         the connection status in more detail, use :attr:`data_source_status_provider`.
 
-        Additionally, if the client was configured to be offline or to use LDD (daemon) mode, this will
-        always return true.
-
         If this returns false, it means the client has not yet obtained any flag data. It might still be
         starting up, or attempting to reconnect after an unsuccessful attempt, or it might have received
         an unrecoverable error (such as an invalid SDK key) and given up. In this state, feature flag
