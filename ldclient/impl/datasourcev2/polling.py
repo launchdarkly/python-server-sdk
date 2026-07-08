@@ -13,7 +13,11 @@ from urllib import parse
 
 import urllib3
 
-from ldclient.config import Config, DataSourceBuilder, HTTPConfig
+from ldclient.config import (
+    DataSourceBuilder,
+    DataSourceBuilderConfig,
+    HTTPConfig
+)
 from ldclient.impl.datasource.feature_requester import FDV1_POLLING_ENDPOINT
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
@@ -257,7 +261,7 @@ class Urllib3PollingRequester(Requester):
     requests.
     """
 
-    def __init__(self, config: Config, base_uri: str, http_options: HTTPConfig):
+    def __init__(self, config: DataSourceBuilderConfig, base_uri: str, http_options: HTTPConfig):
         self._etag = None
         factory = HTTPFactory(_base_headers(config), http_options)
         self._http = factory.create_pool_manager(1, base_uri)
@@ -422,7 +426,7 @@ class PollingDataSourceBuilder(DataSourceBuilder):
         self.__requester = requester
         return self
 
-    def build(self, config: Config) -> PollingDataSource:
+    def build(self, config: DataSourceBuilderConfig) -> PollingDataSource:
         """Builds the PollingDataSource with the configured parameters."""
         requester = (
             self.__requester
@@ -465,7 +469,7 @@ class FallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
         self.__http_options = http_options
         return self
 
-    def build(self, config: Config) -> PollingDataSource:
+    def build(self, config: DataSourceBuilderConfig) -> PollingDataSource:
         """Builds the PollingDataSource with the configured parameters."""
         builder = PollingDataSourceBuilder()
         builder.requester(
@@ -487,7 +491,7 @@ class Urllib3FDv1PollingRequester(Requester):
     requests.
     """
 
-    def __init__(self, config: Config, base_uri: str, http_options: HTTPConfig):
+    def __init__(self, config: DataSourceBuilderConfig, base_uri: str, http_options: HTTPConfig):
         self._etag = None
         self._http = HTTPFactory(_base_headers(config), http_options).create_pool_manager(
             1, base_uri

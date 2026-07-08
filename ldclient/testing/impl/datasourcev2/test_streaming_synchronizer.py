@@ -10,7 +10,7 @@ from ld_eventsource.actions import Action, Start
 from ld_eventsource.http import HTTPStatusError
 from ld_eventsource.sse_client import Event, Fault
 
-from ldclient.config import Config, HTTPConfig
+from ldclient.config import Config, DataSourceBuilderConfig, HTTPConfig
 from ldclient.impl.datasourcev2.streaming import (
     STREAMING_ENDPOINT,
     SseClientBuilder,
@@ -45,7 +45,7 @@ def list_sse_client(
         base_uri: str,  # pylint: disable=unused-argument
         http_options: HTTPConfig,  # pylint: disable=unused-argument
         initial_reconnect_delay: float,
-        config: Config,  # pylint: disable=unused-argument
+        config: DataSourceBuilderConfig,  # pylint: disable=unused-argument
         ss: SelectorStore  # pylint: disable=unused-argument
     ):
         return ListBasedSseClient(events), None

@@ -12,7 +12,7 @@ import hashlib
 import hmac
 from typing import List
 
-from ldclient.config import Config
+from ldclient.config import Config, SdkIdentityConfig
 from ldclient.context import Context
 from ldclient.hook import Hook
 from ldclient.impl.util import log
@@ -24,7 +24,7 @@ from ldclient.plugin import (
 from ldclient.version import VERSION
 
 
-def get_environment_metadata(config: Config, sdk_name: str) -> EnvironmentMetadata:
+def get_environment_metadata(config: SdkIdentityConfig, sdk_name: str) -> EnvironmentMetadata:
     sdk_metadata = SdkMetadata(
         name=sdk_name,
         version=VERSION,
@@ -56,7 +56,7 @@ def get_plugin_hooks(config: Config, environment_metadata: EnvironmentMetadata) 
     return hooks
 
 
-def secure_mode_hash(config: Config, context: Context) -> str:
+def secure_mode_hash(config: SdkIdentityConfig, context: Context) -> str:
     """Computes the secure-mode HMAC for a context, or an empty string for an
     invalid context. Pure: depends only on the SDK key and the context's
     fully-qualified key."""

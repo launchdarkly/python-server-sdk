@@ -7,7 +7,12 @@ from typing import List
 
 from mock import Mock
 
-from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
+from ldclient.config import (
+    Config,
+    DataSourceBuilder,
+    DataSourceBuilderConfig,
+    DataSystemConfig
+)
 from ldclient.datasystem import file_ds_builder
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
@@ -37,7 +42,7 @@ class MockDataSourceBuilder(DataSourceBuilder):  # pylint: disable=too-few-publi
     def __init__(self, mock_synchronizer: Synchronizer):
         self._mock = mock_synchronizer
 
-    def build(self, config: Config) -> Synchronizer:  # pylint: disable=unused-argument
+    def build(self, config: DataSourceBuilderConfig) -> Synchronizer:  # pylint: disable=unused-argument
         return self._mock
 
 
@@ -62,7 +67,7 @@ class _InitializerBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-
     def __init__(self, initializer: Initializer):
         self._initializer = initializer
 
-    def build(self, config: Config) -> Initializer:  # pylint: disable=unused-argument
+    def build(self, config: DataSourceBuilderConfig) -> Initializer:  # pylint: disable=unused-argument
         return self._initializer
 
 

@@ -8,7 +8,7 @@ and async (async_event_processor.py) implementations.
 from collections import namedtuple
 from typing import Any, Dict, List
 
-from ldclient.config import Config
+from ldclient.config import PrivateAttributesConfig
 from ldclient.context import Context
 from ldclient.impl.events.event_context_formatter import EventContextFormatter
 from ldclient.impl.events.event_summarizer import EventSummarizer, EventSummary
@@ -86,7 +86,7 @@ class EventBuffer:
 # ---------------------------------------------------------------------------
 
 class EventOutputFormatter:
-    def __init__(self, config: Config):
+    def __init__(self, config: PrivateAttributesConfig):
         self._context_formatter = EventContextFormatter(
             config.all_attributes_private, config.private_attributes
         )

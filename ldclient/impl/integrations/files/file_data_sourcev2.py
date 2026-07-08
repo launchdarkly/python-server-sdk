@@ -5,7 +5,7 @@ import traceback
 from queue import Empty, Queue
 from typing import Generator, Optional
 
-from ldclient.config import Config, DataSourceBuilder
+from ldclient.config import DataSourceBuilder, DataSourceBuilderConfig
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import _Fail, _Success, current_time_millis, log
 from ldclient.interfaces import (
@@ -449,7 +449,7 @@ class FileDataSourceV2Builder(DataSourceBuilder):  # pylint: disable=too-few-pub
         self.__force_polling = force
         return self
 
-    def build(self, config: Config) -> _FileDataSourceV2:  # pylint: disable=unused-argument
+    def build(self, config: DataSourceBuilderConfig) -> _FileDataSourceV2:  # pylint: disable=unused-argument
         """Builds the FileDataSourceV2 instance."""
         return _FileDataSourceV2(
             self.__paths,
