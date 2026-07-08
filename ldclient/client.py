@@ -464,12 +464,23 @@ class LDClient:
         return self._config.offline
 
     def is_initialized(self) -> bool:
-        """Returns true if the client has successfully connected to LaunchDarkly.
+        """Returns whether the client is initialized and has flag data available to serve requests.
 
-        If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
-        It might still be in the process of starting up, or it might be attempting to reconnect after an
-        unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
-        and given up.
+        If this returns true, it means the client has data it can use to evaluate flags. That could be
+        because it connected to LaunchDarkly at least once and received flag data, or because it has
+        cached data from a persistent store, or because it was configured for offline or LDD (daemon)
+        mode. It could still have encountered a connection problem after that point, and cached data may
+        not be current, so this does not guarantee that the flag data is up to date; if you need to know
+        the connection status in more detail, use :attr:`data_source_status_provider`.
+
+        If this returns false, it means the client has not yet obtained any flag data. It might still be
+        starting up, or attempting to reconnect after an unsuccessful attempt, or it might have received
+        an unrecoverable error (such as an invalid SDK key) and given up. In this state, feature flag
+        evaluations will return default values -- unless you are using a persistent store integration and
+        flag data had already been stored by a successfully connected SDK in the past. You can use
+        :attr:`data_source_status_provider` to get information on errors, or to wait for a successful retry.
+
+        :return: true if the client is initialized and has flag data available
         """
         if self.is_offline() or self._config.use_ldd:
             return True
