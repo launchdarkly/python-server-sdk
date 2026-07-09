@@ -160,12 +160,87 @@ class HTTPConfig:
 T_co = TypeVar("T_co", covariant=True)
 
 
+class SdkIdentityConfig(Protocol):
+    """
+    The SDK's self-identity fields — read by the shared environment-metadata and
+    secure-mode helpers, and included in request headers.
+    """
+
+    @property
+    def sdk_key(self) -> Optional[str]:
+        """The SDK key used to authenticate requests."""
+
+    @property
+    def application(self) -> dict:
+        """The application metadata included in request headers."""
+
+    @property
+    def wrapper_name(self) -> Optional[str]:
+        """The wrapper name included in request headers."""
+
+    @property
+    def wrapper_version(self) -> Optional[str]:
+        """The wrapper version included in request headers."""
+
+
+class DataSourceBuilderConfig(SdkIdentityConfig, Protocol):
+    """
+    The subset of configuration that data source builders and the data sources
+    they build read. Extends :class:`SdkIdentityConfig` with the transport and
+    endpoint fields. It is the structural contract a config object must satisfy
+    to be passed to :meth:`DataSourceBuilder.build`.
+    """
+
+    @property
+    def base_uri(self) -> str:
+        """The base URI for polling requests."""
+
+    @property
+    def stream_base_uri(self) -> str:
+        """The base URI for streaming requests."""
+
+    @property
+    def http(self) -> HTTPConfig:
+        """The HTTP configuration used for requests."""
+
+    @property
+    def initial_reconnect_delay(self) -> float:
+        """The initial reconnect delay for the streaming data source."""
+
+    @property
+    def poll_interval(self) -> float:
+        """The interval between polling requests."""
+
+    @property
+    def payload_filter_key(self) -> Optional[str]:
+        """The payload filter key applied as a query parameter."""
+
+    # Set by the client after construction, so it is a read-write attribute
+    # rather than a read-only property.
+    _instance_id: Optional[str]
+
+
+class PrivateAttributesConfig(Protocol):
+    """
+    The private-attribute redaction settings read by the event output formatter
+    when building analytics events.
+    """
+
+    @property
+    def all_attributes_private(self) -> bool:
+        """Whether all context attributes should be treated as private."""
+
+    @property
+    def private_attributes(self) -> List[str]:
+        """The context attribute references to treat as private."""
+
+
 class DataSourceBuilder(Protocol[T_co]):  # pylint: disable=too-few-public-methods
     """
     Protocol for building data sources.
     """
 
-    def build(self, config: 'Config') -> T_co:
+    def build(self, config: DataSourceBuilderConfig) -> T_co:
         """
         Builds the data source.
 
@@ -199,7 +274,7 @@ class DataSystemConfig:
     """An optional fallback synchronizer that will read from FDv1"""
 
 
-class Config:
+class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     """Advanced configuration options for the SDK client.
 
     To use these options, create an instance of ``Config`` and pass it to either :func:`ldclient.set_config()`

@@ -78,6 +78,10 @@ A special case is the module `ldclient.impl`, and any modules within it. Everyth
 
 So, if there is a class whose existence is entirely an implementation detail, it should be in `impl`. Similarly, classes that are _not_ in `impl` must not expose any public members (i.e. symbols that do not have an underscore prefix) that are not meant to be part of the supported public API. This is important because of our guarantee of backward compatibility for all public APIs within a major version: we want to be able to change our implementation details to suit the needs of the code, without worrying about breaking a customer's code. Due to how the language works, we can't actually prevent an application developer from referencing those classes in their code, but this convention makes it clear that such use is discouraged and unsupported.
 
+### Sync/async parity
+
+The SDK maintains parallel sync (`foo.py`) and async (`async_foo.py`) implementations by hand. When you change a method in a sync module, make the matching change in its `async_` sibling (and vice versa), and justify any difference beyond `async`/`await` keywords. Shared I/O-free ("sans-I/O") logic lives in modules with a `_common` suffix that are imported by both siblings: `impl/client_common.py`, `impl/datasystem/fdv2_common.py`, and `impl/events/event_processor_common.py`. Per-side logic that genuinely differs (more than `async`/`await`) lives directly in each sibling, not in a separate `_common` module — for example `impl/evaluator.py`/`impl/async_evaluator.py` and the in-memory feature stores `feature_store.py`/`async_feature_store.py`. Both the sync and async contract test suites must pass.
+
 ### Type hints
 
 Python does not require the use of type hints, but they can be extremely helpful for spotting mistakes and for improving the IDE experience, so we should always use them in the SDK. Every method in the public API is expected to have type hints for all non-`self` parameters, and for its return value if any.

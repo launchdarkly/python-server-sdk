@@ -18,7 +18,11 @@ from ld_eventsource.config import (
 )
 from ld_eventsource.errors import HTTPStatusError
 
-from ldclient.config import Config, DataSourceBuilder, HTTPConfig
+from ldclient.config import (
+    DataSourceBuilder,
+    DataSourceBuilderConfig,
+    HTTPConfig
+)
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
@@ -59,7 +63,7 @@ JITTER_RATIO = 0.5
 STREAMING_ENDPOINT = "/sdk/stream"
 
 SseClientBuilder = Callable[
-    [str, HTTPConfig, float, Config, SelectorStore],
+    [str, HTTPConfig, float, DataSourceBuilderConfig, SelectorStore],
     Tuple[SSEClient, Optional[urllib3.PoolManager]],
 ]
 
@@ -68,7 +72,7 @@ def create_sse_client(
     base_uri: str,
     http_options: HTTPConfig,
     initial_reconnect_delay: float,
-    config: Config,
+    config: DataSourceBuilderConfig,
     ss: SelectorStore
 ) -> Tuple[SSEClient, Optional[urllib3.PoolManager]]:
     """ "
@@ -158,7 +162,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                  uri: str,
                  http_options: HTTPConfig,
                  initial_reconnect_delay: float,
-                 config: Config):
+                 config: DataSourceBuilderConfig):
         self.__uri = uri
         self.__http_options = http_options
         self.__initial_reconnect_delay = initial_reconnect_delay
@@ -519,7 +523,7 @@ class StreamingDataSourceBuilder(DataSourceBuilder):
         self.__http_options = http_options
         return self
 
-    def build(self, config: Config) -> StreamingDataSource:
+    def build(self, config: DataSourceBuilderConfig) -> StreamingDataSource:
         """Builds a StreamingDataSource instance with the configured parameters."""
         return StreamingDataSource(
             self.__base_uri or config.stream_base_uri,

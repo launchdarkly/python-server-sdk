@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
-from ldclient.config import Config, DataSourceBuilder
+from ldclient.config import Config, DataSourceBuilder, DataSourceBuilderConfig
 from ldclient.context import Context
 from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
     _TestDataSourceV2
@@ -689,6 +689,6 @@ class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: di
     def __init__(self, test_data: TestDataV2):
         self._test_data = test_data
 
-    def build(self, config: Config) -> _TestDataSourceV2:  # pylint: disable=unused-argument
+    def build(self, config: DataSourceBuilderConfig) -> _TestDataSourceV2:  # pylint: disable=unused-argument
         """Builds the TestDataSourceV2 instance."""
         return _TestDataSourceV2(self._test_data)
