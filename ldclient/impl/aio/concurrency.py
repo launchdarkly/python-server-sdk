@@ -1,17 +1,15 @@
 """
-Async concurrency helpers used by the async data source, event processor, and
-data system shells. Each wraps a piece of fiddly asyncio plumbing (timeout-aware
-waits, queue exception normalization, an interval-from-start repeating task, a
-bounded task pool) that the shells would otherwise inline repeatedly. The sync
-shells use the equivalent stdlib/SDK primitives (``threading.Event``/``Lock``,
-``queue.Queue``, ``ReadWriteLock``, ``RepeatingTask``, ``FixedThreadPool``)
-directly, so these helpers have no sync twin.
+Async concurrency primitives used by the async data source, event processor, and
+data system. Each wraps a piece of fiddly asyncio plumbing (timeout-aware waits,
+queue exception normalization, an interval-from-start repeating task, a bounded
+task pool) that callers would otherwise inline repeatedly. The sync code uses the
+equivalent stdlib/SDK primitives (``threading.Event``/``Lock``, ``queue.Queue``,
+``RepeatingTask``, ``FixedThreadPool``) directly, so these have no sync twin.
 """
 
 import asyncio
 import inspect
 import time
-from contextlib import contextmanager
 from queue import Empty as QueueEmpty  # noqa: F401  (shared timeout exception)
 from queue import Full as QueueFull  # noqa: F401  (shared capacity exception)
 from typing import Any, Callable, Optional, Set
@@ -62,21 +60,6 @@ class AsyncLock:
 
     def locked(self) -> bool:
         return self._lock.locked()
-
-
-class AsyncRWLock:
-    """No-op read/write lock with the surface of
-    ``ldclient.impl.rwlock.ReadWriteLock``. Code that holds the lock without
-    awaiting in between cannot be preempted within a single event loop, so no
-    real locking is needed; the sync twin is the real ``ReadWriteLock``."""
-
-    @contextmanager
-    def read(self):
-        yield self
-
-    @contextmanager
-    def write(self):
-        yield self
 
 
 class AsyncQueue:
@@ -150,51 +133,6 @@ async def join_handle(handle: TaskHandle, timeout: float) -> None:
         raise
     except Exception:
         pass
-
-
-async def resolve(value: Any) -> Any:
-    """Awaits and returns ``value`` if it is awaitable, returns it directly
-    otherwise, letting shared code consume results from duck-typed
-    sync-or-async components."""
-    if inspect.isawaitable(value):
-        return await value
-    return value
-
-
-_STOP = object()
-
-
-class _SyncGenAdapter:
-    """Async iterator over a synchronous generator; each ``next()`` call runs
-    on an executor thread so it does not block the event loop."""
-
-    def __init__(self, gen):
-        self._gen = gen
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        def _next():
-            try:
-                return next(self._gen)
-            except StopIteration:
-                return _STOP
-
-        loop = asyncio.get_running_loop()
-        value = await loop.run_in_executor(None, _next)
-        if value is _STOP:
-            raise StopAsyncIteration
-        return value
-
-
-def iterate(gen: Any) -> Any:
-    """Adapts a sync-or-async generator for async iteration. Async generators
-    are returned unchanged; synchronous generators are driven on executor
-    threads."""
-    if hasattr(gen, '__aiter__'):
-        return gen
-    return _SyncGenAdapter(gen)
 
 
 class AsyncCallbackScheduler:

@@ -1,7 +1,7 @@
 """
-Async HTTP transport shim, wrapping an aiohttp ``ClientSession``. The sync
-twin in ``ldclient.impl.shims.sync_transport`` wraps a urllib3
-``PoolManager`` with an identical method surface.
+Async HTTP transport wrapping an aiohttp ``ClientSession``, exposing a
+``TransportResponse`` so callers can inspect a response after the request
+context has closed. The sync side talks to urllib3 directly.
 """
 
 import ssl
@@ -14,8 +14,8 @@ from ld_eventsource.config.async_connect_strategy import AsyncConnectStrategy
 from ld_eventsource.config.error_strategy import ErrorStrategy
 from ld_eventsource.config.retry_delay_strategy import RetryDelayStrategy
 
+from ldclient.impl.aio.transport_types import TransportResponse
 from ldclient.impl.http import _base_headers
-from ldclient.impl.shims.transport_types import TransportResponse
 from ldclient.impl.util import log
 
 # Allows up to 5 minutes to elapse without any data sent across the stream.
