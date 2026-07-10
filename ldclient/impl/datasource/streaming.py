@@ -5,6 +5,7 @@ from threading import Thread
 from typing import Optional
 from urllib import parse
 
+import urllib3
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault
 from ld_eventsource.config import (
@@ -41,6 +42,32 @@ STREAM_ALL_PATH = '/all'
 ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
+def _close_pool_manager(pool: Optional[urllib3.PoolManager]) -> None:
+    """Close every pooled connection in ``pool`` so the underlying TCP sockets
+    are torn down. ``HTTPConnectionPool.close()`` drains its queue and calls
+    ``conn.close()`` on each connection, which sends the FIN the server is
+    waiting on. ``SSEClient.close()`` only releases the stream connection back
+    to the pool; under urllib3 >= 1.26.16 / 2.x, ``PoolManager.clear()`` no
+    longer closes sockets synchronously (teardown is deferred to GC), so the
+    streaming socket would otherwise linger ESTABLISHED after shutdown."""
+    if pool is None:
+        return
+    try:
+        # ``RecentlyUsedContainer`` deliberately disallows iteration; ``keys()``
+        # returns a thread-safe snapshot. We look each one up to close its
+        # underlying ``HTTPConnectionPool``.
+        for key in list(pool.pools.keys()):
+            try:
+                connection_pool = pool.pools.get(key)
+                if connection_pool is not None:
+                    connection_pool.close()
+            except Exception:  # pylint: disable=broad-except
+                log.debug("Error closing streaming connection pool", exc_info=True)
+        pool.clear()
+    except Exception:  # pylint: disable=broad-except
+        log.debug("Error closing streaming pool manager", exc_info=True)
+
+
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
     def __init__(self, config, store, ready, diagnostic_accumulator):
         Thread.__init__(self, name="ldclient.datasource.streaming")
@@ -52,6 +79,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._data_source_update_sink = config.data_source_update_sink
         self._store = store
         self._running = False
+        self._sse: Optional[SSEClient] = None
+        self._sse_pool: Optional[urllib3.PoolManager] = None
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
         self._connection_attempt_start_time = None
@@ -99,6 +128,10 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 if not self._handle_error(action.error):
                     break
         self._sse.close()
+        # See _close_pool_manager: SSEClient.close() only releases the connection
+        # back to the pool, so we force-close the pool to actually sever the TCP
+        # socket rather than leaving it for GC.
+        _close_pool_manager(self._sse_pool)
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:
@@ -110,9 +143,12 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         # We don't want the stream to use the same read timeout as the rest of the SDK.
         http_factory = _http_factory(self._config)
         stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
+        # Retain the pool so we can force-close it on shutdown; SSEClient.close()
+        # won't close a caller-supplied pool. See _close_pool_manager.
+        self._sse_pool = stream_http_factory.create_pool_manager(1, self._uri)
         return SSEClient(
             connect=ConnectStrategy.http(
-                url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
+                url=self._uri, headers=http_factory.base_headers, pool=self._sse_pool, urllib3_request_options={"timeout": stream_http_factory.timeout}
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
             initial_retry_delay=self._config.initial_reconnect_delay,
@@ -129,6 +165,10 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
         if self._sse:
             self._sse.close()
+        # See _close_pool_manager: this is what actually severs the TCP
+        # connection. stop() may run on a different thread than run(); the pool
+        # close is idempotent, so calling it from both is safe.
+        _close_pool_manager(self._sse_pool)
 
         if self._data_source_update_sink is None:
             return
@@ -217,7 +257,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error)))
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
-        self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
+        self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay  # type: ignore
         return True
 
     @staticmethod

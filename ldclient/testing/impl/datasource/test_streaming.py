@@ -438,6 +438,65 @@ def test_failure_transitions_from_valid():
             assert spy.statuses[1].error.status_code == 401
 
 
+def test_stop_closes_underlying_pool():
+    """On shutdown the underlying urllib3 connection pool must be torn down so
+    the streaming TCP socket is actually closed. SSEClient.close() only releases
+    the connection back to the pool; under urllib3 >= 1.26.16 / 2.x that leaves
+    the socket open until GC, so the processor force-closes the pool itself."""
+
+    class TrackingConnectionPool:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class TrackingPoolDict:
+        def __init__(self, items):
+            self._items = items
+
+        def keys(self):
+            return list(self._items.keys())
+
+        def get(self, key):
+            return self._items.get(key)
+
+    class TrackingPool:
+        """Stand-in PoolManager that records clear() and exposes a keys()-iterable
+        pools attribute matching urllib3's RecentlyUsedContainer."""
+
+        def __init__(self):
+            self.cleared = False
+            self.connection_pool = TrackingConnectionPool()
+            self.pools = TrackingPoolDict({"key": self.connection_pool})
+
+        def clear(self):
+            self.cleared = True
+
+    class FakeSSEClient:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    store = InMemoryFeatureStore()
+    ready = Event()
+    config = Config(sdk_key='sdk-key', stream_uri='http://localhost')
+
+    sp = StreamingUpdateProcessor(config, store, ready, None)
+    tracking_pool = TrackingPool()
+    fake_sse = FakeSSEClient()
+    sp._sse = fake_sse
+    sp._sse_pool = tracking_pool
+
+    sp.stop()
+
+    assert fake_sse.closed is True
+    assert tracking_pool.cleared is True
+    assert tracking_pool.connection_pool.closed is True
+
+
 def expect_item(store, kind, item):
     assert store.get(kind, item['key'], lambda x: x) == item
 
