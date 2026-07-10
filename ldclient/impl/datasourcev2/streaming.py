@@ -143,10 +143,10 @@ def _close_pool_manager(pool: Optional[urllib3.PoolManager]) -> None:
                 if connection_pool is not None:
                     connection_pool.close()
             except Exception:  # pylint: disable=broad-except
-                log.debug("Error closing streaming connection pool", exc_info=True)
+                log.warning("Error closing streaming connection pool", exc_info=True)
         pool.clear()
     except Exception:  # pylint: disable=broad-except
-        log.debug("Error closing streaming pool manager", exc_info=True)
+        log.warning("Error closing streaming pool manager", exc_info=True)
 
 
 class StreamingDataSource(Synchronizer, DiagnosticSource):
