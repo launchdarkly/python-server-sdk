@@ -119,20 +119,24 @@ def spawn_handle(name: str, fn: Callable) -> TaskHandle:
 
 async def join_handle(handle: TaskHandle, timeout: float) -> None:
     """Waits up to ``timeout`` seconds for a spawned task to finish, mirroring
-    ``Thread.join(timeout)``: the task's exception (if any) is not re-raised.
-    On timeout the task is cancelled so it does not leak."""
-    try:
-        await asyncio.wait_for(asyncio.shield(handle), timeout)
-    except asyncio.TimeoutError:
+    ``Thread.join(timeout)``: the task's result/exception is not re-raised, and
+    on timeout the task is cancelled so it does not leak. If the *calling* task
+    is cancelled while joining, that cancellation propagates and the joined task
+    is left running (its lifecycle is owned elsewhere).
+
+    Uses ``asyncio.wait`` rather than ``wait_for``: it never cancels the joined
+    task itself and never raises the task's result into us — completion is
+    reported via the returned sets — so caller cancellation propagates without
+    having to disambiguate it from the joined task's own cancellation."""
+    done, _ = await asyncio.wait({handle}, timeout=timeout)
+    if handle not in done:
+        # Timed out — cancel so the task does not outlive the join.
         handle.cancel()
-    except asyncio.CancelledError:
-        # The awaited task was cancelled elsewhere; do not treat that as a
-        # cancellation of the caller.
-        if handle.cancelled():
-            return
-        raise
-    except Exception:
-        pass
+        return
+    if not handle.cancelled():
+        # Consume any exception so it is neither re-raised nor reported as
+        # "never retrieved" (background failures are logged by spawn_handle).
+        handle.exception()
 
 
 class AsyncCallbackScheduler:

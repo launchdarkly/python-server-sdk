@@ -336,6 +336,30 @@ class TestHandleParity:
         handle = aio.spawn_handle("test.boom", boom)
         await aio.join_handle(handle, 2)  # does not raise
 
+    @pytest.mark.asyncio
+    async def test_async_join_propagates_caller_cancellation(self):
+        # Cancelling the task that is *doing* the join must propagate the
+        # cancellation, not swallow it, and must leave the joined task running
+        # (its lifecycle is owned elsewhere).
+        started = aio.AsyncEvent()
+
+        async def slow():
+            started.set()
+            await asyncio.sleep(60)
+
+        handle = aio.spawn_handle("test.slow", slow)
+        await started.wait(2)
+
+        joiner = asyncio.ensure_future(aio.join_handle(handle, 30))
+        await asyncio.sleep(0.05)  # let the joiner park inside join_handle
+        joiner.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await joiner
+
+        assert not handle.cancelled()  # joined task left running
+        handle.cancel()  # cleanup
+
 
 # ---------------------------------------------------------------------------
 # Callback scheduler
