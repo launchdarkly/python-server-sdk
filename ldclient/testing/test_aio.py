@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from ldclient.config import Config
+from ldclient.config import Config, HTTPConfig
 from ldclient.impl.aio import concurrency as aio
-from ldclient.impl.aio.transport import AsyncHTTPTransport
+from ldclient.impl.aio.transport import AsyncHTTPTransport, _resolve_proxy
 from ldclient.testing.http_util import (
     BasicResponse,
     JsonResponse,
@@ -450,3 +450,23 @@ class TestTransportParity:
             resp = await transport.request('GET', server.uri + '/missing')
             assert resp.status == 404
             await transport.close()
+
+    # Proxy resolution must match the sync SDK (ldclient.impl.http): a
+    # configured proxy wins, otherwise fall back to the standard proxy env
+    # vars with NO_PROXY rules applied. (Guards against reverting to aiohttp's
+    # trust_env, whose env/NO_PROXY handling differs from the sync SDK's.)
+
+    def test_resolve_proxy_prefers_configured_proxy(self, monkeypatch):
+        monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
+        http_options = HTTPConfig(http_proxy='http://cfg-proxy:9000')
+        assert _resolve_proxy(http_options, 'https://x.launchdarkly.com') == 'http://cfg-proxy:9000'
+
+    def test_resolve_proxy_falls_back_to_environment(self, monkeypatch):
+        monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
+        monkeypatch.delenv('no_proxy', raising=False)
+        assert _resolve_proxy(HTTPConfig(), 'https://x.launchdarkly.com') == 'http://env-proxy:8080'
+
+    def test_resolve_proxy_honors_no_proxy(self, monkeypatch):
+        monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
+        monkeypatch.setenv('no_proxy', 'launchdarkly.com')
+        assert _resolve_proxy(HTTPConfig(), 'https://x.launchdarkly.com') is None
