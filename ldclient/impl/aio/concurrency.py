@@ -122,12 +122,7 @@ async def join_handle(handle: TaskHandle, timeout: float) -> None:
     ``Thread.join(timeout)``: the task's result/exception is not re-raised, and
     on timeout the task is cancelled so it does not leak. If the *calling* task
     is cancelled while joining, that cancellation propagates and the joined task
-    is left running (its lifecycle is owned elsewhere).
-
-    Uses ``asyncio.wait`` rather than ``wait_for``: it never cancels the joined
-    task itself and never raises the task's result into us — completion is
-    reported via the returned sets — so caller cancellation propagates without
-    having to disambiguate it from the joined task's own cancellation."""
+    is left running (its lifecycle is owned elsewhere)."""
     done, _ = await asyncio.wait({handle}, timeout=timeout)
     if handle not in done:
         # Timed out — cancel so the task does not outlive the join.

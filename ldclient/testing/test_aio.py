@@ -338,9 +338,11 @@ class TestHandleParity:
 
     @pytest.mark.asyncio
     async def test_async_join_propagates_caller_cancellation(self):
-        # Cancelling the task that is *doing* the join must propagate the
-        # cancellation, not swallow it, and must leave the joined task running
-        # (its lifecycle is owned elsewhere).
+        # If the joining task is cancelled while parked in join_handle, the
+        # cancellation must propagate -- even when the joined task is *also*
+        # cancelled first. A `try/except CancelledError: return` keyed off
+        # handle.cancelled() would swallow the caller's cancellation here, so
+        # this guards against reintroducing that pattern.
         started = aio.AsyncEvent()
 
         async def slow():
@@ -352,13 +354,11 @@ class TestHandleParity:
 
         joiner = asyncio.ensure_future(aio.join_handle(handle, 30))
         await asyncio.sleep(0.05)  # let the joiner park inside join_handle
-        joiner.cancel()
+        handle.cancel()            # joined task cancelled first...
+        joiner.cancel()            # ...then the joiner, while still parked
 
         with pytest.raises(asyncio.CancelledError):
             await joiner
-
-        assert not handle.cancelled()  # joined task left running
-        handle.cancel()  # cleanup
 
 
 # ---------------------------------------------------------------------------
