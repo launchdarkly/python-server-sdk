@@ -22,10 +22,6 @@ class AsyncInMemoryFeatureStore(AsyncFeatureStore, DiagnosticDescription):
 
     def __init__(self):
         """Constructs an instance of AsyncInMemoryFeatureStore."""
-        # No lock is needed: every method below reads and mutates ``_items``
-        # without awaiting in between, so it runs to completion without the
-        # event loop switching to another coroutine. (The sync twin uses a
-        # real ``ReadWriteLock`` because threads can preempt each other.)
         self._initialized = False
         self._items: Dict[VersionedDataKind, Dict[str, Any]] = defaultdict(dict)
 
