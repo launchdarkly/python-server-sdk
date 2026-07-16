@@ -121,9 +121,11 @@ async def join_handle(handle: TaskHandle, timeout: float) -> None:
     """Waits up to ``timeout`` seconds for a spawned task to finish, mirroring
     ``Thread.join(timeout)``: the task's exception (if any) is not re-raised.
     On timeout the task is cancelled so it does not leak."""
+    # Use asyncio.wait, not wait_for: on timeout it returns the task in the
+    # pending set so we can cancel and return immediately. (wait_for would
+    # cancel the task and then block until the cancellation completed.)
     done, _ = await asyncio.wait({handle}, timeout=timeout)
     if handle not in done:
-        # Timed out — cancel so the task does not outlive the join.
         handle.cancel()
 
 
