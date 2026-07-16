@@ -119,13 +119,8 @@ def spawn_handle(name: str, fn: Callable) -> TaskHandle:
 
 async def join_handle(handle: TaskHandle, timeout: float) -> None:
     """Waits up to ``timeout`` seconds for a spawned task to finish, mirroring
-    ``Thread.join(timeout)``: the task's result/exception is not re-raised, and
-    on timeout the task is cancelled so it does not leak. If the *calling* task
-    is cancelled while joining, that cancellation propagates and the joined task
-    is left running (its lifecycle is owned elsewhere).
-
-    The joined task must come from :func:`spawn_handle`, whose done-callback
-    retrieves any exception, so nothing needs to be retrieved here."""
+    ``Thread.join(timeout)``: the task's exception (if any) is not re-raised.
+    On timeout the task is cancelled so it does not leak."""
     done, _ = await asyncio.wait({handle}, timeout=timeout)
     if handle not in done:
         # Timed out — cancel so the task does not outlive the join.
