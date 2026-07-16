@@ -27,14 +27,6 @@ BACKOFF_RESET_INTERVAL = 60
 JITTER_RATIO = 0.5
 
 
-def _resolve_proxy(http_options, uri: str) -> Optional[str]:
-    """Resolves the proxy for a request the same way the sync SDK does (see
-    ``ldclient.impl.http.create_pool_manager``): an explicitly configured
-    ``http_proxy`` wins, otherwise fall back to the standard proxy environment
-    variables with ``NO_PROXY`` rules applied for the target URI."""
-    return http_options.http_proxy or _get_proxy_url(uri)
-
-
 def make_client_session(config, http_options=None) -> aiohttp.ClientSession:
     """Creates an ``aiohttp.ClientSession`` configured from the SDK config's
     HTTP options (CA certs, client certs, SSL verification).
@@ -49,8 +41,8 @@ def make_client_session(config, http_options=None) -> aiohttp.ClientSession:
         log.warning("TLS verification disabled")
 
     connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit_per_host=10)
-    # Proxies are resolved per-request via _resolve_proxy to match the sync
-    # SDK, so aiohttp must not also apply proxies from the environment.
+    # Proxies are resolved per-request (matching the sync SDK), so aiohttp
+    # must not also apply proxies from the environment.
     return aiohttp.ClientSession(connector=connector, trust_env=False)
 
 
@@ -73,6 +65,7 @@ class AsyncHTTPTransport:
         self._http_options = http_options if http_options is not None else config.http
         self._client = client
         self._owns_client = client is None
+        self._proxy = self._http_options.http_proxy or None
 
     async def request(
         self,
@@ -96,7 +89,7 @@ class AsyncHTTPTransport:
             headers=headers,
             data=body,
             timeout=timeout,
-            proxy=_resolve_proxy(self._http_options, uri),
+            proxy=self._proxy or _get_proxy_url(uri),
         ) as response:
             text = await response.text(encoding='UTF-8', errors='replace')
             return TransportResponse(response.status, response.headers, text)
@@ -123,7 +116,7 @@ class AsyncSSEFactory:
         self._config = config
         self._session = session
         self._http_options = http_options if http_options is not None else config.http
-        self._proxy_override = proxy
+        self._proxy = proxy if proxy is not None else (self._http_options.http_proxy or None)
 
     def create(self, url: str, initial_retry_delay: float, query_params=None) -> AsyncSSEClient:
         """Builds an SSE client for the given stream URL. Headers, timeouts,
@@ -138,9 +131,7 @@ class AsyncSSEFactory:
                 sock_read=STREAM_READ_TIMEOUT,
             )
         }
-        proxy = self._proxy_override
-        if proxy is None:
-            proxy = _resolve_proxy(self._http_options, url)
+        proxy = self._proxy or _get_proxy_url(url)
         if proxy:
             aiohttp_request_options["proxy"] = proxy
         return AsyncSSEClient(

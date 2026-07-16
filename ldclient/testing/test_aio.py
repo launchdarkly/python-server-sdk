@@ -13,7 +13,7 @@ import pytest
 
 from ldclient.config import Config, HTTPConfig
 from ldclient.impl.aio import concurrency as aio
-from ldclient.impl.aio.transport import AsyncHTTPTransport, _resolve_proxy
+from ldclient.impl.aio.transport import AsyncHTTPTransport, AsyncSSEFactory
 from ldclient.testing.http_util import (
     BasicResponse,
     JsonResponse,
@@ -408,6 +408,37 @@ class TestCallbackSchedulerParity:
 # HTTP transport
 # ---------------------------------------------------------------------------
 
+class _FakeResponse:
+    status = 200
+    headers: dict = {}
+
+    async def text(self, **kwargs):
+        return ""
+
+
+class _FakeResponseCtx:
+    async def __aenter__(self):
+        return _FakeResponse()
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _RecordingSession:
+    """A stand-in aiohttp session that records each request's kwargs (so tests
+    can assert the proxy passed) and yields a canned response."""
+
+    def __init__(self):
+        self.calls = []
+
+    def request(self, method, uri, **kwargs):
+        self.calls.append(kwargs)
+        return _FakeResponseCtx()
+
+    async def close(self):
+        pass
+
+
 class TestTransportParity:
     @pytest.mark.asyncio
     async def test_async_get(self):
@@ -451,22 +482,43 @@ class TestTransportParity:
             assert resp.status == 404
             await transport.close()
 
-    # Proxy resolution must match the sync SDK (ldclient.impl.http): a
-    # configured proxy wins, otherwise fall back to the standard proxy env
-    # vars with NO_PROXY rules applied. (Guards against reverting to aiohttp's
-    # trust_env, whose env/NO_PROXY handling differs from the sync SDK's.)
+    # Proxy handling must match the sync SDK (ldclient.impl.http): a configured
+    # proxy wins, otherwise fall back to the standard proxy env vars with
+    # NO_PROXY rules applied per target URI. (Guards against reverting to
+    # aiohttp's trust_env, whose env/NO_PROXY handling differs.)
 
-    def test_resolve_proxy_prefers_configured_proxy(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_request_uses_configured_proxy(self, monkeypatch):
         monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
-        http_options = HTTPConfig(http_proxy='http://cfg-proxy:9000')
-        assert _resolve_proxy(http_options, 'https://x.launchdarkly.com') == 'http://cfg-proxy:9000'
+        session = _RecordingSession()
+        config = Config('sdk-key', http=HTTPConfig(http_proxy='http://cfg-proxy:9000'))
+        transport = AsyncHTTPTransport(config, client=session)
+        await transport.request('GET', 'https://x.launchdarkly.com/p')
+        assert session.calls[0]['proxy'] == 'http://cfg-proxy:9000'
 
-    def test_resolve_proxy_falls_back_to_environment(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_request_falls_back_to_env_proxy(self, monkeypatch):
         monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
         monkeypatch.delenv('no_proxy', raising=False)
-        assert _resolve_proxy(HTTPConfig(), 'https://x.launchdarkly.com') == 'http://env-proxy:8080'
+        session = _RecordingSession()
+        transport = AsyncHTTPTransport(Config('sdk-key'), client=session)
+        await transport.request('GET', 'https://x.launchdarkly.com/p')
+        assert session.calls[0]['proxy'] == 'http://env-proxy:8080'
 
-    def test_resolve_proxy_honors_no_proxy(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_request_honors_no_proxy(self, monkeypatch):
         monkeypatch.setenv('https_proxy', 'http://env-proxy:8080')
         monkeypatch.setenv('no_proxy', 'launchdarkly.com')
-        assert _resolve_proxy(HTTPConfig(), 'https://x.launchdarkly.com') is None
+        session = _RecordingSession()
+        transport = AsyncHTTPTransport(Config('sdk-key'), client=session)
+        await transport.request('GET', 'https://x.launchdarkly.com/p')
+        assert session.calls[0]['proxy'] is None
+
+    def test_sse_factory_proxy_precedence(self):
+        # Explicit proxy arg overrides the configured proxy.
+        cfg = Config('sdk-key', http=HTTPConfig(http_proxy='http://cfg-proxy:9000'))
+        assert AsyncSSEFactory(cfg, proxy='http://override:1')._proxy == 'http://override:1'
+        # Otherwise the configured proxy is used.
+        assert AsyncSSEFactory(cfg)._proxy == 'http://cfg-proxy:9000'
+        # Neither set -> None (per-URL env fallback happens in create()).
+        assert AsyncSSEFactory(Config('sdk-key'))._proxy is None
