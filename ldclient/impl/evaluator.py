@@ -1,21 +1,32 @@
-import hashlib
 import logging
-from typing import Any, Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 from ldclient.context import Context
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
-from ldclient.impl import operators
-from ldclient.impl.evaluator_common import EvalResult, EvaluationException
+from ldclient.impl.evaluator_common import (
+    EvalResult,
+    EvaluationException,
+    _bucket_context,
+    _bucketable_string_value,
+    _context_key_is_in_target_list,
+    _get_context_value_by_attr_ref,
+    _get_off_value,
+    _get_value_for_variation_or_rollout,
+    _get_variation,
+    _make_big_segment_ref,
+    _match_clause_by_kind,
+    _match_single_context_value,
+    _maybe_negate,
+    _target_match_result,
+    _variation_index_for_context,
+    error_reason
+)
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
 # the ldclient.evaluation module.
 log = logging.getLogger('ldclient.flag')
-
-__LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
-
-__BUILTINS__ = ["key", "secondary", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
 
 class Evaluator:
@@ -282,162 +293,3 @@ class Evaluator:
         if included is not None:
             return included
         return self._simple_segment_match_context(segment, context, state, False)
-
-
-# The following functions are declared outside Evaluator because they do not depend on any
-# of Evaluator's state.
-
-
-def _get_variation(flag: FeatureFlag, variation: int, reason: dict) -> EvaluationDetail:
-    vars = flag.variations
-    if variation < 0 or variation >= len(vars):
-        return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
-    return EvaluationDetail(vars[variation], variation, reason)
-
-
-def _get_off_value(flag: FeatureFlag, reason: dict) -> EvaluationDetail:
-    off_var = flag.off_variation
-    if off_var is None:
-        return EvaluationDetail(None, None, reason)
-    return _get_variation(flag, off_var, reason)
-
-
-def _get_value_for_variation_or_rollout(flag: FeatureFlag, vr: VariationOrRollout, context: Context, reason: dict) -> EvaluationDetail:
-    index, inExperiment = _variation_index_for_context(flag, vr, context)
-    if index is None:
-        return EvaluationDetail(None, None, error_reason('MALFORMED_FLAG'))
-    if inExperiment:
-        reason['inExperiment'] = inExperiment
-    return _get_variation(flag, index, reason)
-
-
-def _variation_index_for_context(flag: FeatureFlag, vr: VariationOrRollout, context: Context) -> Tuple[Optional[int], bool]:
-    var = vr.variation
-    if var is not None:
-        return var, False
-
-    rollout = vr.rollout
-    if rollout is None:
-        return None, False
-    variations = rollout.variations
-    if len(variations) == 0:
-        return None, False
-
-    bucket_by = None if rollout.is_experiment else rollout.bucket_by
-    bucket = _bucket_context(rollout.seed, context, rollout.context_kind, flag.key, flag.salt, bucket_by)
-    is_experiment = rollout.is_experiment and bucket >= 0
-    # _bucket_context returns a negative value if the context didn't exist, in which case we
-    # still end up returning the first bucket, but we will force the "in experiment" state to be false.
-
-    sum = 0.0
-    for wv in variations:
-        sum += wv.weight / 100000.0
-        if bucket < sum:
-            is_experiment_partition = is_experiment and not wv.untracked
-            return wv.variation, is_experiment_partition
-
-    # The context's bucket value was greater than or equal to the end of the last bucket. This could happen due
-    # to a rounding error, or due to the fact that we are scaling to 100000 rather than 99999, or the flag
-    # data could contain buckets that don't actually add up to 100000. Rather than returning an error in
-    # this case (or changing the scaling, which would potentially change the results for *all* contexts), we
-    # will simply put the context in the last bucket.
-    is_experiment_partition = is_experiment and not variations[-1].untracked
-    return variations[-1].variation, is_experiment_partition
-
-
-def _bucket_context(seed: Optional[int], context: Context, context_kind: Optional[str], key: str, salt: str, bucket_by: Optional[AttributeRef]) -> float:
-    match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
-    if match_context is None:
-        return -1
-    clause_value = match_context.key if bucket_by is None else _get_context_value_by_attr_ref(match_context, bucket_by)
-    if clause_value is None:
-        return 0.0
-    bucket_by_value = _bucketable_string_value(clause_value)
-    if bucket_by_value is None:
-        return 0.0
-    id_hash = clause_value
-    if seed is not None:
-        prefix = str(seed)
-    else:
-        prefix = '%s.%s' % (key, salt)
-    hash_key = '%s.%s' % (prefix, id_hash)
-    hash_val = int(hashlib.sha1(hash_key.encode('utf-8')).hexdigest()[:15], 16)
-    result = hash_val / __LONG_SCALE__
-    return result
-
-
-def _bucketable_string_value(u_value) -> Optional[str]:
-    if isinstance(u_value, bool):
-        return None
-    elif isinstance(u_value, (str, int)):
-        return str(u_value)
-
-    return None
-
-
-def _context_key_is_in_target_list(context: Context, context_kind: Optional[str], keys: Set[str]) -> bool:
-    if keys is None or len(keys) == 0:
-        return False
-    match_context = context.get_individual_context(context_kind or Context.DEFAULT_KIND)
-    return match_context is not None and match_context.key in keys
-
-
-def _get_context_value_by_attr_ref(context: Context, attr: AttributeRef) -> Any:
-    if attr is None:
-        raise EvaluationException("rule clause did not specify an attribute")
-    if attr.error is not None:
-        raise EvaluationException("invalid attribute reference: " + attr.error)
-    name = attr[0]
-    if name is None:
-        return None
-    value = context.get(name)
-    depth = attr.depth
-    i = 1
-    while i < depth:
-        if not isinstance(value, dict):
-            return None  # can't get subproperty if we're not in a JSON object
-        value = value.get(attr[i])
-        i += 1
-    return value
-
-
-def _match_single_context_value(clause: Clause, context_value: Any) -> bool:
-    op_fn = operators.ops.get(clause.op)
-    if op_fn is None:
-        return False
-    values_preprocessed = clause.values_preprocessed
-    for i, v in enumerate(clause.values):
-        preprocessed = None if values_preprocessed is None else values_preprocessed[i]
-        if op_fn(context_value, v, preprocessed):
-            return True
-    return False
-
-
-def _match_clause_by_kind(clause: Clause, context: Context) -> bool:
-    # If attribute is "kind", then we treat operator and values as a match expression against a list
-    # of all individual kinds in the context. That is, for a multi-kind context with kinds of "org"
-    # and "user", it is a match if either of those strings is a match with Operator and Values.
-    for i in range(context.individual_context_count):
-        c = context.get_individual_context(i)
-        if c is not None and _match_single_context_value(clause, c.kind):
-            return True
-    return False
-
-
-def _maybe_negate(clause: Clause, val: bool) -> bool:
-    return not val if clause.negate else val
-
-
-def _make_big_segment_ref(segment: Segment) -> str:
-    # The format of Big Segment references is independent of what store implementation is being
-    # used; the store implementation receives only this string and does not know the details of
-    # the data model. The Relay Proxy will use the same format when writing to the store.
-    return "%s.g%d" % (segment.key, segment.generation or 0)
-
-
-def _target_match_result(flag: FeatureFlag, var: int) -> EvaluationDetail:
-    return _get_variation(flag, var, {'kind': 'TARGET_MATCH'})
-
-
-def error_reason(error_kind: str) -> dict:
-    return {'kind': 'ERROR', 'errorKind': error_kind}
