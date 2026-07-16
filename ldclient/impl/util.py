@@ -23,8 +23,6 @@ log = logging.getLogger('ldclient.util')  # historical logger name
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
-
 __BASE_TYPES__ = (str, float, int, bool)
 
 # Maximum length for SDK keys

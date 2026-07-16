@@ -14,8 +14,6 @@ __version__ = VERSION
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 
-__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
-
 """Settings."""
 start_wait = 5
 
