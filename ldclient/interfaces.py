@@ -6,7 +6,17 @@ They may be useful in writing new implementations of these components, or for te
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Generator, List, Mapping, Optional, Protocol
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Mapping,
+    Optional,
+    Protocol
+)
 
 from ldclient.context import Context
 from ldclient.impl.listeners import Listeners
@@ -294,6 +304,116 @@ class FeatureStoreCore(ABC):
     #     """
 
 
+class AsyncReadOnlyStore(Protocol):
+    """Read-only async view of a data store used by the async client's evaluation path.
+
+    Both async data systems expose their active store through this uniform interface:
+    :class:`AsyncFeatureStore` satisfies it directly (FDv1), and FDv2 adapts its
+    synchronous in-memory store to it. This is the async analog of :class:`ReadOnlyStore`.
+    """
+
+    @abstractmethod
+    async def get(self, kind: VersionedDataKind, key: str) -> Optional[Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def all(self, kind: VersionedDataKind) -> Dict[str, Any]:
+        raise NotImplementedError
+
+
+class AsyncFeatureStore(ABC):
+    """
+    Async interface for a versioned store for feature flags and related objects received from
+    LaunchDarkly. Implementations should be safe for concurrent access within a single asyncio
+    event loop.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    An "object", for ``AsyncFeatureStore``, is simply a dict of arbitrary data which must have
+    at least three properties: ``key`` (its unique key), ``version`` (the version number provided
+    by LaunchDarkly), and ``deleted`` (True if this is a placeholder for a deleted object).
+
+    Delete and upsert requests are versioned: if the version number in the request is less than
+    the currently stored version of the object, the request should be ignored.
+    """
+
+    @abstractmethod
+    async def get(self, kind: VersionedDataKind, key: str) -> Optional[Any]:
+        """
+        Retrieves the object to which the specified key is mapped, or None if the key is not
+        found or the associated object has a ``deleted`` property of True.
+
+        :param kind: The kind of object to get
+        :param key: The key whose associated object is to be returned
+        :return: The object, or None
+        """
+
+    @abstractmethod
+    async def all(self, kind: VersionedDataKind) -> Dict[str, Any]:
+        """
+        Retrieves a dictionary of all associated objects of a given kind, excluding deleted items.
+
+        :param kind: The kind of objects to get
+        :return: A dictionary of keys to objects
+        """
+
+    @abstractmethod
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+        """
+        Initializes (or re-initializes) the store with the specified set of objects. Any existing
+        entries will be removed. Implementations can assume that this set of objects is up to
+        date-- there is no need to perform individual version comparisons between the existing
+        objects and the supplied data.
+
+        :param all_data: All objects to be stored
+        """
+
+    @abstractmethod
+    async def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
+        """
+        Updates or inserts the object associated with the specified key. If an item with the same
+        key already exists, it should update it only if the new item's version property is greater
+        than the old one.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        :return: True if the store was updated (the item was new or a newer version); False if the
+            update was rejected because the stored version was equal or newer
+        """
+
+    @abstractmethod
+    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
+        """
+        Deletes the object associated with the specified key, if it exists and its version is less
+        than the specified version. The object should be replaced in the data store by a
+        placeholder with the specified version and a "deleted" property of True.
+
+        :param kind: The kind of object to delete
+        :param key: The key of the object to be deleted
+        :param version: The version for the delete operation
+        """
+
+    @property
+    @abstractmethod
+    def initialized(self) -> bool:
+        """
+        Returns whether the store has been initialized yet or not.
+        """
+
+    async def close(self) -> None:
+        """
+        Releases any resources used by the store implementation.
+
+        The default implementation is a no-op. Persistent store implementations should
+        override this to close connections and release resources on shutdown.
+        """
+        pass
+
+
 # Internal use only. Common methods for components that perform a task in the background.
 class BackgroundOperation:
 
@@ -455,6 +575,49 @@ class BigSegmentStore:
     def stop(self):
         """
         Shuts down the store component and releases and resources it is using.
+        """
+        pass
+
+
+class AsyncBigSegmentStore(ABC):
+    """
+    Async interface for a read-only data store that allows querying of user membership in Big
+    Segments.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    Big Segments are a specific type of user segments. For more information, read the LaunchDarkly
+    documentation: https://docs.launchdarkly.com/home/users/big-segments
+    """
+
+    @abstractmethod
+    async def get_metadata(self) -> BigSegmentStoreMetadata:
+        """
+        Returns information about the overall state of the store. This method will be called only
+        when the SDK needs the latest state, so it should not be cached.
+
+        :return: the store metadata
+        """
+        pass
+
+    @abstractmethod
+    async def get_membership(self, context_hash: str) -> Optional[dict]:
+        """
+        Queries the store for a snapshot of the current segment state for a specific context.
+
+        :param context_hash: the hashed context key
+        :return: True/False values for Big Segments that reference this context, or None
+        """
+        pass
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """
+        Shuts down the store component and releases any resources it is using.
         """
         pass
 
@@ -826,6 +989,69 @@ class DataSourceUpdateSink(ABC):
         previous state was :class:`DataSourceState.INITIALIZING`, the state will remain at
         :class:`DataSourceState.INITIALIZING` because :class:`DataSourceState.INTERRUPTED` is only meaningful
         after a successful startup.
+
+        :param new_state: The updated state of the data source
+        :param new_error: An optional error if the new state is an error condition
+        """
+        pass
+
+
+class AsyncDataSourceUpdateSink(ABC):
+    """
+    Async interface that a data source implementation will use to push data into the SDK.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    The data source interacts with this object, rather than manipulating the data store directly,
+    so that the SDK can perform any other necessary operations that must happen when data is
+    updated.
+    """
+
+    @abstractmethod
+    async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+        """
+        Initializes (or re-initializes) the store with the specified set of entities. Any
+        existing entries will be removed.
+
+        :param all_data: All objects to be stored
+        """
+        pass
+
+    @abstractmethod
+    async def upsert(self, kind: VersionedDataKind, item: dict) -> None:
+        """
+        Attempt to add an entity, or update an existing entity with the same key. An update
+        should only succeed if the new item's version is greater than the old one;
+        otherwise, the method should do nothing.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        """
+        pass
+
+    @abstractmethod
+    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
+        """
+        Attempt to delete an entity if it exists. Deletion should only succeed if the
+        version parameter is greater than the existing entity's version; otherwise, the
+        method should do nothing.
+
+        :param kind: The kind of object to delete
+        :param key: The key of the object to be deleted
+        :param version: The version for the delete operation
+        """
+        pass
+
+    @abstractmethod
+    def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]) -> None:
+        """
+        Informs the SDK of a change in the data source's status.
+
+        This method is synchronous (not async) so it can be called from any context.
 
         :param new_state: The updated state of the data source
         :param new_error: An optional error if the new state is an error condition
@@ -1591,5 +1817,85 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
         """
         stop should halt the synchronization process, causing the sync method
         to exit as soon as possible.
+        """
+        raise NotImplementedError
+
+
+class AsyncInitializer(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    AsyncInitializer represents a component capable of retrieving a single data result
+    asynchronously, such as from the LD polling API.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    The intent of initializers is to quickly fetch an initial set of data, which may be stale but
+    is fast to retrieve. This initial data serves as a foundation for a Synchronizer to build upon,
+    enabling it to provide updates as new changes occur.
+    """
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the initializer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def fetch(self, ss: SelectorStore) -> BasisResult:
+        """
+        fetch should retrieve the initial data set for the data source asynchronously, returning
+        a Basis object on success, or an error message on failure.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
+        """
+        raise NotImplementedError
+
+
+class AsyncSynchronizer(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    AsyncSynchronizer represents a component capable of synchronizing data from an external
+    data source asynchronously, such as a streaming or polling API.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    It is responsible for yielding Update objects that represent the current state of the data
+    source, including any changes that have occurred since the last synchronization.
+    """
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """
+        Returns the name of the synchronizer, which is used for logging and debugging.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def sync(self, ss: SelectorStore) -> AsyncGenerator[Update, None]:
+        """
+        sync should begin the synchronization process for the data source, yielding Update objects
+        asynchronously until the connection is closed or an unrecoverable error occurs.
+
+        Implementations write this as ``async def sync(): yield ...`` (an async generator) and
+        callers consume it as ``async for update in impl.sync(ss):``.
+
+        :param ss: A SelectorStore that provides the Selector to use as a basis for data retrieval.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def stop(self) -> None:
+        """
+        stop should halt the synchronization process, causing the sync method to exit as soon as
+        possible.
         """
         raise NotImplementedError
