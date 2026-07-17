@@ -18,12 +18,11 @@ def timedelta_millis(delta: timedelta) -> float:
     return delta / timedelta(milliseconds=1)
 
 
-log = logging.getLogger('ldclient.util')  # historical logger name
+# historical logger name; cleaning up the SDK's logger names is tracked in SDK-2696
+log = logging.getLogger('ldclient.util')
 
 
 __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
-
-__BUILTINS__ = ["key", "ip", "country", "email", "firstName", "lastName", "avatar", "name", "anonymous"]
 
 __BASE_TYPES__ = (str, float, int, bool)
 
