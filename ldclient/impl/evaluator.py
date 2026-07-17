@@ -25,7 +25,7 @@ from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
 
 # For consistency with past logging behavior, we are pretending that the evaluation logic still lives in
-# the ldclient.evaluation module.
+# the ldclient.flag module. Cleaning up the SDK's logger names is tracked in SDK-2696.
 log = logging.getLogger('ldclient.flag')
 
 
