@@ -1,52 +1,19 @@
 import base64
 import time
 from hashlib import sha256
-from typing import Callable, Optional, Tuple
+from typing import Optional, Tuple
 
 from expiringdict import ExpiringDict
 
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
-from ldclient.impl.listeners import Listeners
+from ldclient.impl.big_segments_common import BigSegmentStoreStatusProviderImpl
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     BigSegmentStoreStatus,
     BigSegmentStoreStatusProvider
 )
-
-
-class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
-    """
-    Default implementation of the BigSegmentStoreStatusProvider interface.
-
-    The real implementation of getting the status is in BigSegmentStoreManager - we pass in a lambda that
-    allows us to get the current status from that class. So this class provides a facade for that, and
-    also adds the listener mechanism.
-    """
-
-    def __init__(self, status_getter: Callable[[], BigSegmentStoreStatus]):
-        self.__status_getter = status_getter
-        self.__status_listeners = Listeners()
-        self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
-
-    @property
-    def status(self) -> BigSegmentStoreStatus:
-        return self.__status_getter()
-
-    def add_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
-        self.__status_listeners.add(listener)
-
-    def remove_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
-        self.__status_listeners.remove(listener)
-
-    def _update_status(self, new_status: BigSegmentStoreStatus):
-        last = self.__last_status
-        if last is None:
-            self.__last_status = new_status
-        elif new_status.available != last.available or new_status.stale != last.stale:
-            self.__last_status = new_status
-            self.__status_listeners.notify(new_status)
 
 
 class BigSegmentStoreManager:
