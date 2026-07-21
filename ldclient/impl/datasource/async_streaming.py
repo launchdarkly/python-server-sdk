@@ -1,24 +1,24 @@
+"""
+Default implementation of the streaming component.
+"""
+
+# currently excluded from documentation - see docs/README.md
+
 import json
 import time
-from threading import Thread
-from typing import Optional
+from typing import Any, Optional
 from urllib import parse
 
-from ld_eventsource import SSEClient
-from ld_eventsource.actions import Event, Fault
-from ld_eventsource.config import (
-    ConnectStrategy,
-    ErrorStrategy,
-    RetryDelayStrategy
-)
+from ld_eventsource.actions import Event, Fault, Start
 from ld_eventsource.errors import HTTPStatusError
 
+from ldclient.impl.aio.concurrency import AsyncTaskRunner
+from ldclient.impl.aio.transport import AsyncSSEFactory, make_client_session
 from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
     parse_path,
     sink_or_store
 )
-from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.util import (
     http_error_message,
     is_http_error_recoverable,
@@ -32,19 +32,9 @@ from ldclient.interfaces import (
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
-# allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
-# stream will keep this from triggering
-stream_read_timeout = 5 * 60
 
-MAX_RETRY_DELAY = 30
-BACKOFF_RESET_INTERVAL = 60
-JITTER_RATIO = 0.5
-
-
-class StreamingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, config, store, ready, diagnostic_accumulator):
-        Thread.__init__(self, name="ldclient.datasource.streaming")
-        self.daemon = True
+class AsyncStreamingUpdateProcessor(UpdateProcessor):
+    def __init__(self, config, store, ready, diagnostic_accumulator, sse_factory: Optional[AsyncSSEFactory] = None):
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
         if config.payload_filter_key is not None:
             self._uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
@@ -54,26 +44,53 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
+        if sse_factory is not None:
+            # A caller-supplied factory owns whatever session it uses; we don't
+            # create or close one here.
+            self._sse_factory = sse_factory
+            self._owned_session = None
+        else:
+            # Build a session configured from the SDK's HTTP options (CA certs,
+            # client cert, SSL verification, proxy trust) so the streaming
+            # connection isn't a plain unconfigured ClientSession. The SSE
+            # client treats the supplied session as externally owned and never
+            # closes it, so this data source closes it on teardown.
+            self._owned_session = make_client_session(config)
+            self._sse_factory = AsyncSSEFactory(config, session=self._owned_session)
+        self._sse: Any = None
         self._connection_attempt_start_time = None
+        self._runner = AsyncTaskRunner()
+        self._started = False
 
-    def run(self):
-        log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
+    def start(self):
+        if self._started:
+            raise RuntimeError("processors can only be started once")
+        self._started = True
+        self._runner.spawn("ldclient.datasource.streaming", self._run)
+
+    async def _run(self):
+        log.info("Starting AsyncStreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
-        self._sse = self._create_sse_client()
+        self._sse = self._sse_factory.create(self._uri, self._config.initial_reconnect_delay)
         self._connection_attempt_start_time = time.time()
-        for action in self._sse.all:
-            if isinstance(action, Event):
+        async for action in self._sse.all:
+            if isinstance(action, Start):
+                # On reconnect after an error the timer was cleared; reset it here.
+                # For the initial connect the pre-loop timestamp is already set.
+                if self._connection_attempt_start_time is None:
+                    self._connection_attempt_start_time = time.time()
+            elif isinstance(action, Event):
                 message_ok = False
                 try:
-                    message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
+                    message_ok = await self._process_message(action)
                 except json.decoder.JSONDecodeError as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    await self._sse.interrupt()
 
-                    self._handle_error(e)
+                    await self._handle_error(e)
                 except Exception as e:
-                    log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    log.warning("Error while handling stream event; will restart stream: %s" % e)
+                    await self._sse.interrupt()
 
                     if self._data_source_update_sink is not None:
                         error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
@@ -88,7 +105,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
                     if not self._ready.is_set():
-                        log.info("StreamingUpdateProcessor initialized ok.")
+                        log.info("AsyncStreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             elif isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
@@ -96,9 +113,19 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 if action.error is None:
                     continue
 
-                if not self._handle_error(action.error):
+                if not await self._handle_error(action.error):
                     break
-        self._sse.close()
+        await self._sse.close()
+        await self._close_owned_session()
+
+    async def _close_owned_session(self):
+        """Close the aiohttp session if the SDK created it. A caller-supplied
+        factory owns its own session, so ``_owned_session`` is ``None`` and
+        nothing is closed here. Closing resets the reference to ``None`` so it
+        isn't closed twice."""
+        if self._owned_session is not None:
+            await self._owned_session.close()
+            self._owned_session = None
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:
@@ -106,29 +133,16 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             elapsed = current_time - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
-    def _create_sse_client(self) -> SSEClient:
-        # We don't want the stream to use the same read timeout as the rest of the SDK.
-        http_factory = _http_factory(self._config)
-        stream_http_factory = HTTPFactory(http_factory.base_headers, http_factory.http_config, override_read_timeout=stream_read_timeout)
-        return SSEClient(
-            connect=ConnectStrategy.http(
-                url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
-            ),
-            error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
-            initial_retry_delay=self._config.initial_reconnect_delay,
-            retry_delay_strategy=RetryDelayStrategy.default(max_delay=MAX_RETRY_DELAY, backoff_multiplier=2, jitter_multiplier=JITTER_RATIO),
-            retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
-            logger=log,
-        )
+    async def stop(self):
+        await self.__stop_with_error_info(None)
+        await self._runner.stop_all()
 
-    def stop(self):
-        self.__stop_with_error_info(None)
-
-    def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
-        log.info("Stopping StreamingUpdateProcessor")
+    async def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
+        log.info("Stopping AsyncStreamingUpdateProcessor")
         self._running = False
         if self._sse:
-            self._sse.close()
+            await self._sse.close()
+        await self._close_owned_session()
 
         if self._data_source_update_sink is None:
             return
@@ -139,21 +153,23 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         return self._running and self._ready.is_set() is True and self._store.initialized is True
 
     # Returns True if we initialized the feature store
-    def _process_message(self, store, msg: Event) -> bool:
+    async def _process_message(self, msg: Event) -> bool:
+        """Process a single SSE event.  Returns True on a successful ``put``."""
+        target = sink_or_store(self._data_source_update_sink, self._store)
         if msg.event == 'put':
             all_data = json.loads(msg.data)
             init_data = {FEATURES: all_data['data']['flags'], SEGMENTS: all_data['data']['segments']}
             log.debug("Received put event with %d flags and %d segments", len(init_data[FEATURES]), len(init_data[SEGMENTS]))
-            store.init(init_data)
+            await target.init(init_data)
             return True
         elif msg.event == 'patch':
             payload = json.loads(msg.data)
             path = payload['path']
             obj = payload['data']
             log.debug("Received patch event for %s, New version: [%d]", path, obj.get("version"))
-            target = parse_path(path)
-            if target is not None:
-                store.upsert(target.kind, obj)
+            parsed = parse_path(path)
+            if parsed is not None:
+                await target.upsert(parsed.kind, obj)
             else:
                 log.warning("Patch for unknown path: %s", path)
         elif msg.event == 'delete':
@@ -162,9 +178,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             # noinspection PyShadowingNames
             version = payload['version']
             log.debug("Received delete event for %s, New version: [%d]", path, version)
-            target = parse_path(path)
-            if target is not None:
-                store.delete(target.kind, target.key, version)
+            parsed = parse_path(path)
+            if parsed is not None:
+                await target.delete(parsed.kind, parsed.key, version)
             else:
                 log.warning("Delete for unknown path: %s", path)
         else:
@@ -172,7 +188,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         return False
 
     # Returns true to continue, false to stop
-    def _handle_error(self, error: Exception) -> bool:
+    async def _handle_error(self, error: Exception) -> bool:
         if not self._running:
             return False  # don't retry if we've been deliberately stopped
 
@@ -194,9 +210,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             http_error_message_result = http_error_message(error.status, "stream connection")
             if not is_http_error_recoverable(error.status):
                 log.error(http_error_message_result)
+                self._running = False
                 self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
-                self.__stop_with_error_info(error_info)
-                self.stop()
+                await self.__stop_with_error_info(error_info)
                 return False
             else:
                 log.warning(http_error_message_result)
@@ -210,13 +226,13 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error)))
-            # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
+            # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of HTTP client internals
         self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
         return True
 
     # magic methods for "with" statement (used in testing)
-    def __enter__(self):
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, type, value, traceback):
-        self.stop()
+    async def __aexit__(self, type, value, traceback):
+        await self.stop()
