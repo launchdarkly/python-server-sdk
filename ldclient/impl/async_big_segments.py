@@ -1,6 +1,3 @@
-import base64
-import time
-from hashlib import sha256
 from typing import Optional, Tuple
 
 from expiringdict import ExpiringDict
@@ -8,7 +5,12 @@ from expiringdict import ExpiringDict
 from ldclient.async_config import AsyncBigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.aio.concurrency import AsyncRepeatingTask
-from ldclient.impl.big_segments_common import BigSegmentStoreStatusProviderImpl
+from ldclient.impl.big_segments_common import (
+    EMPTY_MEMBERSHIP,
+    BigSegmentStoreStatusProviderImpl,
+    _hash_for_user_key,
+    is_stale
+)
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     BigSegmentStoreStatus,
@@ -17,9 +19,7 @@ from ldclient.interfaces import (
 
 
 class AsyncBigSegmentStoreManager:
-    # use EMPTY_MEMBERSHIP as a singleton whenever a membership query returns None; it's safe to reuse it
-    # because we will never modify the membership properties after they're queried
-    EMPTY_MEMBERSHIP = {}  # type: dict
+    EMPTY_MEMBERSHIP = EMPTY_MEMBERSHIP
 
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
@@ -97,8 +97,4 @@ class AsyncBigSegmentStoreManager:
         return new_status
 
     def is_stale(self, timestamp) -> bool:
-        return (timestamp is None) or ((int(time.time() * 1000) - timestamp) >= self.__stale_after_millis)
-
-
-def _hash_for_user_key(user_key: str) -> str:
-    return base64.b64encode(sha256(user_key.encode('utf-8')).digest()).decode('utf-8')
+        return is_stale(timestamp, self.__stale_after_millis)
