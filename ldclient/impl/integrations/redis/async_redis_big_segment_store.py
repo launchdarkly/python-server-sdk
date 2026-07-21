@@ -21,8 +21,6 @@ class _AsyncRedisBigSegmentStore(AsyncBigSegmentStore):
         if not have_async_redis:
             raise NotImplementedError("Cannot use async Redis Big Segment store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
-        redis_opts = dict(redis_opts)  # don't mutate caller's dict
-        redis_opts.setdefault('max_connections', 10)
         self._client = redis_client.from_url(url, **redis_opts)
         log.info("Started AsyncRedisBigSegmentStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
 
