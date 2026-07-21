@@ -50,18 +50,6 @@ class AsyncBigSegmentStoreManager:
     def status_provider(self) -> BigSegmentStoreStatusProvider:
         return self.__status_provider
 
-    def get_status(self) -> BigSegmentStoreStatus:
-        """Return the most recently polled status.
-
-        When no status has been cached yet, the sync variant polls the store
-        inline; the async variant (whose status getter cannot await) reports
-        the store as unavailable until the polling task has run.
-        """
-        status = self.__last_status
-        if status is None:
-            return BigSegmentStoreStatus(False, False)
-        return status if status else self.poll_store_and_update_status()  # type: ignore[return-value]
-
     async def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
         if not self.__store:
             return None, BigSegmentsStatus.NOT_CONFIGURED
@@ -83,6 +71,18 @@ class AsyncBigSegmentStoreManager:
         if not status.available:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
+
+    def get_status(self) -> BigSegmentStoreStatus:
+        """Return the most recently polled status.
+
+        When no status has been cached yet, the sync variant polls the store
+        inline; the async variant (whose status getter cannot await) reports
+        the store as unavailable until the polling task has run.
+        """
+        status = self.__last_status
+        if status is None:
+            return BigSegmentStoreStatus(False, False)
+        return status if status else self.poll_store_and_update_status()  # type: ignore[return-value]
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
