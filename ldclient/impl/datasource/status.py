@@ -1,5 +1,5 @@
 import time
-from typing import Callable, Mapping, Optional, Set
+from typing import Callable, Mapping, Optional, Protocol, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
@@ -132,8 +132,17 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         return affected_items
 
 
+class _DataSourceStatusSource(Protocol):
+    """The status property a status provider reads from its update sink;
+    satisfied by both the sync and async sink implementations."""
+
+    @property
+    def status(self) -> DataSourceStatus:
+        ...
+
+
 class DataSourceStatusProviderImpl(DataSourceStatusProvider):
-    def __init__(self, listeners: Listeners, update_sink: DataSourceUpdateSinkImpl):
+    def __init__(self, listeners: Listeners, update_sink: _DataSourceStatusSource):
         self.__listeners = listeners
         self.__update_sink = update_sink
 
