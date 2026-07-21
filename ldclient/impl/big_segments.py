@@ -19,8 +19,6 @@ from ldclient.interfaces import (
 
 
 class BigSegmentStoreManager:
-    EMPTY_MEMBERSHIP = EMPTY_MEMBERSHIP
-
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
     store to track its status.
@@ -58,7 +56,7 @@ class BigSegmentStoreManager:
             try:
                 membership = self.__store.get_membership(user_hash)
                 if membership is None:
-                    membership = self.EMPTY_MEMBERSHIP
+                    membership = EMPTY_MEMBERSHIP
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
