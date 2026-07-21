@@ -1,5 +1,5 @@
 import time
-from typing import Callable, Dict, Mapping, Optional, Set
+from typing import Dict, Mapping, Optional, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
@@ -11,7 +11,6 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState,
     DataSourceStatus,
-    DataSourceStatusProvider,
     FlagChange
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
@@ -145,19 +144,3 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
                     self.__tracker.add_affected_items(affected_items, KindAndKey(kind=kind, key=key))
 
         return affected_items
-
-
-class AsyncDataSourceStatusProviderImpl(DataSourceStatusProvider):
-    def __init__(self, listeners: Listeners, update_sink: AsyncDataSourceUpdateSinkImpl):
-        self.__listeners = listeners
-        self.__update_sink = update_sink
-
-    @property
-    def status(self) -> DataSourceStatus:
-        return self.__update_sink.status
-
-    def add_listener(self, listener: Callable[[DataSourceStatus], None]):
-        self.__listeners.add(listener)
-
-    def remove_listener(self, listener: Callable[[DataSourceStatus], None]):
-        self.__listeners.remove(listener)

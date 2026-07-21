@@ -1,10 +1,8 @@
 import pytest
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from ldclient.impl.datasource.async_status import (
-    AsyncDataSourceStatusProviderImpl,
-    AsyncDataSourceUpdateSinkImpl
-)
+from ldclient.impl.datasource.async_status import AsyncDataSourceUpdateSinkImpl
+from ldclient.impl.datasource.status import DataSourceStatusProviderImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
     DataSourceErrorInfo,
@@ -292,7 +290,7 @@ async def test_update_status_broadcasts_error_even_with_same_state():
 @pytest.mark.asyncio
 async def test_status_provider_delegates_to_sink():
     sink, status_listeners, _ = make_sink()
-    provider = AsyncDataSourceStatusProviderImpl(status_listeners, sink)
+    provider = DataSourceStatusProviderImpl(status_listeners, sink)
 
     assert provider.status.state == DataSourceState.INITIALIZING
 
@@ -304,7 +302,7 @@ async def test_status_provider_delegates_to_sink():
 @pytest.mark.asyncio
 async def test_status_provider_add_remove_listener():
     sink, status_listeners, _ = make_sink()
-    provider = AsyncDataSourceStatusProviderImpl(status_listeners, sink)
+    provider = DataSourceStatusProviderImpl(status_listeners, sink)
 
     capture = StatusCapture()
     provider.add_listener(capture)
