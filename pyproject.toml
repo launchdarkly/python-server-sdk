@@ -37,7 +37,7 @@ Documentation = "https://launchdarkly-python-sdk.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
 async = ["aiohttp>=3.9,<4"]
-redis = ["redis>=4.2.0"]
+redis = ["redis>=2.10.5"]
 consul = ["python-consul>=1.0.1"]
 dynamodb = ["boto3>=1.9.71"]
 test-filesource = ["pyyaml>=5.3.1", "watchdog>=3.0.0"]
