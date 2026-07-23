@@ -8,7 +8,6 @@ from time import time
 from typing import Callable, Generator, Optional, Tuple
 from urllib import parse
 
-import urllib3
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault, Start
 from ld_eventsource.config import (
@@ -64,7 +63,7 @@ STREAMING_ENDPOINT = "/sdk/stream"
 
 SseClientBuilder = Callable[
     [str, HTTPConfig, float, DataSourceBuilderConfig, SelectorStore],
-    Tuple[SSEClient, Optional[urllib3.PoolManager]],
+    SSEClient,
 ]
 
 
@@ -74,17 +73,10 @@ def create_sse_client(
     initial_reconnect_delay: float,
     config: DataSourceBuilderConfig,
     ss: SelectorStore
-) -> Tuple[SSEClient, Optional[urllib3.PoolManager]]:
-    """ "
+) -> SSEClient:
+    """
     create_sse_client creates an SSEClient instance configured to connect
-    to the LaunchDarkly streaming endpoint, along with the urllib3 PoolManager
-    backing it. The pool is returned alongside the client so the caller can
-    force-close any pooled connections on shutdown -- ``SSEClient.close()``
-    only releases the connection back to the pool via ``urllib3.HTTPResponse
-    .shutdown()`` (which performs a half-close on the local read side) plus
-    ``release_conn()``, neither of which actually closes the underlying TCP
-    socket on Python 3.10. Closing the pool ensures the server observes the
-    client's disconnect when the FDv1 Fallback Directive engages.
+    to the LaunchDarkly streaming endpoint.
     """
     uri = base_uri + STREAMING_ENDPOINT
     if config.payload_filter_key is not None:
@@ -102,12 +94,11 @@ def create_sse_client(
         selector = ss.selector()
         return {"basis": selector.state} if selector.is_defined() else {}
 
-    pool = stream_http_factory.create_pool_manager(1, uri)
-    sse_client = SSEClient(
+    return SSEClient(
         connect=ConnectStrategy.http(
             url=uri,
             headers=base_headers,
-            pool=pool,
+            pool=stream_http_factory.create_pool_manager(1, uri),
             urllib3_request_options={"timeout": stream_http_factory.timeout},
             query_params=query_params
         ),
@@ -122,31 +113,6 @@ def create_sse_client(
         retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
         logger=log,
     )
-    return sse_client, pool
-
-
-def _close_pool_manager(pool: Optional[urllib3.PoolManager]) -> None:
-    """Close every pooled connection in ``pool`` so the underlying TCP sockets
-    are torn down. ``HTTPConnectionPool.close()`` drains its queue and calls
-    ``conn.close()`` on each connection, which sends the FIN that the server
-    is waiting on. ``PoolManager.clear()`` alone doesn't do this -- it just
-    drops the dict of pools without closing the connections inside them."""
-    if pool is None:
-        return
-    try:
-        # ``RecentlyUsedContainer`` deliberately disallows iteration; ``keys()``
-        # returns a thread-safe snapshot. We look each one up to close its
-        # underlying ``HTTPConnectionPool``.
-        for key in list(pool.pools.keys()):
-            try:
-                connection_pool = pool.pools.get(key)
-                if connection_pool is not None:
-                    connection_pool.close()
-            except Exception:  # pylint: disable=broad-except
-                log.debug("Error closing streaming connection pool", exc_info=True)
-        pool.clear()
-    except Exception:  # pylint: disable=broad-except
-        log.debug("Error closing streaming pool manager", exc_info=True)
 
 
 class StreamingDataSource(Synchronizer, DiagnosticSource):
@@ -170,7 +136,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._sse_client_builder: SseClientBuilder = create_sse_client
         self._config = config
         self._sse: Optional[SSEClient] = None
-        self._sse_pool: Optional[urllib3.PoolManager] = None
         self._running = False
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
         self._connection_attempt_start_time: Optional[float] = None
@@ -191,7 +156,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        self._sse, self._sse_pool = self._sse_client_builder(
+        self._sse = self._sse_client_builder(
             self.__uri,
             self.__http_options,
             self.__initial_reconnect_delay,
@@ -301,13 +266,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     break
 
         self._sse.close()
-        # Force-close the underlying urllib3 pool. SSEClient.close() only does a
-        # half-close on the local read side and releases the connection back to
-        # the pool, which on Python 3.10 leaves the TCP socket open until the
-        # response object is garbage-collected. The FDv1 Fallback Directive
-        # requires the Primary Synchronizer to be terminated promptly, so we
-        # tear down the pool here to send the FIN the server is waiting on.
-        _close_pool_manager(self._sse_pool)
 
     def stop(self):
         """
@@ -317,10 +275,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._running = False
         if self._sse:
             self._sse.close()
-        # See _close_pool_manager docstring: this is what actually severs the
-        # TCP connection. ``stop()`` may be called from a different thread than
-        # the one running ``sync()``; close() is idempotent on the pool.
-        _close_pool_manager(self._sse_pool)
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:

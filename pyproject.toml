@@ -27,7 +27,7 @@ dependencies = [
     "pyRFC3339>=1.0",
     "semver>=2.10.2",
     "urllib3>=1.26.0,<3",
-    "launchdarkly-eventsource>=1.7.1,<2.0.0",
+    "launchdarkly-eventsource>=1.7.2,<2.0.0",
 ]
 
 [project.urls]
