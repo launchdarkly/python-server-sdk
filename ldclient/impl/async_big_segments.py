@@ -2,15 +2,15 @@ from typing import Optional, Tuple
 
 from expiringdict import ExpiringDict
 
-from ldclient.config import BigSegmentsConfig
+from ldclient.async_config import AsyncBigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
+from ldclient.impl.aio.concurrency import AsyncRepeatingTask
 from ldclient.impl.big_segments_common import (
     EMPTY_MEMBERSHIP,
     BigSegmentStoreStatusProviderImpl,
     _hash_for_user_key,
     is_stale
 )
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     BigSegmentStoreStatus,
@@ -18,65 +18,75 @@ from ldclient.interfaces import (
 )
 
 
-class BigSegmentStoreManager:
+class AsyncBigSegmentStoreManager:
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
-    store to track its status.
+    store to track its status. The constructor starts the polling task.
     """
 
-    def __init__(self, config: BigSegmentsConfig):
+    # Because the constructor starts the polling task, it must run within a running event loop.
+    def __init__(self, config: AsyncBigSegmentsConfig):
         self.__store = config.store
 
         self.__stale_after_millis = config.stale_after * 1000
         self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
         self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
-        self.__poll_task = None  # type: Optional[RepeatingTask]
+        self.__poll_task = None  # type: Optional[AsyncRepeatingTask]
 
         if self.__store:
             self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
-            self.__poll_task = RepeatingTask("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
+            self.__poll_task = AsyncRepeatingTask("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 
-    def stop(self):
+    async def stop(self):
         if self.__poll_task:
             self.__poll_task.stop()
         if self.__store:
-            self.__store.stop()
+            await self.__store.stop()
 
     @property
     def status_provider(self) -> BigSegmentStoreStatusProvider:
         return self.__status_provider
 
-    def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
+    async def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
         if not self.__store:
             return None, BigSegmentsStatus.NOT_CONFIGURED
         membership = self.__cache.get(user_key)
         if membership is None:
             user_hash = _hash_for_user_key(user_key)
             try:
-                membership = self.__store.get_membership(user_hash)
+                membership = await self.__store.get_membership(user_hash)  # type: ignore[misc]
                 if membership is None:
                     membership = EMPTY_MEMBERSHIP
                 self.__cache[user_key] = membership
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
                 return None, BigSegmentsStatus.STORE_ERROR
+        # First-call fallback: if the polling task hasn't run yet, poll inline now
         status = self.__last_status
-        if not status:
-            status = self.poll_store_and_update_status()
+        if status is None:
+            status = await self.poll_store_and_update_status()
         if not status.available:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
 
     def get_status(self) -> BigSegmentStoreStatus:
-        status = self.__last_status
-        return status if status else self.poll_store_and_update_status()
+        """Return the most recently polled status.
 
-    def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
+        When no status has been cached yet, the sync variant polls the store
+        inline; the async variant (whose status getter cannot await) reports
+        the store as unavailable until the polling task has run.
+        """
+        status = self.__last_status
+        if status is None:
+            return BigSegmentStoreStatus(False, False)
+        return status if status else self.poll_store_and_update_status()  # type: ignore[return-value]
+
+    async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
         if self.__store:
             try:
-                metadata = self.__store.get_metadata()
+                metadata = await self.__store.get_metadata()  # type: ignore[misc]
                 new_status = BigSegmentStoreStatus(True, (metadata is None) or self.is_stale(metadata.last_up_to_date))
             except Exception as e:
                 log.exception("Big Segment store status query returned error: %s" % e)
