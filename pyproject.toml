@@ -1,6 +1,6 @@
 [project]
 name = "launchdarkly-server-sdk"
-version = "9.16.0"
+version = "9.16.1"
 description = "LaunchDarkly SDK for Python"
 authors = [
     {name = "LaunchDarkly", email = "dev@launchdarkly.com"}

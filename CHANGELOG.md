@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.16.1](https://github.com/launchdarkly/python-server-sdk/compare/9.16.0...9.16.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* Bump python-eventsource to 1.7.1 to correct pool ownership when closing connections ([25c2b8d](https://github.com/launchdarkly/python-server-sdk/commit/25c2b8d9f0ede9b147276e6c69f8942964f66649))
+* Correct data source error reporting ([25c2b8d](https://github.com/launchdarkly/python-server-sdk/commit/25c2b8d9f0ede9b147276e6c69f8942964f66649))
+* Remove dead __BUILTINS__ constant ([#461](https://github.com/launchdarkly/python-server-sdk/issues/461)) ([eb0ecfd](https://github.com/launchdarkly/python-server-sdk/commit/eb0ecfde07e42de3844e2de581cbf01adbf8070c))
+
+
+### Documentation
+
+* clarify is_initialized() semantics (SDK-2641) ([#454](https://github.com/launchdarkly/python-server-sdk/issues/454)) ([bab14db](https://github.com/launchdarkly/python-server-sdk/commit/bab14db35c448346e3469a996bdd1de361268d56))
+
 ## [9.16.0](https://github.com/launchdarkly/python-server-sdk/compare/9.15.1...9.16.0) (2026-06-08)
 
 
