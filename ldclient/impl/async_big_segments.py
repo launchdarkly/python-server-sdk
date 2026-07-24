@@ -77,10 +77,7 @@ class AsyncBigSegmentStoreManager:
         inline; the async variant (whose status getter cannot await) reports
         the store as unavailable until the polling task has run.
         """
-        status = self.__last_status
-        if status is None:
-            return BigSegmentStoreStatus(False, False)
-        return status
+        return self.__last_status or BigSegmentStoreStatus(False, False)
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
