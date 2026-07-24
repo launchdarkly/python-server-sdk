@@ -80,7 +80,7 @@ class AsyncBigSegmentStoreManager:
         status = self.__last_status
         if status is None:
             return BigSegmentStoreStatus(False, False)
-        return status if status else self.poll_store_and_update_status()  # type: ignore[return-value]
+        return status
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
