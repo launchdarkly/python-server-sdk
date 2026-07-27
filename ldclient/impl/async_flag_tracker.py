@@ -26,12 +26,11 @@ class AsyncFlagValueChangeListener:
         return cls(key, context, listener, eval_fn, scheduler, value)
 
     def __call__(self, flag_change: FlagChange):
-        self.__scheduler.call(self._on_flag_change, flag_change)
-
-    async def _on_flag_change(self, flag_change: FlagChange):
         if flag_change.key != self.__key:
             return
+        self.__scheduler.call(self._on_flag_change)
 
+    async def _on_flag_change(self):
         async with self.__lock:
             new_value = await self.__eval_fn(self.__key, self.__context)
             old_value, self.__value = self.__value, new_value
