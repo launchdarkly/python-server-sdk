@@ -71,13 +71,16 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
 
     async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
         try:
-            await self.__store.delete(kind, key, version)
+            deleted = await self.__store.delete(kind, key, version)
         except Exception as e:
             error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
             self.update_status(DataSourceState.INTERRUPTED, error_info)
             raise
 
-        self.__update_dependency_for_single_item(kind, key, None)
+        # Only notify when the store actually applied the delete, so a stale (version-rejected)
+        # delete produces no spurious flag-change events, mirroring the upsert path.
+        if deleted:
+            self.__update_dependency_for_single_item(kind, key, None)
 
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]) -> None:
         status_to_broadcast = None

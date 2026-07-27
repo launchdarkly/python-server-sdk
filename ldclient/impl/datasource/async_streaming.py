@@ -134,8 +134,11 @@ class AsyncStreamingUpdateProcessor(UpdateProcessor):
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
     async def stop(self):
-        await self.__stop_with_error_info(None)
+        # Cancel the run task first: otherwise, if stop() is called before _run has executed, the
+        # loop could run _run at __stop_with_error_info's await and create a fresh SSE connection
+        # against the session we're closing. Once the runner is stopped, teardown is safe.
         await self._runner.stop_all()
+        await self.__stop_with_error_info(None)
 
     async def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping AsyncStreamingUpdateProcessor")
