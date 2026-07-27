@@ -691,6 +691,10 @@ class BigSegmentStoreStatusProvider:
         """
         Gets the current status of the store.
 
+        Before the first poll completes, the synchronous SDK performs a blocking store query and
+        returns its result, while the async SDK (``AsyncLDClient``) returns the last polled status
+        without blocking -- ``available=False`` until the first background poll completes.
+
         :return: the status
         """
         pass
