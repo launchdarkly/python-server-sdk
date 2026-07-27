@@ -310,6 +310,11 @@ class AsyncReadOnlyStore(Protocol):
     Both async data systems expose their active store through this uniform interface:
     :class:`AsyncFeatureStore` satisfies it directly (FDv1), and FDv2 adapts its
     synchronous in-memory store to it. This is the async analog of :class:`ReadOnlyStore`.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
     """
 
     @abstractmethod
