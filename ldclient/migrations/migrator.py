@@ -18,7 +18,8 @@ from ldclient.migrations.types import (
     OperationResult,
     Origin,
     Stage,
-    WriteResult
+    WriteResult,
+    _MigratorBuilderBase
 )
 
 if TYPE_CHECKING:
@@ -168,7 +169,7 @@ class MigratorImpl(Migrator):
         return authoritative_result, nonauthoritative_result
 
 
-class MigratorBuilder:
+class MigratorBuilder(_MigratorBuilderBase):
     """
     The migration builder is used to configure and construct an instance of a
     :class:`Migrator`. This migrator can be used to perform LaunchDarkly
@@ -181,41 +182,12 @@ class MigratorBuilder:
         self._client = client
 
         # Default settings as required by the spec
-        self.__read_execution_order = ExecutionOrder.PARALLEL
-        self.__measure_latency = True
-        self.__measure_errors = True
+        self._read_execution_order = ExecutionOrder.PARALLEL
+        self._measure_latency = True
+        self._measure_errors = True
 
         self.__read_config: Optional[MigrationConfig] = None
         self.__write_config: Optional[MigrationConfig] = None
-
-    def read_execution_order(self, order: ExecutionOrder) -> 'MigratorBuilder':
-        """
-        The read execution order influences the parallelism and execution order
-        for read operations involving multiple origins.
-        """
-        if order not in ExecutionOrder:
-            return self
-
-        self.__read_execution_order = order
-        return self
-
-    def track_latency(self, enabled: bool) -> 'MigratorBuilder':
-        """
-        Enable or disable latency tracking for migration operations. This
-        latency information can be sent upstream to LaunchDarkly to enhance
-        migration visibility.
-        """
-        self.__measure_latency = enabled
-        return self
-
-    def track_errors(self, enabled: bool) -> 'MigratorBuilder':
-        """
-        Enable or disable error tracking for migration operations. This error
-        information can be sent upstream to LaunchDarkly to enhance migration
-        visibility.
-        """
-        self.__measure_errors = enabled
-        return self
 
     def read(self, old: MigratorFn, new: MigratorFn, comparison: Optional[MigratorCompareFn] = None) -> 'MigratorBuilder':
         """
@@ -283,11 +255,11 @@ class MigratorBuilder:
         return MigratorImpl(
             Sampler(Random()),
             self._client,
-            self.__read_execution_order,
+            self._read_execution_order,
             self.__read_config,
             self.__write_config,
-            self.__measure_latency,
-            self.__measure_errors,
+            self._measure_latency,
+            self._measure_errors,
         )
 
 
