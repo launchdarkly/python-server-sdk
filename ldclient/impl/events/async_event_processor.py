@@ -2,6 +2,7 @@
 Implementation details of the analytics event delivery component.
 """
 
+import asyncio
 import gzip
 import json
 import queue
@@ -9,11 +10,18 @@ import time
 import uuid
 from collections import namedtuple
 from random import Random
-from threading import Event, Lock, Thread
+from typing import Callable, Optional, Union
 
-import urllib3
-
-from ldclient.config import Config
+from ldclient.async_config import AsyncConfig
+from ldclient.impl.aio.concurrency import (
+    AsyncEvent,
+    AsyncLock,
+    AsyncQueue,
+    AsyncRepeatingTask,
+    AsyncTaskRunner,
+    AsyncWorkerPool
+)
+from ldclient.impl.aio.transport import AsyncHTTPTransport
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_processor_common import (
     EventBuffer,
@@ -21,10 +29,7 @@ from ldclient.impl.events.event_processor_common import (
     EventOutputFormatter
 )
 from ldclient.impl.events.types import EventInput
-from ldclient.impl.fixed_thread_pool import FixedThreadPool
-from ldclient.impl.http import _http_factory
 from ldclient.impl.lru_cache import SimpleLRUCache
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.sampler import Sampler
 from ldclient.impl.util import (
     _headers,
@@ -41,27 +46,27 @@ EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
 
 
 class EventPayloadSendTask:
-    def __init__(self, http, config, formatter, payload, response_fn):
+    def __init__(self, http: AsyncHTTPTransport, config: AsyncConfig, formatter: EventOutputFormatter, payload, response_fn: Callable):
         self._http = http
         self._config = config
         self._formatter = formatter
         self._payload = payload
         self._response_fn = response_fn
 
-    def run(self):
+    async def run(self):
         try:
             output_events = self._formatter.make_output_events(self._payload.events, self._payload.summary)
-            resp = self._do_send(output_events)
-        except Exception as e:
+            await self._do_send(output_events)
+        except Exception:
             log.warning('Unhandled exception in event processor. Analytics events were not processed.', exc_info=True)
 
-    def _do_send(self, output_events):
+    async def _do_send(self, output_events):
         # noinspection PyBroadException
         try:
             json_body = json.dumps(output_events, separators=(',', ':'))
             log.debug('Sending events payload: ' + json_body)
             payload_id = str(uuid.uuid4())
-            r = _post_events_with_retry(self._http, self._config, self._config.events_uri, payload_id, json_body, "%d events" % len(output_events))
+            r = await _post_events_with_retry(self._http, self._config, self._config.events_uri, payload_id, json_body, "%d events" % len(output_events))
             if r:
                 self._response_fn(r)
             return r
@@ -70,27 +75,29 @@ class EventPayloadSendTask:
 
 
 class DiagnosticEventSendTask:
-    def __init__(self, http, config, event_body):
+    def __init__(self, http: AsyncHTTPTransport, config: AsyncConfig, event_body: dict):
         self._http = http
         self._config = config
         self._event_body = event_body
 
-    def run(self):
+    async def run(self):
         # noinspection PyBroadException
         try:
             json_body = json.dumps(self._event_body)
             log.debug('Sending diagnostic event: ' + json_body)
-            _post_events_with_retry(self._http, self._config, self._config.events_base_uri + '/diagnostic', None, json_body, "diagnostic event")
+            await _post_events_with_retry(self._http, self._config, self._config.events_base_uri + '/diagnostic', None, json_body, "diagnostic event")
         except Exception as e:
             log.warning('Unhandled exception in event processor. Diagnostic event was not sent. [%s]', e)
 
 
 class EventDispatcher(EventDispatcherBase):
-    def __init__(self, inbox, config, http_client, diagnostic_accumulator=None):
+    def __init__(self, inbox: AsyncQueue, config: AsyncConfig, http_client, diagnostic_accumulator=None):
         self._inbox = inbox
         self._config = config
-        self._http = _http_factory(config).create_pool_manager(1, config.events_uri) if http_client is None else http_client
-        self._close_http = http_client is None  # so we know whether to close it later
+        # When no client is injected, the transport creates one targeting the
+        # events URI and owns it (closing it on shutdown); an injected client
+        # remains owned by the caller.
+        self._http = AsyncHTTPTransport(config, client=http_client)
         self._disabled = False
         self._outbox = EventBuffer(config.events_max_pending)
         self._context_keys = SimpleLRUCache(config.context_keys_capacity)
@@ -101,22 +108,22 @@ class EventDispatcher(EventDispatcherBase):
         self._sampler = Sampler(Random())
         self._omit_anonymous_contexts = config.omit_anonymous_contexts
 
-        self._flush_workers = FixedThreadPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
-        self._diagnostic_flush_workers = None if self._diagnostic_accumulator is None else FixedThreadPool(1, "ldclient.events.diag_flush")
+        self._flush_workers = AsyncWorkerPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
+        self._diagnostic_flush_workers: Optional[AsyncWorkerPool] = None
         if self._diagnostic_accumulator is not None:
+            self._diagnostic_flush_workers = AsyncWorkerPool(1, "ldclient.events.diag_flush")
             init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date, self._diagnostic_accumulator.diagnostic_id, config)
             task = DiagnosticEventSendTask(self._http, self._config, init_event)
             self._diagnostic_flush_workers.execute(task.run)
 
-        self._main_thread = Thread(target=self._run_main_loop, name="ldclient.events.processor")
-        self._main_thread.daemon = True
-        self._main_thread.start()
+        self._runner = AsyncTaskRunner()
+        self._runner.spawn("ldclient.events.processor", self._run_main_loop)
 
-    def _run_main_loop(self):
+    async def _run_main_loop(self):
         log.info("Starting event processor")
         while True:
             try:
-                message = self._inbox.get(block=True)
+                message = await self._inbox.get()
                 if message.type == 'event':
                     self._process_event(message.param)
                 elif message.type == 'flush':
@@ -126,15 +133,15 @@ class EventDispatcher(EventDispatcherBase):
                 elif message.type == 'diagnostic':
                     self._send_and_reset_diagnostics()
                 elif message.type == 'test_sync':
-                    self._flush_workers.wait()
-                    if self._diagnostic_accumulator is not None:
-                        self._diagnostic_flush_workers.wait()
+                    await self._flush_workers.wait()
+                    if self._diagnostic_flush_workers is not None:
+                        await self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
-                    self._do_shutdown()
+                    await self._do_shutdown()
                     message.param.set()
                     return
-            except Exception as e:
+            except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
 
     def _trigger_flush(self):
@@ -153,40 +160,40 @@ class EventDispatcher(EventDispatcherBase):
                 pass
 
     def _send_and_reset_diagnostics(self):
-        if self._diagnostic_accumulator is not None:
+        if self._diagnostic_accumulator is not None and self._diagnostic_flush_workers is not None:
             dropped_event_count = self._outbox.get_and_clear_dropped_count()
             stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_contexts)
             self._deduplicated_contexts = 0
             task = DiagnosticEventSendTask(self._http, self._config, stats_event)
             self._diagnostic_flush_workers.execute(task.run)
 
-    def _do_shutdown(self):
+    async def _do_shutdown(self):
         self._flush_workers.stop()
-        self._flush_workers.wait()
+        await self._flush_workers.wait()
 
-        if self._diagnostic_flush_workers:
+        if self._diagnostic_flush_workers is not None:
             self._diagnostic_flush_workers.stop()
-            self._diagnostic_flush_workers.wait()
+            await self._diagnostic_flush_workers.wait()
 
-        if self._close_http:
-            self._http.clear()
+        await self._http.close()
 
 
-class DefaultEventProcessor(EventProcessor):
-    def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
-        self._inbox = queue.Queue(config.events_max_pending)
+class AsyncEventProcessor(EventProcessor):
+    def __init__(self, config: AsyncConfig, http=None, dispatcher_class=None, diagnostic_accumulator=None):
+        self._inbox = AsyncQueue(config.events_max_pending)
         self._inbox_full = False
-        self._flush_timer = RepeatingTask("ldclient.events.flush", config.flush_interval, config.flush_interval, self.flush)
-        self._contexts_flush_timer = RepeatingTask("ldclient.events.context-flush", config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
+        self._flush_timer = AsyncRepeatingTask("ldclient.events.flush", config.flush_interval, config.flush_interval, self.flush)
+        self._contexts_flush_timer = AsyncRepeatingTask("ldclient.events.context-flush", config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
         self._flush_timer.start()
         self._contexts_flush_timer.start()
+        self._diagnostic_event_timer: Optional[AsyncRepeatingTask]
         if diagnostic_accumulator is not None:
-            self._diagnostic_event_timer = RepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval, config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer = AsyncRepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval, config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None
 
-        self._close_lock = Lock()
+        self._close_lock = AsyncLock()
         self._closed = False
 
         (dispatcher_class or EventDispatcher)(self._inbox, config, http, diagnostic_accumulator)
@@ -197,8 +204,8 @@ class DefaultEventProcessor(EventProcessor):
     def flush(self):
         self._post_to_inbox(EventProcessorMessage('flush', None))
 
-    def stop(self):
-        with self._close_lock:
+    async def stop(self):
+        async with self._close_lock:
             if self._closed:
                 return
             self._closed = True
@@ -209,41 +216,41 @@ class DefaultEventProcessor(EventProcessor):
         self.flush()
         # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
         # is full; an orderly shutdown can't happen unless these messages are received.
-        self._post_message_and_wait('stop')
+        await self._post_message_and_wait('stop')
 
-    def _post_to_inbox(self, message):
+    def _post_to_inbox(self, message: EventProcessorMessage):
         try:
-            self._inbox.put(message, block=False)
+            self._inbox.put_nowait(message)
         except queue.Full:
             if not self._inbox_full:
                 # possible race condition here, but it's of no real consequence - we'd just get an extra log line
                 self._inbox_full = True
                 log.warning("Events are being produced faster than they can be processed; some events will be dropped")
 
-    def _flush_contexts(self):
-        self._inbox.put(EventProcessorMessage('flush_contexts', None))
+    async def _flush_contexts(self):
+        await self._inbox.put(EventProcessorMessage('flush_contexts', None))
 
-    def _send_diagnostic(self):
-        self._inbox.put(EventProcessorMessage('diagnostic', None))
+    async def _send_diagnostic(self):
+        await self._inbox.put(EventProcessorMessage('diagnostic', None))
 
     # Used only in tests
-    def _wait_until_inactive(self):
-        self._post_message_and_wait('test_sync')
+    async def _wait_until_inactive(self):
+        await self._post_message_and_wait('test_sync')
 
-    def _post_message_and_wait(self, type):
-        reply = Event()
-        self._inbox.put(EventProcessorMessage(type, reply))
-        reply.wait()
+    async def _post_message_and_wait(self, type):
+        reply = AsyncEvent()
+        await self._inbox.put(EventProcessorMessage(type, reply))
+        await reply.wait()
 
     # These magic methods allow use of the "with" block in tests
-    def __enter__(self):
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, type, value, traceback):
-        self.stop()
+    async def __aexit__(self, type, value, traceback):
+        await self.stop()
 
 
-def _post_events_with_retry(http_client, config, uri, payload_id, body, events_description):
+async def _post_events_with_retry(http_client: AsyncHTTPTransport, config: AsyncConfig, uri: str, payload_id: Optional[str], body: str, events_description: str):
     hdrs = _headers(config)
     hdrs['Content-Type'] = 'application/json'
     if config.enable_event_compression:
@@ -254,11 +261,11 @@ def _post_events_with_retry(http_client, config, uri, payload_id, body, events_d
         hdrs['X-LaunchDarkly-Payload-ID'] = payload_id
     can_retry = True
     context = "posting %s" % events_description
-    data = gzip.compress(bytes(body, 'utf-8')) if config.enable_event_compression else body
+    data: Union[bytes, str] = gzip.compress(bytes(body, 'utf-8')) if config.enable_event_compression else body
     while True:
         next_action_message = "will retry" if can_retry else "some events were dropped"
         try:
-            r = http_client.request('POST', uri, headers=hdrs, body=data, timeout=urllib3.Timeout(connect=config.http.connect_timeout, read=config.http.read_timeout), retries=0)
+            r = await http_client.request('POST', uri, headers=hdrs, body=data)
             if r.status < 300:
                 return r
             recoverable = check_if_error_is_recoverable_and_log(context, r.status, None, next_action_message)
@@ -270,4 +277,4 @@ def _post_events_with_retry(http_client, config, uri, payload_id, body, events_d
             return None
         can_retry = False
         # fixed delay of 1 second for event retries
-        time.sleep(1)
+        await asyncio.sleep(1)
