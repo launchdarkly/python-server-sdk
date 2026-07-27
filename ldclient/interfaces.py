@@ -691,6 +691,10 @@ class BigSegmentStoreStatusProvider:
         """
         Gets the current status of the store.
 
+        Before the first poll completes, the synchronous SDK performs a blocking store query and
+        returns its result, while the async SDK (``AsyncLDClient``) returns the last polled status
+        without blocking -- ``available=False`` until the first background poll completes.
+
         :return: the status
         """
         pass
@@ -1183,6 +1187,56 @@ class FlagTracker(ABC):
         :param key: The flag key to monitor
         :param context: The context to evaluate against the flag
         :param listener: The listener to trigger if the value has changed
+        """
+        pass
+
+
+class AsyncFlagTracker(ABC):
+    """
+    An interface for tracking changes in feature flag configurations, for use with the async client
+    (:class:`ldclient.async_client.AsyncLDClient`). It mirrors :class:`FlagTracker`, except
+    :meth:`add_flag_value_change_listener` is a coroutine.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+
+    An implementation of this abstract class is returned by
+    :meth:`ldclient.async_client.AsyncLDClient.flag_tracker`. Application code never needs to
+    implement this interface.
+    """
+
+    @abstractmethod
+    def add_listener(self, listener: Callable[[FlagChange], None]) -> None:
+        """
+        Registers a listener to be notified of feature flag changes in general. Behaves identically
+        to :meth:`FlagTracker.add_listener`.
+
+        :param listener: listener to call when a flag has changed
+        """
+        pass
+
+    @abstractmethod
+    def remove_listener(self, listener: Callable[[FlagChange], None]) -> None:
+        """
+        Unregisters a listener so that it will no longer be notified of feature flag changes.
+
+        :param listener: the listener to remove
+        """
+        pass
+
+    @abstractmethod
+    async def add_flag_value_change_listener(self, key: str, context: Context, listener: Callable[[FlagValueChange], None]) -> Callable[[FlagChange], None]:
+        """
+        Registers a listener to be notified when a specific flag's evaluated value changes for a
+        specific context. Behaves like :meth:`FlagTracker.add_flag_value_change_listener`, but is a
+        **coroutine** and must be awaited (it evaluates the flag to capture the baseline value).
+
+        :param key: the flag key to monitor
+        :param context: the context to evaluate against the flag
+        :param listener: the listener to trigger if the value has changed
+        :return: the subscription; pass it to :meth:`remove_listener` to unsubscribe
         """
         pass
 

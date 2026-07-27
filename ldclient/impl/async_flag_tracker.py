@@ -3,7 +3,7 @@ from typing import Any, Callable
 from ldclient.context import Context
 from ldclient.impl.aio.concurrency import AsyncCallbackScheduler, AsyncLock
 from ldclient.impl.listeners import Listeners
-from ldclient.interfaces import FlagChange, FlagTracker, FlagValueChange
+from ldclient.interfaces import AsyncFlagTracker, FlagChange, FlagValueChange
 
 
 class AsyncFlagValueChangeListener:
@@ -41,7 +41,7 @@ class AsyncFlagValueChangeListener:
         self.__listener(FlagValueChange(self.__key, old_value, new_value))
 
 
-class AsyncFlagTrackerImpl(FlagTracker):
+class AsyncFlagTrackerImpl(AsyncFlagTracker):
     def __init__(self, listeners: Listeners, eval_fn: Callable):
         self.__listeners = listeners
         self.__eval_fn = eval_fn
