@@ -38,4 +38,8 @@ class _AsyncRedisBigSegmentStore(AsyncBigSegmentStore):
         return ret
 
     async def stop(self):
-        await self._client.aclose()
+        # aclose() replaced the async close() in redis-py 5.0.1; the [redis] extra allows >= 4.2
+        if hasattr(self._client, "aclose"):
+            await self._client.aclose()
+        else:
+            await self._client.close()
