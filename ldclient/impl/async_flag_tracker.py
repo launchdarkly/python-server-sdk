@@ -9,7 +9,7 @@ from ldclient.interfaces import FlagChange, FlagTracker, FlagValueChange
 class AsyncFlagValueChangeListener:
     """Calls the user's listener when a specific flag's evaluated value changes for a specific context."""
 
-    def __init__(self, key: str, context: Context, listener: Callable[[FlagValueChange], None], eval_fn: Callable, scheduler: AsyncCallbackScheduler, value: Any):
+    def __init__(self, key: str, context: Context, listener: Callable[[FlagValueChange], None], eval_fn: Callable, scheduler: AsyncCallbackScheduler, initial_value: Any):
         self.__key = key
         self.__context = context
         self.__listener = listener
@@ -17,13 +17,13 @@ class AsyncFlagValueChangeListener:
         self.__scheduler = scheduler
 
         self.__lock = AsyncLock()
-        self.__value = value
+        self.__value = initial_value
 
     @classmethod
     async def create(cls, key: str, context: Context, listener: Callable[[FlagValueChange], None], eval_fn: Callable, scheduler: AsyncCallbackScheduler) -> 'AsyncFlagValueChangeListener':
         """Evaluates the flag once to capture the baseline value, then returns the listener."""
-        value = await eval_fn(key, context)
-        return cls(key, context, listener, eval_fn, scheduler, value)
+        initial_value = await eval_fn(key, context)
+        return cls(key, context, listener, eval_fn, scheduler, initial_value)
 
     def __call__(self, flag_change: FlagChange):
         if flag_change.key != self.__key:
