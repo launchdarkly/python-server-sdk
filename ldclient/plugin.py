@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
-from ldclient.hook import Hook
+from ldclient.hook import AsyncHook, Hook
 from ldclient.impl import AnyNum
 from ldclient.impl.evaluator import error_reason
 from ldclient.interfaces import (
@@ -17,6 +17,7 @@ from ldclient.interfaces import (
 )
 
 if TYPE_CHECKING:
+    from ldclient.async_client import AsyncLDClient
     from ldclient.client import LDClient
 
 
@@ -103,6 +104,67 @@ class Plugin(ABC):
 
         This method is called before register() to collect all hooks from
         plugins. The hooks returned will be added to the SDK's hook configuration.
+
+        :param metadata: Metadata about the environment in which the SDK is running
+        :return: A list of hooks to be registered with the SDK
+        """
+        return []
+
+
+class AsyncPlugin(ABC):
+    """
+    Abstract base class for extending AsyncLDClient functionality via plugins.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    All provided async plugin implementations **MUST** inherit from this class.
+
+    This class includes default implementations for optional methods. This
+    allows LaunchDarkly to expand the list of plugin methods without breaking
+    customer integrations.
+
+    Unlike :class:`Plugin`, the register() method is a coroutine and will be
+    awaited by the async client, allowing plugins to perform asynchronous
+    initialization such as connecting to telemetry backends.
+    """
+
+    @property
+    @abstractmethod
+    def metadata(self) -> PluginMetadata:
+        """
+        Get metadata about the plugin implementation.
+
+        :return: Metadata containing information about the plugin
+        """
+        return PluginMetadata(name='UNDEFINED')
+
+    async def register(self, client: 'AsyncLDClient', metadata: EnvironmentMetadata) -> None:
+        """
+        Register the plugin with the async SDK client.
+
+        This method is called during SDK initialization to allow the plugin
+        to set up any necessary integrations, register hooks, or perform
+        other initialization tasks. The method is a coroutine and will be
+        awaited, allowing asynchronous I/O during registration.
+
+        :param client: The AsyncLDClient instance
+        :param metadata: Metadata about the environment in which the SDK is running
+        """
+        pass
+
+    def get_hooks(self, metadata: EnvironmentMetadata) -> List[AsyncHook]:
+        """
+        Get a list of hooks that this plugin provides.
+
+        This method is called before register() to collect all hooks from
+        plugins. The hooks returned will be added to the SDK's hook configuration.
+        Async plugins provide async :class:`AsyncHook` instances only.
+
+        This method is synchronous (returns a list immediately — no I/O).
 
         :param metadata: Metadata about the environment in which the SDK is running
         :return: A list of hooks to be registered with the SDK
