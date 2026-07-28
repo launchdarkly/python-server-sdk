@@ -10,6 +10,7 @@ the async SDK client.
 
 from typing import Callable, List, Optional, Set
 
+from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.config import (
     DEFAULT_BASE_URI,
     DEFAULT_EVENTS_URI,
@@ -220,7 +221,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__initial_reconnect_delay = initial_reconnect_delay
         self.__poll_interval = max(poll_interval, 30.0)
         self.__use_ldd = use_ldd
-        self.__feature_store = feature_store
+        self.__feature_store = AsyncInMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
         self.__feature_requester_class = feature_requester_class
         self.__events_max_pending = events_max_pending
@@ -308,7 +309,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__use_ldd
 
     @property
-    def feature_store(self) -> Optional[AsyncFeatureStore]:
+    def feature_store(self) -> AsyncFeatureStore:
         return self.__feature_store
 
     @property
