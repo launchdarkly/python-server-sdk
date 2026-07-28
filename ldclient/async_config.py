@@ -8,7 +8,7 @@ the async SDK client.
     compatibility guarantees.
 """
 
-from typing import TYPE_CHECKING, Callable, List, Optional, Set
+from typing import Callable, List, Optional, Set
 
 from ldclient.config import (
     GET_LATEST_FEATURES_PATH,
@@ -28,15 +28,11 @@ from ldclient.impl.util import (
 from ldclient.interfaces import (
     AsyncBigSegmentStore,
     AsyncDataSourceUpdateSink,
+    AsyncEventProcessor,
     AsyncFeatureStore,
     UpdateProcessor
 )
 from ldclient.plugin import AsyncPlugin
-
-if TYPE_CHECKING:
-    # Imported for typing only. The concrete AsyncEventProcessor pulls in aiohttp
-    # transitively, so it is kept out of the runtime import graph.
-    from ldclient.impl.events.async_event_processor import AsyncEventProcessor
 
 
 class AsyncBigSegmentsConfig:
@@ -120,7 +116,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         use_ldd: bool = False,
         feature_store: Optional[AsyncFeatureStore] = None,
         feature_requester_class=None,
-        event_processor_class: Optional[Callable[['AsyncConfig'], 'AsyncEventProcessor']] = None,
+        event_processor_class: Optional[Callable[['AsyncConfig'], AsyncEventProcessor]] = None,
         private_attributes: Set[str] = set(),
         all_attributes_private: bool = False,
         offline: bool = False,
@@ -313,7 +309,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__feature_store
 
     @property
-    def event_processor_class(self) -> Optional[Callable[['AsyncConfig'], 'AsyncEventProcessor']]:
+    def event_processor_class(self) -> Optional[Callable[['AsyncConfig'], AsyncEventProcessor]]:
         return self.__event_processor_class
 
     @property

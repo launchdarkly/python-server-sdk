@@ -484,6 +484,39 @@ class EventProcessor(ABC):
         """
 
 
+class AsyncEventProcessor(ABC):
+    """
+    Async interface for the component that buffers analytics events and sends them to LaunchDarkly,
+    for use with :class:`ldclient.async_client.AsyncLDClient`. It mirrors :class:`EventProcessor`,
+    except ``stop`` is a coroutine. The default implementation can be replaced for testing.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+    """
+
+    @abstractmethod
+    def send_event(self, event):
+        """
+        Processes an event to be sent at some point.
+        """
+
+    @abstractmethod
+    def flush(self):
+        """
+        Specifies that any buffered events should be sent as soon as possible, rather than waiting
+        for the next flush interval. This method is not awaitable; calling ``stop()`` will deliver
+        any events not yet sent prior to shutting down.
+        """
+
+    @abstractmethod
+    async def stop(self):
+        """
+        Shuts down the event processor after first delivering all pending events.
+        """
+
+
 class FeatureRequester(ABC):
     """
     Interface for the component that acquires feature flag data in polling mode. The default
