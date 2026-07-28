@@ -1,5 +1,5 @@
 """
-Tests for AsyncEventProcessor.
+Tests for DefaultAsyncEventProcessor.
 
 These mirror the sync DefaultEventProcessor tests: the processor is driven
 through its public API plus the ``_wait_until_inactive`` test handshake, and
@@ -19,7 +19,9 @@ import pytest
 
 from ldclient.async_config import AsyncConfig
 from ldclient.context import Context
-from ldclient.impl.events.async_event_processor import AsyncEventProcessor
+from ldclient.impl.events.async_event_processor import (
+    DefaultAsyncEventProcessor
+)
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
     create_diagnostic_id
@@ -111,14 +113,14 @@ async def make_processor(mock_http: MockAioHttp, **kwargs):
     kwargs.setdefault('sdk_key', 'SDK_KEY')
     config = AsyncConfig(**kwargs)
     diagnostic_accumulator = _DiagnosticAccumulator(create_diagnostic_id(config))
-    ep = AsyncEventProcessor(config, mock_http, diagnostic_accumulator=diagnostic_accumulator)
+    ep = DefaultAsyncEventProcessor(config, mock_http, diagnostic_accumulator=diagnostic_accumulator)
     try:
         yield ep
     finally:
         await ep.stop()
 
 
-async def flush_and_get_events(ep: AsyncEventProcessor, mock_http: MockAioHttp):
+async def flush_and_get_events(ep: DefaultAsyncEventProcessor, mock_http: MockAioHttp):
     ep.flush()
     await ep._wait_until_inactive()
     if mock_http.request_data is None:
@@ -398,7 +400,7 @@ async def test_does_not_block_on_full_inbox():
                 return
 
     mock_http = MockAioHttp()
-    ep = AsyncEventProcessor(config, mock_http, dispatcher_factory)
+    ep = DefaultAsyncEventProcessor(config, mock_http, dispatcher_factory)
     ep_inbox = ep_inbox_holder[0]
     event1 = EventInputCustom(timestamp, context, 'event1')
     event2 = EventInputCustom(timestamp, context, 'event2')

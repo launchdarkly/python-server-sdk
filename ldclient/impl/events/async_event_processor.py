@@ -36,7 +36,7 @@ from ldclient.impl.util import (
     check_if_error_is_recoverable_and_log,
     log
 )
-from ldclient.interfaces import EventProcessor
+from ldclient.interfaces import AsyncEventProcessor
 
 __MAX_FLUSH_THREADS__ = 5
 __CURRENT_EVENT_SCHEMA__ = 4
@@ -178,7 +178,7 @@ class EventDispatcher(EventDispatcherBase):
         await self._http.close()
 
 
-class AsyncEventProcessor(EventProcessor):
+class DefaultAsyncEventProcessor(AsyncEventProcessor):
     def __init__(self, config: AsyncConfig, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = AsyncQueue(config.events_max_pending)
         self._inbox_full = False
