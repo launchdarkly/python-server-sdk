@@ -11,6 +11,9 @@ the async SDK client.
 from typing import Callable, List, Optional, Set
 
 from ldclient.config import (
+    DEFAULT_BASE_URI,
+    DEFAULT_EVENTS_URI,
+    DEFAULT_STREAM_URI,
     GET_LATEST_FEATURES_PATH,
     STREAM_FLAGS_PATH,
     DataSourceBuilderConfig,
@@ -30,7 +33,7 @@ from ldclient.interfaces import (
     AsyncDataSourceUpdateSink,
     AsyncEventProcessor,
     AsyncFeatureStore,
-    UpdateProcessor
+    AsyncUpdateProcessor
 )
 from ldclient.plugin import AsyncPlugin
 
@@ -102,16 +105,16 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
     def __init__(
         self,
         sdk_key: str,
-        base_uri: str = 'https://app.launchdarkly.com',
-        events_uri: str = 'https://events.launchdarkly.com',
+        base_uri: str = DEFAULT_BASE_URI,
+        events_uri: str = DEFAULT_EVENTS_URI,
         events_max_pending: int = 10000,
         flush_interval: float = 5,
-        stream_uri: str = 'https://stream.launchdarkly.com',
+        stream_uri: str = DEFAULT_STREAM_URI,
         stream: bool = True,
         initial_reconnect_delay: float = 1,
         defaults: dict = {},
         send_events: Optional[bool] = None,
-        update_processor_class: Optional[Callable[['AsyncConfig', AsyncFeatureStore, AsyncEvent], UpdateProcessor]] = None,
+        update_processor_class: Optional[Callable[['AsyncConfig', AsyncFeatureStore, AsyncEvent], AsyncUpdateProcessor]] = None,
         poll_interval: float = 30,
         use_ldd: bool = False,
         feature_store: Optional[AsyncFeatureStore] = None,
@@ -285,7 +288,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__stream_uri + STREAM_FLAGS_PATH
 
     @property
-    def update_processor_class(self) -> Optional[Callable[['AsyncConfig', AsyncFeatureStore, AsyncEvent], UpdateProcessor]]:
+    def update_processor_class(self) -> Optional[Callable[['AsyncConfig', AsyncFeatureStore, AsyncEvent], AsyncUpdateProcessor]]:
         return self.__update_processor_class
 
     @property

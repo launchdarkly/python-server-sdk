@@ -456,6 +456,43 @@ class UpdateProcessor(BackgroundOperation, ABC):
         """
 
 
+class AsyncUpdateProcessor(ABC):
+    """
+    Async interface for the component that obtains feature flag data and passes it to an
+    :class:`AsyncFeatureStore`, for use with :class:`ldclient.async_client.AsyncLDClient`. It mirrors
+    :class:`UpdateProcessor`, except ``stop`` is a coroutine. The built-in implementations are the
+    client's standard streaming or polling behavior.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+    """
+
+    def start(self):
+        """
+        Starts the update processor in the background. Should return immediately and not block.
+        """
+        pass
+
+    async def stop(self):
+        """
+        Stops the update processor. Awaiting the result ensures background work has stopped.
+        """
+        pass
+
+    def is_alive(self) -> bool:
+        """
+        Returns whether the update processor is alive or not.
+        """
+        return True
+
+    def initialized(self) -> bool:  # type: ignore[empty-body]
+        """
+        Returns whether the update processor has received feature flags and has initialized its feature store.
+        """
+
+
 class EventProcessor(ABC):
     """
     Interface for the component that buffers analytics events and sends them to LaunchDarkly.

@@ -31,6 +31,10 @@ from ldclient.plugin import Plugin
 GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
 STREAM_FLAGS_PATH = '/flags'
 
+DEFAULT_BASE_URI = 'https://app.launchdarkly.com'
+DEFAULT_EVENTS_URI = 'https://events.launchdarkly.com'
+DEFAULT_STREAM_URI = 'https://stream.launchdarkly.com'
+
 
 class BigSegmentsConfig:
     """Configuration options related to Big Segments.
@@ -284,11 +288,11 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     def __init__(
         self,
         sdk_key: str,
-        base_uri: str = 'https://app.launchdarkly.com',
-        events_uri: str = 'https://events.launchdarkly.com',
+        base_uri: str = DEFAULT_BASE_URI,
+        events_uri: str = DEFAULT_EVENTS_URI,
         events_max_pending: int = 10000,
         flush_interval: float = 5,
-        stream_uri: str = 'https://stream.launchdarkly.com',
+        stream_uri: str = DEFAULT_STREAM_URI,
         stream: bool = True,
         initial_reconnect_delay: float = 1,
         defaults: dict = {},
