@@ -481,12 +481,6 @@ class AsyncUpdateProcessor(ABC):
         """
         pass
 
-    def is_alive(self) -> bool:
-        """
-        Returns whether the update processor is alive or not.
-        """
-        return True
-
     def initialized(self) -> bool:  # type: ignore[empty-body]
         """
         Returns whether the update processor has received feature flags and has initialized its feature store.
