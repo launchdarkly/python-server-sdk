@@ -56,6 +56,17 @@ class StatusCapture:
         self.statuses.append(status)
 
 
+class _FailingStore(AsyncInMemoryFeatureStore):
+    """Feature store whose reads and writes raise, to exercise the sink's
+    store-error monitoring."""
+
+    async def all(self, kind):
+        raise RuntimeError("boom")
+
+    async def upsert(self, kind, item):
+        raise RuntimeError("boom")
+
+
 # ---------------------------------------------------------------------------
 # init tests
 # ---------------------------------------------------------------------------
@@ -313,3 +324,36 @@ async def test_status_provider_add_remove_listener():
     provider.remove_listener(capture)
     sink.update_status(DataSourceState.OFF, None)
     assert len(capture.statuses) == 1  # listener was removed, no new events
+
+
+# ---------------------------------------------------------------------------
+# store-error monitoring
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_init_records_store_error_when_prior_read_fails():
+    # A flag-change listener must be registered so init reads prior data via
+    # all(); that read is monitored, so a failure records STORE_ERROR.
+    sink, status_listeners, flag_listeners = make_sink(_FailingStore())
+    flag_listeners.add(FlagChangeCapture())
+    status_capture = StatusCapture()
+    status_listeners.add(status_capture)
+
+    with pytest.raises(RuntimeError):
+        await sink.init({FEATURES: {}, SEGMENTS: {}})
+
+    assert len(status_capture.statuses) == 1
+    assert status_capture.statuses[0].error.kind == DataSourceErrorKind.STORE_ERROR
+
+
+@pytest.mark.asyncio
+async def test_upsert_records_store_error_on_failure():
+    sink, status_listeners, _ = make_sink(_FailingStore())
+    status_capture = StatusCapture()
+    status_listeners.add(status_capture)
+
+    with pytest.raises(RuntimeError):
+        await sink.upsert(FEATURES, make_flag('flag-a').to_json_dict())
+
+    assert len(status_capture.statuses) == 1
+    assert status_capture.statuses[0].error.kind == DataSourceErrorKind.STORE_ERROR

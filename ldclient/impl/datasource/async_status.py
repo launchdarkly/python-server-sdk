@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Mapping, Optional, Set
+from typing import Awaitable, Callable, Dict, Mapping, Optional, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
@@ -34,17 +34,15 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
         old_data: Optional[Dict[VersionedDataKind, Mapping[str, dict]]] = None
 
-        if self.__flag_change_listeners.has_listeners():
-            old_data = {}
-            for kind in [FEATURES, SEGMENTS]:
-                old_data[kind] = await self.__store.all(kind)
-
-        try:
+        async def init_store():
+            nonlocal old_data
+            if self.__flag_change_listeners.has_listeners():
+                old_data = {}
+                for kind in [FEATURES, SEGMENTS]:
+                    old_data[kind] = await self.__store.all(kind)
             await self.__store.init(all_data)
-        except Exception as e:
-            error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
-            self.update_status(DataSourceState.INTERRUPTED, error_info)
-            raise
+
+        await self.__monitor_store_update(init_store)
 
         self.__reset_tracker_with_new_data(all_data)
 
@@ -56,12 +54,7 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
     async def upsert(self, kind: VersionedDataKind, item: dict) -> None:
         key = item.get('key', '')
 
-        try:
-            updated = await self.__store.upsert(kind, item)
-        except Exception as e:
-            error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
-            self.update_status(DataSourceState.INTERRUPTED, error_info)
-            raise
+        updated = await self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
 
         # Only update dependency tracking and notify listeners if the store actually applied the
         # update. The AsyncFeatureStore contract returns whether it wrote, so a stale
@@ -70,12 +63,7 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
             self.__update_dependency_for_single_item(kind, key, item)
 
     async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
-        try:
-            deleted = await self.__store.delete(kind, key, version)
-        except Exception as e:
-            error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
-            self.update_status(DataSourceState.INTERRUPTED, error_info)
-            raise
+        deleted = await self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
 
         # Only notify when the store actually applied the delete, so a stale (version-rejected)
         # delete produces no spurious flag-change events, mirroring the upsert path.
@@ -104,6 +92,14 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
 
         if status_to_broadcast is not None:
             self.__status_listeners.notify(status_to_broadcast)
+
+    async def __monitor_store_update(self, fn: Callable[[], Awaitable]):
+        try:
+            return await fn()
+        except Exception as e:
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
+            self.update_status(DataSourceState.INTERRUPTED, error_info)
+            raise
 
     def __update_dependency_for_single_item(self, kind: VersionedDataKind, key: str, item):
         self.__tracker.update_dependencies_from(kind, key, item)
