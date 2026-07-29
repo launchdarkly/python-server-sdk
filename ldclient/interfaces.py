@@ -456,6 +456,37 @@ class UpdateProcessor(BackgroundOperation, ABC):
         """
 
 
+class AsyncUpdateProcessor(ABC):
+    """
+    Async interface for the component that obtains feature flag data and passes it to an
+    :class:`AsyncFeatureStore`, for use with :class:`ldclient.async_client.AsyncLDClient`. It mirrors
+    :class:`UpdateProcessor`, except ``stop`` is a coroutine. The built-in implementations are the
+    client's standard streaming or polling behavior.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+    """
+
+    def start(self):
+        """
+        Starts the update processor in the background. Should return immediately and not block.
+        """
+        pass
+
+    async def stop(self):
+        """
+        Stops the update processor. Awaiting the result ensures background work has stopped.
+        """
+        pass
+
+    def initialized(self) -> bool:  # type: ignore[empty-body]
+        """
+        Returns whether the update processor has received feature flags and has initialized its feature store.
+        """
+
+
 class EventProcessor(ABC):
     """
     Interface for the component that buffers analytics events and sends them to LaunchDarkly.
@@ -479,6 +510,47 @@ class EventProcessor(ABC):
 
     @abstractmethod
     def stop(self):
+        """
+        Shuts down the event processor after first delivering all pending events.
+        """
+
+
+class AsyncEventProcessor(ABC):
+    """
+    Async interface for the component that buffers analytics events and sends them to LaunchDarkly,
+    for use with :class:`ldclient.async_client.AsyncLDClient`. It mirrors :class:`EventProcessor`,
+    except ``stop`` is a coroutine. The default implementation can be replaced for testing.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+    """
+
+    @abstractmethod
+    def send_event(self, event):
+        """
+        Processes an event to be sent at some point.
+        """
+
+    @abstractmethod
+    def flush(self):
+        """
+        Specifies that any buffered events should be sent as soon as possible, rather than waiting
+        for the next flush interval. This method is not awaitable and does not wait for delivery;
+        use ``flush_and_wait`` to wait for delivery to complete.
+        """
+
+    @abstractmethod
+    async def flush_and_wait(self, timeout: float) -> bool:
+        """
+        Flushes any buffered events and waits for delivery to complete, up to ``timeout`` seconds.
+        Returns True if delivery completed within the timeout, or False if it timed out. Unlike
+        ``stop``, this does not shut down the event processor.
+        """
+
+    @abstractmethod
+    async def stop(self):
         """
         Shuts down the event processor after first delivering all pending events.
         """
