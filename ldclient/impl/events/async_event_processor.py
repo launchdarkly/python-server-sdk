@@ -132,6 +132,10 @@ class EventDispatcher(EventDispatcherBase):
                     self._context_keys.clear()
                 elif message.type == 'diagnostic':
                     self._send_and_reset_diagnostics()
+                elif message.type == 'flush_and_wait':
+                    self._trigger_flush()
+                    await self._flush_workers.wait()
+                    message.param.set()
                 elif message.type == 'test_sync':
                     await self._flush_workers.wait()
                     if self._diagnostic_flush_workers is not None:
@@ -203,6 +207,13 @@ class DefaultAsyncEventProcessor(AsyncEventProcessor):
 
     def flush(self):
         self._post_to_inbox(EventProcessorMessage('flush', None))
+
+    async def flush_and_wait(self, timeout: float) -> bool:
+        try:
+            await asyncio.wait_for(self._post_message_and_wait('flush_and_wait'), timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     async def stop(self):
         async with self._close_lock:

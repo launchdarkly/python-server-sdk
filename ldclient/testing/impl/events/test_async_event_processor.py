@@ -174,6 +174,35 @@ async def test_custom_event_is_queued():
         assert output[1]['metricValue'] == 1.5
 
 
+# ---------------------------------------------------------------------------
+# flush_and_wait
+# ---------------------------------------------------------------------------
+
+async def test_flush_and_wait_delivers_events_and_returns_true():
+    mock_http = MockAioHttp()
+    async with make_processor(mock_http) as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+
+        delivered = await ep.flush_and_wait(5)
+
+        assert delivered is True
+        assert mock_http.request_data is not None
+        output = json.loads(mock_http.request_data)
+        assert len(output) == 1
+        assert output[0]['kind'] == 'identify'
+
+
+async def test_flush_and_wait_returns_false_on_timeout():
+    mock_http = MockAioHttp()
+    async with make_processor(mock_http) as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+
+        # A zero timeout can't complete the flush round-trip, so it reports False.
+        delivered = await ep.flush_and_wait(0)
+
+        assert delivered is False
+
+
 async def test_two_events_for_same_context_only_produce_one_index_event():
     mock_http = MockAioHttp()
     async with make_processor(mock_http) as ep:
