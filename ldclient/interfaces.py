@@ -537,8 +537,16 @@ class AsyncEventProcessor(ABC):
     def flush(self):
         """
         Specifies that any buffered events should be sent as soon as possible, rather than waiting
-        for the next flush interval. This method is not awaitable; calling ``stop()`` will deliver
-        any events not yet sent prior to shutting down.
+        for the next flush interval. This method is not awaitable and does not wait for delivery;
+        use ``flush_and_wait`` to wait for delivery to complete.
+        """
+
+    @abstractmethod
+    async def flush_and_wait(self, timeout: float) -> bool:
+        """
+        Flushes any buffered events and waits for delivery to complete, up to ``timeout`` seconds.
+        Returns True if delivery completed within the timeout, or False if it timed out. Unlike
+        ``stop``, this does not shut down the event processor.
         """
 
     @abstractmethod
