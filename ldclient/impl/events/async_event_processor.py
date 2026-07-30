@@ -19,7 +19,7 @@ from ldclient.impl.aio.concurrency import (
     AsyncQueue,
     AsyncRepeatingTask,
     AsyncTaskRunner,
-    AsyncWorkerPool
+    BoundedTaskSet
 )
 from ldclient.impl.aio.transport import AsyncHTTPTransport
 from ldclient.impl.events.diagnostics import create_diagnostic_init
@@ -38,7 +38,7 @@ from ldclient.impl.util import (
 )
 from ldclient.interfaces import AsyncEventProcessor
 
-__MAX_FLUSH_THREADS__ = 5
+__MAX_FLUSH_CONCURRENCY__ = 5
 __CURRENT_EVENT_SCHEMA__ = 4
 
 
@@ -108,13 +108,13 @@ class EventDispatcher(EventDispatcherBase):
         self._sampler = Sampler(Random())
         self._omit_anonymous_contexts = config.omit_anonymous_contexts
 
-        self._flush_workers = AsyncWorkerPool(__MAX_FLUSH_THREADS__, "ldclient.flush")
-        self._diagnostic_flush_workers: Optional[AsyncWorkerPool] = None
+        self._flush_workers = BoundedTaskSet(__MAX_FLUSH_CONCURRENCY__)
+        self._diagnostic_flush_workers: Optional[BoundedTaskSet] = None
         if self._diagnostic_accumulator is not None:
-            self._diagnostic_flush_workers = AsyncWorkerPool(1, "ldclient.events.diag_flush")
+            self._diagnostic_flush_workers = BoundedTaskSet(1)
             init_event = create_diagnostic_init(self._diagnostic_accumulator.data_since_date, self._diagnostic_accumulator.diagnostic_id, config)
             task = DiagnosticEventSendTask(self._http, self._config, init_event)
-            self._diagnostic_flush_workers.execute(task.run)
+            self._diagnostic_flush_workers.try_run(task.run)
 
         self._runner = AsyncTaskRunner()
         self._runner.spawn("ldclient.events.processor", self._run_main_loop)
@@ -134,12 +134,12 @@ class EventDispatcher(EventDispatcherBase):
                     self._send_and_reset_diagnostics()
                 elif message.type == 'flush_and_wait':
                     self._trigger_flush()
-                    await self._flush_workers.wait()
+                    await self._flush_workers.drain()
                     message.param.set()
                 elif message.type == 'test_sync':
-                    await self._flush_workers.wait()
+                    await self._flush_workers.drain()
                     if self._diagnostic_flush_workers is not None:
-                        await self._diagnostic_flush_workers.wait()
+                        await self._diagnostic_flush_workers.drain()
                     message.param.set()
                 elif message.type == 'stop':
                     await self._do_shutdown()
@@ -156,7 +156,7 @@ class EventDispatcher(EventDispatcherBase):
             self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
         if len(payload.events) > 0 or not payload.summary.is_empty():
             task = EventPayloadSendTask(self._http, self._config, self._formatter, payload, self._handle_response)
-            if self._flush_workers.execute(task.run):
+            if self._flush_workers.try_run(task.run):
                 # The events have been handed off to a flush worker; clear them from our buffer.
                 self._outbox.clear()
             else:
@@ -169,15 +169,15 @@ class EventDispatcher(EventDispatcherBase):
             stats_event = self._diagnostic_accumulator.create_event_and_reset(dropped_event_count, self._deduplicated_contexts)
             self._deduplicated_contexts = 0
             task = DiagnosticEventSendTask(self._http, self._config, stats_event)
-            self._diagnostic_flush_workers.execute(task.run)
+            self._diagnostic_flush_workers.try_run(task.run)
 
     async def _do_shutdown(self):
         self._flush_workers.stop()
-        await self._flush_workers.wait()
+        await self._flush_workers.drain()
 
         if self._diagnostic_flush_workers is not None:
             self._diagnostic_flush_workers.stop()
-            await self._diagnostic_flush_workers.wait()
+            await self._diagnostic_flush_workers.drain()
 
         await self._http.close()
 

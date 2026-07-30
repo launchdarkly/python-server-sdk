@@ -205,13 +205,13 @@ class TestRepeatingTaskParity:
 
 
 # ---------------------------------------------------------------------------
-# WorkerPool
+# BoundedTaskSet
 # ---------------------------------------------------------------------------
 
-class TestWorkerPoolParity:
+class TestBoundedTaskSet:
     @pytest.mark.asyncio
-    async def test_async_saturation_returns_false(self):
-        pool = aio.AsyncWorkerPool(1, "test.pool")
+    async def test_saturation_returns_false(self):
+        tasks = aio.BoundedTaskSet(1)
         release = aio.AsyncEvent()
         started = aio.AsyncEvent()
 
@@ -219,24 +219,29 @@ class TestWorkerPoolParity:
             started.set()
             await release.wait(2)
 
-        assert pool.execute(job) is True
-        await started.wait(2)
-        assert pool.execute(lambda: None) is False
-        release.set()
-        await pool.wait()
-
         async def noop():
             pass
 
-        assert pool.execute(noop) is True
-        await pool.wait()
-        pool.stop()
+        assert tasks.try_run(job) is True
+        await started.wait(2)
+        # Set is full (limit 1), so the next task is rejected rather than queued.
+        assert tasks.try_run(noop) is False
+        release.set()
+        await tasks.drain()
+
+        # A slot is free again once the first task drained.
+        assert tasks.try_run(noop) is True
+        await tasks.drain()
+
+        # After stop(), further work is rejected.
+        tasks.stop()
+        assert tasks.try_run(noop) is False
 
     @pytest.mark.asyncio
-    async def test_async_wait_returns_when_idle(self):
-        pool = aio.AsyncWorkerPool(2, "test.pool")
-        await pool.wait()
-        pool.stop()
+    async def test_drain_returns_when_idle(self):
+        tasks = aio.BoundedTaskSet(2)
+        await tasks.drain()
+        tasks.stop()
 
 
 # ---------------------------------------------------------------------------

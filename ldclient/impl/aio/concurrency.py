@@ -2,7 +2,7 @@
 Async concurrency primitives used by the async data source, event processor, and
 data system. Each wraps a piece of fiddly asyncio plumbing (timeout-aware waits,
 queue exception normalization, an interval-from-start repeating task, a bounded
-task pool) that callers would otherwise inline repeatedly. The sync code uses the
+task set) that callers would otherwise inline repeatedly. The sync code uses the
 equivalent stdlib/SDK primitives (``threading.Event``/``Lock``, ``queue.Queue``,
 ``RepeatingTask``, ``FixedThreadPool``) directly, so these have no sync twin.
 """
@@ -12,7 +12,7 @@ import inspect
 import time
 from queue import Empty as QueueEmpty  # noqa: F401  (shared timeout exception)
 from queue import Full as QueueFull  # noqa: F401  (shared capacity exception)
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Coroutine, Optional, Set
 
 from ldclient.impl.util import log
 
@@ -250,50 +250,37 @@ class AsyncRepeatingTask:
             pass
 
 
-class AsyncWorkerPool:
-    """A fixed-size pool of concurrent tasks that rejects jobs when its limit
-    is reached. Matches the contract of
-    ``ldclient.impl.fixed_thread_pool.FixedThreadPool``."""
+class BoundedTaskSet:
+    """Runs up to ``limit`` coroutines concurrently as background tasks. When the
+    limit is reached, ``try_run`` rejects new work (returning False) rather than
+    queuing it, so callers can apply their own backpressure. ``drain`` awaits all
+    in-flight tasks; ``stop`` prevents any further work from being accepted."""
 
-    def __init__(self, size: int, name: str):
-        self._size = size
-        self._name = name
-        self._busy: Set[asyncio.Task] = set()
-        self._event = AsyncEvent()
-        self._stopped = False
+    def __init__(self, limit: int):
+        self._limit = limit
+        self._tasks: Set[asyncio.Task] = set()
+        self._accepting = True
 
-    def execute(self, jobFn: Callable) -> bool:
-        """Schedules a job for execution if the pool is not already at its
-        limit, and returns True if successful; returns False if all workers
-        are busy."""
-        if self._stopped or len(self._busy) >= self._size:
+    def try_run(self, job: Callable[[], Coroutine[Any, Any, Any]]) -> bool:
+        """Runs ``job()`` as a background task if fewer than ``limit`` tasks are
+        already running and the set is still accepting work. Returns True if the
+        task was started, or False if the set is full or has been stopped."""
+        if not self._accepting or len(self._tasks) >= self._limit:
             return False
-        task = asyncio.ensure_future(self._run_job(jobFn))
-        self._busy.add(task)
+        task = asyncio.create_task(job())
+        self._tasks.add(task)
+        task.add_done_callback(self._on_done)
         return True
 
-    async def _run_job(self, jobFn: Callable) -> None:
-        try:
-            result = jobFn()
-            if inspect.isawaitable(result):
-                await result
-        except Exception:
-            log.warning('Unhandled exception in worker thread', exc_info=True)
-        finally:
-            task = asyncio.current_task()
-            if task is not None:
-                self._busy.discard(task)
-            self._event.set()
+    def _on_done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            log.warning('Unhandled exception in background task', exc_info=task.exception())
 
-    async def wait(self) -> None:
-        """Waits until all currently busy workers have completed their jobs."""
-        while len(self._busy) > 0:
-            self._event.clear()
-            if len(self._busy) == 0:
-                return
-            await self._event.wait()
+    async def drain(self) -> None:
+        """Waits for all currently running tasks to complete."""
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
     def stop(self) -> None:
-        """Tells the pool to reject any further jobs; active jobs run to
-        completion."""
-        self._stopped = True
+        """Rejects any further work; tasks already running finish normally."""
+        self._accepting = False
