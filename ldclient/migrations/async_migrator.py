@@ -26,7 +26,6 @@ from ldclient.migrations.types import (
     Origin,
     Stage,
     WriteResult,
-    _MigrationConfigBase,
     _MigratorBuilderBase
 )
 
@@ -204,7 +203,7 @@ class AsyncMigratorImpl(AsyncMigrator):
         return authoritative_result, nonauthoritative_result
 
 
-class AsyncMigrationConfig(_MigrationConfigBase[AsyncMigratorFn]):
+class AsyncMigrationConfig:
     """
     The async counterpart to :class:`ldclient.migrations.MigrationConfig`. It
     stores references to coroutine functions which execute customer defined
@@ -217,6 +216,42 @@ class AsyncMigrationConfig(_MigrationConfigBase[AsyncMigratorFn]):
         use. It may change or be removed without notice and is not subject to backwards
         compatibility guarantees.
     """
+
+    def __init__(self, old: AsyncMigratorFn, new: AsyncMigratorFn, comparison: Optional[MigratorCompareFn] = None):
+        self.__old = old
+        self.__new = new
+        self.__comparison = comparison
+
+    @property
+    def old(self) -> AsyncMigratorFn:
+        """
+        Coroutine function which receives a nullable payload parameter and
+        returns an awaitable resolving to an :class:`ldclient.Result`.
+
+        This function call should affect the old migration origin when called.
+        """
+        return self.__old
+
+    @property
+    def new(self) -> AsyncMigratorFn:
+        """
+        Coroutine function which receives a nullable payload parameter and
+        returns an awaitable resolving to an :class:`ldclient.Result`.
+
+        This function call should affect the new migration origin when called.
+        """
+        return self.__new
+
+    @property
+    def comparison(self) -> Optional[MigratorCompareFn]:
+        """
+        Optional (synchronous) callable which receives two objects of any kind
+        and returns a boolean representing equality.
+
+        The result of this comparison can be sent upstream to LaunchDarkly to
+        enhance migration observability.
+        """
+        return self.__comparison
 
 
 class AsyncMigratorBuilder(_MigratorBuilderBase):

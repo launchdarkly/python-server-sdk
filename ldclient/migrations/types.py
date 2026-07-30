@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 from ldclient.impl.util import Result
 
@@ -196,41 +196,41 @@ class WriteResult:
         return self.__nonauthoritative
 
 
-_MigratorFnT = TypeVar('_MigratorFnT')
-
-
-class _MigrationConfigBase(Generic[_MigratorFnT]):
+class MigrationConfig:
     """
-    Shared implementation backing :class:`MigrationConfig` and its async
-    counterpart. It stores references to the customer defined read or write
-    functions for the old and new origins, along with an optional synchronous
-    comparison function used for read consistency tracking.
+    A migration config stores references to callable methods which execute
+    customer defined read or write operations on old or new origins of
+    information. For read operations, an optional comparison function also be
+    defined.
     """
 
-    def __init__(self, old: _MigratorFnT, new: _MigratorFnT, comparison: Optional[MigratorCompareFn] = None):
-        self._old = old
-        self._new = new
-        self._comparison = comparison
+    def __init__(self, old: MigratorFn, new: MigratorFn, comparison: Optional[MigratorCompareFn] = None):
+        self.__old = old
+        self.__new = new
+        self.__comparison = comparison
 
     @property
-    def old(self) -> _MigratorFnT:
+    def old(self) -> MigratorFn:
         """
         Callable which receives a nullable payload parameter and returns an
         :class:`ldclient.Result`.
 
         This function call should affect the old migration origin when called.
+
+        @return [#call]
         """
-        return self._old
+        return self.__old
 
     @property
-    def new(self) -> _MigratorFnT:
+    def new(self) -> MigratorFn:
         """
-        Callable which receives a nullable payload parameter and returns an
-        :class:`ldclient.Result`.
-
-        This function call should affect the new migration origin when called.
+        # Callable which receives a nullable payload parameter and returns an
+        # :class:`ldclient.Result`.
+        #
+        # This function call should affect the new migration origin when
+        # called.
         """
-        return self._new
+        return self.__new
 
     @property
     def comparison(self) -> Optional[MigratorCompareFn]:
@@ -241,16 +241,7 @@ class _MigrationConfigBase(Generic[_MigratorFnT]):
         The result of this comparison can be sent upstream to LaunchDarkly to
         enhance migration observability.
         """
-        return self._comparison
-
-
-class MigrationConfig(_MigrationConfigBase[MigratorFn]):
-    """
-    A migration config stores references to callable methods which execute
-    customer defined read or write operations on old or new origins of
-    information. For read operations, an optional comparison function also be
-    defined.
-    """
+        return self.__comparison
 
 
 _MigratorBuilderT = TypeVar('_MigratorBuilderT', bound='_MigratorBuilderBase')
