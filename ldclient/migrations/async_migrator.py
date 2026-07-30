@@ -25,8 +25,7 @@ from ldclient.migrations.types import (
     OperationResult,
     Origin,
     Stage,
-    WriteResult,
-    _MigratorBuilderBase
+    WriteResult
 )
 
 if TYPE_CHECKING:
@@ -254,7 +253,7 @@ class AsyncMigrationConfig:
         return self.__comparison
 
 
-class AsyncMigratorBuilder(_MigratorBuilderBase):
+class AsyncMigratorBuilder:
     """
     The async migration builder is used to configure and construct an instance
     of an :class:`AsyncMigrator`. This migrator can be used to perform
@@ -279,6 +278,35 @@ class AsyncMigratorBuilder(_MigratorBuilderBase):
 
         self.__read_config: Optional[AsyncMigrationConfig] = None
         self.__write_config: Optional[AsyncMigrationConfig] = None
+
+    def read_execution_order(self, order: ExecutionOrder) -> 'AsyncMigratorBuilder':
+        """
+        The read execution order influences the parallelism and execution order
+        for read operations involving multiple origins.
+        """
+        if order not in ExecutionOrder:
+            return self
+
+        self._read_execution_order = order
+        return self
+
+    def track_latency(self, enabled: bool) -> 'AsyncMigratorBuilder':
+        """
+        Enable or disable latency tracking for migration operations. This
+        latency information can be sent upstream to LaunchDarkly to enhance
+        migration visibility.
+        """
+        self._measure_latency = enabled
+        return self
+
+    def track_errors(self, enabled: bool) -> 'AsyncMigratorBuilder':
+        """
+        Enable or disable error tracking for migration operations. This error
+        information can be sent upstream to LaunchDarkly to enhance migration
+        visibility.
+        """
+        self._measure_errors = enabled
+        return self
 
     def read(self, old: AsyncMigratorFn, new: AsyncMigratorFn, comparison: Optional[MigratorCompareFn] = None) -> 'AsyncMigratorBuilder':
         """

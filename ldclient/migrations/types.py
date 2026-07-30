@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional
 
 from ldclient.impl.util import Result
 
@@ -242,48 +242,3 @@ class MigrationConfig:
         enhance migration observability.
         """
         return self.__comparison
-
-
-_MigratorBuilderT = TypeVar('_MigratorBuilderT', bound='_MigratorBuilderBase')
-
-
-class _MigratorBuilderBase:
-    """
-    Shared setter implementation for :class:`MigratorBuilder` and its async
-    counterpart. It holds the fluent configuration methods common to both
-    builders. The ``read``, ``write``, and ``build`` methods differ between the
-    sync and async builders and are defined on each subclass.
-    """
-
-    _read_execution_order: ExecutionOrder
-    _measure_latency: bool
-    _measure_errors: bool
-
-    def read_execution_order(self: _MigratorBuilderT, order: ExecutionOrder) -> _MigratorBuilderT:
-        """
-        The read execution order influences the parallelism and execution order
-        for read operations involving multiple origins.
-        """
-        if order not in ExecutionOrder:
-            return self
-
-        self._read_execution_order = order
-        return self
-
-    def track_latency(self: _MigratorBuilderT, enabled: bool) -> _MigratorBuilderT:
-        """
-        Enable or disable latency tracking for migration operations. This
-        latency information can be sent upstream to LaunchDarkly to enhance
-        migration visibility.
-        """
-        self._measure_latency = enabled
-        return self
-
-    def track_errors(self: _MigratorBuilderT, enabled: bool) -> _MigratorBuilderT:
-        """
-        Enable or disable error tracking for migration operations. This error
-        information can be sent upstream to LaunchDarkly to enhance migration
-        visibility.
-        """
-        self._measure_errors = enabled
-        return self
