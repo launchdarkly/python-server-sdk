@@ -22,10 +22,6 @@ from ldclient.testing.builders import FlagBuilder
 user = Context.from_dict({u'key': u'xyz', u'kind': u'user', u'bizzle': u'def'})
 
 
-# ---------------------------------------------------------------------------
-# Test doubles
-# ---------------------------------------------------------------------------
-
 class FakeEventProcessor:
     """Records events the way the real (async/sync) event processors expose them
     so tests can assert on the emitted MigrationOpEvent, mirroring the sync
@@ -92,10 +88,6 @@ def raises_exception(msg) -> AsyncMigratorFn:
     return inner
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
 def builder() -> AsyncMigratorBuilder:
     client = FakeAsyncClient()
@@ -108,10 +100,6 @@ def builder() -> AsyncMigratorBuilder:
 
     return builder
 
-
-# ---------------------------------------------------------------------------
-# Builder validation
-# ---------------------------------------------------------------------------
 
 class TestBuilder:
     def test_can_build_successfully(self):
@@ -155,10 +143,6 @@ class TestBuilder:
         assert isinstance(migrator, str)
         assert migrator == "write configuration not provided"
 
-
-# ---------------------------------------------------------------------------
-# Payload passthrough
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 class TestPassingPayloadThrough:
@@ -222,10 +206,6 @@ class TestPassingPayloadThrough:
         assert all("payload" == p for p in payloads)
 
 
-# ---------------------------------------------------------------------------
-# Invoked tracking
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 class TestTrackingInvoked:
     @pytest.mark.parametrize(
@@ -274,10 +254,6 @@ class TestTrackingInvoked:
         assert len(origins) == len(event.invoked)
         assert all(o in event.invoked for o in origins)
 
-
-# ---------------------------------------------------------------------------
-# Latency tracking
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 class TestTrackingLatency:
@@ -343,10 +319,6 @@ class TestTrackingLatency:
             assert o in event.latencies
             assert event.latencies[o] >= timedelta(milliseconds=100)
 
-
-# ---------------------------------------------------------------------------
-# Error tracking
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 class TestTrackingErrors:
@@ -439,10 +411,6 @@ class TestTrackingErrors:
         assert origin in event.errors
 
 
-# ---------------------------------------------------------------------------
-# Consistency tracking
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 class TestTrackingConsistency:
     @pytest.mark.parametrize(
@@ -522,10 +490,6 @@ class TestTrackingConsistency:
         assert event.consistent is None
 
 
-# ---------------------------------------------------------------------------
-# Exceptions in migrator functions
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 class TestHandlesExceptionsInMigratorFn:
     @pytest.mark.parametrize(
@@ -595,10 +559,6 @@ class TestHandlesExceptionsInMigratorFn:
         assert not result.nonauthoritative.is_success()
         assert str(result.nonauthoritative.exception) == expected_msg
 
-
-# ---------------------------------------------------------------------------
-# Execution order (parallel via asyncio.gather vs serial)
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 class TestSupportsExecutionOrder:
