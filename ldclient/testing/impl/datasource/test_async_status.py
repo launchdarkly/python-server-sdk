@@ -14,10 +14,6 @@ from ldclient.interfaces import (
 from ldclient.testing.builders import FlagBuilder, SegmentBuilder
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def make_sink(store=None):
     if store is None:
@@ -66,10 +62,6 @@ class _FailingStore(AsyncInMemoryFeatureStore):
     async def upsert(self, kind, item):
         raise RuntimeError("boom")
 
-
-# ---------------------------------------------------------------------------
-# init tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_init_notifies_all_flag_change_listeners():
@@ -125,10 +117,6 @@ async def test_init_notifies_listeners_for_changed_flags_on_reinit():
 
     assert sorted(capture.keys) == ['flag-a', 'flag-b']
 
-
-# ---------------------------------------------------------------------------
-# upsert tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_upsert_flag_notifies_listener():
@@ -205,10 +193,6 @@ async def test_upsert_newer_version_notifies():
     assert capture.keys == ['my-flag']
 
 
-# ---------------------------------------------------------------------------
-# delete tests
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_delete_flag_notifies_listener():
     sink, _, flag_listeners = make_sink()
@@ -238,10 +222,6 @@ async def test_delete_segment_does_not_notify_flag_listener():
 
     assert capture.keys == []
 
-
-# ---------------------------------------------------------------------------
-# update_status / DataSourceStatusProvider tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_update_status_broadcasts_to_status_listeners():
@@ -325,10 +305,6 @@ async def test_status_provider_add_remove_listener():
     sink.update_status(DataSourceState.OFF, None)
     assert len(capture.statuses) == 1  # listener was removed, no new events
 
-
-# ---------------------------------------------------------------------------
-# store-error monitoring
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_init_records_store_error_when_prior_read_fails():

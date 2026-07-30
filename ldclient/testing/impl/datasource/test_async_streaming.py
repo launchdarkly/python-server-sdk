@@ -28,10 +28,6 @@ def _item_dict(item):
     return item.to_json_dict() if isinstance(item, ModelEntity) else item
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _make_config(**kwargs):
     return Config(sdk_key='sdk-key', **kwargs)
 
@@ -137,10 +133,6 @@ async def _run_with_actions(actions: list, config=None, store=None, ready_event=
         pass  # some tests expect ready NOT to be set
     return proc, store, ready, factory
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_put_event_initializes_store_and_sets_ready():
@@ -376,11 +368,6 @@ async def test_initialized_reflects_store_state():
     assert proc.initialized()
 
     await proc.stop()
-
-
-# ---------------------------------------------------------------------------
-# Session ownership
-# ---------------------------------------------------------------------------
 
 
 class _FakeSession:
