@@ -30,10 +30,6 @@ async def _async_wait_until(predicate, timeout=2.0):
         await asyncio.sleep(0.01)
 
 
-# ---------------------------------------------------------------------------
-# Event
-# ---------------------------------------------------------------------------
-
 class TestEventParity:
     @pytest.mark.asyncio
     async def test_async_set_clear_is_set(self):
@@ -65,10 +61,6 @@ class TestEventParity:
         await task
 
 
-# ---------------------------------------------------------------------------
-# Lock
-# ---------------------------------------------------------------------------
-
 class TestLockParity:
     @pytest.mark.asyncio
     async def test_async_lock_context_manager(self):
@@ -95,10 +87,6 @@ class TestLockParity:
         assert counter['value'] == 5
         assert counter['max_concurrent'] == 1
 
-
-# ---------------------------------------------------------------------------
-# Queue
-# ---------------------------------------------------------------------------
 
 class TestQueueParity:
     @pytest.mark.asyncio
@@ -130,10 +118,6 @@ class TestQueueParity:
             q.put_nowait('b')
         assert await q.get(block=False) == 'a'
 
-
-# ---------------------------------------------------------------------------
-# RepeatingTask
-# ---------------------------------------------------------------------------
 
 class TestRepeatingTaskParity:
     @pytest.mark.asyncio
@@ -204,10 +188,6 @@ class TestRepeatingTaskParity:
         task.stop()
 
 
-# ---------------------------------------------------------------------------
-# BoundedTaskSet
-# ---------------------------------------------------------------------------
-
 class TestBoundedTaskSet:
     @pytest.mark.asyncio
     async def test_saturation_returns_false(self):
@@ -227,26 +207,22 @@ class TestBoundedTaskSet:
         # Set is full (limit 1), so the next task is rejected rather than queued.
         assert tasks.try_run(noop) is False
         release.set()
-        await tasks.drain()
+        await tasks.wait()
 
-        # A slot is free again once the first task drained.
+        # A slot is free again once the first task finished.
         assert tasks.try_run(noop) is True
-        await tasks.drain()
+        await tasks.wait()
 
         # After stop(), further work is rejected.
         tasks.stop()
         assert tasks.try_run(noop) is False
 
     @pytest.mark.asyncio
-    async def test_drain_returns_when_idle(self):
+    async def test_wait_returns_when_idle(self):
         tasks = aio.BoundedTaskSet(2)
-        await tasks.drain()
+        await tasks.wait()
         tasks.stop()
 
-
-# ---------------------------------------------------------------------------
-# TaskRunner
-# ---------------------------------------------------------------------------
 
 class TestTaskRunnerParity:
     @pytest.mark.asyncio
@@ -303,10 +279,6 @@ class TestTaskRunnerParity:
         except asyncio.CancelledError:
             pass
 
-
-# ---------------------------------------------------------------------------
-# spawn_handle / join_handle
-# ---------------------------------------------------------------------------
 
 class TestHandleParity:
     @pytest.mark.asyncio
@@ -368,10 +340,6 @@ class TestHandleParity:
             await joiner
 
 
-# ---------------------------------------------------------------------------
-# Callback scheduler
-# ---------------------------------------------------------------------------
-
 class TestCallbackSchedulerParity:
     @pytest.mark.asyncio
     async def test_async_call_schedules_coroutine_with_args(self):
@@ -410,10 +378,6 @@ class TestCallbackSchedulerParity:
         assert await completed.wait(2)
         await asyncio.sleep(0.05)  # let the done callback run
 
-
-# ---------------------------------------------------------------------------
-# HTTP transport
-# ---------------------------------------------------------------------------
 
 class _FakeResponse:
     status = 200

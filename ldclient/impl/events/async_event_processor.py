@@ -134,12 +134,12 @@ class EventDispatcher(EventDispatcherBase):
                     self._send_and_reset_diagnostics()
                 elif message.type == 'flush_and_wait':
                     self._trigger_flush()
-                    await self._flush_workers.drain()
+                    await self._flush_workers.wait()
                     message.param.set()
                 elif message.type == 'test_sync':
-                    await self._flush_workers.drain()
+                    await self._flush_workers.wait()
                     if self._diagnostic_flush_workers is not None:
-                        await self._diagnostic_flush_workers.drain()
+                        await self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
                     await self._do_shutdown()
@@ -173,11 +173,11 @@ class EventDispatcher(EventDispatcherBase):
 
     async def _do_shutdown(self):
         self._flush_workers.stop()
-        await self._flush_workers.drain()
+        await self._flush_workers.wait()
 
         if self._diagnostic_flush_workers is not None:
             self._diagnostic_flush_workers.stop()
-            await self._diagnostic_flush_workers.drain()
+            await self._diagnostic_flush_workers.wait()
 
         await self._http.close()
 

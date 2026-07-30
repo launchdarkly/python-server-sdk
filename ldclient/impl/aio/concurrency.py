@@ -253,15 +253,15 @@ class AsyncRepeatingTask:
 class BoundedTaskSet:
     """Runs up to ``limit`` coroutines concurrently as background tasks. When the
     limit is reached, ``try_run`` rejects new work (returning False) rather than
-    queuing it, so callers can apply their own backpressure. ``drain`` awaits all
-    in-flight tasks; ``stop`` prevents any further work from being accepted."""
+    queuing it, so callers can apply their own backpressure. ``wait`` awaits the
+    tasks currently in flight; ``stop`` prevents any further work from being accepted."""
 
     def __init__(self, limit: int):
         self._limit = limit
         self._tasks: Set[asyncio.Task] = set()
         self._accepting = True
 
-    def try_run(self, job: Callable[[], Coroutine[Any, Any, Any]]) -> bool:
+    def try_run(self, job: Callable[[], Coroutine]) -> bool:
         """Runs ``job()`` as a background task if fewer than ``limit`` tasks are
         already running and the set is still accepting work. Returns True if the
         task was started, or False if the set is full or has been stopped."""
@@ -277,8 +277,9 @@ class BoundedTaskSet:
         if not task.cancelled() and task.exception() is not None:
             log.warning('Unhandled exception in background task', exc_info=task.exception())
 
-    async def drain(self) -> None:
-        """Waits for all currently running tasks to complete."""
+    async def wait(self) -> None:
+        """Waits for the tasks currently running to complete. This does not stop
+        new tasks from being added; call ``stop`` first to prevent further work."""
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
     def stop(self) -> None:

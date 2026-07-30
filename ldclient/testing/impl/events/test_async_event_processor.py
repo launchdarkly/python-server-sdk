@@ -41,11 +41,6 @@ flag = FlagBuilder('flagkey').version(2).build()
 timestamp = 10000
 
 
-# ---------------------------------------------------------------------------
-# Mock aiohttp session (mirrors stub_util.MockHttp for the aiohttp surface
-# used by AsyncHTTPTransport)
-# ---------------------------------------------------------------------------
-
 class MockAioResponse:
     def __init__(self, status: int, headers: dict):
         self.status = status
@@ -67,6 +62,8 @@ class _MockRequestContext:
 
 
 class MockAioHttp:
+    """Mock aiohttp session mirroring stub_util.MockHttp for the aiohttp surface used by AsyncHTTPTransport."""
+
     def __init__(self):
         self._recorded_requests: List[Tuple[Any, Any]] = []
         self._response_status = 200
@@ -103,10 +100,6 @@ class MockAioHttp:
         self._recorded_requests = []
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 @asynccontextmanager
 async def make_processor(mock_http: MockAioHttp, **kwargs):
     kwargs.setdefault('diagnostic_opt_out', True)
@@ -127,10 +120,6 @@ async def flush_and_get_events(ep: DefaultAsyncEventProcessor, mock_http: MockAi
         raise AssertionError('Expected to get an HTTP request but did not get one')
     return json.loads(mock_http.request_data)
 
-
-# ---------------------------------------------------------------------------
-# Event payload tests
-# ---------------------------------------------------------------------------
 
 async def test_identify_event_is_queued():
     mock_http = MockAioHttp()
@@ -173,10 +162,6 @@ async def test_custom_event_is_queued():
         assert output[1]['data'] == {'thing': 'stuff'}
         assert output[1]['metricValue'] == 1.5
 
-
-# ---------------------------------------------------------------------------
-# flush_and_wait
-# ---------------------------------------------------------------------------
 
 async def test_flush_and_wait_delivers_events_and_returns_true():
     mock_http = MockAioHttp()
@@ -250,10 +235,6 @@ async def test_stop_flushes_remaining_events():
     assert output[0]['kind'] == 'identify'
 
 
-# ---------------------------------------------------------------------------
-# Header tests
-# ---------------------------------------------------------------------------
-
 async def test_sdk_key_is_sent():
     mock_http = MockAioHttp()
     async with make_processor(mock_http, sdk_key='SDK_KEY') as ep:
@@ -298,10 +279,6 @@ async def test_event_payload_id_changes_between_requests():
         second_payload_id = mock_http.recorded_requests[1][0].get('X-LaunchDarkly-Payload-ID')
         assert first_payload_id != second_payload_id
 
-
-# ---------------------------------------------------------------------------
-# Diagnostics
-# ---------------------------------------------------------------------------
 
 async def test_init_diagnostic_event_sent():
     mock_http = MockAioHttp()
@@ -355,10 +332,6 @@ async def test_event_schema_not_set_on_diagnostic_send():
         assert mock_http.request_headers.get('X-LaunchDarkly-Event-Schema') is None
 
 
-# ---------------------------------------------------------------------------
-# HTTP error handling
-# ---------------------------------------------------------------------------
-
 async def verify_unrecoverable_http_error(status: int):
     mock_http = MockAioHttp()
     async with make_processor(mock_http, sdk_key='SDK_KEY') as ep:
@@ -409,10 +382,6 @@ async def test_will_still_send_after_500_error():
     await verify_recoverable_http_error(500)
 
 
-# ---------------------------------------------------------------------------
-# Inbox capacity
-# ---------------------------------------------------------------------------
-
 async def test_does_not_block_on_full_inbox():
     config = AsyncConfig("fake_sdk_key", events_max_pending=1)  # this sets the size of both the inbox and the outbox to 1
     ep_inbox_holder = [None]
@@ -443,10 +412,6 @@ async def test_does_not_block_on_full_inbox():
     assert message1.param == event1
     assert had_no_more
 
-
-# ---------------------------------------------------------------------------
-# Compression
-# ---------------------------------------------------------------------------
 
 async def test_event_payload_is_gzip_compressed_when_enabled():
     mock_http = MockAioHttp()
