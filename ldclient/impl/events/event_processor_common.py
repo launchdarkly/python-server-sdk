@@ -30,10 +30,6 @@ from ldclient.impl.util import (
 )
 from ldclient.migrations.tracker import MigrationOpEvent
 
-# ---------------------------------------------------------------------------
-# Shared event wrapper types
-# ---------------------------------------------------------------------------
-
 
 class DebugEvent:
     __slots__ = ['original_input']
@@ -53,11 +49,9 @@ class IndexEvent:
 FlushPayload = namedtuple('FlushPayload', ['events', 'summary'])
 
 
-# ---------------------------------------------------------------------------
-# EventBuffer — in-memory accumulation buffer (no I/O)
-# ---------------------------------------------------------------------------
-
 class EventBuffer:
+    """In-memory buffer that accumulates events and their summary until flush. Performs no I/O."""
+
     def __init__(self, capacity: int):
         self._capacity = capacity
         self._events: List[Any] = []
@@ -91,11 +85,9 @@ class EventBuffer:
         self._summarizer.clear()
 
 
-# ---------------------------------------------------------------------------
-# EventOutputFormatter — pure data transform (no I/O)
-# ---------------------------------------------------------------------------
-
 class EventOutputFormatter:
+    """Transforms buffered events into the LaunchDarkly wire-format output payload. Performs no I/O."""
+
     def __init__(self, config: PrivateAttributesConfig):
         self._context_formatter = EventContextFormatter(
             config.all_attributes_private, config.private_attributes
@@ -235,10 +227,6 @@ class EventOutputFormatter:
             out['prereqOf'] = e.prereq_of.key
         return out
 
-
-# ---------------------------------------------------------------------------
-# EventDispatcherBase — pure event-handling logic shared by both dispatchers
-# ---------------------------------------------------------------------------
 
 class EventDispatcherBase:
     """
