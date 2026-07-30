@@ -30,6 +30,9 @@ from ldclient.impl.util import (
 )
 from ldclient.migrations.tracker import MigrationOpEvent
 
+# Analytics event schema version sent to LaunchDarkly via the X-LaunchDarkly-Event-Schema header.
+CURRENT_EVENT_SCHEMA = 4
+
 
 class DebugEvent:
     __slots__ = ['original_input']

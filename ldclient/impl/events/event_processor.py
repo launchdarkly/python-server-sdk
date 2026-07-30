@@ -16,6 +16,7 @@ import urllib3
 from ldclient.config import Config
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_processor_common import (
+    CURRENT_EVENT_SCHEMA,
     EventBuffer,
     EventDispatcherBase,
     EventOutputFormatter
@@ -34,7 +35,6 @@ from ldclient.impl.util import (
 from ldclient.interfaces import EventProcessor
 
 __MAX_FLUSH_THREADS__ = 5
-__CURRENT_EVENT_SCHEMA__ = 4
 
 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
@@ -250,7 +250,7 @@ def _post_events_with_retry(http_client, config, uri, payload_id, body, events_d
         hdrs['Content-Encoding'] = 'gzip'
 
     if payload_id:
-        hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+        hdrs['X-LaunchDarkly-Event-Schema'] = str(CURRENT_EVENT_SCHEMA)
         hdrs['X-LaunchDarkly-Payload-ID'] = payload_id
     can_retry = True
     context = "posting %s" % events_description

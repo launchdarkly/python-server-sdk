@@ -24,6 +24,7 @@ from ldclient.impl.aio.concurrency import (
 from ldclient.impl.aio.transport import AsyncHTTPTransport
 from ldclient.impl.events.diagnostics import create_diagnostic_init
 from ldclient.impl.events.event_processor_common import (
+    CURRENT_EVENT_SCHEMA,
     EventBuffer,
     EventDispatcherBase,
     EventOutputFormatter
@@ -39,7 +40,6 @@ from ldclient.impl.util import (
 from ldclient.interfaces import AsyncEventProcessor
 
 __MAX_FLUSH_CONCURRENCY__ = 5
-__CURRENT_EVENT_SCHEMA__ = 4
 
 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
@@ -268,7 +268,7 @@ async def _post_events_with_retry(http_client: AsyncHTTPTransport, config: Async
         hdrs['Content-Encoding'] = 'gzip'
 
     if payload_id:
-        hdrs['X-LaunchDarkly-Event-Schema'] = str(__CURRENT_EVENT_SCHEMA__)
+        hdrs['X-LaunchDarkly-Event-Schema'] = str(CURRENT_EVENT_SCHEMA)
         hdrs['X-LaunchDarkly-Payload-ID'] = payload_id
     can_retry = True
     context = "posting %s" % events_description
