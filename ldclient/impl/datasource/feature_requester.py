@@ -8,13 +8,11 @@ from urllib import parse
 
 import urllib3
 
+from ldclient.impl.datasource.datasource_common import FDV1_POLLING_ENDPOINT
 from ldclient.impl.http import _http_factory
 from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import FeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
-FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
-
 
 CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 

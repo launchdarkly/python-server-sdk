@@ -11,6 +11,7 @@ from ldclient.interfaces import DataSourceUpdateSink, FeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 STREAM_ALL_PATH = '/all'
+FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
 
 ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
