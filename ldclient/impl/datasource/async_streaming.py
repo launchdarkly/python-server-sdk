@@ -25,15 +25,15 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    AsyncUpdateProcessor,
     DataSourceErrorInfo,
     DataSourceErrorKind,
-    DataSourceState,
-    UpdateProcessor
+    DataSourceState
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
-class AsyncStreamingUpdateProcessor(UpdateProcessor):
+class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
     def __init__(self, config, store, ready, diagnostic_accumulator, sse_factory: Optional[AsyncSSEFactory] = None):
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
         if config.payload_filter_key is not None:
