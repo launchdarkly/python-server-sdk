@@ -14,13 +14,16 @@ import uuid
 from contextlib import asynccontextmanager
 from email.utils import formatdate
 from typing import Any, List, Optional, Tuple
+from unittest.mock import MagicMock
 
 import pytest
 
 from ldclient.async_config import AsyncConfig
 from ldclient.context import Context
+from ldclient.impl.aio.concurrency import AsyncQueue
 from ldclient.impl.events.async_event_processor import (
-    DefaultAsyncEventProcessor
+    DefaultAsyncEventProcessor,
+    EventDispatcher
 )
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
@@ -186,6 +189,33 @@ async def test_flush_and_wait_returns_false_on_timeout():
         delivered = await ep.flush_and_wait(0)
 
         assert delivered is False
+
+
+async def test_trigger_flush_reports_whether_batch_handed_off():
+    # flush_and_wait relies on _trigger_flush reporting whether the batch was
+    # actually handed to a worker; when the pool is saturated it must report
+    # False (events left buffered) so the caller retries rather than falsely
+    # reporting success.
+    mock_http = MockAioHttp()
+    config = AsyncConfig(sdk_key='SDK_KEY', diagnostic_opt_out=True)
+    dispatcher = EventDispatcher(AsyncQueue(config.events_max_pending), config, mock_http)
+    try:
+        # Nothing buffered -> handed off (nothing to do).
+        assert dispatcher._trigger_flush() is True
+
+        dispatcher._outbox.add_event(EventInputIdentify(timestamp, context))
+
+        # Saturated pool: try_run rejects, events stay buffered.
+        dispatcher._flush_workers = MagicMock()
+        dispatcher._flush_workers.try_run = MagicMock(return_value=False)
+        assert dispatcher._trigger_flush() is False
+
+        # A free slot: hands off and clears the buffer.
+        dispatcher._flush_workers.try_run = MagicMock(return_value=True)
+        assert dispatcher._trigger_flush() is True
+        assert dispatcher._outbox.get_payload().events == []
+    finally:
+        await dispatcher._runner.stop_all()
 
 
 async def test_two_events_for_same_context_only_produce_one_index_event():

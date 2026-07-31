@@ -133,7 +133,12 @@ class EventDispatcher(EventDispatcherBase):
                 elif message.type == 'diagnostic':
                     self._send_and_reset_diagnostics()
                 elif message.type == 'flush_and_wait':
-                    self._trigger_flush()
+                    # Ensure the buffered batch is actually handed to a worker
+                    # before reporting success; under saturation the first
+                    # trigger may leave the events buffered, so wait for a free
+                    # worker and retry.
+                    while not self._trigger_flush():
+                        await self._flush_workers.wait()
                     await self._flush_workers.wait()
                     message.param.set()
                 elif message.type == 'test_sync':
@@ -148,9 +153,12 @@ class EventDispatcher(EventDispatcherBase):
             except Exception:
                 log.error('Unhandled exception in event processor', exc_info=True)
 
-    def _trigger_flush(self):
+    def _trigger_flush(self) -> bool:
+        """Hands the buffered events to a flush worker. Returns True if handed
+        off (or there was nothing to flush), or False if all workers are busy
+        and the events were left buffered for a later attempt."""
         if self._disabled:
-            return
+            return True
         payload = self._outbox.get_payload()
         if self._diagnostic_accumulator:
             self._diagnostic_accumulator.record_events_in_batch(len(payload.events))
@@ -159,9 +167,10 @@ class EventDispatcher(EventDispatcherBase):
             if self._flush_workers.try_run(task.run):
                 # The events have been handed off to a flush worker; clear them from our buffer.
                 self._outbox.clear()
-            else:
-                # We're already at our limit of concurrent flushes; leave the events in the buffer.
-                pass
+                return True
+            # We're already at our limit of concurrent flushes; leave the events in the buffer.
+            return False
+        return True
 
     def _send_and_reset_diagnostics(self):
         if self._diagnostic_accumulator is not None and self._diagnostic_flush_workers is not None:
