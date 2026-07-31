@@ -299,6 +299,36 @@ class TestAsyncPollingUpdateProcessor:
         processor._requester.close.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_stop_awaits_poll_before_closing_transport(self):
+        # The in-flight poll must finish unwinding before the transport is
+        # closed, so we never close it out from under a live request.
+        order = []
+        started = asyncio.Event()
+
+        async def slow_poll():
+            started.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                order.append('poll_done')
+                raise
+
+        async def close():
+            order.append('transport_closed')
+
+        requester = MagicMock()
+        requester.get_all_data = slow_poll
+        requester.close = close
+
+        processor = make_processor(requester=requester)
+        processor.start()
+        await asyncio.wait_for(started.wait(), timeout=1.0)
+
+        await processor.stop()
+
+        assert order == ['poll_done', 'transport_closed']
+
+    @pytest.mark.asyncio
     async def test_stop_cancels_polling_task_cleanly(self):
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
