@@ -19,6 +19,9 @@ CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 class AsyncFeatureRequesterImpl(FeatureRequester):
     def __init__(self, config, transport: Optional[AsyncHTTPTransport] = None):
         self._cache: dict = dict()
+        # Only close the transport on shutdown if we created it; an injected
+        # transport is owned by the caller.
+        self._owns_transport = transport is None
         self._transport = transport if transport is not None else AsyncHTTPTransport(config)
         self._config = config
         self._poll_uri = config.base_uri + FDV1_POLLING_ENDPOINT
@@ -47,3 +50,7 @@ class AsyncFeatureRequesterImpl(FeatureRequester):
         log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]", uri, r.status, from_cache, etag)
 
         return {FEATURES: data['flags'], SEGMENTS: data['segments']}
+
+    async def close(self):
+        if self._owns_transport:
+            await self._transport.close()

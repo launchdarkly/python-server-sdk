@@ -41,6 +41,7 @@ def make_processor(config=None, store=None, ready=None, requester=None):
         ready = asyncio.Event()
     if requester is None:
         requester = MagicMock()
+        requester.close = AsyncMock()
     return AsyncPollingUpdateProcessor(
         config=config,
         requester=requester,
@@ -124,6 +125,26 @@ class TestAsyncFeatureRequesterImpl:
 
         assert 'filter=my-filter' in requester._poll_uri
 
+    @pytest.mark.asyncio
+    async def test_close_closes_owned_transport(self):
+        with patch('ldclient.impl.datasource.async_feature_requester.AsyncHTTPTransport') as MockTransport:
+            MockTransport.return_value.close = AsyncMock()
+            requester = AsyncFeatureRequesterImpl(make_config())  # no transport -> owns one
+
+            await requester.close()
+
+            MockTransport.return_value.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_close_does_not_close_injected_transport(self):
+        transport = MagicMock()
+        transport.close = AsyncMock()
+        requester = AsyncFeatureRequesterImpl(make_config(), transport)
+
+        await requester.close()
+
+        transport.close.assert_not_called()
+
 
 class TestAsyncPollingUpdateProcessor:
 
@@ -147,38 +168,6 @@ class TestAsyncPollingUpdateProcessor:
         assert processor.initialized()
         assert len(store.inits) >= 1
         assert store.inits[0] == SAMPLE_DATA
-
-        await processor.stop()
-
-    @pytest.mark.asyncio
-    @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
-    async def test_304_not_modified_does_not_reinitialize_store(self, mock_interval):
-        mock_interval.__get__ = MagicMock(return_value=0)
-
-        store = MockAsyncFeatureStore()
-        ready = asyncio.Event()
-        config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
-
-        call_count = 0
-
-        async def get_all_data():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return SAMPLE_DATA
-            return None  # Simulate 304 Not Modified on subsequent calls
-
-        processor._requester.get_all_data = get_all_data
-
-        processor.start()
-        await asyncio.wait_for(ready.wait(), timeout=2.0)
-
-        # Let it run at least a second poll cycle
-        await asyncio.sleep(0.05)
-
-        # Store should only have been initialized once (None return does not trigger re-init)
-        assert len(store.inits) == 1
 
         await processor.stop()
 
@@ -262,8 +251,8 @@ class TestAsyncPollingUpdateProcessor:
 
         processor.start()
 
-        # _ready is set on the first exception (so the client is never stuck),
-        # but the loop continues.  Wait until the store is actually initialized
+        # A generic error must NOT release start_wait; _ready stays unset until a
+        # later poll succeeds. Wait until the store is actually initialized
         # (call_count reaches 3) to verify polling kept running.
         async def wait_for_initialized():
             while not store.initialized:
@@ -275,6 +264,39 @@ class TestAsyncPollingUpdateProcessor:
         assert call_count >= 3
 
         await processor.stop()
+
+    @pytest.mark.asyncio
+    @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
+    async def test_general_exception_does_not_set_ready(self, mock_interval):
+        mock_interval.__get__ = MagicMock(return_value=0)
+
+        store = MockAsyncFeatureStore()
+        ready = asyncio.Event()
+        config = make_config()
+        processor = make_processor(config=config, store=store, ready=ready)
+
+        async def get_all_data():
+            raise RuntimeError("transient error")
+
+        processor._requester.get_all_data = get_all_data
+
+        processor.start()
+        # Let several polls run; all raise. A transient error must not release
+        # start_wait (mirrors sync, which leaves _ready unset here).
+        await asyncio.sleep(0.05)
+
+        assert not ready.is_set()
+        assert not processor.initialized()
+
+        await processor.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_requester(self):
+        processor = make_processor()
+
+        await processor.stop()
+
+        processor._requester.close.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_stop_cancels_polling_task_cleanly(self):

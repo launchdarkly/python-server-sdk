@@ -46,6 +46,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
 
     async def stop(self):
         self.__stop_with_error_info(None)
+        await self._requester.close()
 
     def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping AsyncPollingUpdateProcessor")
@@ -59,13 +60,12 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
     async def _fetch_and_store(self):
         try:
             all_data = await self._requester.get_all_data()
-            if all_data is not None:
-                await sink_or_store(self._data_source_update_sink, self._store).init(all_data)
-                if not self._ready.is_set() and self._store.initialized:
-                    log.info("AsyncPollingUpdateProcessor initialized ok")
-                    self._ready.set()
+            await sink_or_store(self._data_source_update_sink, self._store).init(all_data)
+            if not self._ready.is_set() and self._store.initialized:
+                log.info("AsyncPollingUpdateProcessor initialized ok")
+                self._ready.set()
 
-            # Signal VALID on any successful response (200 or 304) once the store is populated.
+            # Signal VALID once the store is populated.
             if self._store.initialized and self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.VALID, None)
         except UnsuccessfulResponseException as e:
@@ -83,8 +83,5 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
                     self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
         except Exception as e:
             log.exception('Error: Exception encountered when updating flags. %s' % e)
-            if not self._ready.is_set():
-                self._ready.set()
-
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e)))
