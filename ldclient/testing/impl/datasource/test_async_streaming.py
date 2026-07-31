@@ -134,6 +134,14 @@ async def _run_with_actions(actions: list, config=None, store=None, ready_event=
     return proc, store, ready, factory
 
 
+async def _wait_until(pred, timeout=2.0):
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    while not pred():
+        assert loop.time() < deadline, "condition was not met in time"
+        await asyncio.sleep(0.005)
+
+
 @pytest.mark.asyncio
 async def test_put_event_initializes_store_and_sets_ready():
     flag = FlagBuilder('f1').version(1).build()
@@ -382,8 +390,8 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_default_construction_builds_configured_session():
-    """With no injected factory, a configured session is built via
-    make_client_session and handed to the SSE factory."""
+    """With no injected factory, a configured session is built (lazily, on the
+    event loop in _run) via make_client_session and handed to the SSE factory."""
     config = _make_config()
     store = MockAsyncFeatureStore()
     ready = asyncio.Event()
@@ -394,11 +402,20 @@ async def test_default_construction_builds_configured_session():
     ) as make_session, mock.patch.object(
         async_streaming, "AsyncSSEFactory"
     ) as factory_cls:
+        factory_cls.return_value.create.return_value = _MockSSE([])  # empty stream -> _run blocks
         proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
 
-    make_session.assert_called_once_with(config)
-    assert factory_cls.call_args.kwargs["session"] is fake_session
-    assert proc._owned_session is fake_session
+        # Deferred: nothing is created until the task runs.
+        assert proc._owned_session is None
+
+        proc.start()
+        await _wait_until(lambda: proc._owned_session is not None)
+
+        assert make_session.call_args == mock.call(config)
+        assert factory_cls.call_args.kwargs["session"] is fake_session
+        assert proc._owned_session is fake_session
+
+        await proc.stop()
 
 
 @pytest.mark.asyncio
@@ -411,13 +428,16 @@ async def test_default_construction_session_closed_on_stop():
 
     with mock.patch.object(
         async_streaming, "make_client_session", return_value=fake_session
-    ), mock.patch.object(async_streaming, "AsyncSSEFactory"):
+    ), mock.patch.object(async_streaming, "AsyncSSEFactory") as factory_cls:
+        factory_cls.return_value.create.return_value = _MockSSE([])
         proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
+        proc.start()
+        await _wait_until(lambda: proc._owned_session is not None)
 
-    await proc.stop()
+        await proc.stop()
 
-    assert fake_session.closed is True
-    assert proc._owned_session is None
+        assert fake_session.closed is True
+        assert proc._owned_session is None
 
 
 @pytest.mark.asyncio
@@ -425,13 +445,15 @@ async def test_injected_factory_leaves_session_unowned():
     """When a factory is injected, no session is built and none is owned."""
     with mock.patch.object(async_streaming, "make_client_session") as make_session:
         proc, store, ready, factory = _make_processor([])
+        proc.start()
+        await asyncio.sleep(0.02)  # let _run start against the injected factory
 
-    make_session.assert_not_called()
-    assert proc._owned_session is None
+        make_session.assert_not_called()
+        assert proc._owned_session is None
 
-    # stop() must not attempt to close a session it doesn't own.
-    await proc.stop()
-    assert proc._owned_session is None
+        # stop() must not attempt to close a session it doesn't own.
+        await proc.stop()
+        assert proc._owned_session is None
 
 
 @pytest.mark.asyncio

@@ -44,19 +44,12 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         self._running = False
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
-        if sse_factory is not None:
-            # A caller-supplied factory owns whatever session it uses; we don't
-            # create or close one here.
-            self._sse_factory = sse_factory
-            self._owned_session = None
-        else:
-            # Build a session configured from the SDK's HTTP options (CA certs,
-            # client cert, SSL verification, proxy trust) so the streaming
-            # connection isn't a plain unconfigured ClientSession. The SSE
-            # client treats the supplied session as externally owned and never
-            # closes it, so this data source closes it on teardown.
-            self._owned_session = make_client_session(config)
-            self._sse_factory = AsyncSSEFactory(config, session=self._owned_session)
+        # A caller-supplied factory owns whatever session it uses. With no
+        # factory we build our own session + factory, but that is deferred to
+        # _run() so the aiohttp ClientSession is created on the running event
+        # loop rather than at construction time.
+        self._sse_factory = sse_factory
+        self._owned_session = None
         self._sse: Any = None
         self._connection_attempt_start_time = None
         self._runner = AsyncTaskRunner()
@@ -69,6 +62,14 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         self._runner.spawn("ldclient.datasource.streaming", self._run)
 
     async def _run(self):
+        if self._sse_factory is None:
+            # Build a session configured from the SDK's HTTP options (CA certs,
+            # client cert, SSL verification, proxy trust) so the streaming
+            # connection isn't a plain unconfigured ClientSession. Created here,
+            # on the running loop, per aiohttp. The SSE client treats it as
+            # externally owned, so this data source closes it on teardown.
+            self._owned_session = make_client_session(self._config)
+            self._sse_factory = AsyncSSEFactory(self._config, session=self._owned_session)
         log.info("Starting AsyncStreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
         self._sse = self._sse_factory.create(self._uri, self._config.initial_reconnect_delay)
