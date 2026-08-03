@@ -587,3 +587,31 @@ class TestSupportsExecutionOrder:
 
         assert result.is_success()
         assert ms >= min_time
+
+
+def raises_cancelled() -> AsyncMigratorFn:
+    async def inner(payload):
+        raise asyncio.CancelledError()
+
+    return inner
+
+
+@pytest.mark.asyncio
+class TestReportsCancelledWrite:
+    async def test_cancelled_write_still_reports_completed_origins(self, builder: AsyncMigratorBuilder):
+        # In SHADOW the old origin is authoritative. It succeeds, then the new
+        # write is cancelled mid-operation.
+        builder.write(async_success, raises_cancelled())
+        migrator = builder.build()
+        assert isinstance(migrator, AsyncMigrator)
+
+        with pytest.raises(asyncio.CancelledError):
+            await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
+
+        # The finally still emitted the migration op event, and it records only
+        # the origin that completed. The cancelled write leaves the new origin
+        # uninvoked and unerrored.
+        event = builder._client._event_processor._events[1]  # type: ignore
+        assert isinstance(event, MigrationOpEvent)
+        assert event.invoked == {Origin.OLD}
+        assert event.errors == set()

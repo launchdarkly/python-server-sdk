@@ -83,6 +83,16 @@ class AsyncMigrator(ABC):
         :param context: The context to use when evaluating the flag
         :param default_stage: A default stage to fallback to if one cannot be determined
         :param payload: An optional payload to be passed through to the appropriate write method
+
+        Writes run serially, authoritative origin first. If the authoritative
+        write fails, the non-authoritative write does not run. See
+        :class:`WriteResult`.
+
+        .. note::
+            Cancelling a write mid-operation raises ``CancelledError`` instead
+            of returning a :class:`WriteResult`. A completed authoritative write
+            is not undone, and the migration event still records which origins
+            were written.
         """
 
 
@@ -143,27 +153,32 @@ class AsyncMigratorImpl(AsyncMigrator):
         old = AsyncExecutor(Origin.OLD, self._write_config.old, tracker, self._measure_latency, self._measure_errors, payload)
         new = AsyncExecutor(Origin.NEW, self._write_config.new, tracker, self._measure_latency, self._measure_errors, payload)
 
-        if stage == Stage.OFF:
-            result = await old.run()
-            write_result = WriteResult(result)
-        elif stage == Stage.DUALWRITE:
-            authoritative_result, nonauthoritative_result = await self.__write_both(old, new, tracker)
-            write_result = WriteResult(authoritative_result, nonauthoritative_result)
-        elif stage == Stage.SHADOW:
-            authoritative_result, nonauthoritative_result = await self.__write_both(old, new, tracker)
-            write_result = WriteResult(authoritative_result, nonauthoritative_result)
-        elif stage == Stage.LIVE:
-            authoritative_result, nonauthoritative_result = await self.__write_both(new, old, tracker)
-            write_result = WriteResult(authoritative_result, nonauthoritative_result)
-        elif stage == Stage.RAMPDOWN:
-            authoritative_result, nonauthoritative_result = await self.__write_both(new, old, tracker)
-            write_result = WriteResult(authoritative_result, nonauthoritative_result)
-        else:
-            result = await new.run()
-            write_result = WriteResult(result)
-
-        # track_migration_op is synchronous on the async client; do not await it.
-        self._client.track_migration_op(tracker)
+        try:
+            if stage == Stage.OFF:
+                result = await old.run()
+                write_result = WriteResult(result)
+            elif stage == Stage.DUALWRITE:
+                authoritative_result, nonauthoritative_result = await self.__write_both(old, new, tracker)
+                write_result = WriteResult(authoritative_result, nonauthoritative_result)
+            elif stage == Stage.SHADOW:
+                authoritative_result, nonauthoritative_result = await self.__write_both(old, new, tracker)
+                write_result = WriteResult(authoritative_result, nonauthoritative_result)
+            elif stage == Stage.LIVE:
+                authoritative_result, nonauthoritative_result = await self.__write_both(new, old, tracker)
+                write_result = WriteResult(authoritative_result, nonauthoritative_result)
+            elif stage == Stage.RAMPDOWN:
+                authoritative_result, nonauthoritative_result = await self.__write_both(new, old, tracker)
+                write_result = WriteResult(authoritative_result, nonauthoritative_result)
+            else:
+                result = await new.run()
+                write_result = WriteResult(result)
+        finally:
+            # Emit the event even if the write is cancelled mid-operation. On
+            # cancellation the CancelledError propagates and no WriteResult is
+            # returned, but the tracker still shows which origins were written,
+            # so a partial write is reported instead of lost. track_migration_op
+            # is synchronous; do not await it.
+            self._client.track_migration_op(tracker)
 
         return write_result
 
