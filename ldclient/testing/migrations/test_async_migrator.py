@@ -615,3 +615,17 @@ class TestReportsCancelledWrite:
         assert isinstance(event, MigrationOpEvent)
         assert event.invoked == {Origin.OLD}
         assert event.errors == set()
+
+    async def test_cancelled_before_any_write_reports_nothing(self, builder: AsyncMigratorBuilder):
+        # In SHADOW the old origin is authoritative. It is cancelled before it
+        # completes, so no origin is written.
+        builder.write(raises_cancelled(), async_success)
+        migrator = builder.build()
+        assert isinstance(migrator, AsyncMigrator)
+
+        with pytest.raises(asyncio.CancelledError):
+            await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
+
+        # Nothing was written, so no migration event is emitted (and the client
+        # does not log a spurious "no origins were invoked" error).
+        assert builder._client._event_processor._events == []  # type: ignore

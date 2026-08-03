@@ -134,6 +134,11 @@ class OpTracker:
             self.__invoked.add(origin)
         return self
 
+    def has_invocations(self) -> bool:
+        """Returns whether any origin has been recorded as invoked."""
+        with self.__mutex:
+            return len(self.__invoked) > 0
+
     def consistent(self, is_consistent: Callable[[], bool]) -> 'OpTracker':
         """
         Allows recording the results of a consistency check.

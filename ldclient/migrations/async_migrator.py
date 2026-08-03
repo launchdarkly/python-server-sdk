@@ -173,12 +173,8 @@ class AsyncMigratorImpl(AsyncMigrator):
                 result = await new.run()
                 write_result = WriteResult(result)
         finally:
-            # Emit the event even if the write is cancelled mid-operation. On
-            # cancellation the CancelledError propagates and no WriteResult is
-            # returned, but the tracker still shows which origins were written,
-            # so a partial write is reported instead of lost. track_migration_op
-            # is synchronous; do not await it.
-            self._client.track_migration_op(tracker)
+            if tracker.has_invocations():
+                self._client.track_migration_op(tracker)
 
         return write_result
 
