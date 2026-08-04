@@ -15,7 +15,7 @@ from typing import (
 )
 
 from ldclient.impl.sampler import Sampler
-from ldclient.impl.util import Result
+from ldclient.impl.util import Result, log
 from ldclient.migrations.tracker import OpTracker
 from ldclient.migrations.types import (
     ExecutionOrder,
@@ -172,9 +172,11 @@ class AsyncMigratorImpl(AsyncMigrator):
             else:
                 result = await new.run()
                 write_result = WriteResult(result)
+        except asyncio.CancelledError:
+            log.warning("Migration write was cancelled before completion")
+            raise
         finally:
-            if tracker.has_invocations():
-                self._client.track_migration_op(tracker)
+            self._client.track_migration_op(tracker)
 
         return write_result
 

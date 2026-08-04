@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import List
 
@@ -47,6 +48,7 @@ class FakeAsyncClient:
 
     def __init__(self):
         self._event_processor = FakeEventProcessor()
+        self._build_errors: List[str] = []
         self._flags = {}
         for stage in Stage:
             flag = FlagBuilder(stage.value).on(True).variations(stage.value).fallthrough_variation(0).build()
@@ -62,10 +64,13 @@ class FakeAsyncClient:
         return stage, tracker
 
     def track_migration_op(self, tracker: OpTracker):
-        # Synchronous on the real async client; must NOT be awaited.
+        # Synchronous on the real async client; must NOT be awaited. Mirrors the
+        # real client: a tracker that cannot build an event (e.g. nothing was
+        # invoked) is recorded and dropped, not sent.
         event = tracker.build()
         if isinstance(event, str):
-            raise AssertionError("tracker.build() failed: %s" % event)
+            self._build_errors.append(event)
+            return
         # Emulate the EventInputEvaluation that migration_variation would have
         # queued, so index [1] is the MigrationOpEvent (as in the sync tests).
         self._event_processor.send_event(_FakeEvalEvent())
@@ -598,34 +603,40 @@ def raises_cancelled() -> AsyncMigratorFn:
 
 @pytest.mark.asyncio
 class TestReportsCancelledWrite:
-    async def test_cancelled_write_still_reports_completed_origins(self, builder: AsyncMigratorBuilder):
+    async def test_cancelled_write_still_reports_completed_origins(self, builder: AsyncMigratorBuilder, caplog):
         # In SHADOW the old origin is authoritative. It succeeds, then the new
         # write is cancelled mid-operation.
         builder.write(async_success, raises_cancelled())
         migrator = builder.build()
         assert isinstance(migrator, AsyncMigrator)
 
-        with pytest.raises(asyncio.CancelledError):
-            await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
+        with caplog.at_level(logging.WARNING, logger="ldclient.util"):
+            with pytest.raises(asyncio.CancelledError):
+                await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
 
-        # The finally still emitted the migration op event, and it records only
-        # the origin that completed. The cancelled write leaves the new origin
-        # uninvoked and unerrored.
+        # The cancellation is logged, and the event still records the origin
+        # that completed. The cancelled write leaves the new origin uninvoked
+        # and unerrored.
+        assert "cancelled before completion" in caplog.text
         event = builder._client._event_processor._events[1]  # type: ignore
         assert isinstance(event, MigrationOpEvent)
         assert event.invoked == {Origin.OLD}
         assert event.errors == set()
 
-    async def test_cancelled_before_any_write_reports_nothing(self, builder: AsyncMigratorBuilder):
+    async def test_cancelled_before_any_write_logs_and_emits_no_event(self, builder: AsyncMigratorBuilder, caplog):
         # In SHADOW the old origin is authoritative. It is cancelled before it
         # completes, so no origin is written.
         builder.write(raises_cancelled(), async_success)
         migrator = builder.build()
         assert isinstance(migrator, AsyncMigrator)
 
-        with pytest.raises(asyncio.CancelledError):
-            await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
+        with caplog.at_level(logging.WARNING, logger="ldclient.util"):
+            with pytest.raises(asyncio.CancelledError):
+                await migrator.write(Stage.SHADOW.value, user, Stage.LIVE)
 
-        # Nothing was written, so no migration event is emitted (and the client
-        # does not log a spurious "no origins were invoked" error).
+        # The cancellation is logged. track_migration_op is still called, but
+        # nothing was written, so the tracker cannot build an event and none is
+        # emitted.
+        assert "cancelled before completion" in caplog.text
         assert builder._client._event_processor._events == []  # type: ignore
+        assert builder._client._build_errors == ["no origins were invoked"]  # type: ignore
