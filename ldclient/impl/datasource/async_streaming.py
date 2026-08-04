@@ -118,7 +118,10 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
                         break
         finally:
             if self._sse:
-                await self._sse.close()
+                try:
+                    await self._sse.close()
+                except Exception as e:
+                    log.warning("Error closing stream connection during shutdown: %s" % e)
             await self._close_owned_session()
 
     async def _close_owned_session(self):
