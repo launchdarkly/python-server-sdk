@@ -155,7 +155,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if target is not None:
                 store.upsert(target.kind, obj)
             else:
-                log.warning("Patch for unknown path: %s", path)
+                log.warning("Patch for unknown path")
         elif msg.event == 'delete':
             payload = json.loads(msg.data)
             path = payload['path']
@@ -166,7 +166,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             if target is not None:
                 store.delete(target.kind, target.key, version)
             else:
-                log.warning("Delete for unknown path: %s", path)
+                log.warning("Delete for unknown path")
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False

@@ -180,7 +180,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             if parsed is not None:
                 await target.upsert(parsed.kind, obj)
             else:
-                log.warning("Patch for unknown path: %s", path)
+                log.warning("Patch for unknown path")
         elif msg.event == 'delete':
             payload = json.loads(msg.data)
             path = payload['path']
@@ -191,7 +191,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             if parsed is not None:
                 await target.delete(parsed.kind, parsed.key, version)
             else:
-                log.warning("Delete for unknown path: %s", path)
+                log.warning("Delete for unknown path")
         else:
             log.warning('Unhandled event in stream processor: ' + msg.event)
         return False
