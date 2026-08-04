@@ -89,7 +89,7 @@ class EventBuffer:
 
 
 class EventOutputFormatter:
-    """Transforms buffered events into the LaunchDarkly wire-format output payload. Performs no I/O."""
+    """Transforms buffered events into the output payload sent to LaunchDarkly. Performs no I/O."""
 
     def __init__(self, config: PrivateAttributesConfig):
         self._context_formatter = EventContextFormatter(

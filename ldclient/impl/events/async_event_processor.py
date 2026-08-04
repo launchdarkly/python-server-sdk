@@ -133,10 +133,9 @@ class EventDispatcher(EventDispatcherBase):
                 elif message.type == 'diagnostic':
                     self._send_and_reset_diagnostics()
                 elif message.type == 'flush_and_wait':
-                    # Ensure the buffered batch is actually handed to a worker
-                    # before reporting success; under saturation the first
-                    # trigger may leave the events buffered, so wait for a free
-                    # worker and retry.
+                    # Do not report success until a worker takes the batch.
+                    # When all workers are busy, the first trigger leaves the
+                    # events buffered, so wait for a free worker and try again.
                     while not self._trigger_flush():
                         await self._flush_workers.wait()
                     await self._flush_workers.wait()
