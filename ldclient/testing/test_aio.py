@@ -528,14 +528,9 @@ class TestTransportParity:
 
 class TestImportSafety:
     def test_import_ldclient_does_not_require_aiohttp(self):
-        """A bare ``import ldclient`` must not import aiohttp.
-
-        aiohttp is an optional dependency (the ``async`` extra), so sync-only
-        installs do not have it. The async code keeps its aiohttp-importing
-        pieces (the async client and HTTP transport) off the eager import path.
-        ``import ldclient`` also loads ``ldclient.migrations``, so this covers
-        the async migration surface too. A fresh interpreter is used so the
-        result is not affected by other tests that already imported aiohttp.
+        """A bare ``import ldclient`` must not import anything that requires an
+        optional dependency. aiohttp (the ``async`` extra) is optional, so a
+        sync-only install must still be able to import ldclient.
         """
         code = "import ldclient, sys; sys.exit(1 if 'aiohttp' in sys.modules else 0)"
         result = subprocess.run(
