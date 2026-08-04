@@ -46,9 +46,9 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
 
     async def stop(self):
         self.__stop_with_error_info(None)
-        # Wait for the in-flight poll to finish unwinding before closing the
-        # transport, so awaiting stop() guarantees background work has stopped
-        # and we don't close the HTTP transport out from under a live request.
+        # Wait for the current poll to finish before closing the transport. This way
+        # stop() does not return until background work has stopped, so we never close
+        # the transport while a request is still using it.
         await self._task.wait_stopped()
         await self._requester.close()
 
