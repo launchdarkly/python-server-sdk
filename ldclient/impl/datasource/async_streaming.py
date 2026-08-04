@@ -63,11 +63,10 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
 
     async def _run(self):
         if self._sse_factory is None:
-            # Build a session configured from the SDK's HTTP options (CA certs,
-            # client cert, SSL verification, proxy trust) so the streaming
-            # connection isn't a plain unconfigured ClientSession. Created here,
-            # on the running loop, per aiohttp. The SSE client treats it as
-            # externally owned, so this data source closes it on teardown.
+            # Build a session from the SDK's HTTP options (CA certs, client cert,
+            # SSL verification, proxy trust). Build it here, on the running loop,
+            # as aiohttp requires. The SSE client does not close a supplied
+            # session, so this data source closes it on teardown.
             self._owned_session = make_client_session(self._config)
             self._sse_factory = AsyncSSEFactory(self._config, session=self._owned_session)
         log.info("Starting AsyncStreamingUpdateProcessor connecting to uri: " + self._uri)
