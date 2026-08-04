@@ -146,7 +146,10 @@ class EventDispatcher(EventDispatcherBase):
                         await self._diagnostic_flush_workers.wait()
                     message.param.set()
                 elif message.type == 'stop':
-                    await self._do_shutdown()
+                    try:
+                        await self._do_shutdown()
+                    except Exception:
+                        log.error('Error during event processor shutdown', exc_info=True)
                     message.param.set()
                     return
             except Exception:
@@ -180,6 +183,11 @@ class EventDispatcher(EventDispatcherBase):
             self._diagnostic_flush_workers.try_run(task.run)
 
     async def _do_shutdown(self):
+        # Deliver any still-buffered events before shutting down. Retry the
+        # hand-off while all flush workers are busy (like flush_and_wait), then
+        # stop the pool and wait for the in-flight flushes to finish.
+        while not self._trigger_flush():
+            await self._flush_workers.wait()
         self._flush_workers.stop()
         await self._flush_workers.wait()
 

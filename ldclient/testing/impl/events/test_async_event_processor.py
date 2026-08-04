@@ -20,10 +20,11 @@ import pytest
 
 from ldclient.async_config import AsyncConfig
 from ldclient.context import Context
-from ldclient.impl.aio.concurrency import AsyncQueue
+from ldclient.impl.aio.concurrency import AsyncEvent, AsyncQueue
 from ldclient.impl.events.async_event_processor import (
     DefaultAsyncEventProcessor,
-    EventDispatcher
+    EventDispatcher,
+    EventProcessorMessage
 )
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
@@ -216,6 +217,42 @@ async def test_trigger_flush_reports_whether_batch_handed_off():
         assert dispatcher._outbox.get_payload().events == []
     finally:
         await dispatcher._runner.stop_all()
+
+
+@pytest.mark.asyncio
+async def test_stop_completes_even_if_shutdown_raises():
+    # If _do_shutdown raises, the dispatcher must still set the stop reply and
+    # exit the loop; otherwise stop() would wait on that reply forever.
+    mock_http = MockAioHttp()
+    config = AsyncConfig(sdk_key='SDK_KEY', diagnostic_opt_out=True)
+    inbox = AsyncQueue(config.events_max_pending)
+    dispatcher = EventDispatcher(inbox, config, mock_http)
+
+    async def boom():
+        raise RuntimeError("shutdown failed")
+    dispatcher._do_shutdown = boom
+
+    reply = AsyncEvent()
+    await inbox.put(EventProcessorMessage('stop', reply))
+    # Would hang without the fix; wait_for turns a hang into a test failure.
+    await asyncio.wait_for(reply.wait(), 2)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_flushes_buffered_events():
+    # _do_shutdown must drain the outbox so buffered events are delivered on a
+    # clean shutdown, even when no flush reached the dispatcher beforehand.
+    mock_http = MockAioHttp()
+    config = AsyncConfig(sdk_key='SDK_KEY', diagnostic_opt_out=True)
+    inbox = AsyncQueue(config.events_max_pending)
+    dispatcher = EventDispatcher(inbox, config, mock_http)
+    dispatcher._outbox.add_event(EventInputIdentify(timestamp, context))
+
+    reply = AsyncEvent()
+    await inbox.put(EventProcessorMessage('stop', reply))
+    await asyncio.wait_for(reply.wait(), 2)
+
+    assert mock_http.request_data is not None
 
 
 async def test_two_events_for_same_context_only_produce_one_index_event():
