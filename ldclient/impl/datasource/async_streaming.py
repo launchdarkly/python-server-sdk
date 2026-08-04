@@ -72,52 +72,55 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             self._sse_factory = AsyncSSEFactory(self._config, session=self._owned_session)
         log.info("Starting AsyncStreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
-        self._sse = self._sse_factory.create(self._uri, self._config.initial_reconnect_delay)
-        self._connection_attempt_start_time = time.time()
-        async for action in self._sse.all:
-            if isinstance(action, Start):
-                # On reconnect after an error the timer was cleared; reset it here.
-                # For the initial connect the pre-loop timestamp is already set.
-                if self._connection_attempt_start_time is None:
-                    self._connection_attempt_start_time = time.time()
-            elif isinstance(action, Event):
-                message_ok = False
-                try:
-                    message_ok = await self._process_message(action)
-                except json.decoder.JSONDecodeError as e:
-                    log.info("Error while handling stream event; will restart stream: %s" % e)
-                    await self._sse.interrupt()
+        try:
+            self._sse = self._sse_factory.create(self._uri, self._config.initial_reconnect_delay)
+            self._connection_attempt_start_time = time.time()
+            async for action in self._sse.all:
+                if isinstance(action, Start):
+                    # On reconnect after an error the timer was cleared; reset it here.
+                    # For the initial connect the pre-loop timestamp is already set.
+                    if self._connection_attempt_start_time is None:
+                        self._connection_attempt_start_time = time.time()
+                elif isinstance(action, Event):
+                    message_ok = False
+                    try:
+                        message_ok = await self._process_message(action)
+                    except json.decoder.JSONDecodeError as e:
+                        log.info("Error while handling stream event; will restart stream: %s" % e)
+                        await self._sse.interrupt()
 
-                    await self._handle_error(e)
-                except Exception as e:
-                    log.warning("Error while handling stream event; will restart stream: %s" % e)
-                    await self._sse.interrupt()
+                        await self._handle_error(e)
+                    except Exception as e:
+                        log.warning("Error while handling stream event; will restart stream: %s" % e)
+                        await self._sse.interrupt()
 
-                    if self._data_source_update_sink is not None:
-                        error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
+                        if self._data_source_update_sink is not None:
+                            error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
 
-                        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+                            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
-                if message_ok:
-                    self._record_stream_init(False)
-                    self._connection_attempt_start_time = None
+                    if message_ok:
+                        self._record_stream_init(False)
+                        self._connection_attempt_start_time = None
 
-                    if self._data_source_update_sink is not None:
-                        self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+                        if self._data_source_update_sink is not None:
+                            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
-                    if not self._ready.is_set():
-                        log.info("AsyncStreamingUpdateProcessor initialized ok.")
-                        self._ready.set()
-            elif isinstance(action, Fault):
-                # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
-                # ignore this since we want the connection to continue.
-                if action.error is None:
-                    continue
+                        if not self._ready.is_set():
+                            log.info("AsyncStreamingUpdateProcessor initialized ok.")
+                            self._ready.set()
+                elif isinstance(action, Fault):
+                    # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
+                    # ignore this since we want the connection to continue.
+                    if action.error is None:
+                        continue
 
-                if not await self._handle_error(action.error):
-                    break
-        await self._sse.close()
-        await self._close_owned_session()
+                    if not await self._handle_error(action.error):
+                        break
+        finally:
+            if self._sse:
+                await self._sse.close()
+            await self._close_owned_session()
 
     async def _close_owned_session(self):
         """Close the aiohttp session if the SDK created it. A caller-supplied

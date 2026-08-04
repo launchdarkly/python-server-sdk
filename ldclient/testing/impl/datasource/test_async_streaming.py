@@ -441,6 +441,28 @@ async def test_default_construction_session_closed_on_stop():
 
 
 @pytest.mark.asyncio
+async def test_default_construction_session_closed_when_run_fails():
+    """If _run fails after building the session (e.g. create() raises), the
+    SDK-created session is closed rather than leaked."""
+    config = _make_config()
+    store = MockAsyncFeatureStore()
+    ready = asyncio.Event()
+    fake_session = _FakeSession()
+
+    with mock.patch.object(
+        async_streaming, "make_client_session", return_value=fake_session
+    ), mock.patch.object(async_streaming, "AsyncSSEFactory") as factory_cls:
+        factory_cls.return_value.create.side_effect = RuntimeError("boom")
+        proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
+        proc.start()
+
+        # _run builds the session, then create() raises. The finally must still
+        # close the SDK-created session instead of leaking it.
+        await _wait_until(lambda: fake_session.closed)
+        assert proc._owned_session is None
+
+
+@pytest.mark.asyncio
 async def test_injected_factory_leaves_session_unowned():
     """When a factory is injected, no session is built and none is owned."""
     with mock.patch.object(async_streaming, "make_client_session") as make_session:
