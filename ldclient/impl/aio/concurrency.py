@@ -1,10 +1,10 @@
 """
-Async concurrency primitives used by the async data source, event processor, and
-data system. Each wraps a piece of fiddly asyncio plumbing (timeout-aware waits,
-queue exception normalization, an interval-from-start repeating task, a bounded
-task set) that callers would otherwise inline repeatedly. The sync code uses the
-equivalent stdlib/SDK primitives (``threading.Event``/``Lock``, ``queue.Queue``,
-``RepeatingTask``, ``FixedThreadPool``) directly, so these have no sync twin.
+Async concurrency helpers used by the async data source, event processor, and
+data system. Each helper wraps one piece of asyncio setup so callers do not
+repeat it: timeout-aware waits, queue timeout/capacity exceptions, a repeating
+task, and a bounded task set. The sync code uses the standard-library and SDK
+equivalents (``threading.Event``/``Lock``, ``queue.Queue``, ``RepeatingTask``,
+``FixedThreadPool``) directly, so it has no matching helpers.
 """
 
 import asyncio
@@ -130,9 +130,9 @@ async def join_handle(handle: TaskHandle, timeout: float) -> None:
 
 
 class AsyncCallbackScheduler:
-    """Bridges sync notification paths to async callbacks: ``call`` schedules
-    a coroutine callback onto the event loop captured at construction time,
-    logging any unhandled exception. Safe to invoke from any thread."""
+    """Schedules a coroutine callback onto the event loop that was running when
+    this object was created. ``call`` runs the callback and logs any unhandled
+    exception. Safe to call from any thread."""
 
     def __init__(self):
         self._loop = asyncio.get_running_loop()
