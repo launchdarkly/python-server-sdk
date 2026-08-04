@@ -62,12 +62,14 @@ class AsyncInMemoryFeatureStore(AsyncFeatureStore, DiagnosticDescription):
         for k in all_data:
             log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
 
-    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
+    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
         """ """
         items_of_kind = self._items[kind]
         i = items_of_kind.get(key)
         if i is None or i['version'] < version:
             items_of_kind[key] = {'deleted': True, 'version': version}
+            return True
+        return False
 
     async def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
         """ """

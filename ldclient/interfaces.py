@@ -391,7 +391,7 @@ class AsyncFeatureStore(ABC):
         """
 
     @abstractmethod
-    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> None:
+    async def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
         """
         Deletes the object associated with the specified key, if it exists and its version is less
         than the specified version. The object should be replaced in the data store by a
@@ -400,6 +400,8 @@ class AsyncFeatureStore(ABC):
         :param kind: The kind of object to delete
         :param key: The key of the object to be deleted
         :param version: The version for the delete operation
+        :return: True if the store was updated (a newer delete placeholder was written); False if the
+            delete was rejected because the stored version was equal or newer
         """
 
     @property
