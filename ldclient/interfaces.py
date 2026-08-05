@@ -590,6 +590,13 @@ class AsyncFeatureRequester(ABC):
         """
         ...
 
+    @abstractmethod
+    async def close(self) -> None:
+        """
+        Releases any resources (such as an HTTP transport) owned by the requester.
+        """
+        ...
+
 
 class DiagnosticDescription:
     """
