@@ -17,10 +17,6 @@ from ldclient.impl.async_big_segments import (
 )
 from ldclient.interfaces import AsyncBigSegmentStore, BigSegmentStoreMetadata
 
-# ---------------------------------------------------------------------------
-# Test doubles
-# ---------------------------------------------------------------------------
-
 user_key = 'user-key'
 user_hash = _hash_for_user_key(user_key)
 
@@ -66,19 +62,11 @@ class MockAsyncBigSegmentStore(AsyncBigSegmentStore):
         return list(self._membership_queries)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 async def make_started_manager(store, **kwargs):
     config = AsyncBigSegmentsConfig(store=store, **kwargs)
     # The constructor starts the polling task (it requires a running event loop).
     return AsyncBigSegmentStoreManager(config)
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_membership_query_uncached_result_healthy_status():

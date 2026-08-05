@@ -220,5 +220,38 @@ def _target_match_result(flag: FeatureFlag, var: int) -> EvaluationDetail:
     return _get_variation(flag, var, {'kind': 'TARGET_MATCH'})
 
 
+def check_targets(flag: FeatureFlag, context: Context) -> Optional[EvaluationDetail]:
+    user_targets = flag.targets
+    context_targets = flag.context_targets
+    if len(context_targets) == 0:
+        # old-style data has only targets for users
+        if len(user_targets) != 0:
+            user_context = context.get_individual_context(Context.DEFAULT_KIND)
+            if user_context is None:
+                return None
+            key = user_context.key
+            for t in user_targets:
+                if key in t.values:
+                    return _target_match_result(flag, t.variation)
+        return None
+    for t in context_targets:
+        kind = t.context_kind or Context.DEFAULT_KIND
+        var = t.variation
+        actual_context = context.get_individual_context(kind)
+        if actual_context is None:
+            continue
+        key = actual_context.key
+        if kind == Context.DEFAULT_KIND:
+            for ut in user_targets:
+                if ut.variation == var:
+                    if key in ut.values:
+                        return _target_match_result(flag, var)
+                    break
+            continue
+        if key in t.values:
+            return _target_match_result(flag, var)
+    return None
+
+
 def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}
