@@ -571,6 +571,26 @@ class FeatureRequester(ABC):
         pass
 
 
+class AsyncFeatureRequester(ABC):
+    """
+    Async interface for the component that acquires feature flag data in polling
+    mode. The default implementation can be replaced for testing purposes.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+    """
+
+    @abstractmethod
+    async def get_all_data(self) -> Mapping[VersionedDataKind, Mapping[str, dict]]:
+        """
+        Fetches all feature flag and segment data.
+        """
+        ...
+
+
 class DiagnosticDescription:
     """
     Optional interface for components to describe their own configuration.

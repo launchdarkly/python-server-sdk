@@ -14,7 +14,11 @@ from ldclient.impl.datasource.async_feature_requester import (
 )
 from ldclient.impl.datasource.async_polling import AsyncPollingUpdateProcessor
 from ldclient.impl.util import UnsuccessfulResponseException
-from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.interfaces import (
+    AsyncDataSourceUpdateSink,
+    DataSourceErrorKind,
+    DataSourceState
+)
 from ldclient.testing.mock_async_components import MockAsyncFeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -25,10 +29,7 @@ SAMPLE_DATA = {FEATURES: SAMPLE_FLAGS, SEGMENTS: SAMPLE_SEGMENTS}
 
 
 def make_config(**kwargs):
-    """Create a Config with a short poll_interval for tests.
-
-    Config enforces a minimum poll_interval of 30s, so we patch the property.
-    """
+    """Create a Config with the test SDK key."""
     return Config('SDK_KEY', **kwargs)
 
 
@@ -363,7 +364,7 @@ class TestAsyncPollingUpdateProcessor:
         ready = asyncio.Event()
         config = make_config()
 
-        sink = AsyncMock()
+        sink = MagicMock(spec=AsyncDataSourceUpdateSink)
         config._data_source_update_sink = sink
 
         processor = make_processor(config=config, store=store, ready=ready)
@@ -394,10 +395,10 @@ class TestAsyncPollingUpdateProcessor:
         ready = asyncio.Event()
         config = make_config()
 
-        # The processor checks self._store.initialized before sending VALID.
-        # Use an AsyncMock sink whose init() also marks the underlying store as initialized
-        # so that both the sink-path and the initialized check work correctly.
-        sink = AsyncMock()
+        # The sink's init() also marks the underlying store initialized, so the
+        # ready event fires (it gates on store.initialized) and ready.wait()
+        # below completes.
+        sink = MagicMock(spec=AsyncDataSourceUpdateSink)
 
         async def _init_and_store(data):
             await store.init(data)

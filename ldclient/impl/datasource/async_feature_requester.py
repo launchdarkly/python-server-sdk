@@ -10,13 +10,13 @@ from urllib import parse
 from ldclient.impl.aio.transport import AsyncHTTPTransport
 from ldclient.impl.datasource.datasource_common import FDV1_POLLING_ENDPOINT
 from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
-from ldclient.interfaces import FeatureRequester
+from ldclient.interfaces import AsyncFeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 CacheEntry = namedtuple('CacheEntry', ['data', 'etag'])
 
 
-class AsyncFeatureRequesterImpl(FeatureRequester):
+class AsyncFeatureRequesterImpl(AsyncFeatureRequester):
     def __init__(self, config, transport: Optional[AsyncHTTPTransport] = None):
         self._cache: dict = dict()
         # Only close the transport on shutdown if we created it; an injected

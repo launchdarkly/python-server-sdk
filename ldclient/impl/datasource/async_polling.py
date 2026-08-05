@@ -9,9 +9,6 @@ from typing import Optional
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent, AsyncRepeatingTask
-from ldclient.impl.datasource.async_feature_requester import (
-    AsyncFeatureRequesterImpl
-)
 from ldclient.impl.datasource.datasource_common import sink_or_store
 from ldclient.impl.util import (
     UnsuccessfulResponseException,
@@ -20,6 +17,7 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    AsyncFeatureRequester,
     AsyncFeatureStore,
     AsyncUpdateProcessor,
     DataSourceErrorInfo,
@@ -29,7 +27,7 @@ from ldclient.interfaces import (
 
 
 class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
-    def __init__(self, config: AsyncConfig, requester: AsyncFeatureRequesterImpl, store: AsyncFeatureStore, ready: AsyncEvent):
+    def __init__(self, config: AsyncConfig, requester: AsyncFeatureRequester, store: AsyncFeatureStore, ready: AsyncEvent):
         self._config = config
         self._data_source_update_sink = config.data_source_update_sink
         self._requester = requester
@@ -42,7 +40,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         self._task.start()
 
     def initialized(self):
-        return self._ready.is_set() is True and self._store.initialized is True
+        return self._ready.is_set() and self._store.initialized
 
     async def stop(self):
         self.__stop_with_error_info(None)
@@ -69,8 +67,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
                 log.info("AsyncPollingUpdateProcessor initialized ok")
                 self._ready.set()
 
-            # Signal VALID once the store is populated.
-            if self._store.initialized and self._data_source_update_sink is not None:
+            if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.VALID, None)
         except UnsuccessfulResponseException as e:
             error_info = DataSourceErrorInfo(DataSourceErrorKind.ERROR_RESPONSE, e.status, time.time(), str(e))
