@@ -10,6 +10,7 @@ the ``http`` constructor parameter.
 import asyncio
 import gzip
 import json
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from email.utils import formatdate
@@ -491,3 +492,88 @@ async def test_event_payload_is_gzip_compressed_when_enabled():
         output = json.loads(gzip.decompress(mock_http.request_data))
         assert len(output) == 1
         assert output[0]['kind'] == 'identify'
+
+
+async def test_flush_and_wait_completes_when_in_flight_posts_finish_together():
+    # Regression test for a livelock: when all in-flight flush POSTs finish and
+    # the flush_and_wait message arrives in the same event-loop batch, the
+    # dispatcher's retry loop must still make progress and reply, not spin.
+    class GatedMockAioHttp(MockAioHttp):
+        """Parks each request until the gate is set, then completes without yielding."""
+
+        def __init__(self):
+            super().__init__()
+            self.gate = asyncio.Event()
+
+        def request(self, method, uri, headers=None, data=None, timeout=None, proxy=None):
+            self._recorded_requests.append((headers, data))
+            outer = self
+
+            class _Ctx:
+                async def __aenter__(self):
+                    await outer.gate.wait()
+                    return MockAioResponse(200, {})
+
+                async def __aexit__(self, exc_type, exc_value, traceback):
+                    return False
+
+            return _Ctx()
+
+    # DefaultAsyncEventProcessor discards the dispatcher, so capture it here to
+    # let the watchdog recover the loop if it wedges.
+    dispatcher_holder = []
+
+    def capture_dispatcher(inbox, config, http, diagnostic_accumulator):
+        dispatcher = EventDispatcher(inbox, config, http, diagnostic_accumulator)
+        dispatcher_holder.append(dispatcher)
+        return dispatcher
+
+    mock_http = GatedMockAioHttp()
+    config = AsyncConfig(sdk_key='SDK_KEY', diagnostic_opt_out=True)
+    ep = DefaultAsyncEventProcessor(config, mock_http, dispatcher_class=capture_dispatcher)
+    try:
+        # Saturate all five flush workers with parked POSTs.
+        for i in range(5):
+            ep.send_event(EventInputIdentify(timestamp, Context.create('user%d' % i)))
+            ep.flush()
+        deadline = asyncio.get_running_loop().time() + 2
+        while len(mock_http.recorded_requests) < 5:
+            assert asyncio.get_running_loop().time() < deadline, 'workers never saturated'
+            await asyncio.sleep(0.01)
+
+        # Buffer one more event so the awaited flush has work to hand off.
+        ep.send_event(EventInputIdentify(timestamp, context))
+        await asyncio.sleep(0.05)
+
+        # Complete all in-flight POSTs and enqueue flush_and_wait in one loop
+        # callback, so the dispatcher sees the message in the batch the workers
+        # finished in.
+        reply = AsyncEvent()
+        mock_http.gate.set()
+        ep._inbox.put_nowait(EventProcessorMessage('flush_and_wait', reply))
+
+        # A wedged loop cannot fire asyncio timeouts, so a watchdog thread
+        # detects the wedge and frees the task set to fail with an assertion
+        # rather than hang the run.
+        finished = threading.Event()
+        wedged = threading.Event()
+
+        def watchdog():
+            if not finished.wait(3):
+                wedged.set()
+                dispatcher_holder[0]._flush_workers._tasks.clear()
+
+        threading.Thread(target=watchdog, daemon=True).start()
+
+        replied = await reply.wait(10)
+        finished.set()
+
+        assert replied is True
+        assert not wedged.is_set(), (
+            "flush_and_wait wedged the event loop: the dispatcher spun in "
+            "'while not self._trigger_flush(): await self._flush_workers.wait()' "
+            "without yielding, and only the watchdog un-stuck it"
+        )
+    finally:
+        mock_http.gate.set()
+        await ep.stop()

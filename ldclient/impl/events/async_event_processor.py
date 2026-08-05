@@ -6,7 +6,6 @@ import asyncio
 import gzip
 import json
 import queue
-import time
 import uuid
 from collections import namedtuple
 from random import Random

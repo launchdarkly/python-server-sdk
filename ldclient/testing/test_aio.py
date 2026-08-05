@@ -223,6 +223,38 @@ class TestBoundedTaskSet:
         await tasks.wait()
         tasks.stop()
 
+    @pytest.mark.asyncio
+    async def test_retry_pattern_makes_progress_when_task_finished_in_same_batch(self):
+        tasks = aio.BoundedTaskSet(1)
+        finished = asyncio.Event()
+
+        async def job():
+            finished.set()
+
+        assert tasks.try_run(job) is True
+
+        # A raw asyncio.Event wakes this coroutine in the same loop batch the
+        # job's task finished in, before try_run sees the slot freed.
+        await finished.wait()
+
+        async def noop():
+            pass
+
+        # Mirrors the retry loop in EventDispatcher._run_main_loop: try_run must
+        # free the finished task's slot, or the real (unbounded) loop spins.
+        accepted = False
+        for _ in range(100):
+            if tasks.try_run(noop):
+                accepted = True
+                break
+            await tasks.wait()
+
+        assert accepted, (
+            "try_run never freed capacity: the finished task was still counted "
+            "against the limit, so the dispatcher's retry loop would spin forever"
+        )
+        await tasks.wait()
+
 
 class TestTaskRunnerParity:
     @pytest.mark.asyncio

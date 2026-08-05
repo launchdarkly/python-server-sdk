@@ -267,15 +267,19 @@ class BoundedTaskSet:
         task was started, or False if the set is full or has been stopped."""
         if not self._accepting or len(self._tasks) >= self._limit:
             return False
-        task = asyncio.create_task(job())
+        task = asyncio.create_task(self._run(job))
         self._tasks.add(task)
-        task.add_done_callback(self._on_done)
         return True
 
-    def _on_done(self, task: asyncio.Task) -> None:
-        self._tasks.discard(task)
-        if not task.cancelled() and task.exception() is not None:
-            log.warning('Unhandled exception in background task', exc_info=task.exception())
+    async def _run(self, job: Callable[[], Coroutine]) -> None:
+        try:
+            await job()
+        except Exception:
+            log.warning('Unhandled exception in background task', exc_info=True)
+        finally:
+            task = asyncio.current_task()
+            if task is not None:
+                self._tasks.discard(task)
 
     async def wait(self) -> None:
         """Waits for the tasks currently running to complete. This does not stop
