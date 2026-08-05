@@ -197,9 +197,20 @@ class AsyncLDClient:
         """Releases the threads and network connections used by the SDK
         components. The public :meth:`close` wraps this with a timeout."""
         log.info("Closing LaunchDarkly client..")
-        await self._event_processor.stop()
-        await self._data_system.stop()
-        await self.__big_segment_store_manager.stop()
+        # Stop each component in isolation so one failure does not prevent the
+        # others from stopping.
+        try:
+            await self._event_processor.stop()
+        except Exception as e:
+            log.warning("Error stopping event processor: %s", e)
+        try:
+            await self._data_system.stop()
+        except Exception as e:
+            log.warning("Error stopping data system: %s", e)
+        try:
+            await self.__big_segment_store_manager.stop()
+        except Exception as e:
+            log.warning("Error stopping big segment store manager: %s", e)
 
     async def __start_up(self, start_wait: float):
         environment_metadata = get_environment_metadata(self._config, "python-server-sdk-async")
@@ -611,6 +622,7 @@ class AsyncLDClient:
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
+            result = None
             try:
                 result = await self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
@@ -620,6 +632,10 @@ class AsyncLDClient:
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
 
+            # A per-flag error leaves result unset; degrade only that flag
+            # rather than aborting the whole payload or reusing a neighbor's
+            # prerequisites.
+            prerequisites = result.prerequisites if result is not None else []
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             flag_state = {
                 'key': flag['key'],
@@ -627,7 +643,7 @@ class AsyncLDClient:
                 'variation': detail.variation_index,
                 'reason': detail.reason,
                 'version': flag['version'],
-                'prerequisites': result.prerequisites,
+                'prerequisites': prerequisites,
                 'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
                 'trackReason': requires_experiment_data,
                 'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
@@ -677,12 +693,16 @@ class AsyncLDClient:
         # :param block:
         # :return:
         """
-        hooks = []  # type: List[AsyncHook]
+        # Snapshot the hooks under the lock and release it before awaiting.
+        # A concurrent sync add_hook() takes the write lock with a blocking
+        # wait; holding the read lock across an await would block the event
+        # loop and deadlock. See the sync client, which is safe because it
+        # returns without awaiting.
         with self.__hooks_lock.read():
-            if len(self.__hooks) == 0:
-                return await block()
+            hooks = self.__hooks.copy()  # type: List[AsyncHook]
 
-            hooks = self.__hooks.copy()
+        if not hooks:
+            return await block()
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
         hook_data = await self.__execute_before_evaluation(hooks, series_context)
@@ -703,6 +723,9 @@ class AsyncLDClient:
     async def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], Any]) -> dict:
         try:
             return await block()
+        except asyncio.CancelledError:
+            # Do not swallow cancellation; it must propagate for shutdown.
+            raise
         except BaseException as e:
             log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
             return {}
