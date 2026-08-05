@@ -438,3 +438,30 @@ class TestAsyncPollingUpdateProcessor:
             processor.start()
 
         await processor.stop()
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_transport_when_cancelled_mid_wait(self):
+        # If the caller of stop() is cancelled while it waits for the poll to
+        # finish, the owned transport must still be closed (the close is in a
+        # finally), rather than leaking.
+        requester = MagicMock()
+        requester.close = AsyncMock()
+        processor = make_processor(requester=requester)
+
+        # Replace the repeating task so wait_stopped() hangs until we cancel stop().
+        waiting = asyncio.Event()
+
+        async def hang():
+            waiting.set()
+            await asyncio.Event().wait()
+
+        processor._task = MagicMock()
+        processor._task.wait_stopped = hang
+
+        stop_task = asyncio.create_task(processor.stop())
+        await asyncio.wait_for(waiting.wait(), timeout=2.0)
+        stop_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await stop_task
+
+        requester.close.assert_awaited_once()

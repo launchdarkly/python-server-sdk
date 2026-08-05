@@ -44,11 +44,13 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
 
     async def stop(self):
         self.__stop_with_error_info(None)
-        # Wait for the current poll to finish before closing the transport. This way
-        # stop() does not return until background work has stopped, so we never close
-        # the transport while a request is still using it.
-        await self._task.wait_stopped()
-        await self._requester.close()
+        # Wait for the current poll to finish before closing the transport, so we do
+        # not close it while a request is still using it. The close is in a finally
+        # so an owned transport is still released if stop() is cancelled mid-wait.
+        try:
+            await self._task.wait_stopped()
+        finally:
+            await self._requester.close()
 
     def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping AsyncPollingUpdateProcessor")
