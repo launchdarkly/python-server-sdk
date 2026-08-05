@@ -1,262 +1,222 @@
 """
-This submodule contains the client class that provides most of the SDK functionality.
+Async client for the LaunchDarkly Server-Side Python SDK.
 """
 
-import threading
+import asyncio
 import traceback
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 from uuid import uuid4
 
-from ldclient.config import Config
+import certifi
+
+from ldclient.async_config import AsyncConfig
+from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
-from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.hook import (
+    AsyncHook,
     EvaluationSeriesContext,
-    Hook,
     _EvaluationWithHookResult
 )
-from ldclient.impl.big_segments import BigSegmentStoreManager
+from ldclient.impl import AnyNum
+from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.async_big_segments import AsyncBigSegmentStoreManager
+from ldclient.impl.async_evaluator import AsyncEvaluator, error_reason
+from ldclient.impl.async_flag_tracker import AsyncFlagTrackerImpl
 from ldclient.impl.client_common import (
     get_environment_metadata,
     get_plugin_hooks
 )
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
-from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
-from ldclient.impl.datasource.polling import PollingUpdateProcessor
-from ldclient.impl.datasource.status import (
-    DataSourceStatusProviderImpl,
-    DataSourceUpdateSinkImpl
+from ldclient.impl.datasystem import AsyncDataSystem, DataAvailability
+from ldclient.impl.events.async_event_processor import (
+    DefaultAsyncEventProcessor
 )
-from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
-from ldclient.impl.datastore.status import (
-    DataStoreStatusProviderImpl,
-    DataStoreUpdateSinkImpl
-)
-from ldclient.impl.datasystem import DataAvailability, DataSystem
-from ldclient.impl.datasystem.fdv2 import FDv2
-from ldclient.impl.evaluator import Evaluator, error_reason
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
     create_diagnostic_id
 )
-from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
-from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.feature_flag import FeatureFlag
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
-from ldclient.impl.util import check_uwsgi, log
+from ldclient.impl.stubs import AsyncNullEventProcessor
+from ldclient.impl.util import log
 from ldclient.interfaces import (
+    AsyncFeatureStore,
+    AsyncFlagTracker,
     BigSegmentStoreStatusProvider,
     DataSourceStatusProvider,
-    DataStoreStatus,
-    DataStoreStatusProvider,
-    DataStoreUpdateSink,
-    FeatureStore,
-    FlagTracker,
-    ReadOnlyStore
+    DataStoreStatusProvider
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import EnvironmentMetadata
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
-from .impl import AnyNum
 
-
-class _FeatureStoreClientWrapper(FeatureStore):
-    """Provides additional behavior that the client requires before or after feature store operations.
-    Currently this just means sorting the data set for init() and dealing with data store status listeners.
-    """
-
-    def __init__(self, store: FeatureStore, store_update_sink: DataStoreUpdateSink):
-        self.store = store
-        self.__store_update_sink = store_update_sink
-        self.__monitoring_enabled = self.is_monitoring_enabled()
-
-        # Covers the following variables
-        self.__lock = ReadWriteLock()
-        self.__last_available = True
-        self.__poller: Optional[RepeatingTask] = None
-
-    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
-
-    def get(self, kind, key, callback):
-        return self.__wrapper(lambda: self.store.get(kind, key, callback))
-
-    def all(self, kind, callback):
-        return self.__wrapper(lambda: self.store.all(kind, callback))
-
-    def delete(self, kind, key, version):
-        return self.__wrapper(lambda: self.store.delete(kind, key, version))
-
-    def upsert(self, kind, item):
-        return self.__wrapper(lambda: self.store.upsert(kind, item))
-
-    @property
-    def initialized(self) -> bool:
-        return self.store.initialized
-
-    def __wrapper(self, fn: Callable):
-        try:
-            return fn()
-        except BaseException:
-            if self.__monitoring_enabled:
-                self.__update_availability(False)
-            raise
-
-    def __update_availability(self, available: bool):
-        with self.__lock.write():
-            if available == self.__last_available:
-                return
-            self.__last_available = available
-
-        status = DataStoreStatus(available, False)
-
-        if available:
-            log.warn("Persistent store is available again")
-
-        self.__store_update_sink.update_status(status)
-
-        if available:
-            with self.__lock.write():
-                if self.__poller is not None:
-                    self.__poller.stop()
-                    self.__poller = None
-
-            return
-
-        log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
-        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
-
-        with self.__lock.write():
-            self.__poller = task
-            self.__poller.start()
-
-    def __check_availability(self):
-        try:
-            if self.store.is_available():
-                self.__update_availability(True)
-        except BaseException as e:
-            log.error("Unexpected error from data store status function: %s", e)
-
-    def is_monitoring_enabled(self) -> bool:
-        """
-        This methods determines whether the wrapped store can support enabling monitoring.
-
-        The wrapped store must provide a monitoring_enabled method, which must
-        be true. But this alone is not sufficient.
-
-        Because this class wraps all interactions with a provided store, it can
-        technically "monitor" any store. However, monitoring also requires that
-        we notify listeners when the store is available again.
-
-        We determine this by checking the store's `available?` method, so this
-        is also a requirement for monitoring support.
-
-        These extra checks won't be necessary once `available` becomes a part
-        of the core interface requirements and this class no longer wraps every
-        feature store.
-        """
-
-        if not hasattr(self.store, 'is_monitoring_enabled'):
-            return False
-
-        if not hasattr(self.store, 'is_available'):
-            return False
-
-        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
-        if not callable(monitoring_enabled):
-            return False
-
-        return monitoring_enabled()
-
-
-def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
+async def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
     # This decorator around store.get provides backward compatibility with any custom data
     # store implementation that might still be returning a dict, instead of our data model
     # classes like FeatureFlag.
-    item = store.get(kind, key, lambda x: x)
+    item = await store.get(kind, key)
     return kind.decode(item) if isinstance(item, dict) else item
 
 
-class LDClient:
-    """The LaunchDarkly SDK client object.
+class _NotStartedDataSystem:
+    """Placeholder data system used before start(); reports that only
+    application-provided defaults are available."""
 
-    Applications should configure the client at startup time and continue to use it throughout the lifetime
-    of the application, rather than creating instances on the fly. The best way to do this is with the
-    singleton methods :func:`ldclient.set_config()` and :func:`ldclient.get()`. However, you may also call
-    the constructor directly if you need to maintain multiple instances.
+    @property
+    def data_availability(self) -> DataAvailability:
+        return DataAvailability.DEFAULTS
 
-    Client instances are thread-safe.
+    async def stop(self) -> None:
+        pass
+
+
+class AsyncLDClient:
+    """Async LaunchDarkly SDK client.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    Use ``async with AsyncLDClient(config) as client:`` or call
+    ``await client.start()`` / ``await client.close()`` explicitly.
     """
 
-    def __init__(self, config: Config, start_wait: float = 5):
-        """Constructs a new LDClient instance.
-
-        :param config: optional custom configuration
-        :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
+    def __init__(self, config: AsyncConfig):
         """
-        check_uwsgi()
+        Construct an AsyncLDClient.  Does NOT start background tasks; call
+        ``await start()`` (or use the async context manager) before evaluating flags.
+
+        :param config: SDK configuration
+        """
+        config._validate()
 
         self._config = config
         self._config._instance_id = str(uuid4())
-        self._config._validate()
+        self._lifecycle_lock = asyncio.Lock()
 
-        self._event_processor = None
+        self._started = False
+        self._closed = False
+
+        self._session = None
+        self._proxy: Optional[str] = None
+        # Pre-start placeholders so that evaluation/track/identify before
+        # start() degrade gracefully (defaults returned, events dropped).
+        self._event_processor: Any = AsyncNullEventProcessor()
+        self._data_system: AsyncDataSystem = _NotStartedDataSystem()  # type: ignore[assignment]
+
+        self.__hooks_lock = ReadWriteLock()
+        self.__hooks: List = list(config.hooks)
+
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
-        self.__start_up(start_wait)
+    async def start(self, start_wait: float = 5.0) -> None:
+        """Start the client: create the HTTP session, data system, and event processor.
 
-    def postfork(self, start_wait: float = 5):
+        Safe to call multiple times — subsequent calls are no-ops.
+
+        :param start_wait: seconds to wait for the data source to initialize
         """
-        Re-initializes an existing client after a process fork.
+        async with self._lifecycle_lock:
+            if self._closed:
+                raise RuntimeError("Cannot start a closed AsyncLDClient")
+            if self._started:
+                return
 
-        The SDK relies on multiple background threads to operate correctly.
-        When a process forks, `these threads are not available to the child
-        <https://pythondev.readthedocs.io/fork.html#reinitialize-all-locks-after-fork>`.
+            # __start_up resets the hook list to config.hooks + plugin hooks;
+            # preserve any hooks registered via add_hook() before start().
+            with self.__hooks_lock.read():
+                pre_start_hooks = [h for h in self.__hooks if h not in self._config.hooks]
 
-        As a result, the SDK will not function correctly in the child process
-        until it is re-initialized.
+            try:
+                await self.__start_up(start_wait)
+                self._started = True
+            except Exception:
+                await self._cleanup_partial_start()
+                raise
 
-        This method is effectively equivalent to instantiating a new client.
-        Future iterations of the SDK will provide increasingly efficient
-        re-initializing improvements.
+            for hook in pre_start_hooks:
+                self.add_hook(hook)
 
-        Note that any configuration provided to the SDK will need to survive
-        the forking process independently. For this reason, it is recommended
-        that any listener or hook integrations be added postfork unless you are
-        certain it can survive the forking process.
+    async def _cleanup_partial_start(self):
+        """Release any resources that were partially created during a failed __start_up."""
+        try:
+            await self._event_processor.stop()
+        except Exception:
+            pass
+        try:
+            await self._data_system.stop()
+        except Exception:
+            pass
+        try:
+            manager = self.__big_segment_store_manager
+        except AttributeError:
+            manager = None
+        if manager is not None:
+            try:
+                await manager.stop()
+            except Exception:
+                pass
+        if self._session is not None:
+            try:
+                await self._session.close()
+            except Exception:
+                pass
 
-        :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
+    async def close(self, close_timeout: float = 2.0) -> None:
+        """Shut down the client and release all resources.
+
+        Safe to call multiple times — subsequent calls are no-ops.
         """
-        self.__start_up(start_wait)
+        async with self._lifecycle_lock:
+            if self._closed:
+                return
+            self._closed = True
 
-    def __start_up(self, start_wait: float):
-        environment_metadata = get_environment_metadata(self._config, "python-server-sdk")
+            if self._started:
+                try:
+                    await asyncio.wait_for(self._close_components(), timeout=close_timeout)
+                except asyncio.TimeoutError:
+                    log.warning("Timed out closing AsyncLDClient components")
+                except Exception as e:
+                    log.warning("Error closing AsyncLDClient components: %s", e)
+
+            # Close HTTP session
+            if self._session is not None:
+                try:
+                    await self._session.close()
+                except Exception as e:
+                    log.warning("Error closing HTTP session: %s", e)
+
+    async def _close_components(self):
+        """Releases the threads and network connections used by the SDK
+        components. The public :meth:`close` wraps this with a timeout."""
+        log.info("Closing LaunchDarkly client..")
+        await self._event_processor.stop()
+        await self._data_system.stop()
+        await self.__big_segment_store_manager.stop()
+
+    async def __start_up(self, start_wait: float):
+        environment_metadata = get_environment_metadata(self._config, "python-server-sdk-async")
         plugin_hooks = get_plugin_hooks(self._config.plugins, environment_metadata)
 
         self.__hooks_lock = ReadWriteLock()
-        self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
+        self.__hooks = self._config.hooks + plugin_hooks
 
-        datasystem_config = self._config.datasystem_config
-        if datasystem_config is None:
-            # Initialize data system (FDv1) to encapsulate v1 data plumbing
-            from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
-                FDv1
-            )
+        self._session = await self._create_http_session()
+        self._data_system = self._make_data_system()
 
-            self._data_system: DataSystem = FDv1(self._config)
-        else:
-            self._data_system = FDv2(self._config, datasystem_config)
+        async def variation_eval_fn(key, context):
+            return await self.variation(key, context, None)
 
-        self.__flag_tracker = FlagTrackerImpl(
+        self.__flag_tracker = AsyncFlagTrackerImpl(
             self._data_system.flag_change_listeners,
-            lambda key, context: self.variation(key, context, None)
+            variation_eval_fn
         )
         # Expose providers and store from data system
         self.__data_store_status_provider = self._data_system.data_store_status_provider
@@ -264,13 +224,22 @@ class LDClient:
             self._data_system.data_source_status_provider
         )
 
-        big_segment_store_manager = BigSegmentStoreManager(self._config.big_segments)
+        big_segment_store_manager = AsyncBigSegmentStoreManager(self._config.big_segments)
         self.__big_segment_store_manager = big_segment_store_manager
 
-        self._evaluator = Evaluator(
-            lambda key: _get_store_item(self._data_system.store, FEATURES, key),
-            lambda key: _get_store_item(self._data_system.store, SEGMENTS, key),
-            lambda key: big_segment_store_manager.get_user_membership(key),
+        async def get_flag_fn(key):
+            return await _get_store_item(self._data_system.store, FEATURES, key)
+
+        async def get_segment_fn(key):
+            return await _get_store_item(self._data_system.store, SEGMENTS, key)
+
+        async def get_membership_fn(key):
+            return await big_segment_store_manager.get_user_membership(key)
+
+        self._evaluator = AsyncEvaluator(
+            get_flag_fn,
+            get_segment_fn,
+            get_membership_fn,
             log,
         )
 
@@ -285,9 +254,9 @@ class LDClient:
         # Pass diagnostic accumulator to data system for streaming metrics
         self._data_system.set_diagnostic_accumulator(diagnostic_accumulator)  # type: ignore
 
-        self.__register_plugins(environment_metadata)
+        await self.__register_plugins(environment_metadata)
 
-        update_processor_ready = threading.Event()
+        update_processor_ready = AsyncEvent()
         self._data_system.start(update_processor_ready)
 
         if not self._config.offline and not self._config.use_ldd:
@@ -296,73 +265,75 @@ class LDClient:
 
             if start_wait > 0:
                 log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
-                update_processor_ready.wait(start_wait)
+                await update_processor_ready.wait(start_wait)
 
         if self.is_initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
 
-    def __register_plugins(self, environment_metadata: EnvironmentMetadata):
+    async def _create_http_session(self):
+        """Create and return the aiohttp session. Called from __start_up."""
+        import ssl
+
+        import aiohttp
+
+        ssl_ctx = ssl.create_default_context(
+            cafile=self._config.http.ca_certs or certifi.where()
+        )
+        if self._config.http.cert_file:
+            ssl_ctx.load_cert_chain(self._config.http.cert_file)
+        if self._config.http.disable_ssl_verification:
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            log.warning("TLS verification disabled")
+
+        connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit_per_host=10)
+        self._proxy = self._config.http.http_proxy
+        return aiohttp.ClientSession(
+            connector=connector,
+            trust_env=(self._proxy is None),
+        )
+
+    def _make_data_system(self) -> AsyncDataSystem:
+        datasystem_config = self._config.datasystem_config
+        if datasystem_config is None:
+            from ldclient.impl.datasystem.async_fdv1 import AsyncFDv1
+
+            return AsyncFDv1(self._config, self._select_feature_store(), self._session, self._proxy)
+
+        raise NotImplementedError("FDv2 is not yet supported in the async client")
+
+    def _select_feature_store(self) -> AsyncFeatureStore:
+        """Choose the async feature store for the v1 data system based on the
+        configured store."""
+        feature_store = self._config.feature_store
+        if feature_store is None:
+            return AsyncInMemoryFeatureStore()
+        return feature_store
+
+    async def __register_plugins(self, environment_metadata: EnvironmentMetadata):
         for plugin in self._config.plugins:
             try:
-                plugin.register(self, environment_metadata)
+                await plugin.register(self, environment_metadata)
             except Exception as e:
                 log.error("Error registering plugin %s: %s", plugin.metadata.name, e)
 
     def _set_event_processor(self, config):
         if config.offline or not config.send_events:
-            self._event_processor = NullEventProcessor()
+            self._event_processor = AsyncNullEventProcessor()
             return None
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
             diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
-            self._event_processor = DefaultEventProcessor(config, diagnostic_accumulator=diagnostic_accumulator)
+            self._event_processor = DefaultAsyncEventProcessor(config, self._session, diagnostic_accumulator=diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
         return None
 
-    def _make_update_processor(self, config, store, ready, diagnostic_accumulator):
-        if config.update_processor_class:
-            log.info("Using user-specified update processor: " + str(config.update_processor_class))
-            return config.update_processor_class(config, store, ready)
-
-        if config.offline or config.use_ldd:
-            return NullUpdateProcessor(config, store, ready)
-
-        if config.stream:
-            return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
-
-        log.info("Disabling streaming API")
-        log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
-
-        if config.feature_requester_class:
-            feature_requester = config.feature_requester_class(config)
-        else:
-            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
-
-        return PollingUpdateProcessor(config, feature_requester, store, ready)
-
     def get_sdk_key(self) -> Optional[str]:
         """Returns the configured SDK key."""
         return self._config.sdk_key
-
-    def close(self):
-        """Releases all threads and network connections used by the LaunchDarkly client.
-
-        Do not attempt to use the client after calling this method.
-        """
-        log.info("Closing LaunchDarkly client..")
-        self._event_processor.stop()
-        self._data_system.stop()
-        self.__big_segment_store_manager.stop()
-
-    # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.close()
 
     def _send_event(self, event):
         self._event_processor.send_event(event)
@@ -432,30 +403,19 @@ class LDClient:
         return self._config.offline
 
     def is_initialized(self) -> bool:
-        """Returns whether the client is initialized and has flag data available to serve requests.
+        """Returns true if the client has successfully connected to LaunchDarkly.
 
-        If this returns true, it means the client has data it can use to evaluate flags. That could be
-        because it connected to LaunchDarkly at least once and received flag data, or because it has
-        cached data from a persistent store, or because it was configured for offline or LDD (daemon)
-        mode. It could still have encountered a connection problem after that point, and cached data may
-        not be current, so this does not guarantee that the flag data is up to date; if you need to know
-        the connection status in more detail, use :attr:`data_source_status_provider`.
-
-        If this returns false, it means the client has not yet obtained any flag data. It might still be
-        starting up, or attempting to reconnect after an unsuccessful attempt, or it might have received
-        an unrecoverable error (such as an invalid SDK key) and given up. In this state, feature flag
-        evaluations will return default values -- unless you are using a persistent store integration and
-        flag data had already been stored by a successfully connected SDK in the past. You can use
-        :attr:`data_source_status_provider` to get information on errors, or to wait for a successful retry.
-
-        :return: true if the client is initialized and has flag data available
+        If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
+        It might still be in the process of starting up, or it might be attempting to reconnect after an
+        unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
+        and given up.
         """
         if self.is_offline() or self._config.use_ldd:
             return True
 
         return self._data_system.data_availability.at_least(DataAvailability.CACHED)
 
-    def flush(self):
+    async def flush(self):
         """Flushes all pending analytics events.
 
         Normally, batches of events are delivered in the background at intervals determined by the
@@ -465,9 +425,23 @@ class LDClient:
         """
         if self._config.offline:
             return
-        return self._event_processor.flush()
+        # flush() only schedules delivery; it does not await, so there is
+        # nothing to await here.
+        self._event_processor.flush()
 
-    def variation(self, key: str, context: Context, default: Any) -> Any:
+    async def flush_and_wait(self, timeout: float) -> bool:
+        """Flushes all pending analytics events and waits for delivery to complete.
+
+        Unlike :meth:`flush`, this waits for the buffered events to be delivered, up to ``timeout``
+        seconds. Returns True if delivery completed within the timeout, or False if it timed out.
+
+        :param timeout: the maximum number of seconds to wait for delivery
+        """
+        if self._config.offline:
+            return True
+        return await self._event_processor.flush_and_wait(timeout)
+
+    async def variation(self, key: str, context: Context, default: Any) -> Any:
         """Calculates the value of a feature flag for a given context.
 
         :param key: the unique key for the feature flag
@@ -477,13 +451,13 @@ class LDClient:
         :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
         """
 
-        def evaluate():
-            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_default)
+        async def evaluate():
+            detail, _ = await self._evaluate_internal(key, context, default, self._event_factory_default)
             return _EvaluationWithHookResult(evaluation_detail=detail)
 
-        return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation", block=evaluate).evaluation_detail.value
+        return (await self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation", block=evaluate)).evaluation_detail.value
 
-    def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
+    async def variation_detail(self, key: str, context: Context, default: Any) -> EvaluationDetail:
         """Calculates the value of a feature flag for a given context, and returns an object that
         describes the way the value was determined.
 
@@ -498,13 +472,13 @@ class LDClient:
           flag value and evaluation reason
         """
 
-        def evaluate():
-            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+        async def evaluate():
+            detail, _ = await self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
             return _EvaluationWithHookResult(evaluation_detail=detail)
 
-        return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation_detail", block=evaluate).evaluation_detail
+        return (await self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation_detail", block=evaluate)).evaluation_detail
 
-    def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
+    async def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
         """
         This method returns the migration stage of the migration feature flag
         for the given evaluation context.
@@ -518,8 +492,8 @@ class LDClient:
             log.error(f"default stage {default_stage} is not a valid stage; using 'off' instead")
             default_stage = Stage.OFF
 
-        def evaluate():
-            detail, flag = self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
+        async def evaluate():
+            detail, flag = await self._evaluate_internal(key, context, default_stage.value, self._event_factory_default)
 
             if isinstance(detail.value, str):
                 stage = Stage.from_str(detail.value)
@@ -531,10 +505,10 @@ class LDClient:
             tracker = OpTracker(key, flag, context, detail, default_stage)
             return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': default_stage, 'tracker': tracker})
 
-        hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage.value, method="migration_variation", block=evaluate)
+        hook_result = await self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage.value, method="migration_variation", block=evaluate)
         return hook_result.results['default_stage'], hook_result.results['tracker']
 
-    def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+    async def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
@@ -554,7 +528,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._data_system.store, FEATURES, key)
+            flag = await _get_store_item(self._data_system.store, FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
@@ -567,7 +541,7 @@ class LDClient:
             return EvaluationDetail(default, None, reason), None
         else:
             try:
-                result = self._evaluator.evaluate(flag, context, event_factory)
+                result = await self._evaluator.evaluate(flag, context, event_factory)
                 for event in result.events or []:
                     self._send_event(event)
                 detail = result.detail
@@ -582,7 +556,7 @@ class LDClient:
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
-    def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
+    async def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
         """Returns an object that encapsulates the state of all feature flags for a given context,
         including the flag values and also metadata that can be used on the front end. See the
         JavaScript SDK Reference Guide on
@@ -627,7 +601,7 @@ class LDClient:
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
         try:
-            flags_map = self._data_system.store.all(FEATURES, lambda x: x)
+            flags_map = await self._data_system.store.all(FEATURES)
             if flags_map is None:
                 raise ValueError("feature store error")
         except Exception as e:
@@ -638,7 +612,7 @@ class LDClient:
             if client_only and not flag.get('clientSide', False):
                 continue
             try:
-                result = self._evaluator.evaluate(flag, context, self._event_factory_default)
+                result = await self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
@@ -674,22 +648,25 @@ class LDClient:
         """
         return _secure_mode_hash(self._config, context)
 
-    def add_hook(self, hook: Hook):
+    def add_hook(self, hook: AsyncHook):
         """
         Add a hook to the client. In order to register a hook before the client starts, please use the `hooks` property of
-        `Config`.
+        `AsyncConfig`.
 
         Hooks provide entrypoints which allow for observation of SDK functions.
 
+        The async client only accepts :class:`ldclient.hook.AsyncHook` instances;
+        passing a synchronous :class:`ldclient.hook.Hook` raises ``TypeError``.
+
         :param hook:
         """
-        if not isinstance(hook, Hook):
-            return
+        if not isinstance(hook, AsyncHook):
+            raise TypeError("AsyncLDClient requires an AsyncHook; synchronous Hook instances are not supported")
 
         with self.__hooks_lock.write():
             self.__hooks.append(hook)
 
-    def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], _EvaluationWithHookResult]) -> _EvaluationWithHookResult:
+    async def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], Any]) -> _EvaluationWithHookResult:
         """
         # evaluate_with_hook will run the provided block, wrapping it with evaluation hook support.
         #
@@ -700,32 +677,32 @@ class LDClient:
         # :param block:
         # :return:
         """
-        hooks = []  # type: List[Hook]
+        hooks = []  # type: List[AsyncHook]
         with self.__hooks_lock.read():
             if len(self.__hooks) == 0:
-                return block()
+                return await block()
 
             hooks = self.__hooks.copy()
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
-        hook_data = self.__execute_before_evaluation(hooks, series_context)
-        evaluation_result = block()
-        self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
+        hook_data = await self.__execute_before_evaluation(hooks, series_context)
+        evaluation_result = await block()
+        await self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
 
         return evaluation_result
 
-    def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[dict]:
-        return [self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {})) for hook in hooks]
+    async def __execute_before_evaluation(self, hooks: List[AsyncHook], series_context: EvaluationSeriesContext) -> List[dict]:
+        return [await self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {})) for hook in hooks]
 
-    def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
+    async def __execute_after_evaluation(self, hooks: List[AsyncHook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
         return [
-            self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
+            await self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
             for (hook, data) in reversed(list(zip(hooks, hook_data)))
         ]
 
-    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], dict]) -> dict:
+    async def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], Any]) -> dict:
         try:
-            return block()
+            return await block()
         except BaseException as e:
             log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
             return {}
@@ -772,15 +749,24 @@ class LDClient:
         return self.__data_store_status_provider
 
     @property
-    def flag_tracker(self) -> FlagTracker:
+    def flag_tracker(self) -> AsyncFlagTracker:
         """
         Returns an interface for tracking changes in feature flag configurations.
 
-        The :class:`ldclient.interfaces.FlagTracker` contains methods for
+        The :class:`ldclient.interfaces.AsyncFlagTracker` contains methods for
         requesting notifications about feature flag changes using an event
         listener model.
         """
+        if not self._started:
+            raise RuntimeError("AsyncLDClient.flag_tracker is not available until after start()")
         return self.__flag_tracker
 
+    async def __aenter__(self):
+        await self.start()
+        return self
 
-__all__ = ['LDClient', 'Config']
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+__all__ = ['AsyncLDClient']

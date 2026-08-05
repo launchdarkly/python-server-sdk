@@ -3,11 +3,11 @@ Test utilities for async SDK components.
 """
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from ldclient.interfaces import EventProcessor, UpdateProcessor
+from ldclient.interfaces import AsyncEventProcessor, UpdateProcessor
 
 
-class MockAsyncEventProcessor(EventProcessor):
-    """A mock EventProcessor that records send_event() calls for testing.
+class MockAsyncEventProcessor(AsyncEventProcessor):
+    """A mock AsyncEventProcessor that records send_event() calls for testing.
 
     flush() and stop() are no-ops.
     """
@@ -21,7 +21,10 @@ class MockAsyncEventProcessor(EventProcessor):
     def flush(self):
         pass
 
-    def stop(self):
+    async def flush_and_wait(self, timeout: float) -> bool:
+        return True
+
+    async def stop(self):
         pass
 
 
