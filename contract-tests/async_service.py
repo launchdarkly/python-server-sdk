@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from logging.config import dictConfig
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 # Import ldclient from parent directory
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
@@ -224,9 +224,6 @@ class AsyncClientEntity:
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = AsyncBigSegmentsConfig(**big_config)
 
-        if config_params.get("persistentDataStore") is not None:
-            opts["feature_store"] = _create_persistent_store(config_params["persistentDataStore"])
-
         start_wait = config_params.get("startWaitTimeMs") or 5000
         sdk_config = AsyncConfig(**opts)
 
@@ -358,7 +355,7 @@ class AsyncClientEntity:
 
         migrator = builder.build()
         if isinstance(migrator, str):
-            raise Exception(f"failed to build migrator: {migrator}")
+            return {"result": migrator}
 
         key = params["key"]
         context = Context.from_dict(params["context"])
@@ -463,14 +460,9 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'evaluation-hooks',
             'omit-anonymous-contexts',
             'client-prereq-events',
-            'persistent-data-store-redis',
-            'persistent-data-store-dynamodb',
-            'persistent-data-store-consul',
             'flag-change-listeners',
             'flag-value-change-listeners',
-            'fdv1-fallback',
             'migrations',
-            'async',
         ]
     }
     return aiohttp.web.Response(
@@ -502,6 +494,8 @@ async def handle_create_client(request: aiohttp.web.Request) -> aiohttp.web.Resp
         await client.start()
     except Exception as e:
         global_log.exception(e)
+        # Close the partially-started client so it does not leak tasks or sessions.
+        await client.close()
         return aiohttp.web.Response(text=str(e), status=500)
 
     if not client.is_initializing() and not options['configuration'].get('initCanFail', False):
@@ -600,77 +594,6 @@ async def handle_delete_client(request: aiohttp.web.Request) -> aiohttp.web.Resp
 def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
     if params_in.get(name_in) is not None:
         params_out[name_out] = params_in[name_in] / 1000.0
-
-
-def _set_optional_time(params_in: dict, name_in: str, func: Callable):
-    if params_in.get(name_in) is not None:
-        func(params_in[name_in] / 1000.0)
-
-
-def _set_optional_value(params_in: dict, name_in: str, func: Callable):
-    if params_in.get(name_in) is not None:
-        func(params_in[name_in])
-
-
-def _create_persistent_store(persistent_store_config: dict):
-    """Creates a persistent store instance based on the configuration."""
-    from urllib.parse import urlparse
-
-    from ldclient.feature_store import CacheConfig
-    from ldclient.integrations import Consul, DynamoDB, Redis
-
-    store_params = persistent_store_config["store"]
-    store_type = store_params["type"]
-    dsn = store_params["dsn"]
-    prefix = store_params.get("prefix")
-
-    cache_config = persistent_store_config.get("cache", {})
-    cache_mode = cache_config.get("mode", "ttl")
-
-    if cache_mode == "off":
-        caching = CacheConfig.disabled()
-    elif cache_mode == "infinite":
-        caching = CacheConfig(expiration=sys.maxsize)
-    elif cache_mode == "ttl":
-        ttl_seconds = cache_config.get("ttl", 15)
-        caching = CacheConfig(expiration=ttl_seconds)
-    else:
-        caching = CacheConfig.default()
-
-    if store_type == "redis":
-        return Redis.new_feature_store(
-            url=dsn,
-            prefix=prefix or Redis.DEFAULT_PREFIX,
-            caching=caching,
-        )
-    elif store_type == "dynamodb":
-        parsed = urlparse(dsn) if '://' in dsn else urlparse(f'http://{dsn}')
-        endpoint_url = f"{parsed.scheme}://{parsed.netloc}"
-        import boto3
-        dynamodb_opts = {
-            'endpoint_url': endpoint_url,
-            'region_name': 'us-east-1',
-            'aws_access_key_id': 'dummy',
-            'aws_secret_access_key': 'dummy',
-        }
-        return DynamoDB.new_feature_store(
-            table_name="sdk-contract-tests",
-            prefix=prefix,
-            dynamodb_opts=dynamodb_opts,
-            caching=caching,
-        )
-    elif store_type == "consul":
-        parsed = urlparse(dsn) if '://' in dsn else urlparse(f'http://{dsn}')
-        host = parsed.hostname or 'localhost'
-        port = parsed.port or 8500
-        return Consul.new_feature_store(
-            host=host,
-            port=port,
-            prefix=prefix,
-            caching=caching,
-        )
-    else:
-        raise ValueError(f"Unsupported data store type: {store_type}")
 
 
 # ---------------------------------------------------------------------------
