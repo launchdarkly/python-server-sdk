@@ -95,4 +95,7 @@ def __getattr__(name):
     raise AttributeError("module 'ldclient' has no attribute %r" % name)
 
 
-__all__ = ['AsyncLDClient', 'Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations']
+# AsyncLDClient is intentionally omitted from __all__ so that
+# `from ldclient import *` does not import aiohttp. It still resolves lazily
+# via __getattr__ as `ldclient.AsyncLDClient`.
+__all__ = ['Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations']
