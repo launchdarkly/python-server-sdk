@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.17.0](https://github.com/launchdarkly/python-server-sdk/compare/9.16.1...9.17.0) (2026-08-05)
+
+
+### Features
+
+* Add async big segment store manager and async Redis adapter ([#462](https://github.com/launchdarkly/python-server-sdk/issues/462)) ([aa492d2](https://github.com/launchdarkly/python-server-sdk/commit/aa492d230252efd26256540cb35e86022b9342f7))
+* Add async event processor ([ec7c113](https://github.com/launchdarkly/python-server-sdk/commit/ec7c1137e9c64b3a010baac83e3b6aebd9db8df6))
+* Add async event processor ([#472](https://github.com/launchdarkly/python-server-sdk/issues/472)) ([ec7c113](https://github.com/launchdarkly/python-server-sdk/commit/ec7c1137e9c64b3a010baac83e3b6aebd9db8df6))
+* Add async FDv1 polling data source and feature requester ([#475](https://github.com/launchdarkly/python-server-sdk/issues/475)) ([cca37a8](https://github.com/launchdarkly/python-server-sdk/commit/cca37a86fff49adb69144e046b4f9a9c47d473bd))
+* Add async FDv1 streaming and data source status tracking ([#464](https://github.com/launchdarkly/python-server-sdk/issues/464)) ([4bf7067](https://github.com/launchdarkly/python-server-sdk/commit/4bf7067e1d084df0eaa04cceefb95a79821ca966))
+* Add async hook, plugin, and flag tracker ([#463](https://github.com/launchdarkly/python-server-sdk/issues/463)) ([686a70a](https://github.com/launchdarkly/python-server-sdk/commit/686a70a13e60a61ab6bd84b85f5753d91dad9960))
+* Add async migration support ([#470](https://github.com/launchdarkly/python-server-sdk/issues/470)) ([577d51e](https://github.com/launchdarkly/python-server-sdk/commit/577d51e1092a64d0053725503f50ad0183dc2ad7))
+* Add AsyncConfig for the async SDK client ([#471](https://github.com/launchdarkly/python-server-sdk/issues/471)) ([0587a78](https://github.com/launchdarkly/python-server-sdk/commit/0587a780c8bb0697ca6a9ecf1d161b51eeba204f))
+
 ## [9.16.1](https://github.com/launchdarkly/python-server-sdk/compare/9.16.0...9.16.1) (2026-07-24)
 
 
