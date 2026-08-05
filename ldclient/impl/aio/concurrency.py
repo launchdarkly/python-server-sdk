@@ -228,10 +228,7 @@ class AsyncRepeatingTask:
         the task never started or is the current task."""
         task = self.__task
         if task is not None and task is not asyncio.current_task():
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            await asyncio.wait({task})
 
     async def _run(self):
         try:
