@@ -223,6 +223,13 @@ class AsyncRepeatingTask:
         if task is not None and task is not asyncio.current_task():
             task.cancel()
 
+    async def wait_stopped(self):
+        """Waits for the task to finish unwinding after ``stop()``. A no-op if
+        the task never started or is the current task."""
+        task = self.__task
+        if task is not None and task is not asyncio.current_task():
+            await asyncio.wait({task})
+
     async def _run(self):
         try:
             if self.__initial_delay > 0:
