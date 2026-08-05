@@ -10,15 +10,17 @@ across the two client classes instead (differing only in ``async``/``await``).
 
 import hashlib
 import hmac
-from typing import List
+from typing import List, Sequence, Union
 
-from ldclient.config import Config, SdkIdentityConfig
+from ldclient.config import SdkIdentityConfig
 from ldclient.context import Context
-from ldclient.hook import Hook
+from ldclient.hook import AsyncHook, Hook
 from ldclient.impl.util import log
 from ldclient.plugin import (
     ApplicationMetadata,
+    AsyncPlugin,
     EnvironmentMetadata,
+    Plugin,
     SdkMetadata
 )
 from ldclient.version import VERSION
@@ -46,9 +48,9 @@ def get_environment_metadata(config: SdkIdentityConfig, sdk_name: str) -> Enviro
     )
 
 
-def get_plugin_hooks(config: Config, environment_metadata: EnvironmentMetadata) -> List[Hook]:
-    hooks = []
-    for plugin in config.plugins:
+def get_plugin_hooks(plugins: Sequence[Union[Plugin, AsyncPlugin]], environment_metadata: EnvironmentMetadata) -> List:
+    hooks: List = []
+    for plugin in plugins:
         try:
             hooks.extend(plugin.get_hooks(environment_metadata))
         except Exception as e:
