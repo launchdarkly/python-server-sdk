@@ -362,3 +362,79 @@ async def test_start_after_close_raises():
     await client.close()
     with pytest.raises(RuntimeError):
         await client.start()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_returns_flag_values():
+    """all_flags_state() returns a valid state with each flag's value."""
+    store = MockAsyncFeatureStore()
+    # init() decodes the flag dicts into model objects, matching the real
+    # data-source flow that all_flags_state() reads back.
+    await store.init({FEATURES: {
+        'flag-a': _make_flag('flag-a', 'value-a'),
+        'flag-b': _make_flag('flag-b', 'value-b'),
+    }})
+
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=MockAsyncUpdateProcessor,
+        send_events=False,
+    )
+    async with AsyncLDClient(config) as client:
+        context = Context.create('user-1')
+        state = await client.all_flags_state(context)
+
+    assert state.valid
+    assert state.to_values_map() == {'flag-a': 'value-a', 'flag-b': 'value-b'}
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_degrades_gracefully_when_evaluator_raises():
+    """A per-flag evaluation error degrades only that flag: the payload is not
+    aborted, and the failed flag does not reuse a neighbor's prerequisites."""
+    from ldclient.evaluation import EvaluationDetail
+    from ldclient.impl.evaluator_common import EvalResult
+
+    store = MockAsyncFeatureStore()
+    # Insertion order is preserved: bad-first tests that a first-flag failure
+    # does not raise UnboundLocalError; good-then-bad tests that the trailing
+    # failed flag does not inherit the good flag's prerequisites.
+    await store.init({FEATURES: {
+        'flag-bad-first': _make_flag('flag-bad-first', 'x'),
+        'flag-good': _make_flag('flag-good', 'value-good'),
+        'flag-bad-last': _make_flag('flag-bad-last', 'y'),
+    }})
+
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=MockAsyncUpdateProcessor,
+        send_events=False,
+    )
+    async with AsyncLDClient(config) as client:
+        async def fake_evaluate(flag, context, event_factory):
+            if flag['key'].startswith('flag-bad'):
+                raise RuntimeError("boom")
+            result = EvalResult()
+            result.detail = EvaluationDetail('value-good', 2, {'kind': 'FALLTHROUGH'})
+            result.prerequisites = ['prereq-x']
+            return result
+
+        client._evaluator.evaluate = fake_evaluate
+        context = Context.create('user-1')
+        state = await client.all_flags_state(context, with_reasons=True)
+
+    # The payload was not aborted by the first flag raising.
+    assert state.valid
+    # The good flag still evaluated normally.
+    assert state.get_flag_value('flag-good') == 'value-good'
+    # The failed flags degraded to None rather than raising.
+    assert state.get_flag_value('flag-bad-first') is None
+    assert state.get_flag_value('flag-bad-last') is None
+
+    # The trailing failed flag did not inherit the good flag's prerequisites.
+    flags_state = state.to_json_dict()['$flagsState']
+    assert flags_state['flag-good'].get('prerequisites') == ['prereq-x']
+    assert 'prerequisites' not in flags_state['flag-bad-last']
+    assert 'prerequisites' not in flags_state['flag-bad-first']
