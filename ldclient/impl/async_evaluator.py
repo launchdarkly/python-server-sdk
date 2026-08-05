@@ -17,8 +17,8 @@ from ldclient.impl.evaluator_common import (
     _match_clause_by_kind,
     _match_single_context_value,
     _maybe_negate,
-    _target_match_result,
     _variation_index_for_context,
+    check_targets,
     error_reason
 )
 from ldclient.impl.events.types import EventFactory
@@ -80,7 +80,7 @@ class AsyncEvaluator:
             return _get_off_value(flag, prereq_failure_reason)
 
         # Check to see if any context targets match:
-        target_result = self._check_targets(flag, context)
+        target_result = check_targets(flag, context)
         if target_result is not None:
             return target_result
 
@@ -139,38 +139,6 @@ class AsyncEvaluator:
         finally:
             if state.prereq_stack is not None and len(state.prereq_stack) != 0:
                 state.prereq_stack.pop()
-
-    def _check_targets(self, flag: FeatureFlag, context: Context) -> Optional[EvaluationDetail]:
-        user_targets = flag.targets
-        context_targets = flag.context_targets
-        if len(context_targets) == 0:
-            # old-style data has only targets for users
-            if len(user_targets) != 0:
-                user_context = context.get_individual_context(Context.DEFAULT_KIND)
-                if user_context is None:
-                    return None
-                key = user_context.key
-                for t in user_targets:
-                    if key in t.values:
-                        return _target_match_result(flag, t.variation)
-            return None
-        for t in context_targets:
-            kind = t.context_kind or Context.DEFAULT_KIND
-            var = t.variation
-            actual_context = context.get_individual_context(kind)
-            if actual_context is None:
-                continue
-            key = actual_context.key
-            if kind == Context.DEFAULT_KIND:
-                for ut in user_targets:
-                    if ut.variation == var:
-                        if key in ut.values:
-                            return _target_match_result(flag, var)
-                        break
-                continue
-            if key in t.values:
-                return _target_match_result(flag, var)
-        return None
 
     async def _rule_matches_context(self, rule: FlagRule, context: Context, state: EvalResult) -> bool:
         for clause in rule.clauses:
