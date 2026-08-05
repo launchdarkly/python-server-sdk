@@ -1,10 +1,10 @@
 """
-Async concurrency primitives used by the async data source, event processor, and
-data system. Each wraps a piece of fiddly asyncio plumbing (timeout-aware waits,
-queue exception normalization, an interval-from-start repeating task, a bounded
-task pool) that callers would otherwise inline repeatedly. The sync code uses the
-equivalent stdlib/SDK primitives (``threading.Event``/``Lock``, ``queue.Queue``,
-``RepeatingTask``, ``FixedThreadPool``) directly, so these have no sync twin.
+Async concurrency helpers used by the async data source, event processor, and
+data system. Each helper wraps one piece of asyncio setup so callers do not
+repeat it: timeout-aware waits, queue timeout/capacity exceptions, a repeating
+task, and a bounded task set. The sync code uses the standard-library and SDK
+equivalents (``threading.Event``/``Lock``, ``queue.Queue``, ``RepeatingTask``,
+``FixedThreadPool``) directly, so it has no matching helpers.
 """
 
 import asyncio
@@ -12,7 +12,7 @@ import inspect
 import time
 from queue import Empty as QueueEmpty  # noqa: F401  (shared timeout exception)
 from queue import Full as QueueFull  # noqa: F401  (shared capacity exception)
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Coroutine, Optional, Set
 
 from ldclient.impl.util import log
 
@@ -130,9 +130,9 @@ async def join_handle(handle: TaskHandle, timeout: float) -> None:
 
 
 class AsyncCallbackScheduler:
-    """Bridges sync notification paths to async callbacks: ``call`` schedules
-    a coroutine callback onto the event loop captured at construction time,
-    logging any unhandled exception. Safe to invoke from any thread."""
+    """Schedules a coroutine callback onto the event loop that was running when
+    this object was created. ``call`` runs the callback and logs any unhandled
+    exception. Safe to call from any thread."""
 
     def __init__(self):
         self._loop = asyncio.get_running_loop()
@@ -250,50 +250,42 @@ class AsyncRepeatingTask:
             pass
 
 
-class AsyncWorkerPool:
-    """A fixed-size pool of concurrent tasks that rejects jobs when its limit
-    is reached. Matches the contract of
-    ``ldclient.impl.fixed_thread_pool.FixedThreadPool``."""
+class BoundedTaskSet:
+    """Runs up to ``limit`` coroutines concurrently as background tasks. When the
+    limit is reached, ``try_run`` rejects new work (returning False) rather than
+    queuing it, so callers can apply their own backpressure. ``wait`` awaits the
+    tasks currently in flight; ``stop`` prevents any further work from being accepted."""
 
-    def __init__(self, size: int, name: str):
-        self._size = size
-        self._name = name
-        self._busy: Set[asyncio.Task] = set()
-        self._event = AsyncEvent()
-        self._stopped = False
+    def __init__(self, limit: int):
+        self._limit = limit
+        self._tasks: Set[asyncio.Task] = set()
+        self._accepting = True
 
-    def execute(self, jobFn: Callable) -> bool:
-        """Schedules a job for execution if the pool is not already at its
-        limit, and returns True if successful; returns False if all workers
-        are busy."""
-        if self._stopped or len(self._busy) >= self._size:
+    def try_run(self, job: Callable[[], Coroutine]) -> bool:
+        """Runs ``job()`` as a background task if fewer than ``limit`` tasks are
+        already running and the set is still accepting work. Returns True if the
+        task was started, or False if the set is full or has been stopped."""
+        if not self._accepting or len(self._tasks) >= self._limit:
             return False
-        task = asyncio.ensure_future(self._run_job(jobFn))
-        self._busy.add(task)
+        task = asyncio.create_task(self._run(job))
+        self._tasks.add(task)
         return True
 
-    async def _run_job(self, jobFn: Callable) -> None:
+    async def _run(self, job: Callable[[], Coroutine]) -> None:
         try:
-            result = jobFn()
-            if inspect.isawaitable(result):
-                await result
+            await job()
         except Exception:
-            log.warning('Unhandled exception in worker thread', exc_info=True)
+            log.warning('Unhandled exception in background task', exc_info=True)
         finally:
             task = asyncio.current_task()
             if task is not None:
-                self._busy.discard(task)
-            self._event.set()
+                self._tasks.discard(task)
 
     async def wait(self) -> None:
-        """Waits until all currently busy workers have completed their jobs."""
-        while len(self._busy) > 0:
-            self._event.clear()
-            if len(self._busy) == 0:
-                return
-            await self._event.wait()
+        """Waits for the tasks currently running to complete. This does not stop
+        new tasks from being added; call ``stop`` first to prevent further work."""
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
     def stop(self) -> None:
-        """Tells the pool to reject any further jobs; active jobs run to
-        completion."""
-        self._stopped = True
+        """Rejects any further work; tasks already running finish normally."""
+        self._accepting = False

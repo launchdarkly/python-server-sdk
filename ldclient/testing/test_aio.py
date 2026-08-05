@@ -30,10 +30,6 @@ async def _async_wait_until(predicate, timeout=2.0):
         await asyncio.sleep(0.01)
 
 
-# ---------------------------------------------------------------------------
-# Event
-# ---------------------------------------------------------------------------
-
 class TestEventParity:
     @pytest.mark.asyncio
     async def test_async_set_clear_is_set(self):
@@ -65,10 +61,6 @@ class TestEventParity:
         await task
 
 
-# ---------------------------------------------------------------------------
-# Lock
-# ---------------------------------------------------------------------------
-
 class TestLockParity:
     @pytest.mark.asyncio
     async def test_async_lock_context_manager(self):
@@ -95,10 +87,6 @@ class TestLockParity:
         assert counter['value'] == 5
         assert counter['max_concurrent'] == 1
 
-
-# ---------------------------------------------------------------------------
-# Queue
-# ---------------------------------------------------------------------------
 
 class TestQueueParity:
     @pytest.mark.asyncio
@@ -130,10 +118,6 @@ class TestQueueParity:
             q.put_nowait('b')
         assert await q.get(block=False) == 'a'
 
-
-# ---------------------------------------------------------------------------
-# RepeatingTask
-# ---------------------------------------------------------------------------
 
 class TestRepeatingTaskParity:
     @pytest.mark.asyncio
@@ -204,14 +188,10 @@ class TestRepeatingTaskParity:
         task.stop()
 
 
-# ---------------------------------------------------------------------------
-# WorkerPool
-# ---------------------------------------------------------------------------
-
-class TestWorkerPoolParity:
+class TestBoundedTaskSet:
     @pytest.mark.asyncio
-    async def test_async_saturation_returns_false(self):
-        pool = aio.AsyncWorkerPool(1, "test.pool")
+    async def test_saturation_returns_false(self):
+        tasks = aio.BoundedTaskSet(1)
         release = aio.AsyncEvent()
         started = aio.AsyncEvent()
 
@@ -219,29 +199,62 @@ class TestWorkerPoolParity:
             started.set()
             await release.wait(2)
 
-        assert pool.execute(job) is True
+        async def noop():
+            pass
+
+        assert tasks.try_run(job) is True
         await started.wait(2)
-        assert pool.execute(lambda: None) is False
+        # Set is full (limit 1), so the next task is rejected rather than queued.
+        assert tasks.try_run(noop) is False
         release.set()
-        await pool.wait()
+        await tasks.wait()
+
+        # A slot is free again once the first task finished.
+        assert tasks.try_run(noop) is True
+        await tasks.wait()
+
+        # After stop(), further work is rejected.
+        tasks.stop()
+        assert tasks.try_run(noop) is False
+
+    @pytest.mark.asyncio
+    async def test_wait_returns_when_idle(self):
+        tasks = aio.BoundedTaskSet(2)
+        await tasks.wait()
+        tasks.stop()
+
+    @pytest.mark.asyncio
+    async def test_retry_pattern_makes_progress_when_task_finished_in_same_batch(self):
+        tasks = aio.BoundedTaskSet(1)
+        finished = asyncio.Event()
+
+        async def job():
+            finished.set()
+
+        assert tasks.try_run(job) is True
+
+        # A raw asyncio.Event wakes this coroutine in the same loop batch the
+        # job's task finished in, before try_run sees the slot freed.
+        await finished.wait()
 
         async def noop():
             pass
 
-        assert pool.execute(noop) is True
-        await pool.wait()
-        pool.stop()
+        # Mirrors the retry loop in EventDispatcher._run_main_loop: try_run must
+        # free the finished task's slot, or the real (unbounded) loop spins.
+        accepted = False
+        for _ in range(100):
+            if tasks.try_run(noop):
+                accepted = True
+                break
+            await tasks.wait()
 
-    @pytest.mark.asyncio
-    async def test_async_wait_returns_when_idle(self):
-        pool = aio.AsyncWorkerPool(2, "test.pool")
-        await pool.wait()
-        pool.stop()
+        assert accepted, (
+            "try_run never freed capacity: the finished task was still counted "
+            "against the limit, so the dispatcher's retry loop would spin forever"
+        )
+        await tasks.wait()
 
-
-# ---------------------------------------------------------------------------
-# TaskRunner
-# ---------------------------------------------------------------------------
 
 class TestTaskRunnerParity:
     @pytest.mark.asyncio
@@ -298,10 +311,6 @@ class TestTaskRunnerParity:
         except asyncio.CancelledError:
             pass
 
-
-# ---------------------------------------------------------------------------
-# spawn_handle / join_handle
-# ---------------------------------------------------------------------------
 
 class TestHandleParity:
     @pytest.mark.asyncio
@@ -363,10 +372,6 @@ class TestHandleParity:
             await joiner
 
 
-# ---------------------------------------------------------------------------
-# Callback scheduler
-# ---------------------------------------------------------------------------
-
 class TestCallbackSchedulerParity:
     @pytest.mark.asyncio
     async def test_async_call_schedules_coroutine_with_args(self):
@@ -405,10 +410,6 @@ class TestCallbackSchedulerParity:
         assert await completed.wait(2)
         await asyncio.sleep(0.05)  # let the done callback run
 
-
-# ---------------------------------------------------------------------------
-# HTTP transport
-# ---------------------------------------------------------------------------
 
 class _FakeResponse:
     status = 200
