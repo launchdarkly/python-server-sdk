@@ -607,20 +607,17 @@ class AsyncLDClient:
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
-            result = None
             try:
                 result = await self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
+                prerequisites = result.prerequisites
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
-
-            # A per-flag error leaves result unset; degrade only that flag
-            # rather than aborting the whole payload or reusing a neighbor's
-            # prerequisites.
-            prerequisites = result.prerequisites if result is not None else []
+                # A per-flag error degrades only that flag: no value, no prerequisites.
+                prerequisites = []
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             flag_state = {
                 'key': flag['key'],
