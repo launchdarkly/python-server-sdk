@@ -640,11 +640,14 @@ class LDClient:
             try:
                 result = self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
+                prerequisites = result.prerequisites
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
+                # A per-flag error degrades only that flag: no value, no prerequisites.
+                prerequisites = []
 
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             flag_state = {
@@ -653,7 +656,7 @@ class LDClient:
                 'variation': detail.variation_index,
                 'reason': detail.reason,
                 'version': flag['version'],
-                'prerequisites': result.prerequisites,
+                'prerequisites': prerequisites,
                 'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
                 'trackReason': requires_experiment_data,
                 'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
