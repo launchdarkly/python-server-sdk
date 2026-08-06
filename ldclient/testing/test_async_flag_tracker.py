@@ -15,10 +15,6 @@ from ldclient.impl.async_flag_tracker import (
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import FlagChange, FlagValueChange
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def context():
@@ -48,10 +44,6 @@ async def tracker(listeners, eval_fn):
     # The tracker's scheduler captures the running event loop at construction.
     return AsyncFlagTrackerImpl(listeners, eval_fn)
 
-
-# ---------------------------------------------------------------------------
-# AsyncFlagValueChangeListener tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_create_initializes_value_without_notifying(tracker, context, eval_fn):
@@ -122,10 +114,6 @@ async def test_listener_callback_is_sync(tracker, listeners, eval_values, contex
 
     assert len(was_called) == 1
 
-
-# ---------------------------------------------------------------------------
-# AsyncFlagTrackerImpl tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_add_flag_value_change_listener_returns_listener(tracker, context):

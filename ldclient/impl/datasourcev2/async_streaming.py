@@ -5,16 +5,12 @@ with any required supporting classes and protocols.
 
 import json
 from time import time
-from typing import Callable, Generator, Optional, Tuple
+from typing import AsyncGenerator, Callable, Optional, Tuple
 from urllib import parse
 
-from ld_eventsource import SSEClient
+import aiohttp
+from ld_eventsource import AsyncSSEClient
 from ld_eventsource.actions import Event, Fault, Start
-from ld_eventsource.config import (
-    ConnectStrategy,
-    ErrorStrategy,
-    RetryDelayStrategy
-)
 from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import (
@@ -22,9 +18,9 @@ from ldclient.config import (
     DataSourceBuilderConfig,
     HTTPConfig
 )
+from ldclient.impl.aio.transport import AsyncSSEFactory, make_client_session
 from ldclient.impl.datasourcev2.streaming_common import process_message
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
@@ -33,28 +29,20 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    AsyncSynchronizer,
     ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
     SelectorStore,
-    Synchronizer,
     Update
 )
-
-# allows for up to 5 minutes to elapse without any data sent across the stream.
-# The heartbeats sent as comments on the stream will keep this from triggering
-STREAM_READ_TIMEOUT = 5 * 60
-
-MAX_RETRY_DELAY = 30
-BACKOFF_RESET_INTERVAL = 60
-JITTER_RATIO = 0.5
 
 STREAMING_ENDPOINT = "/sdk/stream"
 
 SseClientBuilder = Callable[
     [str, HTTPConfig, float, DataSourceBuilderConfig, SelectorStore],
-    SSEClient,
+    Tuple[AsyncSSEClient, Optional[aiohttp.ClientSession]],
 ]
 
 
@@ -63,70 +51,73 @@ def create_sse_client(
     http_options: HTTPConfig,
     initial_reconnect_delay: float,
     config: DataSourceBuilderConfig,
-    ss: SelectorStore
-) -> SSEClient:
+    ss: SelectorStore,
+    session=None,
+) -> Tuple[AsyncSSEClient, Optional[aiohttp.ClientSession]]:
     """
-    create_sse_client creates an SSEClient instance configured to connect
-    to the LaunchDarkly streaming endpoint.
+    create_sse_client creates an SSE client configured to connect to the
+    LaunchDarkly streaming endpoint, along with the aiohttp session backing it
+    when the SDK created that session itself.
+
+    When no ``session`` is supplied, one is built from the SDK's HTTP options
+    via ``make_client_session`` (CA certs, client cert, SSL verification, proxy
+    trust, connector limits) and returned as the second element so the caller
+    can close it on shutdown -- the SSE client treats the supplied session as
+    externally owned and never closes it. When a ``session`` is supplied, the
+    caller owns it and ``None`` is returned in its place.
     """
     uri = base_uri + STREAMING_ENDPOINT
     if config.payload_filter_key is not None:
         uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
 
-    # We don't want the stream to use the same read timeout as the rest of the SDK.
-    base_headers = _base_headers(config)
-    stream_http_factory = HTTPFactory(
-        base_headers,
-        http_options,
-        override_read_timeout=STREAM_READ_TIMEOUT,
-    )
-
-    def query_params() -> dict[str, str]:
+    def query_params() -> dict:
         selector = ss.selector()
         return {"basis": selector.state} if selector.is_defined() else {}
 
-    return SSEClient(
-        connect=ConnectStrategy.http(
-            url=uri,
-            headers=base_headers,
-            pool=stream_http_factory.create_pool_manager(1, uri),
-            urllib3_request_options={"timeout": stream_http_factory.timeout},
-            query_params=query_params
-        ),
-        # we'll make error-handling decisions when we see a Fault
-        error_strategy=ErrorStrategy.always_continue(),
-        initial_retry_delay=initial_reconnect_delay,
-        retry_delay_strategy=RetryDelayStrategy.default(
-            max_delay=MAX_RETRY_DELAY,
-            backoff_multiplier=2,
-            jitter_multiplier=JITTER_RATIO,
-        ),
-        retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
-        logger=log,
+    if session is None:
+        session = make_client_session(config, http_options)
+        owned_session: Optional[aiohttp.ClientSession] = session
+    else:
+        owned_session = None
+
+    factory = AsyncSSEFactory(
+        config,
+        session=session,
+        http_options=http_options,
     )
+    sse_client = factory.create(uri, initial_reconnect_delay, query_params=query_params)
+    return sse_client, owned_session
 
 
-class StreamingDataSource(Synchronizer, DiagnosticSource):
+class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
     """
-    StreamingSynchronizer is a specific type of Synchronizer that handles
+    AsyncStreamingDataSource is a specific type of synchronizer that handles
     streaming data sources.
 
     It should implement the sync method to yield updates as they are received
     from the streaming data source.
     """
 
-    def __init__(self,
-                 uri: str,
-                 http_options: HTTPConfig,
-                 initial_reconnect_delay: float,
-                 config: DataSourceBuilderConfig):
+    def __init__(
+        self,
+        uri: str,
+        http_options: HTTPConfig,
+        initial_reconnect_delay: float,
+        config: DataSourceBuilderConfig,
+        session=None,
+    ):
         self.__uri = uri
         self.__http_options = http_options
         self.__initial_reconnect_delay = initial_reconnect_delay
 
         self._sse_client_builder: SseClientBuilder = create_sse_client
         self._config = config
-        self._sse: Optional[SSEClient] = None
+        self._session = session
+        # Build the default SSE builder here, not in __init__, so the session
+        # passed to the constructor reaches the SSE client.
+        self._sse_client_builder = lambda *args: create_sse_client(*args, session=self._session)  # type: ignore[misc]
+        self._sse: Optional[AsyncSSEClient] = None
+        self._owned_session: Optional[aiohttp.ClientSession] = None
         self._running = False
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
         self._connection_attempt_start_time: Optional[float] = None
@@ -141,13 +132,13 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         """
         return "streaming"
 
-    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
+    async def sync(self, ss: SelectorStore) -> AsyncGenerator[Update, None]:
         """
         sync should begin the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        self._sse = self._sse_client_builder(
+        self._sse, self._owned_session = self._sse_client_builder(
             self.__uri,
             self.__http_options,
             self.__initial_reconnect_delay,
@@ -157,6 +148,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
         if self._sse is None:
             log.error("Failed to create SSE client for streaming updates.")
+            await self._close_owned_session()
             return
 
         change_set_builder = ChangeSetBuilder()
@@ -164,13 +156,11 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._connection_attempt_start_time = time()
 
         envid = None
-        # fallback_requested is set when a Start action carries
-        # X-LD-FD-Fallback: true. We finish applying the current payload
-        # before halting, so consumers can serve the server-provided data
-        # while FDv1 takes over. The latch is one-way and terminal: once
-        # set, any subsequent payload-completing event or error must carry
-        # the signal forward and halt the stream, even if the failure path
-        # itself doesn't see the directive header.
+        # A Start action with the X-LD-FD-Fallback: true header sets fallback_requested.
+        # We apply the current payload before halting, so consumers can serve that data
+        # while FDv1 takes over. Once set, the flag stays set: every later payload event
+        # or error re-emits the signal and halts the stream, even when that event has no
+        # directive header of its own.
         fallback_requested = False
 
         def _with_fallback_signal(update: Update) -> Update:
@@ -186,86 +176,97 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 environment_id=update.environment_id,
             )
 
-        for action in self._sse.all:
-            if isinstance(action, Fault):
-                # If the SSE client detects the stream has closed, then it will
-                # emit a fault with no-error. We can ignore this since we want
-                # the connection to continue.
-                if action.error is None:
+        try:
+            async for action in self._sse.all:
+                if isinstance(action, Fault):
+                    # If the SSE client detects the stream has closed, then it will
+                    # emit a fault with no-error. We can ignore this since we want
+                    # the connection to continue.
+                    if action.error is None:
+                        continue
+
+                    if action.headers is not None:
+                        envid = action.headers.get(_LD_ENVID_HEADER, envid)
+
+                    (update, should_continue) = await self._handle_error(action.error, envid)
+                    if update is not None:
+                        yield _with_fallback_signal(update)
+
+                    # The FDv1 Fallback Directive is one-way and terminal: if it
+                    # was latched on a prior Start, we must not keep retrying the
+                    # FDv2 endpoint even when the failure itself looks recoverable.
+                    if fallback_requested or not should_continue:
+                        break
                     continue
 
-                if action.headers is not None:
+                if isinstance(action, Start) and action.headers is not None:
                     envid = action.headers.get(_LD_ENVID_HEADER, envid)
+                    if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                        fallback_requested = True
 
-                (update, should_continue) = self._handle_error(action.error, envid)
-                if update is not None:
-                    yield _with_fallback_signal(update)
+                if not isinstance(action, Event):
+                    continue
 
-                # The FDv1 Fallback Directive is one-way and terminal: if it
-                # was latched on a prior Start, we must not keep retrying the
-                # FDv2 endpoint even when the failure itself looks recoverable.
-                if fallback_requested or not should_continue:
-                    break
-                continue
+                try:
+                    update = process_message(action, change_set_builder, envid)
+                    if update is not None:
+                        self._record_stream_init(False)
+                        self._connection_attempt_start_time = None
+                        if fallback_requested:
+                            # The completed update is the natural moment to honor
+                            # the latched directive: yield once with the signal,
+                            # then halt — the consumer will switch to FDv1.
+                            yield _with_fallback_signal(update)
+                            break
+                        yield update
+                except json.decoder.JSONDecodeError as e:
+                    log.info(
+                        "Error while handling stream event; will restart stream: %s", e
+                    )
+                    await self._sse.interrupt()
 
-            if isinstance(action, Start) and action.headers is not None:
-                envid = action.headers.get(_LD_ENVID_HEADER, envid)
-                if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
-                    fallback_requested = True
-
-            if not isinstance(action, Event):
-                continue
-
-            try:
-                update = process_message(action, change_set_builder, envid)
-                if update is not None:
-                    self._record_stream_init(False)
-                    self._connection_attempt_start_time = None
-                    if fallback_requested:
-                        # The completed update is the natural moment to honor
-                        # the latched directive: yield once with the signal,
-                        # then halt — the consumer will switch to FDv1.
+                    (update, should_continue) = await self._handle_error(e, envid)
+                    if update is not None:
                         yield _with_fallback_signal(update)
+                    if fallback_requested or not should_continue:
                         break
-                    yield update
-            except json.decoder.JSONDecodeError as e:
-                log.info(
-                    "Error while handling stream event; will restart stream: %s", e
-                )
-                self._sse.interrupt()
+                except Exception as e:  # pylint: disable=broad-except
+                    log.info(
+                        "Error while handling stream event; will restart stream: %s", e
+                    )
+                    await self._sse.interrupt()
 
-                (update, should_continue) = self._handle_error(e, envid)
-                if update is not None:
-                    yield _with_fallback_signal(update)
-                if fallback_requested or not should_continue:
-                    break
-            except Exception as e:  # pylint: disable=broad-except
-                log.info(
-                    "Error while handling stream event; will restart stream: %s", e
-                )
-                self._sse.interrupt()
+                    yield _with_fallback_signal(Update(
+                        state=DataSourceState.INTERRUPTED,
+                        error=DataSourceErrorInfo(
+                            DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
+                        ),
+                        fallback_to_fdv1=False,
+                        environment_id=envid,
+                    ))
+                    if fallback_requested:
+                        break
+        finally:
+            await self._sse.close()
+            await self._close_owned_session()
 
-                yield _with_fallback_signal(Update(
-                    state=DataSourceState.INTERRUPTED,
-                    error=DataSourceErrorInfo(
-                        DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
-                    ),
-                    fallback_to_fdv1=False,
-                    environment_id=envid,
-                ))
-                if fallback_requested:
-                    break
-
-        self._sse.close()
-
-    def stop(self):
+    async def stop(self):
         """
         Stops the streaming synchronizer, closing any open connections.
         """
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
         if self._sse:
-            self._sse.close()
+            await self._sse.close()
+        await self._close_owned_session()
+
+    async def _close_owned_session(self):
+        """Close the aiohttp session if the SDK created it. A caller-supplied
+        session is owned by the caller and is never closed here. Closing sets
+        the reference back to ``None`` so it isn't closed twice."""
+        if self._owned_session is not None:
+            await self._owned_session.close()
+            self._owned_session = None
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:
@@ -273,7 +274,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             elapsed = current_time - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
-    def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
+    async def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
         """
         This method handles errors that occur during the streaming process.
 
@@ -328,7 +329,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                     fallback_to_fdv1=True,
                     environment_id=envid,
                 )
-                self.stop()
+                await self.stop()
                 return (update, False)
 
             http_error_message_result = http_error_message(
@@ -349,7 +350,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             if not is_recoverable:
                 self._connection_attempt_start_time = None
                 log.error(http_error_message_result)
-                self.stop()
+                await self.stop()
                 return (update, False)
 
             log.warning(http_error_message_result)
@@ -368,41 +369,48 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             environment_id=envid,
         )
         # no stacktrace here because, for a typical connection error, it'll
-        # just be a lengthy tour of urllib3 internals
+        # just be a lengthy tour of HTTP client internals
 
         return (update, True)
 
 
-class StreamingDataSourceBuilder(DataSourceBuilder):
+class AsyncStreamingDataSourceBuilder(DataSourceBuilder):
     """
-    Builder for a StreamingDataSource.
+    Builder for a AsyncStreamingDataSource.
     """
 
     def __init__(self):
         self.__base_uri: Optional[str] = None
         self.__initial_reconnect_delay: Optional[float] = None
         self.__http_options: Optional[HTTPConfig] = None
+        self.__session = None
 
-    def base_uri(self, uri: str) -> 'StreamingDataSourceBuilder':
+    def base_uri(self, uri: str) -> 'AsyncStreamingDataSourceBuilder':
         """Sets the base URI for the streaming data source."""
         self.__base_uri = uri.rstrip('/')
         return self
 
-    def initial_reconnect_delay(self, delay: float) -> 'StreamingDataSourceBuilder':
+    def initial_reconnect_delay(self, delay: float) -> 'AsyncStreamingDataSourceBuilder':
         """Sets the initial reconnect delay for the streaming data source."""
         self.__initial_reconnect_delay = delay
         return self
 
-    def http_options(self, http_options: HTTPConfig) -> 'StreamingDataSourceBuilder':
+    def http_options(self, http_options: HTTPConfig) -> 'AsyncStreamingDataSourceBuilder':
         """Sets the HTTP options for the streaming data source."""
         self.__http_options = http_options
         return self
 
-    def build(self, config: DataSourceBuilderConfig) -> StreamingDataSource:
-        """Builds a StreamingDataSource instance with the configured parameters."""
-        return StreamingDataSource(
+    def session(self, session) -> 'AsyncStreamingDataSourceBuilder':
+        """Sets the aiohttp session for the streaming data source."""
+        self.__session = session
+        return self
+
+    def build(self, config: DataSourceBuilderConfig) -> AsyncStreamingDataSource:
+        """Builds a AsyncStreamingDataSource instance with the configured parameters."""
+        return AsyncStreamingDataSource(
             self.__base_uri or config.stream_base_uri,
             self.__http_options or config.http,
             self.__initial_reconnect_delay or config.initial_reconnect_delay,
-            config
+            config,
+            session=self.__session,
         )

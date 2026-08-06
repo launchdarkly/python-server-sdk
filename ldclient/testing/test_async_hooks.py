@@ -20,12 +20,8 @@ from ldclient.hook import AsyncHook, EvaluationSeriesContext, Metadata
 log = logging.getLogger('ldclient')
 
 
-# ---------------------------------------------------------------------------
-# Helpers: inline dispatch function that mirrors AsyncLDClient behaviour
-# ---------------------------------------------------------------------------
-
 async def _try_execute_stage_async(method, hook_name, coro_or_fn):
-    """Execute a single hook stage, catching and logging any exceptions."""
+    """Execute a single hook stage the way AsyncLDClient does, catching and logging any exceptions."""
     try:
         return await coro_or_fn()
     except BaseException as e:
@@ -63,10 +59,6 @@ async def _evaluate_with_hooks(hooks, series_context, eval_fn):
     return detail
 
 
-# ---------------------------------------------------------------------------
-# Concrete hook implementations for testing
-# ---------------------------------------------------------------------------
-
 class RecordingAsyncHook(AsyncHook):
     """Async hook that records calls and threads a counter through data."""
 
@@ -89,10 +81,6 @@ class RecordingAsyncHook(AsyncHook):
         return {**data, self._name + '_after': True}
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
 def series_context():
     return EvaluationSeriesContext(
@@ -114,10 +102,6 @@ def eval_fn(mock_detail):
         return mock_detail
     return _fn
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_async_hook_before_and_after_awaited(series_context, eval_fn):
