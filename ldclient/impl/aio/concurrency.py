@@ -242,8 +242,6 @@ class AsyncRepeatingTask:
                     result = self.__action()
                     if inspect.isawaitable(result):
                         await result
-                except asyncio.CancelledError:
-                    raise
                 except Exception as e:
                     log.exception("Unexpected exception on worker task: %s" % e)
                 delay = next_time - time.time()
