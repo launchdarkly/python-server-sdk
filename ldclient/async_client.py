@@ -38,7 +38,6 @@ from ldclient.impl.events.diagnostics import (
 )
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model.feature_flag import FeatureFlag
-from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import AsyncNullEventProcessor
 from ldclient.impl.util import log
 from ldclient.interfaces import (
@@ -109,7 +108,6 @@ class AsyncLDClient:
         self._event_processor: Any = AsyncNullEventProcessor()
         self._data_system: AsyncDataSystem = _NotStartedDataSystem()  # type: ignore[assignment]
 
-        self.__hooks_lock = ReadWriteLock()
         self.__hooks: List = list(config.hooks)
 
         self._event_factory_default = EventFactory(False)
@@ -130,8 +128,7 @@ class AsyncLDClient:
 
             # __start_up resets the hook list to config.hooks + plugin hooks;
             # preserve any hooks registered via add_hook() before start().
-            with self.__hooks_lock.read():
-                pre_start_hooks = [h for h in self.__hooks if h not in self._config.hooks]
+            pre_start_hooks = [h for h in self.__hooks if h not in self._config.hooks]
 
             try:
                 await self.__start_up(start_wait)
@@ -216,7 +213,6 @@ class AsyncLDClient:
         environment_metadata = get_environment_metadata(self._config, "python-server-sdk-async")
         plugin_hooks = get_plugin_hooks(self._config.plugins, environment_metadata)
 
-        self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks
 
         self._session = await self._create_http_session()
@@ -679,8 +675,7 @@ class AsyncLDClient:
         if not isinstance(hook, AsyncHook):
             raise TypeError("AsyncLDClient requires an AsyncHook; synchronous Hook instances are not supported")
 
-        with self.__hooks_lock.write():
-            self.__hooks.append(hook)
+        self.__hooks.append(hook)
 
     async def __evaluate_with_hooks(self, key: str, context: Context, default_value: Any, method: str, block: Callable[[], Any]) -> _EvaluationWithHookResult:
         """
@@ -693,13 +688,10 @@ class AsyncLDClient:
         # :param block:
         # :return:
         """
-        # Snapshot the hooks under the lock and release it before awaiting.
-        # A concurrent sync add_hook() takes the write lock with a blocking
-        # wait; holding the read lock across an await would block the event
-        # loop and deadlock. See the sync client, which is safe because it
-        # returns without awaiting.
-        with self.__hooks_lock.read():
-            hooks = self.__hooks.copy()  # type: List[AsyncHook]
+        # Snapshot the hooks. The client runs on a single event loop, so a plain
+        # list copy is atomic (no coroutine interleaves without an await), and
+        # add_hook is a same-loop sync append.
+        hooks = list(self.__hooks)  # type: List[AsyncHook]
 
         if not hooks:
             return await block()
