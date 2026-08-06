@@ -616,7 +616,6 @@ class AsyncLDClient:
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
-                # A per-flag error degrades only that flag: no value, no prerequisites.
                 prerequisites = []
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             flag_state = {
@@ -674,9 +673,7 @@ class AsyncLDClient:
         # :param block:
         # :return:
         """
-        # Snapshot the hooks. The client runs on a single event loop, so a plain
-        # list copy is atomic (no coroutine interleaves without an await), and
-        # add_hook is a same-loop sync append.
+        # Snapshot the hook list to ensure hooks added during evaluation don't get called for the current evaluation.
         hooks = list(self.__hooks)  # type: List[AsyncHook]
 
         if not hooks:

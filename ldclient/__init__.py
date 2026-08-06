@@ -89,13 +89,12 @@ __BASE_TYPES__ = (str, float, int, bool)
 
 
 def __getattr__(name):
+    # AsyncLDClient loads lazily so importing ldclient does not require aiohttp
+    # unless you use the async client.
     if name == 'AsyncLDClient':
         from ldclient.async_client import AsyncLDClient
         return AsyncLDClient
     raise AttributeError("module 'ldclient' has no attribute %r" % name)
 
 
-# AsyncLDClient is intentionally omitted from __all__ so that
-# `from ldclient import *` does not import aiohttp. It still resolves lazily
-# via __getattr__ as `ldclient.AsyncLDClient`.
 __all__ = ['Config', 'Context', 'ContextBuilder', 'ContextMultiBuilder', 'LDClient', 'Result', 'client', 'context', 'evaluation', 'integrations', 'interfaces', 'migrations']
