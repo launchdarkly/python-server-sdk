@@ -102,7 +102,6 @@ async def test_close_is_idempotent():
     client = AsyncLDClient(_offline_config())
     await client.start()
     await client.close()
-    # Second close should be a no-op
     await client.close()
 
 
@@ -111,7 +110,6 @@ async def test_context_manager():
     """async with AsyncLDClient(config) as client: starts and closes the client."""
     async with AsyncLDClient(_offline_config()) as client:
         assert client.is_initialized()
-    # After exiting, closed flag should be set
     assert client._closed is True
 
 
