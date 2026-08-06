@@ -44,9 +44,11 @@ class MockAsyncFeatureStore(AsyncInMemoryFeatureStore):
     async def force_set(self, kind, item):
         """Directly insert an item into the store, bypassing version checks.
 
-        Useful for setting up test state without going through normal upsert semantics.
+        Decodes the item into a model object, as the real store does on init/upsert,
+        so reads return decoded objects. Useful for setting up test state without
+        going through normal upsert semantics.
         """
-        self._items[kind][item['key']] = item
+        self._items[kind][item['key']] = kind.decode(item)
 
     async def force_delete(self, kind, key):
         """Directly remove an item from the store.
