@@ -49,15 +49,7 @@ from ldclient.interfaces import (
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import EnvironmentMetadata
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
-
-
-async def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
-    # This decorator around store.get provides backward compatibility with any custom data
-    # store implementation that might still be returning a dict, instead of our data model
-    # classes like FeatureFlag.
-    item = await store.get(kind, key)
-    return kind.decode(item) if isinstance(item, dict) else item
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 class _NotStartedDataSystem:
@@ -223,10 +215,10 @@ class AsyncLDClient:
         self.__big_segment_store_manager = big_segment_store_manager
 
         async def get_flag_fn(key):
-            return await _get_store_item(self._data_system.store, FEATURES, key)
+            return await self._data_system.store.get(FEATURES, key)
 
         async def get_segment_fn(key):
-            return await _get_store_item(self._data_system.store, SEGMENTS, key)
+            return await self._data_system.store.get(SEGMENTS, key)
 
         async def get_membership_fn(key):
             return await big_segment_store_manager.get_user_membership(key)
@@ -523,7 +515,7 @@ class AsyncLDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = await _get_store_item(self._data_system.store, FEATURES, key)
+            flag = await self._data_system.store.get(FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
