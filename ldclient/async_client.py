@@ -194,20 +194,9 @@ class AsyncLDClient:
         """Releases the threads and network connections used by the SDK
         components. The public :meth:`close` wraps this with a timeout."""
         log.info("Closing LaunchDarkly client..")
-        # Stop each component in isolation so one failure does not prevent the
-        # others from stopping.
-        try:
-            await self._event_processor.stop()
-        except Exception as e:
-            log.warning("Error stopping event processor: %s", e)
-        try:
-            await self._data_system.stop()
-        except Exception as e:
-            log.warning("Error stopping data system: %s", e)
-        try:
-            await self.__big_segment_store_manager.stop()
-        except Exception as e:
-            log.warning("Error stopping big segment store manager: %s", e)
+        await self._event_processor.stop()
+        await self._data_system.stop()
+        await self.__big_segment_store_manager.stop()
 
     async def __start_up(self, start_wait: float):
         environment_metadata = get_environment_metadata(self._config, "python-server-sdk-async")
