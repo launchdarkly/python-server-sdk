@@ -28,24 +28,20 @@ def _public_surface(cls) -> set:
 
 
 # (sync_cls, async_cls, sync_only, async_only)
-# The allowlists document intentionally one-sided public members. Keep them
-# small and justified -- every entry is a place the two APIs deliberately differ.
+# The allowlists document intentionally one-sided public members, either
+# sync-only or async-only. Keep them small and justified -- every entry is a
+# place the two APIs deliberately differ.
 PAIRS = [
     pytest.param(
         LDClient, AsyncLDClient,
-        {"postfork"},   # sync-only: os.fork() recovery hook (no async equivalent)
-        # async-only: explicit `await start()` lifecycle, and flush_and_wait
-        # (the sync client only offers fire-and-forget flush()).
+        {"postfork"},
         {"start", "flush_and_wait"},
         id="client",
     ),
     pytest.param(
         InMemoryFeatureStore, AsyncInMemoryFeatureStore,
         set(),
-        {"close"},      # async-only: the async FeatureStore interface declares
-                        # `async def close()` for resource teardown; the sync
-                        # FeatureStore has no close() (it is hasattr-guarded at
-                        # every call site).
+        {"close"},
         id="feature_store",
     ),
     pytest.param(Evaluator, AsyncEvaluator, set(), set(), id="evaluator"),

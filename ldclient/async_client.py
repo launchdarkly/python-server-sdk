@@ -183,7 +183,6 @@ class AsyncLDClient:
                 except Exception as e:
                     log.warning("Error closing AsyncLDClient components: %s", e)
 
-            # Close HTTP session
             if self._session is not None:
                 try:
                     await self._session.close()
