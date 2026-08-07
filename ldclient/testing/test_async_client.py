@@ -353,13 +353,14 @@ async def test_hooks_data_isolation():
 
 
 @pytest.mark.asyncio
-async def test_start_after_close_raises():
-    """Calling start() after close() raises RuntimeError."""
+async def test_start_after_close_is_noop():
+    """Calling start() after close() logs a warning and does nothing; the client stays closed."""
     client = AsyncLDClient(_offline_config())
     await client.start()
     await client.close()
-    with pytest.raises(RuntimeError):
-        await client.start()
+    # Does not raise; the client remains closed.
+    await client.start()
+    assert client._closed is True
 
 
 @pytest.mark.asyncio
