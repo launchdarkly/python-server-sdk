@@ -108,13 +108,15 @@ class AsyncLDClient:
     async def start(self, start_wait: float = 5.0) -> None:
         """Start the client: create the HTTP session, data system, and event processor.
 
-        Safe to call multiple times — subsequent calls are no-ops.
+        Safe to call multiple times — subsequent calls are no-ops. Calling start()
+        after close() logs a warning and does nothing; the client stays closed.
 
         :param start_wait: seconds to wait for the data source to initialize
         """
         async with self._lifecycle_lock:
             if self._closed:
-                raise RuntimeError("Cannot start a closed AsyncLDClient")
+                log.warning("start() called on a closed AsyncLDClient; ignoring")
+                return
             if self._started:
                 return
 
