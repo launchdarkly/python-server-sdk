@@ -392,6 +392,36 @@ async def test_start_is_single_shot_after_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_start_cleans_up_and_propagates_on_cancellation(monkeypatch):
+    """A cancelled start() runs cleanup (CancelledError is a BaseException),
+    marks the client spent, and re-raises so cancellation still propagates."""
+    client = AsyncLDClient(_offline_config())
+
+    cleaned = False
+    original_cleanup = client._cleanup_partial_start
+
+    async def spy_cleanup():
+        nonlocal cleaned
+        cleaned = True
+        await original_cleanup()
+
+    client._cleanup_partial_start = spy_cleanup
+
+    def cancel(*args, **kwargs):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr("ldclient.async_client.get_plugin_hooks", cancel)
+
+    with pytest.raises(asyncio.CancelledError):
+        await client.start()
+
+    # Cleanup (which stops the started components) ran, and the instance is spent.
+    assert cleaned is True
+    assert client._closed is True
+    assert client._started is False
+
+
+@pytest.mark.asyncio
 async def test_all_flags_state_returns_flag_values():
     """all_flags_state() returns a valid state with each flag's value."""
     store = MockAsyncFeatureStore()

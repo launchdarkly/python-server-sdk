@@ -150,9 +150,11 @@ class AsyncLDClient:
             try:
                 await self.__start_up(start_wait)
                 self._started = True
-            except Exception:
+            except BaseException:
+                # Catch BaseException, not Exception, so a cancelled start
+                # (CancelledError) also releases the components __start_up began.
+                # re-raise propagates the error/cancellation; it is not swallowed.
                 await self._cleanup_partial_start()
-                # A failed start leaves the instance spent; block reuse.
                 self._closed = True
                 raise
 
