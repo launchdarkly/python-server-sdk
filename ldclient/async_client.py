@@ -37,6 +37,7 @@ from ldclient.impl.events.diagnostics import (
     create_diagnostic_id
 )
 from ldclient.impl.events.types import EventFactory
+from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.stubs import AsyncNullEventProcessor
 from ldclient.impl.util import log
@@ -104,6 +105,16 @@ class AsyncLDClient:
 
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
+
+        self._flag_change_listeners = Listeners()
+
+        async def variation_eval_fn(key, context):
+            return await self.variation(key, context, None)
+
+        self.__flag_tracker = AsyncFlagTrackerImpl(
+            self._flag_change_listeners,
+            variation_eval_fn
+        )
 
     async def start(self, start_wait: float = 5.0) -> None:
         """Start the client: create the HTTP session, data system, and event processor.
@@ -200,13 +211,6 @@ class AsyncLDClient:
         self._session = await self._create_http_session()
         self._data_system = self._make_data_system()
 
-        async def variation_eval_fn(key, context):
-            return await self.variation(key, context, None)
-
-        self.__flag_tracker = AsyncFlagTrackerImpl(
-            self._data_system.flag_change_listeners,
-            variation_eval_fn
-        )
         # Expose providers and store from data system
         self.__data_store_status_provider = self._data_system.data_store_status_provider
         self.__data_source_status_provider = (
@@ -289,7 +293,7 @@ class AsyncLDClient:
         if datasystem_config is None:
             from ldclient.impl.datasystem.async_fdv1 import AsyncFDv1
 
-            return AsyncFDv1(self._config, self._select_feature_store(), self._session, self._proxy)
+            return AsyncFDv1(self._config, self._select_feature_store(), self._flag_change_listeners, self._session, self._proxy)
 
         raise NotImplementedError("FDv2 is not yet supported in the async client")
 
@@ -747,9 +751,10 @@ class AsyncLDClient:
         The :class:`ldclient.interfaces.AsyncFlagTracker` contains methods for
         requesting notifications about feature flag changes using an event
         listener model.
+
+        Listeners registered before ``start()`` receive change events once the
+        data system starts.
         """
-        if not self._started:
-            raise RuntimeError("AsyncLDClient.flag_tracker is not available until after start()")
         return self.__flag_tracker
 
     async def __aenter__(self):

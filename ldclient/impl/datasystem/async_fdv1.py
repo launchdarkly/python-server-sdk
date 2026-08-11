@@ -42,7 +42,7 @@ class AsyncFDv1(AsyncDataSystem):
     monitoring.
     """
 
-    def __init__(self, config: AsyncConfig, store: AsyncFeatureStore, session: Optional[Any] = None, proxy: Optional[str] = None):
+    def __init__(self, config: AsyncConfig, store: AsyncFeatureStore, flag_change_listeners: Listeners, session: Optional[Any] = None, proxy: Optional[str] = None):
         self._config = config
         self._store = store
         self._session = session
@@ -59,9 +59,11 @@ class AsyncFDv1(AsyncDataSystem):
             self._store, self._data_store_update_sink  # type: ignore[arg-type]
         )
 
-        # Set up the data source status tracking and listeners
+        # Set up the data source status tracking and listeners. The flag-change
+        # Listeners is provided by the client so its flag tracker (built before
+        # start()) shares the same collection.
         self._data_source_listeners = Listeners()
-        self._flag_change_listeners = Listeners()
+        self._flag_change_listeners = flag_change_listeners
         self._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(
             self._store,
             self._data_source_listeners,

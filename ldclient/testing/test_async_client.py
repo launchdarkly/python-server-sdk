@@ -222,11 +222,18 @@ async def test_add_hook_rejects_sync_hook():
 
 
 @pytest.mark.asyncio
-async def test_flag_tracker_before_start_raises():
-    """Accessing flag_tracker before start() raises RuntimeError."""
+async def test_flag_tracker_available_before_start():
+    """flag_tracker is available before start(); the client's flag-change
+    Listeners is the same collection the data system uses after start()."""
     client = AsyncLDClient(_offline_config())
-    with pytest.raises(RuntimeError):
-        _ = client.flag_tracker
+
+    tracker = client.flag_tracker
+    assert tracker is not None
+    tracker.add_listener(lambda change: None)
+
+    await client.start()
+    assert client._data_system.flag_change_listeners is client._flag_change_listeners
+    await client.close()
 
 
 @pytest.mark.asyncio
