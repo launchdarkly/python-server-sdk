@@ -7,8 +7,6 @@ import traceback
 from typing import Any, Callable, List, Optional, Tuple
 from uuid import uuid4
 
-import certifi
-
 from ldclient.async_config import AsyncConfig
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.context import Context
@@ -20,6 +18,7 @@ from ldclient.hook import (
 )
 from ldclient.impl import AnyNum
 from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.aio.transport import make_client_session
 from ldclient.impl.async_big_segments import AsyncBigSegmentStoreManager
 from ldclient.impl.async_evaluator import AsyncEvaluator
 from ldclient.impl.async_flag_tracker import AsyncFlagTrackerImpl
@@ -83,7 +82,6 @@ class AsyncLDClient:
         self._closed = False
 
         self._session = None
-        self._proxy: Optional[str] = None
         # Event processor is a no-op until start(); track/identify before start()
         # drop events.
         self._event_processor: Any = AsyncNullEventProcessor()
@@ -131,8 +129,10 @@ class AsyncLDClient:
     async def start(self, start_wait: float = 5.0) -> None:
         """Start the client: create the HTTP session, data system, and event processor.
 
-        Safe to call multiple times — subsequent calls are no-ops. Calling start()
-        after close() logs a warning and does nothing; the client stays closed.
+        Single-shot. Calling start() again after it has started is a no-op. If
+        start() raises, the client is spent: it is marked closed and later
+        start() calls are ignored, so construct a new client to retry. Calling
+        start() after close() is also a logged no-op.
 
         :param start_wait: seconds to wait for the data source to initialize
         """
@@ -152,6 +152,8 @@ class AsyncLDClient:
                 self._started = True
             except Exception:
                 await self._cleanup_partial_start()
+                # A failed start leaves the instance spent; block reuse.
+                self._closed = True
                 raise
 
             for hook in pre_start_hooks:
@@ -181,6 +183,7 @@ class AsyncLDClient:
                 await self._session.close()
             except Exception:
                 pass
+            self._session = None
 
     async def close(self, close_timeout: float = 2.0) -> None:
         """Shut down the client and release all resources.
@@ -255,33 +258,12 @@ class AsyncLDClient:
     def _get_session(self):
         """Return the shared aiohttp session, creating it on first use inside the
         event loop. Nothing creates it in offline/LDD mode, because no network
-        component asks for it."""
+        component asks for it. Uses the same factory as the async transport so
+        SSL/cert setup and proxy handling stay consistent (proxies are resolved
+        per request, so the session itself has trust_env=False)."""
         if self._session is None:
-            self._session = self._create_http_session()
+            self._session = make_client_session(self._config)
         return self._session
-
-    def _create_http_session(self):
-        """Create and return the aiohttp session."""
-        import ssl
-
-        import aiohttp
-
-        ssl_ctx = ssl.create_default_context(
-            cafile=self._config.http.ca_certs or certifi.where()
-        )
-        if self._config.http.cert_file:
-            ssl_ctx.load_cert_chain(self._config.http.cert_file)
-        if self._config.http.disable_ssl_verification:
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
-            log.warning("TLS verification disabled")
-
-        connector = aiohttp.TCPConnector(ssl=ssl_ctx, limit_per_host=10)
-        self._proxy = self._config.http.http_proxy
-        return aiohttp.ClientSession(
-            connector=connector,
-            trust_env=(self._proxy is None),
-        )
 
     def _make_data_system(self) -> AsyncDataSystem:
         datasystem_config = self._config.datasystem_config

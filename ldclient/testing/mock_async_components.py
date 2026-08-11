@@ -3,7 +3,7 @@ Test utilities for async SDK components.
 """
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from ldclient.interfaces import AsyncEventProcessor, UpdateProcessor
+from ldclient.interfaces import AsyncEventProcessor, AsyncUpdateProcessor
 
 
 class MockAsyncEventProcessor(AsyncEventProcessor):
@@ -58,7 +58,7 @@ class MockAsyncFeatureStore(AsyncInMemoryFeatureStore):
         self._items[kind].pop(key, None)
 
 
-class MockAsyncUpdateProcessor(UpdateProcessor):
+class MockAsyncUpdateProcessor(AsyncUpdateProcessor):
     """A mock UpdateProcessor that immediately reports itself as initialized.
 
     Used to fake a ready data source in client tests. If a ``ready`` event is provided, it is
@@ -72,7 +72,7 @@ class MockAsyncUpdateProcessor(UpdateProcessor):
     def start(self):
         pass
 
-    def stop(self):
+    async def stop(self):
         pass
 
     def initialized(self) -> bool:

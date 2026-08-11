@@ -372,6 +372,26 @@ async def test_start_after_close_is_noop():
 
 
 @pytest.mark.asyncio
+async def test_start_is_single_shot_after_failure(monkeypatch):
+    """If start() raises, the client is marked spent; a retry is a logged no-op."""
+    client = AsyncLDClient(_offline_config())
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    # Make __start_up raise early so the start fails.
+    monkeypatch.setattr("ldclient.async_client.get_plugin_hooks", boom)
+
+    with pytest.raises(RuntimeError):
+        await client.start()
+    assert client._closed is True
+
+    # A retry does not re-run start-up.
+    await client.start()
+    assert client._started is False
+
+
+@pytest.mark.asyncio
 async def test_all_flags_state_returns_flag_values():
     """all_flags_state() returns a valid state with each flag's value."""
     store = MockAsyncFeatureStore()
