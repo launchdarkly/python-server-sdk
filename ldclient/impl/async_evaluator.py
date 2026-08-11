@@ -7,19 +7,15 @@ from ldclient.impl.evaluator_common import (
     EvalResult,
     EvaluationException,
     _bucket_context,
-    _bucketable_string_value,
     _context_key_is_in_target_list,
     _get_context_value_by_attr_ref,
     _get_off_value,
     _get_value_for_variation_or_rollout,
-    _get_variation,
     _make_big_segment_ref,
     _match_clause_by_kind,
     _match_single_context_value,
     _maybe_negate,
-    _variation_index_for_context,
-    check_targets,
-    error_reason
+    check_targets
 )
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
