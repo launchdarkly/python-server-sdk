@@ -38,10 +38,6 @@ pytestmark = pytest.mark.skipif(
 DEFAULT_PREFIX = 'launchdarkly'
 FAKE_USER_HASH = 'userhash'
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def sync_redis_client():
     """Return a synchronous Redis client for test setup/teardown."""
@@ -85,10 +81,6 @@ def make_store(prefix=None):
     return Redis.async_big_segment_store(prefix=prefix)
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture(params=[None, 'testprefix'])
 def prefix(request):
     return request.param
@@ -109,10 +101,6 @@ def clear_before_each(prefix):
     except Exception:
         pass
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(skip_database_tests, reason="skipping database tests")

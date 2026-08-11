@@ -13,10 +13,6 @@ from ldclient.impl.events.types import EventFactory, EventInputEvaluation
 from ldclient.impl.model import *
 from ldclient.testing.builders import *
 
-# ---------------------------------------------------------------------------
-# Test infrastructure
-# ---------------------------------------------------------------------------
-
 basic_user = Context.create('user-key')
 fake_timestamp = 0
 event_factory = EventFactory(False, lambda: fake_timestamp)
@@ -88,10 +84,6 @@ def assert_eval_result(result, expected_detail, expected_events):
     assert result.events == expected_events
 
 
-# ---------------------------------------------------------------------------
-# Basic flag evaluation (on/off/fallthrough)
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_flag_returns_off_variation_if_flag_is_off():
     flag = FlagBuilder('feature').on(False).off_variation(1).variations('a', 'b', 'c').build()
@@ -156,10 +148,6 @@ async def test_flag_returns_fallthrough_variation():
     assert_eval_result(await basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
 
-# ---------------------------------------------------------------------------
-# Rule matching
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_flag_matches_user_from_rules():
     rule = {'id': 'id', 'clauses': [{'attribute': 'key', 'op': 'in', 'values': ['userkey']}], 'variation': 0}
@@ -186,10 +174,6 @@ async def test_flag_returns_error_if_rule_variation_is_negative():
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(await basic_evaluator.evaluate(flag, user, event_factory), detail, None)
 
-
-# ---------------------------------------------------------------------------
-# Prerequisite evaluation
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_flag_returns_off_variation_if_prerequisite_not_found():
@@ -249,10 +233,6 @@ async def test_prerequisite_cycle_detection(depth: int):
     detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'})
     assert_eval_result(await evaluator.evaluate(flags[0], context, event_factory), detail, None)
 
-
-# ---------------------------------------------------------------------------
-# Segment matching
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_segment_match_clause_retrieves_segment_from_store():
@@ -320,10 +300,6 @@ async def test_segment_cycle_detection(depth: int):
     assert result.detail.value is None
     assert result.detail.reason == {'kind': 'ERROR', 'errorKind': 'MALFORMED_FLAG'}
 
-
-# ---------------------------------------------------------------------------
-# Big segment matching — verifies await is correctly called
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_big_segment_with_no_generation_is_not_matched():
