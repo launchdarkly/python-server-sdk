@@ -21,7 +21,7 @@ from ldclient.hook import (
 from ldclient.impl import AnyNum
 from ldclient.impl.aio.concurrency import AsyncEvent
 from ldclient.impl.async_big_segments import AsyncBigSegmentStoreManager
-from ldclient.impl.async_evaluator import AsyncEvaluator, error_reason
+from ldclient.impl.async_evaluator import AsyncEvaluator
 from ldclient.impl.async_flag_tracker import AsyncFlagTrackerImpl
 from ldclient.impl.client_common import (
     get_environment_metadata,
@@ -29,6 +29,7 @@ from ldclient.impl.client_common import (
 )
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasystem import AsyncDataSystem, DataAvailability
+from ldclient.impl.evaluator_common import error_reason
 from ldclient.impl.events.async_event_processor import (
     DefaultAsyncEventProcessor
 )
