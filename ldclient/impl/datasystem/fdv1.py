@@ -98,6 +98,10 @@ class FDv1(DataSystem):
     def store(self) -> ReadOnlyStore:
         return self._store_wrapper
 
+    @property
+    def environment_id(self) -> Optional[str]:
+        return self._data_source_update_sink.environment_id
+
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.

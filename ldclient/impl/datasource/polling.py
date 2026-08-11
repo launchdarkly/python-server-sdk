@@ -6,10 +6,13 @@ Default implementation of the polling component.
 
 import time
 from threading import Event
-from typing import Optional
+from typing import Any, Mapping, Optional, Protocol, Tuple, runtime_checkable
 
 from ldclient.config import Config
-from ldclient.impl.datasource.datasource_common import sink_or_store
+from ldclient.impl.datasource.datasource_common import (
+    record_environment_id,
+    sink_or_store
+)
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import (
     UnsuccessfulResponseException,
@@ -26,6 +29,12 @@ from ldclient.interfaces import (
     FeatureStore,
     UpdateProcessor
 )
+
+
+@runtime_checkable
+class _FeatureRequesterWithHeaders(Protocol):
+    def get_all_data_with_headers(self) -> Tuple[Any, Optional[Mapping[str, str]]]:
+        ...
 
 
 class PollingUpdateProcessor(UpdateProcessor):
@@ -58,7 +67,8 @@ class PollingUpdateProcessor(UpdateProcessor):
 
     def _poll(self):
         try:
-            all_data = self._requester.get_all_data()
+            (all_data, headers) = self._get_all_data_with_headers()
+            record_environment_id(self._data_source_update_sink, headers)
             sink_or_store(self._data_source_update_sink, self._store).init(all_data)
             if not self._ready.is_set() and self._store.initialized:
                 log.info("PollingUpdateProcessor initialized ok")
@@ -84,3 +94,13 @@ class PollingUpdateProcessor(UpdateProcessor):
 
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e)))
+
+    def _get_all_data_with_headers(self) -> Tuple[Any, Optional[Mapping[str, str]]]:
+        """
+        Externally provided feature requesters are not required to surface
+        response headers, so fall back to the data-only method.
+        """
+        if isinstance(self._requester, _FeatureRequesterWithHeaders):
+            return self._requester.get_all_data_with_headers()
+
+        return (self._requester.get_all_data(), None)

@@ -5,7 +5,7 @@ from typing import Optional
 from urllib import parse
 
 from ld_eventsource import SSEClient
-from ld_eventsource.actions import Event, Fault
+from ld_eventsource.actions import Event, Fault, Start
 from ld_eventsource.config import (
     ConnectStrategy,
     ErrorStrategy,
@@ -16,6 +16,7 @@ from ld_eventsource.errors import HTTPStatusError
 from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
     parse_path,
+    record_environment_id,
     sink_or_store
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
@@ -62,7 +63,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._sse = self._create_sse_client()
         self._connection_attempt_start_time = time.time()
         for action in self._sse.all:
-            if isinstance(action, Event):
+            if isinstance(action, Start):
+                record_environment_id(self._data_source_update_sink, action.headers)
+            elif isinstance(action, Event):
                 message_ok = False
                 try:
                     message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
@@ -91,6 +94,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             elif isinstance(action, Fault):
+                record_environment_id(self._data_source_update_sink, action.headers)
+
                 # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
                 # ignore this since we want the connection to continue.
                 if action.error is None:

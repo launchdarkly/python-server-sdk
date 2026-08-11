@@ -570,6 +570,12 @@ class FeatureRequester(ABC):
         """
         pass
 
+    def get_all_data(self) -> Mapping[VersionedDataKind, Mapping[str, dict]]:
+        """
+        Fetches all feature flag and segment data.
+        """
+        raise NotImplementedError
+
 
 class AsyncFeatureRequester(ABC):
     """

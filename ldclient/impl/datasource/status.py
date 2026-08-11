@@ -26,11 +26,21 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
 
         self.__lock = ReadWriteLock()
         self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
+        self.__environment_id: Optional[str] = None
 
     @property
     def status(self) -> DataSourceStatus:
         with self.__lock.read():
             return self.__status
+
+    @property
+    def environment_id(self) -> Optional[str]:
+        with self.__lock.read():
+            return self.__environment_id
+
+    def set_environment_id(self, environment_id: str) -> None:
+        with self.__lock.write():
+            self.__environment_id = environment_id
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
         old_data = None

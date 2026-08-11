@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
@@ -17,6 +17,7 @@ class EvaluationSeriesContext:
     context: Context  #: The context used during evaluation.
     default_value: Any  #: The default value provided to the evaluation method
     method: str  #: The string version of the method which triggered the evaluation series.
+    environment_id: Optional[str] = None  #: The environment ID the SDK is connected to, if available.
 
 
 @dataclass

@@ -176,3 +176,18 @@ def test_migration_evaluation_detail_default_converts_to_off_if_invalid():
     assert len(details) == 1
     assert details[0].value == Stage.OFF.value
     assert details[0].variation_index is None
+
+
+def test_series_context_environment_id_is_none_without_environment_id():
+    contexts = []
+    hook = MockHook(before_evaluation=lambda series_context, data: contexts.append(series_context), after_evaluation=record('after', []))
+
+    td = TestData.data_source()
+    td.update(td.flag('flag-key').variation_for_all(True))
+
+    config = Config('SDK_KEY', update_processor_class=td, send_events=False, hooks=[hook])
+    client = LDClient(config=config)
+    client.variation('flag-key', user, False)
+
+    assert len(contexts) == 1
+    assert contexts[0].environment_id is None
