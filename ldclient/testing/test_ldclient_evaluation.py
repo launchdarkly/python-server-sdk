@@ -342,3 +342,43 @@ def test_all_flags_returns_empty_state_if_feature_store_throws_error(caplog):
     assert state.valid is False
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == ['Unable to read flags for all_flag_state: NotImplementedError()']
+
+
+def test_all_flags_state_degrades_per_flag_on_evaluator_error():
+    # A flag whose evaluation raises degrades only that flag: the loop must not
+    # raise UnboundLocalError when the first flag raises, and a failed flag must
+    # not inherit a previous good flag's prerequisites.
+    from unittest.mock import MagicMock
+
+    store = InMemoryFeatureStore()
+    # Ordering matters: 'bad-first' raises on the first iteration (would
+    # UnboundLocalError if result were read unconditionally); 'bad-last' raises
+    # after a good flag set result (would reuse the good result's prerequisites).
+    store.init({FEATURES: {
+        'bad-first': {'key': 'bad-first', 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': ['x']},
+        'good': {'key': 'good', 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': ['y']},
+        'bad-last': {'key': 'bad-last', 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': ['z']},
+    }})
+    client = make_client(store)
+
+    good_result = MagicMock()
+    good_result.detail = EvaluationDetail('y', 0, {'kind': 'FALLTHROUGH'})
+    good_result.prerequisites = ['prereq-of-good']
+
+    def fake_evaluate(flag, context, event_factory):
+        if flag['key'] == 'good':
+            return good_result
+        raise RuntimeError("boom")
+
+    client._evaluator.evaluate = MagicMock(side_effect=fake_evaluate)
+
+    # This must not raise UnboundLocalError.
+    state = client.all_flags_state(user)
+    assert state.valid
+
+    metadata = state.to_json_dict()['$flagsState']
+    # The good flag carries its own prerequisites; the failed flags carry none
+    # (not a neighbor's).
+    assert metadata['good'].get('prerequisites') == ['prereq-of-good']
+    assert 'prerequisites' not in metadata['bad-first']
+    assert 'prerequisites' not in metadata['bad-last']
