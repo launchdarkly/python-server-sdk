@@ -37,7 +37,6 @@ from ldclient.impl.events.diagnostics import (
     create_diagnostic_id
 )
 from ldclient.impl.events.types import EventFactory
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.stubs import AsyncNullEventProcessor
 from ldclient.impl.util import log
@@ -51,18 +50,6 @@ from ldclient.interfaces import (
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import EnvironmentMetadata
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
-
-
-class _NotStartedDataSystem:
-    """Placeholder data system used before start(); reports that only
-    application-provided defaults are available."""
-
-    @property
-    def data_availability(self) -> DataAvailability:
-        return DataAvailability.DEFAULTS
-
-    async def stop(self) -> None:
-        pass
 
 
 class AsyncLDClient:
@@ -96,23 +83,47 @@ class AsyncLDClient:
 
         self._session = None
         self._proxy: Optional[str] = None
-        # Pre-start placeholders so that evaluation/track/identify before
-        # start() degrade gracefully (defaults returned, events dropped).
+        # Event processor is a no-op until start(); track/identify before start()
+        # drop events.
         self._event_processor: Any = AsyncNullEventProcessor()
-        self._data_system: AsyncDataSystem = _NotStartedDataSystem()  # type: ignore[assignment]
 
         self.__hooks: List = list(config.hooks)
 
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
-        self._flag_change_listeners = Listeners()
+        # Build the object graph here (loop-free). start() supplies the loop-bound
+        # resources: the HTTP session (created lazily), the data source, the
+        # big-segment poll, and the event processor. Evaluation before start()
+        # serves whatever the store already has.
+        self._data_system: AsyncDataSystem = self._make_data_system()
+
+        self.__data_store_status_provider = self._data_system.data_store_status_provider
+        self.__data_source_status_provider = self._data_system.data_source_status_provider
+
+        self.__big_segment_store_manager = AsyncBigSegmentStoreManager(self._config.big_segments)
+
+        async def get_flag_fn(key):
+            return await self._data_system.store.get(FEATURES, key)
+
+        async def get_segment_fn(key):
+            return await self._data_system.store.get(SEGMENTS, key)
+
+        async def get_membership_fn(key):
+            return await self.__big_segment_store_manager.get_user_membership(key)
+
+        self._evaluator = AsyncEvaluator(
+            get_flag_fn,
+            get_segment_fn,
+            get_membership_fn,
+            log,
+        )
 
         async def variation_eval_fn(key, context):
             return await self.variation(key, context, None)
 
         self.__flag_tracker = AsyncFlagTrackerImpl(
-            self._flag_change_listeners,
+            self._data_system.flag_change_listeners,
             variation_eval_fn
         )
 
@@ -208,33 +219,8 @@ class AsyncLDClient:
 
         self.__hooks = self._config.hooks + plugin_hooks
 
-        self._session = await self._create_http_session()
-        self._data_system = self._make_data_system()
-
-        # Expose providers and store from data system
-        self.__data_store_status_provider = self._data_system.data_store_status_provider
-        self.__data_source_status_provider = (
-            self._data_system.data_source_status_provider
-        )
-
-        big_segment_store_manager = AsyncBigSegmentStoreManager(self._config.big_segments)
-        self.__big_segment_store_manager = big_segment_store_manager
-
-        async def get_flag_fn(key):
-            return await self._data_system.store.get(FEATURES, key)
-
-        async def get_segment_fn(key):
-            return await self._data_system.store.get(SEGMENTS, key)
-
-        async def get_membership_fn(key):
-            return await big_segment_store_manager.get_user_membership(key)
-
-        self._evaluator = AsyncEvaluator(
-            get_flag_fn,
-            get_segment_fn,
-            get_membership_fn,
-            log,
-        )
+        # Start the big-segment status poll now that a loop is running.
+        self.__big_segment_store_manager.start()
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
@@ -265,8 +251,16 @@ class AsyncLDClient:
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
 
-    async def _create_http_session(self):
-        """Create and return the aiohttp session. Called from __start_up."""
+    def _get_session(self):
+        """Return the shared aiohttp session, creating it on first use inside the
+        event loop. Nothing creates it in offline/LDD mode, because no network
+        component asks for it."""
+        if self._session is None:
+            self._session = self._create_http_session()
+        return self._session
+
+    def _create_http_session(self):
+        """Create and return the aiohttp session."""
         import ssl
 
         import aiohttp
@@ -293,7 +287,7 @@ class AsyncLDClient:
         if datasystem_config is None:
             from ldclient.impl.datasystem.async_fdv1 import AsyncFDv1
 
-            return AsyncFDv1(self._config, self._select_feature_store(), self._flag_change_listeners, self._session, self._proxy)
+            return AsyncFDv1(self._config, self._select_feature_store(), self._get_session)
 
         raise NotImplementedError("FDv2 is not yet supported in the async client")
 
@@ -319,7 +313,7 @@ class AsyncLDClient:
         if not config.event_processor_class:
             diagnostic_id = create_diagnostic_id(config)
             diagnostic_accumulator = None if config.diagnostic_opt_out else _DiagnosticAccumulator(diagnostic_id)
-            self._event_processor = DefaultAsyncEventProcessor(config, self._session, diagnostic_accumulator=diagnostic_accumulator)
+            self._event_processor = DefaultAsyncEventProcessor(config, self._get_session(), diagnostic_accumulator=diagnostic_accumulator)
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
         return None

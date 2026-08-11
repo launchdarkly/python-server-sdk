@@ -64,8 +64,10 @@ class MockAsyncBigSegmentStore(AsyncBigSegmentStore):
 
 async def make_started_manager(store, **kwargs):
     config = AsyncBigSegmentsConfig(store=store, **kwargs)
-    # The constructor starts the polling task (it requires a running event loop).
-    return AsyncBigSegmentStoreManager(config)
+    manager = AsyncBigSegmentStoreManager(config)
+    # start() begins the polling task (it requires a running event loop).
+    manager.start()
+    return manager
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent
@@ -42,11 +42,12 @@ class AsyncFDv1(AsyncDataSystem):
     monitoring.
     """
 
-    def __init__(self, config: AsyncConfig, store: AsyncFeatureStore, flag_change_listeners: Listeners, session: Optional[Any] = None, proxy: Optional[str] = None):
+    def __init__(self, config: AsyncConfig, store: AsyncFeatureStore, session_provider: Callable[[], Any]):
         self._config = config
         self._store = store
-        self._session = session
-        self._proxy = proxy
+        # The client creates the aiohttp session lazily inside the loop; the data
+        # source resolves it here when it builds its network processor at start().
+        self._session_provider = session_provider
 
         # Set up data store status tracking (no store wrapper)
         self._data_store_listeners = Listeners()
@@ -59,11 +60,9 @@ class AsyncFDv1(AsyncDataSystem):
             self._store, self._data_store_update_sink  # type: ignore[arg-type]
         )
 
-        # Set up the data source status tracking and listeners. The flag-change
-        # Listeners is provided by the client so its flag tracker (built before
-        # start()) shares the same collection.
+        # Set up the data source status tracking and listeners
         self._data_source_listeners = Listeners()
-        self._flag_change_listeners = flag_change_listeners
+        self._flag_change_listeners = Listeners()
         self._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(
             self._store,
             self._data_source_listeners,
@@ -157,7 +156,7 @@ class AsyncFDv1(AsyncDataSystem):
                 store,
                 ready,
                 self._diagnostic_accumulator,
-                AsyncSSEFactory(config, session=self._session, proxy=self._proxy),
+                AsyncSSEFactory(config, session=self._session_provider(), proxy=config.http.http_proxy),
             )
 
         log.info("Disabling streaming API")
@@ -168,6 +167,6 @@ class AsyncFDv1(AsyncDataSystem):
         else:
             feature_requester = AsyncFeatureRequesterImpl(
                 config,
-                AsyncHTTPTransport(config, client=self._session),
+                AsyncHTTPTransport(config, client=self._session_provider()),
             )
         return AsyncPollingUpdateProcessor(config, feature_requester, store, ready)

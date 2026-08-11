@@ -223,16 +223,17 @@ async def test_add_hook_rejects_sync_hook():
 
 @pytest.mark.asyncio
 async def test_flag_tracker_available_before_start():
-    """flag_tracker is available before start(); the client's flag-change
-    Listeners is the same collection the data system uses after start()."""
+    """flag_tracker is available before start(); the data system it reads from is
+    built in __init__ and not rebuilt by start(), so early listeners stay wired."""
     client = AsyncLDClient(_offline_config())
 
     tracker = client.flag_tracker
     assert tracker is not None
     tracker.add_listener(lambda change: None)
 
+    data_system_before = client._data_system
     await client.start()
-    assert client._data_system.flag_change_listeners is client._flag_change_listeners
+    assert client._data_system is data_system_before
     await client.close()
 
 
