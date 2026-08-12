@@ -127,6 +127,7 @@ async def test_flush_delegates_to_event_processor():
     # Replace the event processor with a mock that tracks flush calls
     mock_ep = MagicMock()
     mock_ep.flush = MagicMock(return_value=None)
+    mock_ep.stop = AsyncMock()
     client._event_processor = mock_ep
 
     await client.flush()
@@ -143,6 +144,7 @@ async def test_flush_is_noop_when_offline():
 
     mock_ep = MagicMock()
     mock_ep.flush = MagicMock(return_value=None)
+    mock_ep.stop = AsyncMock()
     client._event_processor = mock_ep
 
     await client.flush()
@@ -384,8 +386,9 @@ async def test_start_is_single_shot_after_failure(monkeypatch):
 
     with pytest.raises(RuntimeError):
         await client.start()
-    # A failed start marks the client started (spent); a retry is a no-op.
+    # A failed start marks the client started (spent) and closed (torn down).
     assert client._started is True
+    assert client._closed is True
 
     # Retry does not re-run start-up (it would raise again if it did).
     await client.start()
@@ -398,14 +401,14 @@ async def test_start_cleans_up_and_propagates_on_cancellation(monkeypatch):
     client = AsyncLDClient(_offline_config())
 
     cleaned = False
-    original_cleanup = client._cleanup_partial_start
+    original_cleanup = client._close_components
 
-    async def spy_cleanup():
+    async def spy_cleanup(*args, **kwargs):
         nonlocal cleaned
         cleaned = True
-        await original_cleanup()
+        await original_cleanup(*args, **kwargs)
 
-    client._cleanup_partial_start = spy_cleanup
+    client._close_components = spy_cleanup
 
     def cancel(*args, **kwargs):
         raise asyncio.CancelledError()
@@ -416,9 +419,11 @@ async def test_start_cleans_up_and_propagates_on_cancellation(monkeypatch):
         await client.start()
 
     # Cleanup ran (stopping the started components), the instance is spent
-    # (single-shot via _started), and the CancelledError propagated.
+    # (single-shot via _started), it is closed, and the CancelledError
+    # propagated.
     assert cleaned is True
     assert client._started is True
+    assert client._closed is True
 
 
 @pytest.mark.asyncio
