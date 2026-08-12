@@ -94,8 +94,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             elif isinstance(action, Fault):
-                record_environment_id(self._data_source_update_sink, action.headers)
-
                 # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
                 # ignore this since we want the connection to continue.
                 if action.error is None:

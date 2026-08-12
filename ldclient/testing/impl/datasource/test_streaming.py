@@ -472,7 +472,7 @@ def test_environment_id_is_none_when_not_provided():
                 assert sink.environment_id is None
 
 
-def test_records_environment_id_from_error_response_headers():
+def test_does_not_record_environment_id_from_error_response_headers():
     store = InMemoryFeatureStore()
     ready = Event()
 
@@ -487,7 +487,7 @@ def test_records_environment_id_from_error_response_headers():
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
-                assert sink.environment_id == 'env-from-error'
+                assert sink.environment_id is None
 
 
 def expect_item(store, kind, item):

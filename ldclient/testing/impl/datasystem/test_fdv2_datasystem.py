@@ -786,7 +786,7 @@ def test_environment_id_from_initializer_basis():
     fdv2.stop()
 
 
-def test_environment_id_from_initializer_error_headers():
+def test_environment_id_is_not_recorded_from_initializer_error_headers():
     init = _StaticInitializer(
         "failing-initializer",
         _Fail(error="boom", exception=None, headers={_LD_ENVID_HEADER: 'env-from-error'}),
@@ -801,7 +801,7 @@ def test_environment_id_from_initializer_error_headers():
     fdv2.start(set_on_ready)
     assert set_on_ready.wait(1), "Data system did not become ready in time"
 
-    assert fdv2.environment_id == 'env-from-error'
+    assert fdv2.environment_id is None
     fdv2.stop()
 
 
@@ -826,13 +826,13 @@ def test_environment_id_from_synchronizer_update():
     fdv2.stop()
 
 
-def test_environment_id_is_retained_when_updates_omit_it():
+def test_environment_id_is_not_recorded_from_non_valid_updates():
     sync_mock: Synchronizer = Mock()
     sync_mock.name = "envid-sync"
     sync_mock.stop = Mock()
     sync_mock.sync.return_value = iter([
         Update(state=DataSourceState.VALID, environment_id="env-from-sync"),
-        Update(state=DataSourceState.INTERRUPTED),
+        Update(state=DataSourceState.INTERRUPTED, environment_id="env-from-interrupted"),
     ])
 
     fdv2 = FDv2(

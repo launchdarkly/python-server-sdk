@@ -165,7 +165,7 @@ def test_records_environment_id_from_polling_headers():
     sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
     config._data_source_update_sink = sink
     setup_processor(config)
-    ready.wait()
+    assert ready.wait(2)
 
     assert sink.environment_id == 'env-abc-123'
 
@@ -177,6 +177,6 @@ def test_environment_id_is_none_when_requester_provides_no_headers():
     sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
     config._data_source_update_sink = sink
     setup_processor(config)
-    ready.wait()
+    assert ready.wait(2)
 
     assert sink.environment_id is None

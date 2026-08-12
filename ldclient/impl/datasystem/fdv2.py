@@ -21,12 +21,7 @@ from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.util import (
-    _LD_ENVID_HEADER,
-    _LD_FD_FALLBACK_HEADER,
-    _Fail,
-    log
-)
+from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
@@ -222,8 +217,6 @@ class FDv2(DataSystem):
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
-                    if basis_result.headers is not None:
-                        self._record_environment_id(basis_result.headers.get(_LD_ENVID_HEADER))
                     # An error response can still carry the FDv1 fallback directive.
                     if basis_result.headers is not None and \
                             basis_result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
@@ -422,7 +415,8 @@ class FDv2(DataSystem):
                 if self._stop_event.is_set():
                     return ConditionDirective.FALLBACK
 
-                self._record_environment_id(update.environment_id)
+                if update.state == DataSourceState.VALID:
+                    self._record_environment_id(update.environment_id)
 
                 # Handle the update
                 if update.change_set is not None:
@@ -509,7 +503,7 @@ class FDv2(DataSystem):
             log.error("Failed to reinitialize data store", exc_info=err)
 
     def _record_environment_id(self, environment_id: Optional[str]):
-        if environment_id is None:
+        if not isinstance(environment_id, str) or environment_id == '':
             return
 
         with self._lock.write():
