@@ -6,24 +6,24 @@ initializer, along with any required supporting classes and protocols.
 import json
 from abc import abstractmethod
 from collections import namedtuple
-from threading import Event
 from time import time
-from typing import Generator, Mapping, Optional, Protocol, Tuple
+from typing import AsyncGenerator, Mapping, Optional, Protocol, Tuple
 from urllib import parse
-
-import urllib3
 
 from ldclient.config import (
     DataSourceBuilder,
     DataSourceBuilderConfig,
     HTTPConfig
 )
-from ldclient.impl.datasource.feature_requester import FDV1_POLLING_ENDPOINT
+from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.aio.transport import AsyncHTTPTransport
+from ldclient.impl.datasource.async_feature_requester import (
+    FDV1_POLLING_ENDPOINT
+)
 from ldclient.impl.datasourcev2.polling_common import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )
-from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
@@ -37,6 +37,8 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    AsyncInitializer,
+    AsyncSynchronizer,
     Basis,
     BasisResult,
     ChangeSet,
@@ -44,10 +46,8 @@ from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    Initializer,
     Selector,
     SelectorStore,
-    Synchronizer,
     Update
 )
 
@@ -57,17 +57,17 @@ FDV2_POLLING_ENDPOINT = "/sdk/poll"
 PollingResult = _Result[Tuple[ChangeSet, Mapping], str]
 
 
-class Requester(Protocol):  # pylint: disable=too-few-public-methods
+class AsyncRequester(Protocol):  # pylint: disable=too-few-public-methods
     """
-    Requester allows PollingDataSource to delegate fetching data to
+    AsyncRequester allows AsyncPollingDataSource to delegate fetching data to
     another component.
 
-    This is useful for testing the PollingDataSource without needing to set up
+    This is useful for testing the AsyncPollingDataSource without needing to set up
     a test HTTP server.
     """
 
     @abstractmethod
-    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+    async def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
         Fetches the data for the given selector.
         Returns a Result containing a tuple of ChangeSet and any request headers,
@@ -79,34 +79,34 @@ class Requester(Protocol):  # pylint: disable=too-few-public-methods
 CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
 
 
-class PollingDataSource(Initializer, Synchronizer):
+class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
     """
-    PollingDataSource is a data source that can retrieve information from
-    LaunchDarkly either as an Initializer or as a Synchronizer.
+    AsyncPollingDataSource is a data source that can retrieve information from
+    LaunchDarkly either as an initializer or as a synchronizer.
     """
 
     def __init__(
         self,
         poll_interval: float,
-        requester: Requester,
+        requester: AsyncRequester,
     ):
         self._requester = requester
         self._poll_interval = poll_interval
-        self._interrupt_event = Event()
-        self._stop = Event()
+        self._interrupt_event = AsyncEvent()
+        self._stop = AsyncEvent()
 
     @property
     def name(self) -> str:
         """Returns the name of the initializer."""
         return "PollingDataSourceV2"
 
-    def fetch(self, ss: SelectorStore) -> BasisResult:
+    async def fetch(self, ss: SelectorStore) -> BasisResult:
         """
         Fetch returns a Basis, or an error if the Basis could not be retrieved.
         """
-        return self._poll(ss)
+        return await self._poll(ss)
 
-    def sync(self, ss: SelectorStore) -> Generator[Update, None, None]:
+    async def sync(self, ss: SelectorStore) -> AsyncGenerator[Update, None]:
         """
         sync begins the synchronization process for the data source, yielding
         Update objects until the connection is closed or an unrecoverable error
@@ -116,7 +116,7 @@ class PollingDataSource(Initializer, Synchronizer):
         self._interrupt_event.clear()
         self._stop.clear()
         while self._stop.is_set() is False:
-            result = self._requester.fetch(ss.selector())
+            result = await self._requester.fetch(ss.selector())
             if isinstance(result, _Fail):
                 fallback = None
                 envid = None
@@ -151,7 +151,7 @@ class PollingDataSource(Initializer, Synchronizer):
                             error=error_info,
                             environment_id=envid,
                         )
-                        self._interrupt_event.wait(self._poll_interval)
+                        await self._interrupt_event.wait(self._poll_interval)
                         continue
 
                     yield Update(
@@ -193,18 +193,18 @@ class PollingDataSource(Initializer, Synchronizer):
                     fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
                 )
 
-            if self._interrupt_event.wait(self._poll_interval):
+            if await self._interrupt_event.wait(self._poll_interval):
                 break
 
-    def stop(self):
+    async def stop(self):
         """Stops the synchronizer."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
         self._stop.set()
 
-    def _poll(self, ss: SelectorStore) -> BasisResult:
+    async def _poll(self, ss: SelectorStore) -> BasisResult:
         try:
-            result = self._requester.fetch(ss.selector())
+            result = await self._requester.fetch(ss.selector())
 
             if isinstance(result, _Fail):
                 if isinstance(result.exception, UnsuccessfulResponseException):
@@ -251,21 +251,30 @@ class PollingDataSource(Initializer, Synchronizer):
 
 
 # pylint: disable=too-few-public-methods
-class Urllib3PollingRequester(Requester):
+class AiohttpPollingRequester(AsyncRequester):
     """
-    Urllib3PollingRequester is a Requester that uses urllib3 to make HTTP
-    requests.
+    A requester implementation that issues HTTP requests through the SDK's
+    HTTP transport.
     """
 
-    def __init__(self, config: DataSourceBuilderConfig, base_uri: str, http_options: HTTPConfig):
-        self._etag = None
-        factory = HTTPFactory(_base_headers(config), http_options)
-        self._http = factory.create_pool_manager(1, base_uri)
+    def __init__(
+        self,
+        config: DataSourceBuilderConfig,
+        base_uri: str,
+        http_options: HTTPConfig,
+        session=None,
+    ):
+        self._etag: Optional[str] = None
+        self._http = AsyncHTTPTransport(
+            config,
+            client=session,
+            http_options=http_options,
+        )
         self._http_options = http_options
         self._config = config
         self._poll_uri = base_uri + FDV2_POLLING_ENDPOINT
 
-    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+    async def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
         Fetches the data for the given selector.
         Returns a Result containing a tuple of ChangeSet and any request headers,
@@ -289,15 +298,10 @@ class Urllib3PollingRequester(Requester):
         if self._etag is not None:
             hdrs["If-None-Match"] = self._etag
 
-        response = self._http.request(
+        response = await self._http.request(
             "GET",
             uri,
             headers=hdrs,
-            timeout=urllib3.Timeout(
-                connect=self._http_options.connect_timeout,
-                read=self._http_options.read_timeout,
-            ),
-            retries=1,
         )
         headers = response.headers
 
@@ -310,7 +314,7 @@ class Urllib3PollingRequester(Requester):
         if response.status == 304:
             return _Success(value=(ChangeSetBuilder.no_changes(), headers))
 
-        data = json.loads(response.data.decode("UTF-8"))
+        data = json.loads(response.body)
         etag = headers.get("ETag")
 
         if etag is not None:
@@ -334,88 +338,102 @@ class Urllib3PollingRequester(Requester):
         )
 
 
-class PollingDataSourceBuilder(DataSourceBuilder):
+class AsyncPollingDataSourceBuilder(DataSourceBuilder):
     """
-    Builder for a PollingDataSource.
+    Builder for a AsyncPollingDataSource.
     """
 
     def __init__(self):
         self.__base_uri: Optional[str] = None
         self.__poll_interval: Optional[float] = None
         self.__http_options: Optional[HTTPConfig] = None
-        self.__requester: Optional[Requester] = None
+        self.__requester: Optional[AsyncRequester] = None
+        self.__session = None
 
-    def base_uri(self, uri: str) -> 'PollingDataSourceBuilder':
+    def base_uri(self, uri: str) -> 'AsyncPollingDataSourceBuilder':
         """Sets the base URI for the streaming data source."""
         self.__base_uri = uri.rstrip('/')
         return self
 
-    def poll_interval(self, poll_interval: float) -> 'PollingDataSourceBuilder':
-        """Sets the polling interval for the PollingDataSource."""
+    def poll_interval(self, poll_interval: float) -> 'AsyncPollingDataSourceBuilder':
+        """Sets the polling interval for the AsyncPollingDataSource."""
         self.__poll_interval = poll_interval
         return self
 
-    def http_options(self, http_options: HTTPConfig) -> 'PollingDataSourceBuilder':
+    def http_options(self, http_options: HTTPConfig) -> 'AsyncPollingDataSourceBuilder':
         """Sets the HTTP options for the streaming data source."""
         self.__http_options = http_options
         return self
 
-    def requester(self, requester: Requester) -> 'PollingDataSourceBuilder':
-        """Sets a custom Requester for the PollingDataSource."""
+    def requester(self, requester: AsyncRequester) -> 'AsyncPollingDataSourceBuilder':
+        """Sets a custom AsyncRequester for the AsyncPollingDataSource."""
         self.__requester = requester
         return self
 
-    def build(self, config: DataSourceBuilderConfig) -> PollingDataSource:
-        """Builds the PollingDataSource with the configured parameters."""
+    def session(self, session) -> 'AsyncPollingDataSourceBuilder':
+        """Sets the aiohttp session used for HTTP requests."""
+        self.__session = session
+        return self
+
+    def build(self, config: DataSourceBuilderConfig) -> AsyncPollingDataSource:
+        """Builds the AsyncPollingDataSource with the configured parameters."""
         requester = (
             self.__requester
             if self.__requester is not None
-            else Urllib3PollingRequester(
+            else AiohttpPollingRequester(
                 config,
                 self.__base_uri or config.base_uri,
-                self.__http_options or config.http
+                self.__http_options or config.http,
+                session=self.__session,
             )
         )
 
-        return PollingDataSource(
+        return AsyncPollingDataSource(
             poll_interval=self.__poll_interval or config.poll_interval,
             requester=requester
         )
 
 
-class FallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
+class AsyncFallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
     """
-    Builder for a PollingDataSource that falls back to Flag Delivery v1.
+    Builder for a AsyncPollingDataSource that falls back to Flag Delivery v1.
     """
 
     def __init__(self):
         self.__base_uri: Optional[str] = None
         self.__poll_interval: Optional[float] = None
         self.__http_options: Optional[HTTPConfig] = None
+        self.__session = None
 
-    def base_uri(self, uri: str) -> 'FallbackToFDv1PollingDataSourceBuilder':
+    def base_uri(self, uri: str) -> 'AsyncFallbackToFDv1PollingDataSourceBuilder':
         """Sets the base URI for the data source."""
         self.__base_uri = uri.rstrip('/')
         return self
 
-    def poll_interval(self, poll_interval: float) -> 'FallbackToFDv1PollingDataSourceBuilder':
+    def poll_interval(self, poll_interval: float) -> 'AsyncFallbackToFDv1PollingDataSourceBuilder':
         """Sets the polling interval for the data source."""
         self.__poll_interval = poll_interval
         return self
 
-    def http_options(self, http_options: HTTPConfig) -> 'FallbackToFDv1PollingDataSourceBuilder':
+    def http_options(self, http_options: HTTPConfig) -> 'AsyncFallbackToFDv1PollingDataSourceBuilder':
         """Sets the HTTP options for the data source."""
         self.__http_options = http_options
         return self
 
-    def build(self, config: DataSourceBuilderConfig) -> PollingDataSource:
-        """Builds the PollingDataSource with the configured parameters."""
-        builder = PollingDataSourceBuilder()
+    def session(self, session) -> 'AsyncFallbackToFDv1PollingDataSourceBuilder':
+        """Sets the aiohttp session used for HTTP requests."""
+        self.__session = session
+        return self
+
+    def build(self, config: DataSourceBuilderConfig) -> AsyncPollingDataSource:
+        """Builds the AsyncPollingDataSource with the configured parameters."""
+        builder = AsyncPollingDataSourceBuilder()
         builder.requester(
-            Urllib3FDv1PollingRequester(
+            AiohttpFDv1PollingRequester(
                 config,
                 self.__base_uri or config.base_uri,
-                self.__http_options or config.http
+                self.__http_options or config.http,
+                session=self.__session,
             )
         )
         builder.poll_interval(self.__poll_interval or config.poll_interval)
@@ -424,22 +442,30 @@ class FallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
 
 
 # pylint: disable=too-few-public-methods
-class Urllib3FDv1PollingRequester(Requester):
+class AiohttpFDv1PollingRequester(AsyncRequester):
     """
-    Urllib3PollingRequesterFDv1 is a Requester that uses urllib3 to make HTTP
-    requests.
+    A requester implementation for the Flag Delivery v1 polling endpoint that
+    issues HTTP requests through the SDK's HTTP transport.
     """
 
-    def __init__(self, config: DataSourceBuilderConfig, base_uri: str, http_options: HTTPConfig):
-        self._etag = None
-        self._http = HTTPFactory(_base_headers(config), http_options).create_pool_manager(
-            1, base_uri
+    def __init__(
+        self,
+        config: DataSourceBuilderConfig,
+        base_uri: str,
+        http_options: HTTPConfig,
+        session=None,
+    ):
+        self._etag: Optional[str] = None
+        self._http = AsyncHTTPTransport(
+            config,
+            client=session,
+            http_options=http_options,
         )
         self._http_options = http_options
         self._config = config
         self._poll_uri = base_uri + FDV1_POLLING_ENDPOINT
 
-    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+    async def fetch(self, selector: Optional[Selector]) -> PollingResult:
         """
         Fetches the data for the given selector.
         Returns a Result containing a tuple of ChangeSet and any request headers,
@@ -460,15 +486,10 @@ class Urllib3FDv1PollingRequester(Requester):
         if self._etag is not None:
             hdrs["If-None-Match"] = self._etag
 
-        response = self._http.request(
+        response = await self._http.request(
             "GET",
             uri,
             headers=hdrs,
-            timeout=urllib3.Timeout(
-                connect=self._http_options.connect_timeout,
-                read=self._http_options.read_timeout,
-            ),
-            retries=1,
         )
 
         headers = response.headers
@@ -481,7 +502,7 @@ class Urllib3FDv1PollingRequester(Requester):
         if response.status == 304:
             return _Success(value=(ChangeSetBuilder.no_changes(), headers))
 
-        data = json.loads(response.data.decode("UTF-8"))
+        data = json.loads(response.body)
         etag = headers.get("ETag")
 
         if etag is not None:
