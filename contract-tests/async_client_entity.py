@@ -207,7 +207,7 @@ class AsyncClientEntity:
                     response = requests.post(endpoint, data=payload)
                     if response.status_code == 200:
                         return Result.success(response.text)
-                    return Result.error(f"Request failed with status code {response.status_code}")
+                    return Result.fail(f"Request failed with status code {response.status_code}")
 
                 return await asyncio.to_thread(do_post)
 
