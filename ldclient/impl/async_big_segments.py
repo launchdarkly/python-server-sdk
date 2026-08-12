@@ -21,10 +21,9 @@ from ldclient.interfaces import (
 class AsyncBigSegmentStoreManager:
     """
     Internal component that decorates the Big Segment store with caching behavior, and also polls the
-    store to track its status. The constructor starts the polling task.
+    store to track its status. Call start() to begin the status polling task.
     """
 
-    # Because the constructor starts the polling task, it must run within a running event loop.
     def __init__(self, config: AsyncBigSegmentsConfig):
         self.__store = config.store
 
@@ -36,6 +35,11 @@ class AsyncBigSegmentStoreManager:
         if self.__store:
             self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
             self.__poll_task = AsyncRepeatingTask("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
+
+    def start(self):
+        """Starts the status polling task. Separated from __init__ so the manager
+        can be built without a running loop; the client calls this from start()."""
+        if self.__poll_task is not None:
             self.__poll_task.start()
 
     async def stop(self):

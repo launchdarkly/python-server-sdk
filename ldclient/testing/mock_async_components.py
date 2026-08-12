@@ -3,11 +3,11 @@ Test utilities for async SDK components.
 """
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from ldclient.interfaces import EventProcessor, UpdateProcessor
+from ldclient.interfaces import AsyncEventProcessor, AsyncUpdateProcessor
 
 
-class MockAsyncEventProcessor(EventProcessor):
-    """A mock EventProcessor that records send_event() calls for testing.
+class MockAsyncEventProcessor(AsyncEventProcessor):
+    """A mock AsyncEventProcessor that records send_event() calls for testing.
 
     flush() and stop() are no-ops.
     """
@@ -21,7 +21,10 @@ class MockAsyncEventProcessor(EventProcessor):
     def flush(self):
         pass
 
-    def stop(self):
+    async def flush_and_wait(self, timeout: float) -> bool:
+        return True
+
+    async def stop(self):
         pass
 
 
@@ -41,9 +44,11 @@ class MockAsyncFeatureStore(AsyncInMemoryFeatureStore):
     async def force_set(self, kind, item):
         """Directly insert an item into the store, bypassing version checks.
 
-        Useful for setting up test state without going through normal upsert semantics.
+        Decodes the item into a model object, as the real store does on init/upsert,
+        so reads return decoded objects. Useful for setting up test state without
+        going through normal upsert semantics.
         """
-        self._items[kind][item['key']] = item
+        self._items[kind][item['key']] = kind.decode(item)
 
     async def force_delete(self, kind, key):
         """Directly remove an item from the store.
@@ -53,7 +58,7 @@ class MockAsyncFeatureStore(AsyncInMemoryFeatureStore):
         self._items[kind].pop(key, None)
 
 
-class MockAsyncUpdateProcessor(UpdateProcessor):
+class MockAsyncUpdateProcessor(AsyncUpdateProcessor):
     """A mock UpdateProcessor that immediately reports itself as initialized.
 
     Used to fake a ready data source in client tests. If a ``ready`` event is provided, it is
@@ -67,7 +72,7 @@ class MockAsyncUpdateProcessor(UpdateProcessor):
     def start(self):
         pass
 
-    def stop(self):
+    async def stop(self):
         pass
 
     def initialized(self) -> bool:
