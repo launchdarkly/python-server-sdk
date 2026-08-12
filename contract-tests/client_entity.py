@@ -265,7 +265,7 @@ class ClientEntity:
                 if response.status_code == 200:
                     return Result.success(response.text)
 
-                return Result.error(f"Request failed with status code {response.status_code}")
+                return Result.fail(f"Request failed with status code {response.status_code}")
 
             return fn
 
