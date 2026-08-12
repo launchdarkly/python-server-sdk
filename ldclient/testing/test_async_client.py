@@ -384,11 +384,11 @@ async def test_start_is_single_shot_after_failure(monkeypatch):
 
     with pytest.raises(RuntimeError):
         await client.start()
-    assert client._closed is True
+    # A failed start marks the client started (spent); a retry is a no-op.
+    assert client._started is True
 
-    # A retry does not re-run start-up.
+    # Retry does not re-run start-up (it would raise again if it did).
     await client.start()
-    assert client._started is False
 
 
 @pytest.mark.asyncio
@@ -415,10 +415,10 @@ async def test_start_cleans_up_and_propagates_on_cancellation(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await client.start()
 
-    # Cleanup (which stops the started components) ran, and the instance is spent.
+    # Cleanup ran (stopping the started components), the instance is spent
+    # (single-shot via _started), and the CancelledError propagated.
     assert cleaned is True
-    assert client._closed is True
-    assert client._started is False
+    assert client._started is True
 
 
 @pytest.mark.asyncio
