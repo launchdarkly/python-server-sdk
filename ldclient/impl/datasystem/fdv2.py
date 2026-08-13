@@ -3,24 +3,18 @@ from queue import Queue
 from threading import Event, Thread
 from typing import Any, Callable, Dict, List, Optional
 
-from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
-from ldclient.impl.datasystem import (
-    DataAvailability,
-    DataSystem,
-    DiagnosticAccumulator,
-    DiagnosticSource
-)
+from ldclient.config import Config, DataSystemConfig
+from ldclient.impl.datasystem import DataSystem, DiagnosticSource
 from ldclient.impl.datasystem.fdv2_common import (
     ConditionDirective,
     DataSourceStatusProviderImpl,
     DataStoreStatusProviderImpl,
     FeatureStoreClientWrapper,
+    _FDv2Base,
     fallback_condition,
     recovery_condition
 )
-from ldclient.impl.datasystem.store import Store
 from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
@@ -28,10 +22,6 @@ from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    DataSourceStatusProvider,
-    DataStoreMode,
-    DataStoreStatus,
-    DataStoreStatusProvider,
     FlagTracker,
     ReadOnlyStore,
     Synchronizer
@@ -39,7 +29,7 @@ from ldclient.interfaces import (
 from ldclient.versioned_data_kind import VersionedDataKind
 
 
-class FDv2(DataSystem):
+class FDv2(_FDv2Base, DataSystem):
     """
     FDv2 is an implementation of the DataSystem interface that uses the Flag Delivery V2 protocol
     for obtaining and keeping data up-to-date. Additionally, it operates with an optional persistent
@@ -59,37 +49,7 @@ class FDv2(DataSystem):
         :param store_writable: Whether the persistent store should be written to
         :param disabled: Whether the data system is disabled (offline mode)
         """
-        self._config = config
-        self._data_system_config = data_system_config
-        self._synchronizers: List[DataSourceBuilder[Synchronizer]] = list(data_system_config.synchronizers) if data_system_config.synchronizers else []
-        self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
-        self._disabled = self._config.offline
-
-        # Diagnostic accumulator provided by client for streaming metrics
-        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
-
-        # Set up event listeners
-        self._flag_change_listeners = Listeners()
-        self._change_set_listeners = Listeners()
-        self._data_store_listeners = Listeners()
-
-        self._data_store_listeners.add(self._persistent_store_outage_recovery)
-
-        # Create the store
-        self._store = Store(self._flag_change_listeners, self._change_set_listeners)
-
-        # Status providers
-        self._data_source_status_provider = DataSourceStatusProviderImpl(Listeners())
-        self._data_store_status_provider = DataStoreStatusProviderImpl(None, self._data_store_listeners)
-
-        # Configure persistent store if provided
-        if self._data_system_config.data_store is not None:
-            self._data_store_status_provider = DataStoreStatusProviderImpl(self._data_system_config.data_store, self._data_store_listeners)
-            writable = self._data_system_config.data_store_mode == DataStoreMode.READ_WRITE
-            wrapper = FeatureStoreClientWrapper(self._data_system_config.data_store, self._data_store_status_provider)
-            self._store.with_persistence(
-                wrapper, writable, self._data_store_status_provider
-            )
+        super().__init__(config, data_system_config)
 
         # Threading
         self._stop_event = Event()
@@ -97,12 +57,6 @@ class FDv2(DataSystem):
         self._active_synchronizer: Optional[Synchronizer] = None
         self._threads: List[Thread] = []
         self._environment_id: Optional[str] = None
-
-        # Track configuration
-        self._configured_with_data_sources = (
-            (data_system_config.initializers is not None and len(data_system_config.initializers) > 0)
-            or len(self._synchronizers) > 0
-        )
 
     def start(self, set_on_ready: Event):
         """
@@ -147,13 +101,6 @@ class FDv2(DataSystem):
 
         # Close the store
         self._store.close()
-
-    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
-        """
-        Sets the diagnostic accumulator for streaming initialization metrics.
-        This should be called before start() to ensure metrics are collected.
-        """
-        self._diagnostic_accumulator = diagnostic_accumulator
 
     def _run_main_loop(self, set_on_ready: Event):
         """Main coordination loop that manages initializers and synchronizers."""
@@ -454,21 +401,6 @@ class FDv2(DataSystem):
         # the synchronizer can't provide more updates, so we should remove it and fall back
         return ConditionDirective.REMOVE
 
-    def _persistent_store_outage_recovery(self, data_store_status: DataStoreStatus):
-        """
-        Monitor the data store status. If the store comes online and
-        potentially has stale data, we should write our known state to it.
-        """
-        if not data_store_status.available:
-            return
-
-        if not data_store_status.stale:
-            return
-
-        err = self._store.commit()
-        if err is not None:
-            log.error("Failed to reinitialize data store", exc_info=err)
-
     def _record_environment_id(self, environment_id: Optional[str]):
         if not isinstance(environment_id, str) or environment_id == '':
             return
@@ -486,40 +418,6 @@ class FDv2(DataSystem):
     def store(self) -> ReadOnlyStore:
         """Get the underlying store for flag evaluation."""
         return self._store.get_active_store()
-
-    @property
-    def data_source_status_provider(self) -> DataSourceStatusProvider:
-        """Get the data source status provider."""
-        return self._data_source_status_provider
-
-    @property
-    def data_store_status_provider(self) -> DataStoreStatusProvider:
-        """Get the data store status provider."""
-        return self._data_store_status_provider
-
-    @property
-    def flag_change_listeners(self) -> Listeners:
-        """Get the collection of listeners for flag change events."""
-        return self._flag_change_listeners
-
-    @property
-    def data_availability(self) -> DataAvailability:
-        """Get the current data availability level."""
-        if self._store.selector().is_defined():
-            return DataAvailability.REFRESHED
-
-        if not self._configured_with_data_sources or self._store.is_initialized():
-            return DataAvailability.CACHED
-
-        return DataAvailability.DEFAULTS
-
-    @property
-    def target_availability(self) -> DataAvailability:
-        """Get the target data availability level based on configuration."""
-        if self._configured_with_data_sources:
-            return DataAvailability.REFRESHED
-
-        return DataAvailability.CACHED
 
 
 __all__ = [
