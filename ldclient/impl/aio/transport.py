@@ -91,7 +91,7 @@ class AsyncHTTPTransport:
             timeout=timeout,
             proxy=self._proxy or _get_proxy_url(uri),
         ) as response:
-            text = await response.text(encoding='UTF-8', errors='replace')
+            text = await response.text(encoding='UTF-8')
             return TransportResponse(response.status, response.headers, text)
 
     async def close(self) -> None:
