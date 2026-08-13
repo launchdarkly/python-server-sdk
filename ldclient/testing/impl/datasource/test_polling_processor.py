@@ -145,3 +145,38 @@ def verify_recoverable_http_error(http_status_code, ignore_mock):
         assert status.state == DataSourceState.INITIALIZING
         assert status.error.kind == DataSourceErrorKind.ERROR_RESPONSE
         assert status.error.status_code == http_status_code
+
+
+class MockFeatureRequesterWithHeaders(MockFeatureRequester):
+    def __init__(self, headers):
+        super().__init__()
+        self.headers = headers
+
+    def get_all_data_with_headers(self):
+        return (self.get_all_data(), self.headers)
+
+
+def test_records_environment_id_from_polling_headers():
+    global mock_requester
+    mock_requester = MockFeatureRequesterWithHeaders({'X-LD-EnvID': 'env-abc-123'})
+    mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
+
+    config = Config("SDK_KEY")
+    sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+    config._data_source_update_sink = sink
+    setup_processor(config)
+    assert ready.wait(2)
+
+    assert sink.environment_id == 'env-abc-123'
+
+
+def test_environment_id_is_none_when_requester_provides_no_headers():
+    mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
+
+    config = Config("SDK_KEY")
+    sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+    config._data_source_update_sink = sink
+    setup_processor(config)
+    assert ready.wait(2)
+
+    assert sink.environment_id is None

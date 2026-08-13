@@ -34,6 +34,7 @@ class PostingHook(Hook):
                 'context': series_context.context.to_dict(),
                 'defaultValue': series_context.default_value,
                 'method': series_context.method,
+                'environmentId': series_context.environment_id,
             },
             'evaluationSeriesData': data,
             'stage': stage,

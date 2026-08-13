@@ -438,6 +438,58 @@ def test_failure_transitions_from_valid():
             assert spy.statuses[1].error.status_code == 401
 
 
+def test_records_environment_id_from_stream_headers():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event(), headers={'X-LD-EnvID': 'env-abc-123'}) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+            sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+            config._data_source_update_sink = sink
+            server.for_path('/all', stream)
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sink.environment_id == 'env-abc-123'
+
+
+def test_environment_id_is_none_when_not_provided():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+            sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+            config._data_source_update_sink = sink
+            server.for_path('/all', stream)
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sink.environment_id is None
+
+
+def test_does_not_record_environment_id_from_error_response_headers():
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            error_then_success = SequentialHandler(BasicResponse(503, None, {'X-LD-EnvID': 'env-from-error'}), stream)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+            sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+            config._data_source_update_sink = sink
+            server.for_path('/all', error_then_success)
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sink.environment_id is None
+
+
 def expect_item(store, kind, item):
     assert store.get(kind, item['key'], lambda x: x) == item
 

@@ -6,7 +6,7 @@ v2), as well as types for v1 and v2 specific protocols.
 from abc import abstractmethod
 from enum import Enum
 from threading import Event
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ldclient.impl.aio.concurrency import AsyncEvent
@@ -143,6 +143,18 @@ class DataSystem(Protocol):
     def store(self) -> ReadOnlyStore:
         """
         Returns the data store used by the data system.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def environment_id(self) -> Optional[str]:
+        """
+        Returns the environment ID reported by LaunchDarkly, if it is known.
+
+        This is only available once a connection to LaunchDarkly has provided
+        it, and it will be None when the SDK is offline, using an unsupported
+        data source, or connected to a service which does not report it.
         """
         raise NotImplementedError
 

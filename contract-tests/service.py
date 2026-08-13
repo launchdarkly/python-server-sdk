@@ -77,6 +77,7 @@ def status():
             'instance-id',
             'anonymous-redaction',
             'evaluation-hooks',
+            'hook-environment-id',
             'omit-anonymous-contexts',
             'client-prereq-events',
             'persistent-data-store-redis',

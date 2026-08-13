@@ -95,6 +95,7 @@ class FDv2(DataSystem):
         self._lock = ReadWriteLock()
         self._active_synchronizer: Optional[Synchronizer] = None
         self._threads: List[Thread] = []
+        self._environment_id: Optional[str] = None
 
         # Track configuration
         self._configured_with_data_sources = (
@@ -239,6 +240,8 @@ class FDv2(DataSystem):
 
                 basis = basis_result.value
                 log.info("Initialized via %s", initializer.name)
+
+                self._record_environment_id(basis.environment_id)
 
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
@@ -412,6 +415,9 @@ class FDv2(DataSystem):
                 if self._stop_event.is_set():
                     return ConditionDirective.FALLBACK
 
+                if update.state == DataSourceState.VALID:
+                    self._record_environment_id(update.environment_id)
+
                 # Handle the update
                 if update.change_set is not None:
                     self._store.apply(update.change_set, True)
@@ -495,6 +501,19 @@ class FDv2(DataSystem):
         err = self._store.commit()
         if err is not None:
             log.error("Failed to reinitialize data store", exc_info=err)
+
+    def _record_environment_id(self, environment_id: Optional[str]):
+        if not isinstance(environment_id, str) or environment_id == '':
+            return
+
+        with self._lock.write():
+            self._environment_id = environment_id
+
+    @property
+    def environment_id(self) -> Optional[str]:
+        """Get the environment ID reported by LaunchDarkly, if known."""
+        with self._lock.read():
+            return self._environment_id
 
     @property
     def store(self) -> ReadOnlyStore:

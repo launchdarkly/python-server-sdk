@@ -5,6 +5,7 @@ import pytest
 
 from ldclient.client import Context, LDClient
 from ldclient.config import Config, HTTPConfig
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
 from ldclient.testing.http_util import (
     BasicResponse,
     SequentialHandler,
@@ -165,3 +166,31 @@ def test_can_connect_with_selfsigned_cert_by_setting_ca_certs():
         config = Config(sdk_key='sdk_key', base_uri=server.uri, stream=False, send_events=False, http=HTTPConfig(ca_certs='./ldclient/testing/selfsigned.pem'))
         with LDClient(config=config) as client:
             assert client.is_initialized()
+
+
+def test_hooks_receive_environment_id_in_streaming_mode():
+    contexts = []
+
+    class CapturingHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='capturing-hook')
+
+        def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+            contexts.append(series_context)
+            return data
+
+        def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail) -> dict:
+            return data
+
+    with start_server() as stream_server:
+        with stream_content(make_put_event([always_true_flag]), headers={'X-LD-EnvID': 'env-abc-123'}) as stream_handler:
+            stream_server.for_path('/all', stream_handler)
+            config = Config(sdk_key=sdk_key, stream_uri=stream_server.uri, send_events=False, hooks=[CapturingHook()])
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+                client.variation(always_true_flag['key'], user, False)
+
+                assert len(contexts) == 1
+                assert contexts[0].environment_id == 'env-abc-123'

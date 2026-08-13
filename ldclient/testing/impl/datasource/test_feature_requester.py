@@ -25,6 +25,19 @@ def test_get_all_data_returns_data():
         assert result == expected_data
 
 
+def test_get_all_data_with_headers_returns_response_headers():
+    with start_server() as server:
+        config = Config(sdk_key='sdk-key', base_uri=server.uri)
+        fr = FeatureRequesterImpl(config)
+
+        resp_data = {'flags': {}, 'segments': {}}
+        server.for_path('/sdk/latest-all', JsonResponse(resp_data, {'X-LD-EnvID': 'env-abc-123'}))
+
+        (data, headers) = fr.get_all_data_with_headers()
+        assert data == {FEATURES: {}, SEGMENTS: {}}
+        assert headers.get('X-LD-EnvID') == 'env-abc-123'
+
+
 def test_get_all_data_sends_headers():
     with start_server() as server:
         config = Config(sdk_key='sdk-key', base_uri=server.uri)

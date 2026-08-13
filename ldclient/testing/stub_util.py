@@ -43,16 +43,18 @@ def make_delete_event(kind, key, version):
     return 'event:delete\ndata: %s\n\n' % json.dumps(data)
 
 
-def stream_content(event=None):
-    stream = ChunkedResponse({'Content-Type': 'text/event-stream'})
+def stream_content(event=None, headers=None):
+    stream_headers = {'Content-Type': 'text/event-stream'}
+    stream_headers.update(headers or {})
+    stream = ChunkedResponse(stream_headers)
     if event:
         stream.push(event)
     return stream
 
 
-def poll_content(flags=[], segments=[]):
+def poll_content(flags=[], segments=[], headers=None):
     data = {"flags": make_items_map(flags), "segments": make_items_map(segments)}
-    return JsonResponse(data)
+    return JsonResponse(data, headers)
 
 
 class MockEventProcessor(EventProcessor):

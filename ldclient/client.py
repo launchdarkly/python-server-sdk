@@ -709,7 +709,7 @@ class LDClient:
 
             hooks = self.__hooks.copy()
 
-        series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
+        series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method, environment_id=self._data_system.environment_id)
         hook_data = self.__execute_before_evaluation(hooks, series_context)
         evaluation_result = block()
         self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)

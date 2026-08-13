@@ -16,7 +16,12 @@ from ldclient.config import (
 from ldclient.datasystem import file_ds_builder
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
-from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, _Success
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    _Fail,
+    _Success
+)
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import (
     Basis,
@@ -755,3 +760,89 @@ def test_fdv2_synchronizer_fallback_on_success_with_payload():
     # The Valid update's payload must be applied before the handoff.
     assert payload_flag_seen.wait(1), "FDv2 payload was not applied before fallback"
     assert fdv1_flag_seen.wait(1), "FDv1 fallback synchronizer did not run after directive"
+
+
+def test_environment_id_from_initializer_basis():
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    change_set = builder.finish(Selector(state="initializer-state", version=1))
+    init = _StaticInitializer(
+        "envid-initializer",
+        _Success(value=Basis(change_set=change_set, persist=True, environment_id="env-from-initializer")),
+    )
+
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=[_InitializerBuilder(init)], synchronizers=None),
+    )
+
+    assert fdv2.environment_id is None
+
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    assert fdv2.environment_id == "env-from-initializer"
+    fdv2.stop()
+
+
+def test_environment_id_is_not_recorded_from_initializer_error_headers():
+    init = _StaticInitializer(
+        "failing-initializer",
+        _Fail(error="boom", exception=None, headers={_LD_ENVID_HEADER: 'env-from-error'}),
+    )
+
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=[_InitializerBuilder(init)], synchronizers=None),
+    )
+
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    assert fdv2.environment_id is None
+    fdv2.stop()
+
+
+def test_environment_id_from_synchronizer_update():
+    sync_mock: Synchronizer = Mock()
+    sync_mock.name = "envid-sync"
+    sync_mock.stop = Mock()
+    sync_mock.sync.return_value = iter([
+        Update(state=DataSourceState.VALID, environment_id="env-from-sync"),
+    ])
+
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=None, synchronizers=[MockDataSourceBuilder(sync_mock)]),
+    )
+
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    assert fdv2.environment_id == "env-from-sync"
+    fdv2.stop()
+
+
+def test_environment_id_is_not_recorded_from_non_valid_updates():
+    sync_mock: Synchronizer = Mock()
+    sync_mock.name = "envid-sync"
+    sync_mock.stop = Mock()
+    sync_mock.sync.return_value = iter([
+        Update(state=DataSourceState.VALID, environment_id="env-from-sync"),
+        Update(state=DataSourceState.INTERRUPTED, environment_id="env-from-interrupted"),
+    ])
+
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=None, synchronizers=[MockDataSourceBuilder(sync_mock)]),
+    )
+
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    assert fdv2.environment_id == "env-from-sync"
+    fdv2.stop()
