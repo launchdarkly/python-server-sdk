@@ -69,6 +69,14 @@ class AsyncRequester(Protocol):  # pylint: disable=too-few-public-methods
         """
         raise NotImplementedError
 
+    @abstractmethod
+    async def close(self) -> None:
+        """
+        Releases any resources (such as an HTTP transport) owned by the
+        requester.
+        """
+        raise NotImplementedError
+
 
 CacheEntry = namedtuple("CacheEntry", ["data", "etag"])
 
@@ -123,10 +131,11 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
                 break
 
     async def stop(self):
-        """Stops the synchronizer."""
+        """Stops the synchronizer and closes the requester's HTTP transport."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
         self._stop.set()
+        await self._requester.close()
 
     async def _poll(self, ss: SelectorStore) -> BasisResult:
         try:
@@ -225,6 +234,10 @@ class AiohttpPollingRequester(AsyncRequester):
             exception=changeset_result.exception,
             headers=headers,  # type: ignore
         )
+
+    async def close(self) -> None:
+        """Closes the requester's HTTP transport."""
+        await self._http.close()
 
 
 class AsyncPollingDataSourceBuilder(DataSourceBuilder):
@@ -413,3 +426,7 @@ class AiohttpFDv1PollingRequester(AsyncRequester):
             exception=changeset_result.exception,
             headers=headers,
         )
+
+    async def close(self) -> None:
+        """Closes the requester's HTTP transport."""
+        await self._http.close()

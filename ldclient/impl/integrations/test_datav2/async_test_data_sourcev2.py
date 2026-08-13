@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from ldclient.impl.util import _Fail, _Success, current_time_millis
 from ldclient.interfaces import (
@@ -30,6 +30,9 @@ class _AsyncTestDataSourceV2:
         self._test_data = test_data
         self._closed = False
         self._update_queue: asyncio.Queue = asyncio.Queue()
+        # The event loop that sync() runs on. Captured when sync() starts so
+        # cross-thread updates can be scheduled onto it safely.
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Register for change notifications; upsert_flag is invoked on updates.
         self._test_data._add_instance(self)
@@ -46,6 +49,8 @@ class _AsyncTestDataSourceV2:
     async def sync(self, ss: SelectorStore) -> AsyncGenerator[Update, None]:
         """Implementation of the AsyncSynchronizer.sync method: yields the initial
         data, then each update as it is queued, until the source is stopped."""
+        self._loop = asyncio.get_running_loop()
+
         initial_result = self._make_basis()
         if isinstance(initial_result, _Fail):
             yield Update(
@@ -76,7 +81,25 @@ class _AsyncTestDataSourceV2:
         self._closed = True
         self._test_data._closed_instance(self)
         # Wake the sync generator so it can exit.
-        self._update_queue.put_nowait(None)
+        self._enqueue(None)
+
+    def _enqueue(self, item) -> None:
+        """Put an item on the update queue safely from any thread.
+
+        Flag updates can arrive on any thread (TestDataV2.update may be called
+        from user code), but an asyncio.Queue must only be touched from its own
+        event loop. So schedule the put on the loop captured when sync() started.
+        Before sync() runs there is no consumer and no loop to cross into, so put
+        directly. If the loop has since closed, drop the item."""
+        loop = self._loop
+        if loop is None:
+            self._update_queue.put_nowait(item)
+            return
+        try:
+            loop.call_soon_threadsafe(self._update_queue.put_nowait, item)
+        except RuntimeError:
+            # The event loop has been closed; there is nothing left to deliver to.
+            pass
 
     def upsert_flag(self, flag_data: dict):
         """Called by TestDataV2 when a flag is updated; queues the change for
@@ -98,11 +121,11 @@ class _AsyncTestDataSourceV2:
             selector = Selector.new_selector(str(version), version)
             change_set = builder.finish(selector)
 
-            self._update_queue.put_nowait(
+            self._enqueue(
                 Update(state=DataSourceState.VALID, change_set=change_set)
             )
         except Exception as e:
-            self._update_queue.put_nowait(
+            self._enqueue(
                 Update(
                     state=DataSourceState.OFF,
                     error=DataSourceErrorInfo(

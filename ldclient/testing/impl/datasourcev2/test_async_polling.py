@@ -40,10 +40,16 @@ class MockPollingRequester:  # pylint: disable=too-few-public-methods
         self._index += 1
         return result
 
+    async def close(self) -> None:
+        pass
+
 
 class MockExceptionThrowingRequester:  # pylint: disable=too-few-public-methods
     async def fetch(self, selector: Optional[Selector]) -> PollingResult:
         raise RuntimeError("requester blew up")
+
+    async def close(self) -> None:
+        pass
 
 
 def _valid_change_set():
@@ -180,6 +186,9 @@ async def test_sync_network_error_yields_interrupted():
             if call_count >= 2:
                 await src.stop()
             return _Fail(error="connection refused")
+
+        async def close(self) -> None:
+            pass
 
     src = AsyncPollingDataSource(poll_interval=0.01, requester=_StoppingRequester())
 
