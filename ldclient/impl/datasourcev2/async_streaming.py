@@ -11,7 +11,6 @@ from urllib import parse
 import aiohttp
 from ld_eventsource import AsyncSSEClient
 from ld_eventsource.actions import Event, Fault, Start
-from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import (
     DataSourceBuilder,
@@ -19,15 +18,13 @@ from ldclient.config import (
     HTTPConfig
 )
 from ldclient.impl.aio.transport import AsyncSSEFactory, make_client_session
-from ldclient.impl.datasourcev2.streaming_common import process_message
-from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.util import (
-    _LD_ENVID_HEADER,
-    _LD_FD_FALLBACK_HEADER,
-    http_error_message,
-    is_http_error_recoverable,
-    log
+from ldclient.impl.datasourcev2.streaming_common import (
+    classify_stream_error,
+    process_message,
+    with_fallback_signal
 )
+from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
+from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
 from ldclient.interfaces import (
     AsyncSynchronizer,
     ChangeSetBuilder,
@@ -163,19 +160,6 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         # directive header of its own.
         fallback_requested = False
 
-        def _with_fallback_signal(update: Update) -> Update:
-            """Return ``update`` decorated with ``fallback_to_fdv1=True`` when
-            the directive has been latched. Idempotent if already set."""
-            if not fallback_requested or update.fallback_to_fdv1:
-                return update
-            return Update(
-                state=update.state,
-                change_set=update.change_set,
-                error=update.error,
-                fallback_to_fdv1=True,
-                environment_id=update.environment_id,
-            )
-
         try:
             async for action in self._sse.all:
                 if isinstance(action, Fault):
@@ -190,7 +174,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
                     (update, should_continue) = await self._handle_error(action.error, envid)
                     if update is not None:
-                        yield _with_fallback_signal(update)
+                        yield with_fallback_signal(update, fallback_requested)
 
                     # The FDv1 Fallback Directive is one-way and terminal: if it
                     # was latched on a prior Start, we must not keep retrying the
@@ -216,7 +200,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                             # The completed update is the natural moment to honor
                             # the latched directive: yield once with the signal,
                             # then halt — the consumer will switch to FDv1.
-                            yield _with_fallback_signal(update)
+                            yield with_fallback_signal(update, fallback_requested)
                             break
                         yield update
                 except json.decoder.JSONDecodeError as e:
@@ -227,7 +211,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
                     (update, should_continue) = await self._handle_error(e, envid)
                     if update is not None:
-                        yield _with_fallback_signal(update)
+                        yield with_fallback_signal(update, fallback_requested)
                     if fallback_requested or not should_continue:
                         break
                 except Exception as e:  # pylint: disable=broad-except
@@ -236,14 +220,14 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                     )
                     await self._sse.interrupt()
 
-                    yield _with_fallback_signal(Update(
+                    yield with_fallback_signal(Update(
                         state=DataSourceState.INTERRUPTED,
                         error=DataSourceErrorInfo(
                             DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                         ),
                         fallback_to_fdv1=False,
                         environment_id=envid,
-                    ))
+                    ), fallback_requested)
                     if fallback_requested:
                         break
         finally:
@@ -289,89 +273,15 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         if not self._running:
             return (None, False)  # don't retry if we've been deliberately stopped
 
-        update: Optional[Update] = None
-
-        if isinstance(error, json.decoder.JSONDecodeError):
-            log.error("Unexpected error on stream connection: %s, will retry", error)
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = time() + \
-                self._sse.next_retry_delay  # type: ignore
-
-            update = Update(
-                state=DataSourceState.INTERRUPTED,
-                error=DataSourceErrorInfo(
-                    DataSourceErrorKind.INVALID_DATA, 0, time(), str(error)
-                ),
-                fallback_to_fdv1=False,
-                environment_id=envid,
-            )
-            return (update, True)
-
-        if isinstance(error, HTTPStatusError):
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = time() + \
-                self._sse.next_retry_delay  # type: ignore
-
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.ERROR_RESPONSE,
-                error.status,
-                time(),
-                str(error),
-            )
-
-            if envid is None and error.headers is not None:
-                envid = error.headers.get(_LD_ENVID_HEADER)
-
-            if error.headers is not None and error.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
-                update = Update(
-                    state=DataSourceState.OFF,
-                    error=error_info,
-                    fallback_to_fdv1=True,
-                    environment_id=envid,
-                )
-                await self.stop()
-                return (update, False)
-
-            http_error_message_result = http_error_message(
-                error.status, "stream connection"
-            )
-            is_recoverable = is_http_error_recoverable(error.status)
-            update = Update(
-                state=(
-                    DataSourceState.INTERRUPTED
-                    if is_recoverable
-                    else DataSourceState.OFF
-                ),
-                error=error_info,
-                fallback_to_fdv1=False,
-                environment_id=envid,
-            )
-
-            if not is_recoverable:
-                self._connection_attempt_start_time = None
-                log.error(http_error_message_result)
-                await self.stop()
-                return (update, False)
-
-            log.warning(http_error_message_result)
-            return (update, True)
-
-        log.warning("Unexpected error on stream connection: %s, will retry", error)
-        self._record_stream_init(True)
-        self._connection_attempt_start_time = time() + self._sse.next_retry_delay  # type: ignore
-
-        update = Update(
-            state=DataSourceState.INTERRUPTED,
-            error=DataSourceErrorInfo(
-                DataSourceErrorKind.UNKNOWN, 0, time(), str(error)
-            ),
-            fallback_to_fdv1=False,
-            environment_id=envid,
+        decision = classify_stream_error(
+            error, self._sse.next_retry_delay, envid  # type: ignore
         )
-        # no stacktrace here because, for a typical connection error, it'll
-        # just be a lengthy tour of HTTP client internals
+        self._record_stream_init(True)
+        self._connection_attempt_start_time = decision.next_attempt_start
+        if decision.should_stop:
+            await self.stop()
 
-        return (update, True)
+        return (decision.update, decision.should_continue)
 
 
 class AsyncStreamingDataSourceBuilder(DataSourceBuilder):

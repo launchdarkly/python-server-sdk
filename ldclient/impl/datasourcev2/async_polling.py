@@ -6,7 +6,6 @@ initializer, along with any required supporting classes and protocols.
 import json
 from abc import abstractmethod
 from collections import namedtuple
-from time import time
 from typing import AsyncGenerator, Mapping, Optional, Protocol, Tuple
 from urllib import parse
 
@@ -21,31 +20,26 @@ from ldclient.impl.datasource.async_feature_requester import (
     FDV1_POLLING_ENDPOINT
 )
 from ldclient.impl.datasourcev2.polling_common import (
+    PollAction,
     fdv1_polling_payload_to_changeset,
-    polling_payload_to_changeset
+    map_polling_result,
+    polling_payload_to_changeset,
+    polling_result_to_basis
 )
 from ldclient.impl.util import (
-    _LD_ENVID_HEADER,
-    _LD_FD_FALLBACK_HEADER,
     UnsuccessfulResponseException,
     _Fail,
     _headers,
     _Result,
     _Success,
-    http_error_message,
-    is_http_error_recoverable,
     log
 )
 from ldclient.interfaces import (
     AsyncInitializer,
     AsyncSynchronizer,
-    Basis,
     BasisResult,
     ChangeSet,
     ChangeSetBuilder,
-    DataSourceErrorInfo,
-    DataSourceErrorKind,
-    DataSourceState,
     Selector,
     SelectorStore,
     Update
@@ -117,82 +111,14 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         self._stop.clear()
         while self._stop.is_set() is False:
             result = await self._requester.fetch(ss.selector())
-            if isinstance(result, _Fail):
-                fallback = None
-                envid = None
+            decision = map_polling_result(result)
+            yield decision.update
 
-                if result.headers is not None:
-                    fallback = result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
-                    envid = result.headers.get(_LD_ENVID_HEADER)
-
-                if isinstance(result.exception, UnsuccessfulResponseException):
-                    error_info = DataSourceErrorInfo(
-                        kind=DataSourceErrorKind.ERROR_RESPONSE,
-                        status_code=result.exception.status,
-                        time=time(),
-                        message=http_error_message(
-                            result.exception.status, "polling request"
-                        ),
-                    )
-
-                    if fallback:
-                        yield Update(
-                            state=DataSourceState.OFF,
-                            error=error_info,
-                            fallback_to_fdv1=True,
-                            environment_id=envid,
-                        )
-                        break
-
-                    status_code = result.exception.status
-                    if is_http_error_recoverable(status_code):
-                        yield Update(
-                            state=DataSourceState.INTERRUPTED,
-                            error=error_info,
-                            environment_id=envid,
-                        )
-                        await self._interrupt_event.wait(self._poll_interval)
-                        continue
-
-                    yield Update(
-                        state=DataSourceState.OFF,
-                        error=error_info,
-                        environment_id=envid,
-                    )
-                    break
-
-                error_info = DataSourceErrorInfo(
-                    kind=DataSourceErrorKind.NETWORK_ERROR,
-                    time=time(),
-                    status_code=0,
-                    message=result.error,
-                )
-
-                # Even a non-HTTP error (e.g. malformed JSON) can carry the fallback
-                # header. If so, halt rather than retrying the FDv2 endpoint.
-                if fallback:
-                    yield Update(
-                        state=DataSourceState.OFF,
-                        error=error_info,
-                        fallback_to_fdv1=True,
-                        environment_id=envid,
-                    )
-                    break
-
-                yield Update(
-                    state=DataSourceState.INTERRUPTED,
-                    error=error_info,
-                    environment_id=envid,
-                )
-            else:
-                (change_set, headers) = result.value
-                yield Update(
-                    state=DataSourceState.VALID,
-                    change_set=change_set,
-                    environment_id=headers.get(_LD_ENVID_HEADER),
-                    fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
-                )
-
+            if decision.control is PollAction.BREAK:
+                break
+            if decision.control is PollAction.WAIT_CONTINUE:
+                await self._interrupt_event.wait(self._poll_interval)
+                continue
             if await self._interrupt_event.wait(self._poll_interval):
                 break
 
@@ -205,44 +131,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
     async def _poll(self, ss: SelectorStore) -> BasisResult:
         try:
             result = await self._requester.fetch(ss.selector())
-
-            if isinstance(result, _Fail):
-                if isinstance(result.exception, UnsuccessfulResponseException):
-                    status_code = result.exception.status
-                    http_error_message_result = http_error_message(
-                        status_code, "polling request"
-                    )
-                    if is_http_error_recoverable(status_code):
-                        log.warning(http_error_message_result)
-
-                    # Forward any response headers so callers (e.g. FDv2 datasystem)
-                    # can read the X-LD-FD-Fallback directive even on error.
-                    return _Fail(
-                        error=http_error_message_result,
-                        exception=result.exception,
-                        headers=result.headers,
-                    )
-
-                return _Fail(
-                    error=result.error or "Failed to request payload",
-                    exception=result.exception,
-                    headers=result.headers,
-                )
-
-            (change_set, headers) = result.value
-
-            env_id = headers.get(_LD_ENVID_HEADER)
-            if not isinstance(env_id, str):
-                env_id = None
-
-            basis = Basis(
-                change_set=change_set,
-                persist=change_set.selector.is_defined(),
-                environment_id=env_id,
-                fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true',
-            )
-
-            return _Success(value=basis)
+            return polling_result_to_basis(result)
         except Exception as e:  # pylint: disable=broad-except
             msg = f"Error: Exception encountered when updating flags. {e}"
             log.exception(msg)
