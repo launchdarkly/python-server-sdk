@@ -15,6 +15,9 @@ try:
 except ImportError:
     pass
 
+# Cap the WATCH-retry loop so a hot-contended key can't starve upsert_internal forever; matches the LaunchDarkly Go Redis stores.
+_MAX_UPSERT_RETRIES = 10
+
 
 class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
     """Async Redis implementation of :class:`ldclient.interfaces.AsyncFeatureStoreCore`.
@@ -76,7 +79,7 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
         key = item['key']
         item_json = json.dumps(item)
 
-        while True:
+        for _ in range(_MAX_UPSERT_RETRIES):
             async with self._client.pipeline() as pipe:
                 try:
                     await pipe.watch(base_key)
@@ -103,6 +106,8 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
                 except WatchError:
                     log.debug("AsyncRedisFeatureStore: concurrent modification detected, retrying")
                     continue
+
+        raise RuntimeError("failed to update key %s in '%s' after %d attempts" % (key, kind.namespace, _MAX_UPSERT_RETRIES))
 
     async def initialized_internal(self) -> bool:
         return bool(await self._client.exists(self._init_key))
