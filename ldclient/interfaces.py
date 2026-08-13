@@ -421,6 +421,88 @@ class AsyncFeatureStore(ABC):
         pass
 
 
+class AsyncFeatureStoreCore(ABC):
+    """
+    Async equivalent of :class:`FeatureStoreCore`, for use with
+    :class:`ldclient.async_feature_store_helpers.AsyncCachingStoreWrapper`. It exposes a simplified
+    subset of the functionality of :class:`AsyncFeatureStore`, so a database integration only has to
+    implement the database-specific logic; the wrapper adds caching and encode/decode handling.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees. Pin to a specific minor version and review the changelog
+        before upgrading.
+
+    All items passed to and returned from these methods are plain JSON-compatible dicts, not decoded
+    model objects. The wrapper handles decoding for its cache and its callers.
+    """
+
+    @abstractmethod
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
+        """
+        Returns the object to which the specified key is mapped, or None if no such item exists.
+        The method should not attempt to filter out any items based on their deleted property,
+        nor to cache any items.
+
+        :param kind: The kind of object to get
+        :param key: The key of the object
+        :return: The object to which the specified key is mapped, or None
+        """
+        ...
+
+    @abstractmethod
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
+        """
+        Returns a dictionary of all associated objects of a given kind. The method should not attempt
+        to filter out any items based on their deleted property, nor to cache any items.
+
+        :param kind: The kind of objects to get
+        :return: A dictionary of keys to items
+        """
+        ...
+
+    @abstractmethod
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+        """
+        Initializes (or re-initializes) the store with the specified set of objects. Any existing
+        entries will be removed. Implementations can assume that this set of objects is up to date--
+        there is no need to perform individual version comparisons between the existing objects and
+        the supplied data.
+
+        :param all_data: A dictionary of data kinds to item collections
+        """
+        ...
+
+    @abstractmethod
+    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+        """
+        Updates or inserts the object associated with the specified key. If an item with the same key
+        already exists, it should update it only if the new item's version property is greater than
+        the old one. It should return the final state of the item, that is, the item that was passed
+        in if the update succeeded, or the item that is currently in the data store if the update
+        failed the version check. This lets the wrapper update its cache correctly.
+
+        :param kind: The kind of object to update
+        :param item: The object to update or insert
+        :return: The state of the object after the update
+        """
+        ...
+
+    @abstractmethod
+    async def initialized_internal(self) -> bool:
+        """
+        Returns true if this store has been initialized. In a shared data store, it should be able to
+        detect this even if init_internal was called in a different process, so the test should be
+        based on what is in the data store.
+        """
+        ...
+
+    # An implementation may also define ``async def is_available(self) -> bool`` and
+    # ``async def close(self) -> None``. The wrapper detects and uses them if present, so they are
+    # not declared here as required methods.
+
+
 # Internal use only. Common methods for components that perform a task in the background.
 class BackgroundOperation:
 
