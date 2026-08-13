@@ -238,6 +238,52 @@ class Redis:
         return _RedisBigSegmentStore(url, prefix, redis_opts)
 
     @staticmethod
+    def async_feature_store(url: str = 'redis://localhost:6379/0', prefix: Optional[str] = None, caching: CacheConfig = CacheConfig.default(), redis_opts: Dict[str, Any] = {}):
+        """
+        Creates an async Redis-backed implementation of :class:`~ldclient.interfaces.AsyncFeatureStore`.
+
+        .. caution::
+            This feature is experimental and should NOT be considered ready for production
+            use. It may change or be removed without notice and is not subject to backwards
+            compatibility guarantees. Pin to a specific minor version and review the changelog
+            before upgrading.
+
+        For more details about how and why you can use a persistent feature store, see the
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
+
+        To use this method, you must first install the ``redis`` package (version >=5.0.1). Then, put
+        the object returned by this method into the ``feature_store`` property of your client
+        configuration when constructing an ``AsyncLDClient``.
+        ::
+
+            from ldclient.config import Config
+            from ldclient.integrations import Redis
+            store = Redis.async_feature_store()
+            config = Config(feature_store=store)
+
+        The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
+        one Redis instance.
+
+        :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
+        :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
+          ``DEFAULT_PREFIX``
+        :param caching: specifies whether local caching should be enabled and if so,
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          See :class:`ldclient.feature_store.CacheConfig`.
+        :param redis_opts: extra options forwarded to ``redis.asyncio.from_url``
+        """
+        from ldclient.async_feature_store_helpers import (
+            AsyncCachingStoreWrapper
+        )
+        from ldclient.impl.integrations.redis.async_redis_feature_store import (
+            _AsyncRedisFeatureStoreCore
+        )
+        core = _AsyncRedisFeatureStoreCore(url, prefix, redis_opts)
+        wrapper = AsyncCachingStoreWrapper(core, caching)
+        wrapper._core = core  # exposed for testing
+        return wrapper
+
+    @staticmethod
     def async_big_segment_store(url: str = 'redis://localhost:6379/0', prefix: Optional[str] = None, redis_opts: Dict[str, Any] = {}):
         """
         Creates an async Redis-backed Big Segment store implementing :class:`~ldclient.interfaces.AsyncBigSegmentStore`.
