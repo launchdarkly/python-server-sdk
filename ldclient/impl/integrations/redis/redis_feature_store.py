@@ -15,6 +15,9 @@ try:
 except ImportError:
     pass
 
+# Cap the WATCH-retry loop so a hot-contended key can't starve upsert_internal forever; matches the LaunchDarkly Go Redis stores.
+_MAX_UPSERT_RETRIES = 10
+
 
 class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
     def __init__(self, url, prefix, redis_opts: Dict[str, Any]):
@@ -82,7 +85,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         key = item['key']
         item_json = json.dumps(item)
 
-        while True:
+        for _ in range(_MAX_UPSERT_RETRIES):
             pipeline = r.pipeline()
             pipeline.watch(base_key)
             old = self.get_internal(kind, key)
@@ -110,6 +113,8 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
                     log.debug("RedisFeatureStore: concurrent modification detected, retrying")
                     continue
             return item
+
+        raise RuntimeError("failed to update key %s in '%s' after %d attempts" % (key, kind.namespace, _MAX_UPSERT_RETRIES))
 
     def initialized_internal(self):
         r = redis.Redis(connection_pool=self._pool)
