@@ -45,8 +45,7 @@ class _AsyncStoreView:
     """Wraps FDv2's synchronous in-memory active store as an
     :class:`AsyncReadOnlyStore`. This lets the evaluation path use one async
     interface for both FDv1 and FDv2. Reads are in-memory dict lookups, so
-    nothing is awaited. It is the async version of the sync
-    ``FeatureStoreClientWrapper``."""
+    nothing is awaited."""
 
     def __init__(self, store: ReadOnlyStore):
         self._store = store
