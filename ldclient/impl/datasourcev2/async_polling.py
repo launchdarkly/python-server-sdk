@@ -117,25 +117,27 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         log.info("Starting PollingDataSourceV2 synchronizer")
         self._interrupt_event.clear()
         self._stop.clear()
-        while self._stop.is_set() is False:
-            result = await self._requester.fetch(ss.selector())
-            decision = map_polling_result(result)
-            yield decision.update
+        try:
+            while self._stop.is_set() is False:
+                result = await self._requester.fetch(ss.selector())
+                decision = map_polling_result(result)
+                yield decision.update
 
-            if decision.control is PollAction.BREAK:
-                break
-            if decision.control is PollAction.WAIT_CONTINUE:
-                await self._interrupt_event.wait(self._poll_interval)
-                continue
-            if await self._interrupt_event.wait(self._poll_interval):
-                break
+                if decision.control is PollAction.BREAK:
+                    break
+                if decision.control is PollAction.WAIT_CONTINUE:
+                    await self._interrupt_event.wait(self._poll_interval)
+                    continue
+                if await self._interrupt_event.wait(self._poll_interval):
+                    break
+        finally:
+            await self._requester.close()
 
     async def stop(self):
-        """Stops the synchronizer and closes the requester's HTTP transport."""
+        """Signals the synchronizer to stop."""
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
         self._stop.set()
-        await self._requester.close()
 
     async def _poll(self, ss: SelectorStore) -> BasisResult:
         try:
