@@ -264,3 +264,53 @@ async def test_stop_halts_sync():
 
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
+
+
+@pytest.mark.asyncio
+async def test_sync_recoverable_error_continues_polling():
+    change_set = _valid_change_set()
+    src = _make_source(
+        [
+            _Fail(error="500", exception=UnsuccessfulResponseException(500)),
+            _Success(value=(change_set, {})),
+        ],
+        poll_interval=0.01,
+    )
+
+    gen = src.sync(_ss())
+    first = await asyncio.wait_for(gen.__anext__(), timeout=2)
+    second = await asyncio.wait_for(gen.__anext__(), timeout=2)
+    await gen.aclose()
+
+    assert first.state == DataSourceState.INTERRUPTED
+    assert first.error is not None
+    assert first.error.status_code == 500
+    assert second.state == DataSourceState.VALID
+    assert second.change_set is change_set
+
+
+@pytest.mark.asyncio
+async def test_requester_is_closed_after_stop():
+    class CloseTrackingRequester(MockPollingRequester):
+        def __init__(self, results):
+            super().__init__(results)
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    requester = CloseTrackingRequester([_Success(value=(_valid_change_set(), {}))])
+    src = AsyncPollingDataSource(poll_interval=60, requester=requester)
+
+    first_update_received = asyncio.Event()
+
+    async def consume():
+        async for _ in src.sync(_ss()):
+            first_update_received.set()
+
+    task = asyncio.create_task(consume())
+    await asyncio.wait_for(first_update_received.wait(), timeout=2)
+    await src.stop()
+    await asyncio.wait_for(task, timeout=2)
+
+    assert requester.closed is True

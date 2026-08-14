@@ -506,3 +506,46 @@ async def test_supplied_session_flows_through_builder_as_unowned():
     assert factory_cls.call_args.kwargs["session"] is supplied
     assert supplied.closed is False
     assert src._owned_session is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_latched_on_start_carries_through_recoverable_fault():
+    """A directive latched on Start must halt the stream even on a recoverable fault."""
+    src = make_streaming_data_source()
+
+    actions = [
+        Start(headers={_LD_FD_FALLBACK_HEADER: 'true'}),
+        Fault(error=HTTPStatusError(503)),
+        # Must never be reached — the latched directive halts the stream.
+        server_intent_event(IntentCode.TRANSFER_FULL),
+        put_object_event("flag-1"),
+        payload_transferred_event(),
+    ]
+
+    updates = await collect_updates(src, actions)
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].error.status_code == 503
+    assert updates[0].fallback_to_fdv1 is True
+
+
+@pytest.mark.asyncio
+async def test_envid_preserved_across_headerless_reconnect_start():
+    """A reconnect Start without X-LD-EnvID must not clear the environment ID."""
+    src = make_streaming_data_source()
+
+    actions = [
+        Start(headers={_LD_ENVID_HEADER: 'my-env'}),
+        server_intent_event(IntentCode.TRANSFER_FULL),
+        put_object_event("flag-1"),
+        payload_transferred_event(1),
+        Start(headers={}),
+        server_intent_event(IntentCode.TRANSFER_FULL),
+        put_object_event("flag-2"),
+        payload_transferred_event(2),
+    ]
+
+    updates = await collect_updates(src, actions)
+    assert len(updates) == 2
+    assert updates[0].environment_id == 'my-env'
+    assert updates[1].environment_id == 'my-env'
