@@ -147,6 +147,60 @@ class DynamoDB:
         """
         return _DynamoDBBigSegmentStore(table_name, prefix, dynamodb_opts)
 
+    @staticmethod
+    def async_feature_store(table_name: str, prefix: Optional[str] = None, dynamodb_opts: Mapping[str, Any] = {}, caching: CacheConfig = CacheConfig.default()):
+        """Creates an async DynamoDB-backed implementation of :class:`~ldclient.interfaces.AsyncFeatureStore`.
+
+        .. caution::
+            This feature is experimental and should NOT be considered ready for production
+            use. It may change or be removed without notice and is not subject to backwards
+            compatibility guarantees. Pin to a specific minor version and review the changelog
+            before upgrading.
+
+        For more details about how and why you can use a persistent feature store, see the
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
+
+        To use this method, you must first install the ``aioboto3`` package. Then, put the object
+        returned by this method into the ``feature_store`` property of your client configuration
+        when constructing an ``AsyncLDClient``.
+        ::
+
+            from ldclient.config import Config
+            from ldclient.integrations import DynamoDB
+            store = DynamoDB.async_feature_store("my-table-name")
+            config = Config(feature_store=store)
+
+        The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
+        one DynamoDB table.
+
+        Note that the DynamoDB table must already exist; the LaunchDarkly SDK does not create the table
+        automatically, because it has no way of knowing what additional properties (such as permissions
+        and throughput) you would want it to have. The table must have a partition key called
+        "namespace" and a sort key called "key", both with a string type.
+
+        By default, the DynamoDB client will try to get your AWS credentials and region name from
+        environment variables and/or local configuration files, as described in the AWS SDK documentation.
+        You may also pass configuration settings in ``dynamodb_opts``.
+
+        :param table_name: the name of an existing DynamoDB table
+        :param prefix: an optional namespace prefix to be prepended to all DynamoDB keys
+        :param dynamodb_opts: optional parameters for configuring the DynamoDB client, forwarded to
+          ``aioboto3.Session.client``
+        :param caching: specifies whether local caching should be enabled and if so,
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          See :class:`ldclient.feature_store.CacheConfig`.
+        """
+        from ldclient.async_feature_store_helpers import (
+            AsyncCachingStoreWrapper
+        )
+        from ldclient.impl.integrations.dynamodb.async_dynamodb_feature_store import (
+            _AsyncDynamoDBFeatureStoreCore
+        )
+        core = _AsyncDynamoDBFeatureStoreCore(table_name, prefix, dynamodb_opts)
+        wrapper = AsyncCachingStoreWrapper(core, caching)
+        wrapper._core = core  # exposed for testing
+        return wrapper
+
 
 class Redis:
     """Provides factory methods for integrations between the LaunchDarkly SDK and Redis."""
