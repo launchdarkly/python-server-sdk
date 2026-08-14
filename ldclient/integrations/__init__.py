@@ -71,6 +71,54 @@ class Consul:
         core = _ConsulFeatureStoreCore(host, port, prefix, consul_opts)
         return CachingStoreWrapper(core, caching)
 
+    @staticmethod
+    def async_feature_store(
+        host: Optional[str] = None, port: Optional[int] = None, prefix: Optional[str] = None, consul_opts: Optional[dict] = None, caching: CacheConfig = CacheConfig.default()
+    ):
+        """Creates an async Consul-backed implementation of :class:`ldclient.interfaces.AsyncFeatureStore`.
+
+        .. caution::
+            This feature is experimental and should NOT be considered ready for production
+            use. It may change or be removed without notice and is not subject to backwards
+            compatibility guarantees. Pin to a specific minor version and review the changelog
+            before upgrading.
+
+        For more details about how and why you can use a persistent feature store, see the
+        `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
+
+        To use this method, you must first install the ``py-consul`` package with its ``asyncio``
+        extra (``py-consul[asyncio]``). Then, put the object returned by this method into the
+        ``feature_store`` property of your client configuration when constructing an ``AsyncLDClient``.
+        ::
+
+            from ldclient.integrations import Consul
+            store = Consul.async_feature_store()
+            config = Config(feature_store=store)
+
+        The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
+        one Consul instance.
+
+        :param host: hostname of the Consul server (uses ``localhost`` if omitted)
+        :param port: port of the Consul server (uses 8500 if omitted)
+        :param prefix: a namespace prefix to be prepended to all Consul keys
+        :param consul_opts: optional parameters for configuring the Consul client, if you need
+          to set any of them besides host and port, as defined in the
+          `py-consul API <https://py-consul.readthedocs.io/en/latest/#consul>`_
+        :param caching: specifies whether local caching should be enabled and if so,
+          sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
+          See :class:`ldclient.feature_store.CacheConfig`.
+        """
+        from ldclient.async_feature_store_helpers import (
+            AsyncCachingStoreWrapper
+        )
+        from ldclient.impl.integrations.consul.async_consul_feature_store import (
+            _AsyncConsulFeatureStoreCore
+        )
+        core = _AsyncConsulFeatureStoreCore(host, port, prefix, consul_opts)
+        wrapper = AsyncCachingStoreWrapper(core, caching)
+        wrapper._core = core  # exposed for testing
+        return wrapper
+
 
 class DynamoDB:
     """Provides factory methods for integrations between the LaunchDarkly SDK and DynamoDB."""
