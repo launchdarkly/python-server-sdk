@@ -185,7 +185,7 @@ class AiohttpPollingRequester(AsyncRequester):
             query_params["filter"] = self._config.payload_filter_key
 
         if selector is not None and selector.is_defined():
-            query_params["selector"] = selector.state
+            query_params["basis"] = selector.state
 
         uri = self._poll_uri
         if len(query_params) > 0:
