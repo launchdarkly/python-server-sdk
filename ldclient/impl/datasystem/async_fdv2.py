@@ -395,9 +395,11 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             log.error("Error consuming synchronizer results: %s", e)
             return ConditionDirective.REMOVE
         finally:
-            await synchronizer.stop()
             timer.stop()
+            if sync_reader is not None:
+                sync_reader.cancel()
 
+            await synchronizer.stop()
             if sync_reader is not None:
                 await join_handle(sync_reader, 0.5)
 
