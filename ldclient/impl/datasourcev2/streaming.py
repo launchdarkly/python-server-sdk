@@ -15,38 +15,26 @@ from ld_eventsource.config import (
     ErrorStrategy,
     RetryDelayStrategy
 )
-from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import (
     DataSourceBuilder,
     DataSourceBuilderConfig,
     HTTPConfig
 )
+from ldclient.impl.datasourcev2.streaming_common import (
+    classify_stream_error,
+    process_message,
+    with_fallback_signal
+)
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.datasystem.protocolv2 import (
-    DeleteObject,
-    Error,
-    EventName,
-    Goodbye,
-    PutObject
-)
 from ldclient.impl.http import HTTPFactory, _base_headers
-from ldclient.impl.util import (
-    _LD_ENVID_HEADER,
-    _LD_FD_FALLBACK_HEADER,
-    http_error_message,
-    is_http_error_recoverable,
-    log
-)
+from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
 from ldclient.interfaces import (
     ChangeSetBuilder,
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    IntentCode,
-    Selector,
     SelectorStore,
-    ServerIntent,
     Synchronizer,
     Update
 )
@@ -182,19 +170,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         # itself doesn't see the directive header.
         fallback_requested = False
 
-        def _with_fallback_signal(update: Update) -> Update:
-            """Return ``update`` decorated with ``fallback_to_fdv1=True`` when
-            the directive has been latched. Idempotent if already set."""
-            if not fallback_requested or update.fallback_to_fdv1:
-                return update
-            return Update(
-                state=update.state,
-                change_set=update.change_set,
-                error=update.error,
-                fallback_to_fdv1=True,
-                environment_id=update.environment_id,
-            )
-
         for action in self._sse.all:
             if isinstance(action, Fault):
                 # If the SSE client detects the stream has closed, then it will
@@ -208,7 +183,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(action.error, envid)
                 if update is not None:
-                    yield _with_fallback_signal(update)
+                    yield with_fallback_signal(update, fallback_requested)
 
                 # The FDv1 Fallback Directive is one-way and terminal: if it
                 # was latched on a prior Start, we must not keep retrying the
@@ -226,7 +201,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 continue
 
             try:
-                update = self._process_message(action, change_set_builder, envid)
+                update = process_message(action, change_set_builder, envid)
                 if update is not None:
                     self._record_stream_init(False)
                     self._connection_attempt_start_time = None
@@ -234,7 +209,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                         # The completed update is the natural moment to honor
                         # the latched directive: yield once with the signal,
                         # then halt — the consumer will switch to FDv1.
-                        yield _with_fallback_signal(update)
+                        yield with_fallback_signal(update, fallback_requested)
                         break
                     yield update
             except json.decoder.JSONDecodeError as e:
@@ -245,7 +220,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
                 (update, should_continue) = self._handle_error(e, envid)
                 if update is not None:
-                    yield _with_fallback_signal(update)
+                    yield with_fallback_signal(update, fallback_requested)
                 if fallback_requested or not should_continue:
                     break
             except Exception as e:  # pylint: disable=broad-except
@@ -254,14 +229,14 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
                 )
                 self._sse.interrupt()
 
-                yield _with_fallback_signal(Update(
+                yield with_fallback_signal(Update(
                     state=DataSourceState.INTERRUPTED,
                     error=DataSourceErrorInfo(
                         DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
                     ),
                     fallback_to_fdv1=False,
                     environment_id=envid,
-                ))
+                ), fallback_requested)
                 if fallback_requested:
                     break
 
@@ -282,76 +257,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             elapsed = current_time - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
-    # pylint: disable=too-many-return-statements
-    def _process_message(
-        self, msg: Event, change_set_builder: ChangeSetBuilder, envid: Optional[str]
-    ) -> Optional[Update]:
-        """
-        Processes a single message from the SSE stream and returns an Update
-        object if applicable.
-
-        This method may raise exceptions if the message is malformed or if an
-        error occurs while processing the message. The caller should handle these
-        exceptions appropriately.
-        """
-        if msg.event == EventName.HEARTBEAT:
-            return None
-
-        if msg.event == EventName.SERVER_INTENT:
-            server_intent = ServerIntent.from_dict(json.loads(msg.data))
-            change_set_builder.start(server_intent.payload.code)
-
-            if server_intent.payload.code == IntentCode.TRANSFER_NONE:
-                change_set_builder.expect_changes()
-                return Update(
-                    state=DataSourceState.VALID,
-                    environment_id=envid,
-                )
-            return None
-
-        if msg.event == EventName.PUT_OBJECT:
-            put = PutObject.from_dict(json.loads(msg.data))
-            change_set_builder.add_put(put.kind, put.key, put.version, put.object)
-            return None
-
-        if msg.event == EventName.DELETE_OBJECT:
-            delete = DeleteObject.from_dict(json.loads(msg.data))
-            change_set_builder.add_delete(delete.kind, delete.key, delete.version)
-            return None
-
-        if msg.event == EventName.GOODBYE:
-            goodbye = Goodbye.from_dict(json.loads(msg.data))
-            log.info("SSE server sent goodbye: %s", goodbye.reason)
-
-            return None
-
-        if msg.event == EventName.ERROR:
-            error = Error.from_dict(json.loads(msg.data))
-            log.error("Error on %s: %s", error.payload_id, error.reason)
-
-            # The protocol should "reset" any previous change events it has
-            # received, but should continue to operate under the assumption the
-            # last server intent was in effect.
-            #
-            # The server may choose to send a new server-intent, at which point
-            # we will set that as well.
-            change_set_builder.reset()
-
-            return None
-
-        if msg.event == EventName.PAYLOAD_TRANSFERRED:
-            selector = Selector.from_dict(json.loads(msg.data))
-            change_set = change_set_builder.finish(selector)
-
-            return Update(
-                state=DataSourceState.VALID,
-                change_set=change_set,
-                environment_id=envid,
-            )
-
-        log.info("Unexpected event found in stream: %s", msg.event)
-        return None
-
     def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
         """
         This method handles errors that occur during the streaming process.
@@ -367,89 +272,15 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         if not self._running:
             return (None, False)  # don't retry if we've been deliberately stopped
 
-        update: Optional[Update] = None
-
-        if isinstance(error, json.decoder.JSONDecodeError):
-            log.error("Unexpected error on stream connection: %s, will retry", error)
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = time() + \
-                self._sse.next_retry_delay  # type: ignore
-
-            update = Update(
-                state=DataSourceState.INTERRUPTED,
-                error=DataSourceErrorInfo(
-                    DataSourceErrorKind.INVALID_DATA, 0, time(), str(error)
-                ),
-                fallback_to_fdv1=False,
-                environment_id=envid,
-            )
-            return (update, True)
-
-        if isinstance(error, HTTPStatusError):
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = time() + \
-                self._sse.next_retry_delay  # type: ignore
-
-            error_info = DataSourceErrorInfo(
-                DataSourceErrorKind.ERROR_RESPONSE,
-                error.status,
-                time(),
-                str(error),
-            )
-
-            if envid is None and error.headers is not None:
-                envid = error.headers.get(_LD_ENVID_HEADER)
-
-            if error.headers is not None and error.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
-                update = Update(
-                    state=DataSourceState.OFF,
-                    error=error_info,
-                    fallback_to_fdv1=True,
-                    environment_id=envid,
-                )
-                self.stop()
-                return (update, False)
-
-            http_error_message_result = http_error_message(
-                error.status, "stream connection"
-            )
-            is_recoverable = is_http_error_recoverable(error.status)
-            update = Update(
-                state=(
-                    DataSourceState.INTERRUPTED
-                    if is_recoverable
-                    else DataSourceState.OFF
-                ),
-                error=error_info,
-                fallback_to_fdv1=False,
-                environment_id=envid,
-            )
-
-            if not is_recoverable:
-                self._connection_attempt_start_time = None
-                log.error(http_error_message_result)
-                self.stop()
-                return (update, False)
-
-            log.warning(http_error_message_result)
-            return (update, True)
-
-        log.warning("Unexpected error on stream connection: %s, will retry", error)
-        self._record_stream_init(True)
-        self._connection_attempt_start_time = time() + self._sse.next_retry_delay  # type: ignore
-
-        update = Update(
-            state=DataSourceState.INTERRUPTED,
-            error=DataSourceErrorInfo(
-                DataSourceErrorKind.UNKNOWN, 0, time(), str(error)
-            ),
-            fallback_to_fdv1=False,
-            environment_id=envid,
+        decision = classify_stream_error(
+            error, self._sse.next_retry_delay, envid  # type: ignore
         )
-        # no stacktrace here because, for a typical connection error, it'll
-        # just be a lengthy tour of urllib3 internals
+        self._record_stream_init(True)
+        self._connection_attempt_start_time = decision.next_attempt_start
+        if decision.should_stop:
+            self.stop()
 
-        return (update, True)
+        return (decision.update, decision.should_continue)
 
 
 class StreamingDataSourceBuilder(DataSourceBuilder):

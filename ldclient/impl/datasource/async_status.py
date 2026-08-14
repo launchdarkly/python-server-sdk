@@ -3,7 +3,6 @@ from typing import Awaitable, Callable, Dict, Mapping, Optional, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
-from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.interfaces import (
     AsyncDataSourceUpdateSink,
     AsyncFeatureStore,
@@ -23,13 +22,11 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
         self.__flag_change_listeners = flag_change_listeners
         self.__tracker = DependencyTracker()
 
-        self.__lock = ReadWriteLock()
         self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
 
     @property
     def status(self) -> DataSourceStatus:
-        with self.__lock.read():
-            return self.__status
+        return self.__status
 
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
         old_data: Optional[Dict[VersionedDataKind, Mapping[str, dict]]] = None
@@ -73,22 +70,21 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]) -> None:
         status_to_broadcast = None
 
-        with self.__lock.write():
-            old_status = self.__status
+        old_status = self.__status
 
-            if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
-                new_state = DataSourceState.INITIALIZING
+        if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
+            new_state = DataSourceState.INITIALIZING
 
-            if new_state == old_status.state and new_error is None:
-                return
+        if new_state == old_status.state and new_error is None:
+            return
 
-            self.__status = DataSourceStatus(
-                new_state,
-                self.__status.since if new_state == self.__status.state else time.time(),
-                self.__status.error if new_error is None else new_error,
-            )
+        self.__status = DataSourceStatus(
+            new_state,
+            self.__status.since if new_state == self.__status.state else time.time(),
+            self.__status.error if new_error is None else new_error,
+        )
 
-            status_to_broadcast = self.__status
+        status_to_broadcast = self.__status
 
         if status_to_broadcast is not None:
             self.__status_listeners.notify(status_to_broadcast)
