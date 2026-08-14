@@ -1,10 +1,25 @@
-import time
-from queue import Queue
-from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Optional
+"""
+FDv2 data system coordinator: manages initializers and synchronizers to
+obtain and keep the SDK's data up-to-date, operating with an optional
+persistent store in read-only or read/write mode.
+"""
 
-from ldclient.config import Config, DataSystemConfig
-from ldclient.impl.datasystem import DataSystem, DiagnosticSource
+import time
+from typing import Optional, cast
+
+from ldclient.async_config import AsyncConfig
+from ldclient.config import DataSystemConfig
+from ldclient.impl.aio.concurrency import (
+    AsyncEvent,
+    AsyncLock,
+    AsyncQueue,
+    AsyncRepeatingTask,
+    AsyncTaskRunner,
+    TaskHandle,
+    join_handle,
+    spawn_handle
+)
+from ldclient.impl.datasystem import AsyncDataSystem, DiagnosticSource
 from ldclient.impl.datasystem.fdv2_common import (
     ConditionDirective,
     DataSourceStatusProviderImpl,
@@ -14,35 +29,48 @@ from ldclient.impl.datasystem.fdv2_common import (
     fallback_condition,
     recovery_condition
 )
-from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.impl.repeating_task import RepeatingTask
-from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
 from ldclient.interfaces import (
+    AsyncInitializer,
+    AsyncReadOnlyStore,
+    AsyncSynchronizer,
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
-    FlagTracker,
-    ReadOnlyStore,
-    Synchronizer
+    ReadOnlyStore
 )
-from ldclient.versioned_data_kind import VersionedDataKind
 
 
-class FDv2(_FDv2Base, DataSystem):
+class _AsyncStoreView:
+    """Wraps FDv2's synchronous in-memory active store as an
+    :class:`AsyncReadOnlyStore`. This lets the evaluation path use one async
+    interface for both FDv1 and FDv2. Reads are in-memory dict lookups, so
+    nothing is awaited."""
+
+    def __init__(self, store: ReadOnlyStore):
+        self._store = store
+
+    async def get(self, kind, key):
+        return self._store.get(kind, key, lambda x: x)
+
+    async def all(self, kind):
+        return self._store.all(kind, lambda x: x)
+
+
+class AsyncFDv2(_FDv2Base, AsyncDataSystem):
     """
-    FDv2 is an implementation of the DataSystem interface that uses the Flag Delivery V2 protocol
+    AsyncFDv2 is an implementation of the AsyncDataSystem interface that uses the Flag Delivery V2 protocol
     for obtaining and keeping data up-to-date. Additionally, it operates with an optional persistent
     store in read-only or read/write mode.
     """
 
     def __init__(
         self,
-        config: Config,
+        config: AsyncConfig,
         data_system_config: DataSystemConfig,
     ):
         """
-        Initialize a new FDv2 data system.
+        Initialize a new AsyncFDv2 data system.
 
         :param config: Configuration for initializers and synchronizers
         :param persistent_store: Optional persistent store for data persistence
@@ -51,16 +79,15 @@ class FDv2(_FDv2Base, DataSystem):
         """
         super().__init__(config, data_system_config)
 
-        # Threading
-        self._stop_event = Event()
-        self._lock = ReadWriteLock()
-        self._active_synchronizer: Optional[Synchronizer] = None
-        self._threads: List[Thread] = []
-        self._environment_id: Optional[str] = None
+        # Concurrency
+        self._stop_event = AsyncEvent()
+        self._lock = AsyncLock()
+        self._active_synchronizer: Optional[AsyncSynchronizer] = None
+        self._runner = AsyncTaskRunner()
 
-    def start(self, set_on_ready: Event):
+    def start(self, set_on_ready: AsyncEvent):
         """
-        Start the FDv2 data system.
+        Start the AsyncFDv2 data system.
 
         :param set_on_ready: Event to set when the system is ready or has failed
         """
@@ -71,38 +98,27 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._stop_event.clear()
 
-        # Start the main coordination thread
-        main_thread = Thread(
-            target=self._run_main_loop,
-            args=(set_on_ready,),
-            name="FDv2-main",
-            daemon=True
-        )
-        main_thread.start()
-        self._threads.append(main_thread)
+        # Start the main coordination loop
+        self._runner.spawn("AsyncFDv2-main", lambda: self._run_main_loop(set_on_ready))
 
-    def stop(self):
-        """Stop the FDv2 data system and all associated threads."""
+    async def stop(self):
+        """Stop the AsyncFDv2 data system and all the work it is coordinating."""
         self._stop_event.set()
 
-        with self._lock.write():
+        async with self._lock:
             if self._active_synchronizer is not None:
                 try:
-                    self._active_synchronizer.stop()
+                    await self._active_synchronizer.stop()
                 except Exception as e:
                     log.error("Error stopping active data source: %s", e)
 
-        # Wait for all threads to complete
-        for thread in self._threads:
-            if thread.is_alive():
-                thread.join(timeout=5.0)  # 5 second timeout
-                if thread.is_alive():
-                    log.warning("Thread %s did not terminate in time", thread.name)
+        # Wait for the coordinator's background work to complete
+        await self._runner.stop_all(timeout=5.0)
 
         # Close the store
         self._store.close()
 
-    def _run_main_loop(self, set_on_ready: Event):
+    async def _run_main_loop(self, set_on_ready: AsyncEvent):
         """Main coordination loop that manages initializers and synchronizers."""
         try:
             self._data_source_status_provider.update_status(
@@ -110,7 +126,7 @@ class FDv2(_FDv2Base, DataSystem):
             )
 
             # Run initializers first
-            fallback_requested = self._run_initializers(set_on_ready)
+            fallback_requested = await self._run_initializers(set_on_ready)
 
             # If an initializer asked the SDK to fall back to FDv1, halt the
             # configured FDv2 chain and switch terminally to the FDv1 Fallback
@@ -132,15 +148,15 @@ class FDv2(_FDv2Base, DataSystem):
                     return
 
             # Run synchronizers
-            self._run_synchronizers(set_on_ready)
+            await self._run_synchronizers(set_on_ready)
 
         except Exception as e:
-            log.error("Error in FDv2 main loop: %s", e)
+            log.error("Error in AsyncFDv2 main loop: %s", e)
             # Ensure ready event is set even on error
             if not set_on_ready.is_set():
                 set_on_ready.set()
 
-    def _run_initializers(self, set_on_ready: Event) -> bool:
+    async def _run_initializers(self, set_on_ready: AsyncEvent) -> bool:
         """
         Run initializers to get initial data.
 
@@ -158,10 +174,12 @@ class FDv2(_FDv2Base, DataSystem):
                 return False
 
             try:
-                initializer = initializer_builder.build(self._config)
+                # DataSystemConfig types builders with the sync Initializer;
+                # async data systems are configured with async builders.
+                initializer = cast(AsyncInitializer, initializer_builder.build(self._config))
                 log.info("Attempting to initialize via %s", initializer.name)
 
-                basis_result = initializer.fetch(self._store)
+                basis_result = await initializer.fetch(self._store)
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
@@ -189,8 +207,6 @@ class FDv2(_FDv2Base, DataSystem):
                 basis = basis_result.value
                 log.info("Initialized via %s", initializer.name)
 
-                self._record_environment_id(basis.environment_id)
-
                 # Apply the basis to the store
                 self._store.apply(basis.change_set, basis.persist)
 
@@ -212,105 +228,101 @@ class FDv2(_FDv2Base, DataSystem):
                 log.error("Initializer failed with exception: %s", e)
         return False
 
-    def _run_synchronizers(self, set_on_ready: Event):
+    async def _run_synchronizers(self, set_on_ready: AsyncEvent):
         """Run synchronizers to keep data up-to-date."""
         # If no synchronizers configured, just set ready and return
         if len(self._synchronizers) == 0:
             set_on_ready.set()
             return
 
-        def synchronizer_loop(self: 'FDv2'):
-            try:
-                # Make a working copy of the synchronizers list
-                synchronizers_list = list(self._synchronizers)
-                current_index = 0
-
-                # Always ensure ready event is set when we exit
-                while not self._stop_event.is_set() and len(synchronizers_list) > 0:
-                    try:
-                        with self._lock.write():
-                            synchronizer: Synchronizer = synchronizers_list[current_index].build(self._config)
-                            self._active_synchronizer = synchronizer
-                            if isinstance(synchronizer, DiagnosticSource) and self._diagnostic_accumulator is not None:
-                                synchronizer.set_diagnostic_accumulator(self._diagnostic_accumulator)
-
-                        log.info("Synchronizer %s (index %d) is starting", synchronizer.name, current_index)
-
-                        directive = self._consume_synchronizer_results(
-                            synchronizer, set_on_ready, current_index != 0
-                        )
-
-                        if directive == ConditionDirective.FDV1:
-                            # Abandon all synchronizers and use only fdv1 fallback
-                            log.warning("Falling back to FDv1 protocol")
-                            if self._fdv1_fallback_synchronizer_builder is not None:
-                                synchronizers_list = [self._fdv1_fallback_synchronizer_builder]
-                                current_index = 0
-                            else:
-                                log.warning("Synchronizer requested FDv1 fallback but none configured")
-                                synchronizers_list = []
-                                self._data_source_status_provider.update_status(
-                                    DataSourceState.OFF,
-                                    self._data_source_status_provider.status.error
-                                )
-                                break
-                            continue
-                        elif directive == ConditionDirective.REMOVE:
-                            # Permanent failure - remove synchronizer from list
-                            log.warning("Synchronizer %s permanently failed, removing from list", synchronizer.name)
-                            del synchronizers_list[current_index]
-
-                            if len(synchronizers_list) == 0:
-                                log.warning("No more synchronizers available")
-                                self._data_source_status_provider.update_status(
-                                    DataSourceState.OFF,
-                                    self._data_source_status_provider.status.error
-                                )
-                                break
-
-                            # Adjust index if we're now beyond the end of the list
-                            # If we deleted the last synchronizer, wrap to the beginning
-                            if current_index >= len(synchronizers_list):
-                                current_index = 0
-                            # Note: If we deleted a middle element, current_index now points to
-                            # what was the next element (shifted down), which is correct
-                            continue
-                        # Condition was met - determine next synchronizer based on directive
-                        elif directive == ConditionDirective.RECOVER:
-                            log.info("Recovery condition met, returning to first synchronizer")
-                            current_index = 0
-                        elif directive == ConditionDirective.FALLBACK:
-                            # Fallback to next synchronizer (wraps to 0 at end)
-                            current_index = (current_index + 1) % len(synchronizers_list)
-                            log.info("Fallback condition met, moving to synchronizer at index %d", current_index)
-
-                    except Exception as e:
-                        log.error("Failed to build or run synchronizer: %s", e)
-                        break
-
-            except Exception as e:
-                log.error("Error in synchronizer loop: %s", e)
-            finally:
-                # Ensure we always set the ready event when exiting
-                set_on_ready.set()
-                with self._lock.write():
-                    if self._active_synchronizer is not None:
-                        self._active_synchronizer.stop()
-                    self._active_synchronizer = None
-
-        sync_thread = Thread(
-            target=synchronizer_loop,
-            name="FDv2-synchronizers",
-            args=(self,),
-            daemon=True
+        self._runner.spawn(
+            "AsyncFDv2-synchronizers",
+            lambda: self._synchronizer_loop(set_on_ready),
         )
-        sync_thread.start()
-        self._threads.append(sync_thread)
 
-    def _consume_synchronizer_results(
+    async def _synchronizer_loop(self, set_on_ready: AsyncEvent):
+        try:
+            # Make a working copy of the synchronizers list
+            synchronizers_list = list(self._synchronizers)
+            current_index = 0
+
+            # Always ensure ready event is set when we exit
+            while not self._stop_event.is_set() and len(synchronizers_list) > 0:
+                try:
+                    async with self._lock:
+                        synchronizer: AsyncSynchronizer = synchronizers_list[current_index].build(self._config)
+                        self._active_synchronizer = synchronizer
+                        if isinstance(synchronizer, DiagnosticSource) and self._diagnostic_accumulator is not None:
+                            synchronizer.set_diagnostic_accumulator(self._diagnostic_accumulator)
+
+                    log.info("Synchronizer %s (index %d) is starting", synchronizer.name, current_index)
+
+                    directive = await self._consume_synchronizer_results(
+                        synchronizer, set_on_ready, current_index != 0
+                    )
+
+                    if directive == ConditionDirective.FDV1:
+                        # Abandon all synchronizers and use only fdv1 fallback
+                        log.warning("Falling back to FDv1 protocol")
+                        if self._fdv1_fallback_synchronizer_builder is not None:
+                            synchronizers_list = [self._fdv1_fallback_synchronizer_builder]
+                            current_index = 0
+                        else:
+                            log.warning("Synchronizer requested FDv1 fallback but none configured")
+                            synchronizers_list = []
+                            self._data_source_status_provider.update_status(
+                                DataSourceState.OFF,
+                                self._data_source_status_provider.status.error
+                            )
+                            break
+                        continue
+                    elif directive == ConditionDirective.REMOVE:
+                        # Permanent failure - remove synchronizer from list
+                        log.warning("Synchronizer %s permanently failed, removing from list", synchronizer.name)
+                        del synchronizers_list[current_index]
+
+                        if len(synchronizers_list) == 0:
+                            log.warning("No more synchronizers available")
+                            self._data_source_status_provider.update_status(
+                                DataSourceState.OFF,
+                                self._data_source_status_provider.status.error
+                            )
+                            break
+
+                        # Adjust index if we're now beyond the end of the list
+                        # If we deleted the last synchronizer, wrap to the beginning
+                        if current_index >= len(synchronizers_list):
+                            current_index = 0
+                        # Note: If we deleted a middle element, current_index now points to
+                        # what was the next element (shifted down), which is correct
+                        continue
+                    # Condition was met - determine next synchronizer based on directive
+                    elif directive == ConditionDirective.RECOVER:
+                        log.info("Recovery condition met, returning to first synchronizer")
+                        current_index = 0
+                    elif directive == ConditionDirective.FALLBACK:
+                        # Fallback to next synchronizer (wraps to 0 at end)
+                        current_index = (current_index + 1) % len(synchronizers_list)
+                        log.info("Fallback condition met, moving to synchronizer at index %d", current_index)
+
+                except Exception as e:
+                    log.error("Failed to build or run synchronizer: %s", e)
+                    break
+
+        except Exception as e:
+            log.error("Error in synchronizer loop: %s", e)
+        finally:
+            # Ensure we always set the ready event when exiting
+            set_on_ready.set()
+            async with self._lock:
+                if self._active_synchronizer is not None:
+                    await self._active_synchronizer.stop()
+                self._active_synchronizer = None
+
+    async def _consume_synchronizer_results(
         self,
-        synchronizer: Synchronizer,
-        set_on_ready: Event,
+        synchronizer: AsyncSynchronizer,
+        set_on_ready: AsyncEvent,
         check_recovery: bool,
     ) -> ConditionDirective:
         """
@@ -318,34 +330,29 @@ class FDv2(_FDv2Base, DataSystem):
 
         :return: Tuple of (should_remove_sync, fallback_to_fdv1, directive)
         """
-        action_queue: Queue = Queue()
-        timer = RepeatingTask(
-            label="FDv2-sync-cond-timer",
+        action_queue: AsyncQueue = AsyncQueue()
+        timer = AsyncRepeatingTask(
+            label="AsyncFDv2-sync-cond-timer",
             interval=10,
             initial_delay=10,
             callable=lambda: action_queue.put("check")
         )
 
-        def reader(self: 'FDv2'):
+        async def reader():
             try:
-                for update in synchronizer.sync(self._store):
-                    action_queue.put(update)
+                async for update in synchronizer.sync(self._store):
+                    await action_queue.put(update)
             finally:
-                action_queue.put("quit")
+                await action_queue.put("quit")
 
-        sync_reader = Thread(
-            target=reader,
-            name="FDv2-sync-reader",
-            args=(self,),
-            daemon=True
-        )
+        sync_reader: Optional[TaskHandle] = None
 
         try:
             timer.start()
-            sync_reader.start()
+            sync_reader = spawn_handle("AsyncFDv2-sync-reader", reader)
 
             while True:
-                update = action_queue.get(True)
+                update = await action_queue.get()
                 if isinstance(update, str):
                     if update == "quit":
                         break
@@ -362,9 +369,6 @@ class FDv2(_FDv2Base, DataSystem):
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
                     return ConditionDirective.FALLBACK
-
-                if update.state == DataSourceState.VALID:
-                    self._record_environment_id(update.environment_id)
 
                 # Handle the update
                 if update.change_set is not None:
@@ -391,39 +395,29 @@ class FDv2(_FDv2Base, DataSystem):
             log.error("Error consuming synchronizer results: %s", e)
             return ConditionDirective.REMOVE
         finally:
-            synchronizer.stop()
             timer.stop()
+            if sync_reader is not None:
+                sync_reader.cancel()
 
-            sync_reader.join(0.5)
+            await synchronizer.stop()
+            if sync_reader is not None:
+                await join_handle(sync_reader, 0.5)
 
         # If we reach here, the synchronizer's iterator completed normally (no more updates)
         # For continuous synchronizers (streaming/polling), this is unexpected and indicates
         # the synchronizer can't provide more updates, so we should remove it and fall back
         return ConditionDirective.REMOVE
 
-    def _record_environment_id(self, environment_id: Optional[str]):
-        if not isinstance(environment_id, str) or environment_id == '':
-            return
-
-        with self._lock.write():
-            self._environment_id = environment_id
-
     @property
-    def environment_id(self) -> Optional[str]:
-        """Get the environment ID reported by LaunchDarkly, if known."""
-        with self._lock.read():
-            return self._environment_id
-
-    @property
-    def store(self) -> ReadOnlyStore:
+    def store(self) -> AsyncReadOnlyStore:
         """Get the underlying store for flag evaluation."""
-        return self._store.get_active_store()
+        return _AsyncStoreView(self._store.get_active_store())
 
 
 __all__ = [
+    'AsyncFDv2',
     'ConditionDirective',
     'DataSourceStatusProviderImpl',
     'DataStoreStatusProviderImpl',
-    'FDv2',
     'FeatureStoreClientWrapper',
 ]

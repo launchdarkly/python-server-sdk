@@ -9,9 +9,12 @@ and the condition directive enum.
 import time
 from copy import copy
 from enum import Enum
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from ldclient.config import DataSourceBuilder, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
+from ldclient.impl.datasystem import DataAvailability, DiagnosticAccumulator
+from ldclient.impl.datasystem.store import Store
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
@@ -21,6 +24,7 @@ from ldclient.interfaces import (
     DataSourceState,
     DataSourceStatus,
     DataSourceStatusProvider,
+    DataStoreMode,
     DataStoreStatus,
     DataStoreStatusProvider,
     FeatureStore
@@ -284,9 +288,154 @@ class ConditionDirective(str, Enum):
     """
 
 
+def fallback_condition(status: DataSourceStatus) -> bool:
+    """
+    Determine if we should fallback to the next synchronizer in the list.
+    This applies at any position in the synchronizers list.
+
+    :param status: Current data source status
+    :return: True if fallback condition is met
+    """
+    interrupted_at_runtime = (
+        status.state == DataSourceState.INTERRUPTED
+        and time.time() - status.since > 60  # 1 minute
+    )
+    cannot_initialize = (
+        status.state == DataSourceState.INITIALIZING
+        and time.time() - status.since > 10  # 10 seconds
+    )
+
+    return interrupted_at_runtime or cannot_initialize
+
+
+def recovery_condition(status: DataSourceStatus) -> bool:
+    """
+    Determine if we should try to recover to the first (preferred) synchronizer.
+    This only applies when not already at the first synchronizer (index > 0).
+
+    :param status: Current data source status
+    :return: True if recovery condition is met
+    """
+    healthy_for_too_long = (
+        status.state == DataSourceState.VALID
+        and time.time() - status.since > 300  # 5 minutes
+    )
+
+    return healthy_for_too_long
+
+
+class _FDv2Base:
+    """
+    Common construction and read-only accessors for the FDv2 data system
+    coordinators.
+
+    This wires up the listeners, the in-memory store, the status providers, and
+    the optional persistent store, and it reports data availability. Subclasses
+    add their own concurrency primitives and the loops that run initializers and
+    synchronizers.
+    """
+
+    def __init__(self, config, data_system_config: DataSystemConfig):
+        self._config = config
+        self._data_system_config = data_system_config
+        self._synchronizers: List[DataSourceBuilder] = list(data_system_config.synchronizers) if data_system_config.synchronizers else []
+        self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
+        self._disabled = config.offline
+
+        # Diagnostic accumulator provided by the client for streaming metrics.
+        self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
+
+        # Set up event listeners.
+        self._flag_change_listeners = Listeners()
+        self._change_set_listeners = Listeners()
+        self._data_store_listeners = Listeners()
+
+        self._data_store_listeners.add(self._persistent_store_outage_recovery)
+
+        # Create the store.
+        self._store = Store(self._flag_change_listeners, self._change_set_listeners)
+
+        # Status providers.
+        self._data_source_status_provider = DataSourceStatusProviderImpl(Listeners())
+        self._data_store_status_provider = DataStoreStatusProviderImpl(None, self._data_store_listeners)
+
+        # Configure the persistent store if one is provided.
+        if self._data_system_config.data_store is not None:
+            self._data_store_status_provider = DataStoreStatusProviderImpl(self._data_system_config.data_store, self._data_store_listeners)
+            writable = self._data_system_config.data_store_mode == DataStoreMode.READ_WRITE
+            wrapper = FeatureStoreClientWrapper(self._data_system_config.data_store, self._data_store_status_provider)
+            self._store.with_persistence(
+                wrapper, writable, self._data_store_status_provider
+            )
+
+        # Track configuration.
+        self._configured_with_data_sources = (
+            (data_system_config.initializers is not None and len(data_system_config.initializers) > 0)
+            or len(self._synchronizers) > 0
+        )
+
+    def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
+        """
+        Sets the diagnostic accumulator for streaming initialization metrics.
+        This should be called before start() to ensure metrics are collected.
+        """
+        self._diagnostic_accumulator = diagnostic_accumulator
+
+    def _persistent_store_outage_recovery(self, data_store_status: DataStoreStatus):
+        """
+        Monitor the data store status. If the store comes online and
+        potentially has stale data, we should write our known state to it.
+        """
+        if not data_store_status.available:
+            return
+
+        if not data_store_status.stale:
+            return
+
+        err = self._store.commit()
+        if err is not None:
+            log.error("Failed to reinitialize data store", exc_info=err)
+
+    @property
+    def data_source_status_provider(self) -> DataSourceStatusProvider:
+        """Get the data source status provider."""
+        return self._data_source_status_provider
+
+    @property
+    def data_store_status_provider(self) -> DataStoreStatusProvider:
+        """Get the data store status provider."""
+        return self._data_store_status_provider
+
+    @property
+    def flag_change_listeners(self) -> Listeners:
+        """Get the collection of listeners for flag change events."""
+        return self._flag_change_listeners
+
+    @property
+    def data_availability(self) -> DataAvailability:
+        """Get the current data availability level."""
+        if self._store.selector().is_defined():
+            return DataAvailability.REFRESHED
+
+        if not self._configured_with_data_sources or self._store.is_initialized():
+            return DataAvailability.CACHED
+
+        return DataAvailability.DEFAULTS
+
+    @property
+    def target_availability(self) -> DataAvailability:
+        """Get the target data availability level based on configuration."""
+        if self._configured_with_data_sources:
+            return DataAvailability.REFRESHED
+
+        return DataAvailability.CACHED
+
+
 __all__ = [
     'ConditionDirective',
     'DataSourceStatusProviderImpl',
     'DataStoreStatusProviderImpl',
     'FeatureStoreClientWrapper',
+    'fallback_condition',
+    'recovery_condition',
 ]

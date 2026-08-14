@@ -197,6 +197,12 @@ class AsyncLDClient:
         # Start the big-segment status poll now that a loop is running.
         self.__big_segment_store_manager.start()
 
+        # FDv2 builds its data sources from builders; wire the shared session into
+        # them before starting (FDv1 pulls the session itself via its provider).
+        datasystem_config = self._config.datasystem_config
+        if datasystem_config is not None and not self._config.offline:
+            self._wire_data_source_sessions(datasystem_config)
+
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
 
@@ -243,7 +249,9 @@ class AsyncLDClient:
 
             return AsyncFDv1(self._config, self._select_feature_store(), self._get_session)
 
-        raise NotImplementedError("FDv2 is not yet supported in the async client")
+        from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
+
+        return AsyncFDv2(self._config, datasystem_config)
 
     def _select_feature_store(self) -> AsyncFeatureStore:
         """Choose the async feature store for the v1 data system based on the
@@ -252,6 +260,34 @@ class AsyncLDClient:
         if feature_store is None:
             return AsyncInMemoryFeatureStore()
         return feature_store
+
+    def _wire_data_source_sessions(self, data_system_config) -> None:
+        """Provide the client's aiohttp session to any async data source
+        builders so the sources they build share the client's connection pool."""
+        from ldclient.impl.datasourcev2.async_polling import (
+            AsyncFallbackToFDv1PollingDataSourceBuilder,
+            AsyncPollingDataSourceBuilder
+        )
+        from ldclient.impl.datasourcev2.async_streaming import (
+            AsyncStreamingDataSourceBuilder
+        )
+
+        builders = list(data_system_config.initializers or []) + list(
+            data_system_config.synchronizers or []
+        )
+        if data_system_config.fdv1_fallback_synchronizer is not None:
+            builders.append(data_system_config.fdv1_fallback_synchronizer)
+
+        for builder in builders:
+            if isinstance(
+                builder,
+                (
+                    AsyncFallbackToFDv1PollingDataSourceBuilder,
+                    AsyncPollingDataSourceBuilder,
+                    AsyncStreamingDataSourceBuilder,
+                ),
+            ):
+                builder.session(self._get_session())
 
     async def __register_plugins(self, environment_metadata: EnvironmentMetadata):
         for plugin in self._config.plugins:
