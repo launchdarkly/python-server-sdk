@@ -321,6 +321,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
         datasystem_config: Optional[DataSystemConfig] = None,
+        shutdown_timeout: Optional[float] = 5,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -392,6 +393,12 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
         :param datasystem_config: Configuration for the upcoming enhanced data system design. This is experimental and should not be set without direction from LaunchDarkly support.
+        :param shutdown_timeout: The maximum number of seconds that :func:`ldclient.client.LDClient.close()`
+          will wait for pending analytics events to be delivered before giving up. Delivery of an event
+          payload can block for an unbounded time when name resolution hangs, because DNS lookups are not
+          covered by the connect and read timeouts in :class:`HTTPConfig`; without this limit, ``close()``
+          would never return. Any events still undelivered when the timeout expires are discarded. Set this
+          to ``None`` to wait indefinitely, but be aware that doing so can prevent your process from exiting.
         """
         self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
@@ -429,6 +436,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self.__payload_filter_key = payload_filter_key
+        self.__shutdown_timeout = None if shutdown_timeout is None else max(shutdown_timeout, 0)
         self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
         self._instance_id: Optional[str] = None
         self._datasystem_config = datasystem_config
@@ -643,6 +651,14 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         Determines whether or not anonymous contexts will be omitted from index and identify events.
         """
         return self.__omit_anonymous_contexts
+
+    @property
+    def shutdown_timeout(self) -> Optional[float]:
+        """
+        The maximum number of seconds that :func:`ldclient.client.LDClient.close()` will wait for
+        pending analytics events to be delivered before giving up, or ``None`` to wait indefinitely.
+        """
+        return self.__shutdown_timeout
 
     @property
     def payload_filter_key(self) -> Optional[str]:
