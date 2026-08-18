@@ -165,14 +165,6 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return monitoring_enabled()
 
 
-def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
-    # This decorator around store.get provides backward compatibility with any custom data
-    # store implementation that might still be returning a dict, instead of our data model
-    # classes like FeatureFlag.
-    item = store.get(kind, key, lambda x: x)
-    return kind.decode(item) if isinstance(item, dict) else item
-
-
 class LDClient:
     """The LaunchDarkly SDK client object.
 
@@ -258,8 +250,8 @@ class LDClient:
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(self._data_system.store, FEATURES, key),
-            lambda key: _get_store_item(self._data_system.store, SEGMENTS, key),
+            lambda key: self._data_system.store.get(FEATURES, key),
+            lambda key: self._data_system.store.get(SEGMENTS, key),
             lambda key: big_segment_store_manager.get_user_membership(key),
             log,
         )
@@ -544,7 +536,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._data_system.store, FEATURES, key)
+            flag = self._data_system.store.get(FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())

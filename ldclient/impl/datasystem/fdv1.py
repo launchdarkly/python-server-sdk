@@ -1,5 +1,5 @@
 from threading import Event
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from ldclient.config import Config
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
@@ -18,6 +18,7 @@ from ldclient.impl.datasystem import (
     DataSystem,
     DiagnosticAccumulator
 )
+from ldclient.impl.datasystem.store import _decode
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
 from ldclient.interfaces import (
@@ -27,8 +28,33 @@ from ldclient.interfaces import (
     ReadOnlyStore,
     UpdateProcessor
 )
+from ldclient.versioned_data_kind import VersionedDataKind
 
 # Delayed import inside __init__ to avoid circular dependency with ldclient.client
+
+
+class _ReadOnlyFeatureStoreView(ReadOnlyStore):
+    """Exposes only ``get``/``all`` over a feature store, decoding dict items.
+
+    The wrapped store is stable and never swaps, so it is read directly. Items
+    stored as dicts are decoded into model objects; items already decoded are
+    returned unchanged, then the caller's ``callback`` is applied.
+    """
+
+    def __init__(self, store: FeatureStore):
+        self._store = store
+
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        item = self._store.get(kind, key, lambda x: x)
+        return callback(_decode(kind, item))
+
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        items = self._store.all(kind, lambda x: x)
+        return callback({key: _decode(kind, value) for key, value in items.items()})
+
+    @property
+    def initialized(self) -> bool:
+        return self._store.initialized
 
 
 class FDv1(DataSystem):
@@ -51,6 +77,7 @@ class FDv1(DataSystem):
         self._store_wrapper: FeatureStore = _FeatureStoreClientWrapper(
             self._config.feature_store, self._data_store_update_sink
         )
+        self._store_view = _ReadOnlyFeatureStoreView(self._store_wrapper)
         self._data_store_status_provider_impl = DataStoreStatusProviderImpl(
             self._store_wrapper, self._data_store_update_sink
         )
@@ -94,7 +121,7 @@ class FDv1(DataSystem):
 
     @property
     def store(self) -> ReadOnlyStore:
-        return self._store_wrapper
+        return self._store_view
 
     @property
     def environment_id(self) -> Optional[str]:
