@@ -1,7 +1,7 @@
 import time
 from queue import Queue
 from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Optional
+from typing import List, Optional
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.impl.datasystem import (
@@ -17,7 +17,6 @@ from ldclient.impl.datasystem.fdv2_common import (
     FeatureStoreClientWrapper
 )
 from ldclient.impl.datasystem.store import Store
-from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
@@ -31,11 +30,9 @@ from ldclient.interfaces import (
     DataStoreMode,
     DataStoreStatus,
     DataStoreStatusProvider,
-    FlagTracker,
     ReadOnlyStore,
     Synchronizer
 )
-from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class FDv2(DataSystem):

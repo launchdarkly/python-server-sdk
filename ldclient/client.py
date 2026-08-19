@@ -24,15 +24,7 @@ from ldclient.impl.client_common import (
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
-from ldclient.impl.datasource.status import (
-    DataSourceStatusProviderImpl,
-    DataSourceUpdateSinkImpl
-)
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
-from ldclient.impl.datastore.status import (
-    DataStoreStatusProviderImpl,
-    DataStoreUpdateSinkImpl
-)
 from ldclient.impl.datasystem import DataAvailability, DataSystem
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
@@ -43,7 +35,6 @@ from ldclient.impl.events.diagnostics import (
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
@@ -56,8 +47,7 @@ from ldclient.interfaces import (
     DataStoreStatusProvider,
     DataStoreUpdateSink,
     FeatureStore,
-    FlagTracker,
-    ReadOnlyStore
+    FlagTracker
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import EnvironmentMetadata
