@@ -18,14 +18,12 @@ from ldclient.impl.datasystem import (
     DataSystem,
     DiagnosticAccumulator
 )
-from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import NullUpdateProcessor
 from ldclient.interfaces import (
     DataSourceStatusProvider,
     DataStoreStatusProvider,
     FeatureStore,
-    FlagTracker,
     ReadOnlyStore,
     UpdateProcessor
 )
