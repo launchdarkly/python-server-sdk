@@ -1,7 +1,8 @@
 from threading import Event
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Mapping, Optional
 
 from ldclient.config import Config
+from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.status import (
@@ -20,17 +21,129 @@ from ldclient.impl.datasystem import (
 )
 from ldclient.impl.datasystem.store import _decode
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.repeating_task import RepeatingTask
+from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import NullUpdateProcessor
+from ldclient.impl.util import log
 from ldclient.interfaces import (
     DataSourceStatusProvider,
+    DataStoreStatus,
     DataStoreStatusProvider,
+    DataStoreUpdateSink,
     FeatureStore,
     ReadOnlyStore,
     UpdateProcessor
 )
 from ldclient.versioned_data_kind import VersionedDataKind
 
-# Delayed import inside __init__ to avoid circular dependency with ldclient.client
+
+class _FeatureStoreClientWrapper(FeatureStore):
+    """Provides additional behavior that the client requires before or after feature store operations.
+    Currently this just means sorting the data set for init() and dealing with data store status listeners.
+    """
+
+    def __init__(self, store: FeatureStore, store_update_sink: DataStoreUpdateSink):
+        self.store = store
+        self.__store_update_sink = store_update_sink
+        self.__monitoring_enabled = self.is_monitoring_enabled()
+
+        # Covers the following variables
+        self.__lock = ReadWriteLock()
+        self.__last_available = True
+        self.__poller: Optional[RepeatingTask] = None
+
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
+        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+
+    def get(self, kind, key, callback):
+        return self.__wrapper(lambda: self.store.get(kind, key, callback))
+
+    def all(self, kind, callback):
+        return self.__wrapper(lambda: self.store.all(kind, callback))
+
+    def delete(self, kind, key, version):
+        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+
+    def upsert(self, kind, item):
+        return self.__wrapper(lambda: self.store.upsert(kind, item))
+
+    @property
+    def initialized(self) -> bool:
+        return self.store.initialized
+
+    def __wrapper(self, fn: Callable):
+        try:
+            return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __update_availability(self, available: bool):
+        with self.__lock.write():
+            if available == self.__last_available:
+                return
+            self.__last_available = available
+
+        status = DataStoreStatus(available, False)
+
+        if available:
+            log.warn("Persistent store is available again")
+
+        self.__store_update_sink.update_status(status)
+
+        if available:
+            with self.__lock.write():
+                if self.__poller is not None:
+                    self.__poller.stop()
+                    self.__poller = None
+
+            return
+
+        log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
+        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+
+        with self.__lock.write():
+            self.__poller = task
+            self.__poller.start()
+
+    def __check_availability(self):
+        try:
+            if self.store.is_available():
+                self.__update_availability(True)
+        except BaseException as e:
+            log.error("Unexpected error from data store status function: %s", e)
+
+    def is_monitoring_enabled(self) -> bool:
+        """
+        This methods determines whether the wrapped store can support enabling monitoring.
+
+        The wrapped store must provide a monitoring_enabled method, which must
+        be true. But this alone is not sufficient.
+
+        Because this class wraps all interactions with a provided store, it can
+        technically "monitor" any store. However, monitoring also requires that
+        we notify listeners when the store is available again.
+
+        We determine this by checking the store's `available?` method, so this
+        is also a requirement for monitoring support.
+
+        These extra checks won't be necessary once `available` becomes a part
+        of the core interface requirements and this class no longer wraps every
+        feature store.
+        """
+
+        if not hasattr(self.store, 'is_monitoring_enabled'):
+            return False
+
+        if not hasattr(self.store, 'is_available'):
+            return False
+
+        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
+        if not callable(monitoring_enabled):
+            return False
+
+        return monitoring_enabled()
 
 
 class _ReadOnlyFeatureStoreView(ReadOnlyStore):
@@ -71,9 +184,6 @@ class FDv1(DataSystem):
         self._data_store_update_sink = DataStoreUpdateSinkImpl(
             self._data_store_listeners
         )
-        # Import here to avoid circular import
-        from ldclient.client import _FeatureStoreClientWrapper
-
         self._store_wrapper: FeatureStore = _FeatureStoreClientWrapper(
             self._config.feature_store, self._data_store_update_sink
         )

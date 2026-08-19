@@ -12,7 +12,7 @@ from ldclient.interfaces import (
 )
 
 if TYPE_CHECKING:
-    from ldclient.client import _FeatureStoreClientWrapper
+    from ldclient.impl.datasystem.fdv1 import _FeatureStoreClientWrapper
 
 
 class DataStoreUpdateSinkImpl(DataStoreUpdateSink):
