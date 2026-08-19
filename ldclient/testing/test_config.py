@@ -17,6 +17,27 @@ def test_copy_config():
     assert new_config.stream is False
 
 
+def test_with_wrapper_information():
+    config = Config(sdk_key="SDK_KEY", stream=False, wrapper_name="original", wrapper_version="1.0.0")
+
+    wrapped = config.with_wrapper_information("wrapper", "2.0.0")
+    assert wrapped.wrapper_name == "wrapper"
+    assert wrapped.wrapper_version == "2.0.0"
+    assert wrapped.sdk_key == "SDK_KEY"
+    assert wrapped.stream is False
+
+    assert config.wrapper_name == "original"
+    assert config.wrapper_version == "1.0.0"
+
+
+def test_with_wrapper_information_defaults_the_version():
+    config = Config(sdk_key="SDK_KEY", wrapper_name="original", wrapper_version="1.0.0")
+
+    wrapped = config.with_wrapper_information("wrapper")
+    assert wrapped.wrapper_name == "wrapper"
+    assert wrapped.wrapper_version is None
+
+
 def test_can_set_valid_poll_interval():
     config = Config(sdk_key="SDK_KEY", poll_interval=31)
     assert config.poll_interval == 31
