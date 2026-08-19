@@ -94,12 +94,12 @@ def _delta_changeset(key: str, version: int, on: bool) -> ChangeSet:
 
 
 @pytest.mark.asyncio
-async def test_apply_async_full_transfer_persists_via_init():
+async def test_apply_full_transfer_persists_via_init():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
     store.with_async_persistence(async_store, True, None)
 
-    await store.apply_async(_full_changeset("flag-a", 1, True), True)
+    await store.apply(_full_changeset("flag-a", 1, True), True)
 
     # After a full transfer the memory store is authoritative and serves reads
     assert store.get_active_store() is store._memory_store
@@ -113,30 +113,30 @@ async def test_apply_async_full_transfer_persists_via_init():
 
 
 @pytest.mark.asyncio
-async def test_apply_async_delta_persists_via_upsert():
+async def test_apply_delta_persists_via_upsert():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
     store.with_async_persistence(async_store, True, None)
 
-    await store.apply_async(_full_changeset("flag-a", 1, True), True)
+    await store.apply(_full_changeset("flag-a", 1, True), True)
     async_store.init_called_count = 0
     async_store.upsert_calls = []
 
-    await store.apply_async(_delta_changeset("flag-a", 2, False), True)
+    await store.apply(_delta_changeset("flag-a", 2, False), True)
 
     assert any(call[1] == "flag-a" and call[2] == 2 for call in async_store.upsert_calls)
     assert async_store.snapshot()[FEATURES]["flag-a"]["on"] is False
 
 
 @pytest.mark.asyncio
-async def test_apply_async_read_only_does_not_persist():
+async def test_apply_read_only_does_not_persist():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
     # writable=False -> READ_ONLY: never write to the store
     store.with_async_persistence(async_store, False, None)
 
-    await store.apply_async(_full_changeset("flag-a", 1, True), True)
-    await store.apply_async(_delta_changeset("flag-a", 2, False), True)
+    await store.apply(_full_changeset("flag-a", 1, True), True)
+    await store.apply(_delta_changeset("flag-a", 2, False), True)
 
     assert async_store.init_called_count == 0
     assert async_store.upsert_calls == []
@@ -145,7 +145,7 @@ async def test_apply_async_read_only_does_not_persist():
 
 
 @pytest.mark.asyncio
-async def test_apply_async_fires_change_set_listeners():
+async def test_apply_fires_change_set_listeners():
     async_store = FakeAsyncFeatureStore()
     received: List[ChangeSet] = []
     change_set_listeners = Listeners()
@@ -155,29 +155,29 @@ async def test_apply_async_fires_change_set_listeners():
     store.with_async_persistence(async_store, True, None)
 
     cs = _full_changeset("flag-a", 1, True)
-    await store.apply_async(cs, True)
+    await store.apply(cs, True)
 
     assert received == [cs]
 
 
 @pytest.mark.asyncio
-async def test_commit_async_writes_memory_to_store():
+async def test_commit_writes_memory_to_store():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
     store.with_async_persistence(async_store, True, None)
 
     # Populate memory without persisting yet (read-only apply through memory)
-    await store.apply_async(_full_changeset("flag-a", 1, True), True)
+    await store.apply(_full_changeset("flag-a", 1, True), True)
     async_store.init_called_count = 0
 
-    err = await store.commit_async()
+    err = await store.commit()
     assert err is None
     assert async_store.init_called_count == 1
     assert "flag-a" in async_store.snapshot()[FEATURES]
 
 
 @pytest.mark.asyncio
-async def test_commit_async_returns_error_on_failure():
+async def test_commit_returns_error_on_failure():
     class FailingStore(FakeAsyncFeatureStore):
         async def init(self, all_data):
             raise RuntimeError("boom")
@@ -186,22 +186,22 @@ async def test_commit_async_returns_error_on_failure():
     store = AsyncStore(Listeners(), Listeners())
     # Read-only so the deferred persist is skipped and memory is populated first.
     store.with_async_persistence(async_store, False, None)
-    await store.apply_async(_full_changeset("flag-a", 1, True), True)
+    await store.apply(_full_changeset("flag-a", 1, True), True)
 
     # Now make it writable and commit, which triggers the failing init.
     store._persistent_store_writable = True
-    err = await store.commit_async()
+    err = await store.commit()
     assert isinstance(err, RuntimeError)
     assert str(err) == "boom"
 
 
 @pytest.mark.asyncio
-async def test_close_async_closes_async_store():
+async def test_close_closes_async_store():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
     store.with_async_persistence(async_store, True, None)
 
-    err = await store.close_async()
+    err = await store.close()
     assert err is None
     assert async_store.closed is True
 

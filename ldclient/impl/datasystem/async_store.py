@@ -105,7 +105,7 @@ class AsyncStore(_StoreBase):
         self._persist = persist
         return collections if self._should_persist() else None
 
-    async def apply_async(self, change_set: ChangeSet, persist: bool) -> None:
+    async def apply(self, change_set: ChangeSet, persist: bool) -> None:
         """
         Apply a changeset to the store using the async persist path.
 
@@ -147,15 +147,18 @@ class AsyncStore(_StoreBase):
             return
 
         async with self._async_persist_lock:
-            if is_full:
-                await store.init(pending)
-            else:
-                for kind in pending:
-                    kind_data = pending[kind]
-                    for key in kind_data:
-                        await store.upsert(kind, kind_data[key])
+            try:
+                if is_full:
+                    await store.init(pending)
+                else:
+                    for kind in pending:
+                        kind_data = pending[kind]
+                        for key in kind_data:
+                            await store.upsert(kind, kind_data[key])
+            except Exception as e:
+                log.error("Store: couldn't persist changeset: %s", str(e))
 
-    async def commit_async(self) -> Optional[Exception]:
+    async def commit(self) -> Optional[Exception]:
         """
         Persist the data in the memory store to the async persistent store, if configured.
 
@@ -192,7 +195,7 @@ class AsyncStore(_StoreBase):
                 return e
         return None
 
-    async def close_async(self) -> Optional[Exception]:
+    async def close(self) -> Optional[Exception]:
         """
         Close the store and the async persistent store, if configured.
 

@@ -8,11 +8,10 @@ the async SDK client.
     compatibility guarantees.
 """
 
+from dataclasses import dataclass
 from typing import Callable, List, Optional, Set
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from dataclasses import dataclass
-
 from ldclient.config import (
     DEFAULT_BASE_URI,
     DEFAULT_EVENTS_URI,
