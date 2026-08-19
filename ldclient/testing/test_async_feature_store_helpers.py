@@ -4,7 +4,7 @@ import pytest
 
 from ldclient.async_feature_store_helpers import AsyncCachingStoreWrapper
 from ldclient.feature_store import CacheConfig
-from ldclient.versioned_data_kind import VersionedDataKind
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 # These tests exercise the caching-wrapper logic only, using an in-memory mock core, so they run
 # without a Redis instance. They mirror ldclient.testing.test_feature_store_helpers for the sync
@@ -204,6 +204,21 @@ class TestAsyncCachingStoreWrapper:
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
         assert await wrapper.all(THINGS) == {item1["key"]: item1}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", [FEATURES, SEGMENTS])
+    @pytest.mark.parametrize("cached", [False, True])
+    async def test_get_all_tolerates_tombstone_with_no_key(self, cached, kind):
+        # Other LaunchDarkly SDKs write deleted items to a persistent store with only the
+        # version. The store knows the key, because it is the key the item is stored under.
+        core = MockAsyncCore()
+        wrapper = make_wrapper(core, cached)
+        live_item = {"key": "item1", "version": 1}
+        tombstone = {"version": 2, "deleted": True}
+        core.data[kind] = {"item1": live_item, "item2": tombstone}
+
+        assert await wrapper.all(kind) == {"item1": kind.decode(live_item)}
+        assert await wrapper.get(kind, "item2") is None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("cached", [False, True])
