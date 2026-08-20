@@ -479,6 +479,10 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         This is intended for use by wrapper libraries, such as the LaunchDarkly OpenFeature providers, which need to
         identify themselves rather than the application that configured the client.
 
+        The new instance is a shallow copy: it shares the objects the original configuration references, such as the
+        feature store, the logger, and the HTTP configuration. Mutating one of those objects affects both
+        configurations.
+
         :param wrapper_name: an identifying name for the wrapper being used; see :py:attr:`~wrapper_name`
         :param wrapper_version: the version of the wrapper being used; see :py:attr:`~wrapper_version`
         """
