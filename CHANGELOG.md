@@ -2,6 +2,30 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.17.0](https://github.com/launchdarkly/python-server-sdk/compare/9.16.1...9.17.0) (2026-08-20)
+
+
+### Features
+
+* Add async big segment store manager and async Redis adapter ([#462](https://github.com/launchdarkly/python-server-sdk/issues/462)) ([aa492d2](https://github.com/launchdarkly/python-server-sdk/commit/aa492d230252efd26256540cb35e86022b9342f7))
+* Add async event processor ([ec7c113](https://github.com/launchdarkly/python-server-sdk/commit/ec7c1137e9c64b3a010baac83e3b6aebd9db8df6))
+* Add async event processor ([#472](https://github.com/launchdarkly/python-server-sdk/issues/472)) ([ec7c113](https://github.com/launchdarkly/python-server-sdk/commit/ec7c1137e9c64b3a010baac83e3b6aebd9db8df6))
+* Add async FDv1 polling data source and feature requester ([#475](https://github.com/launchdarkly/python-server-sdk/issues/475)) ([cca37a8](https://github.com/launchdarkly/python-server-sdk/commit/cca37a86fff49adb69144e046b4f9a9c47d473bd))
+* Add async FDv1 streaming and data source status tracking ([#464](https://github.com/launchdarkly/python-server-sdk/issues/464)) ([4bf7067](https://github.com/launchdarkly/python-server-sdk/commit/4bf7067e1d084df0eaa04cceefb95a79821ca966))
+* Add async FDv2 data sources ([#485](https://github.com/launchdarkly/python-server-sdk/issues/485)) ([5da1515](https://github.com/launchdarkly/python-server-sdk/commit/5da1515fb4825383c187f2a80b320df0b6323e5a))
+* Add async hook, plugin, and flag tracker ([#463](https://github.com/launchdarkly/python-server-sdk/issues/463)) ([686a70a](https://github.com/launchdarkly/python-server-sdk/commit/686a70a13e60a61ab6bd84b85f5753d91dad9960))
+* Add async migration support ([#470](https://github.com/launchdarkly/python-server-sdk/issues/470)) ([577d51e](https://github.com/launchdarkly/python-server-sdk/commit/577d51e1092a64d0053725503f50ad0183dc2ad7))
+* Add async persistent feature store foundation and Redis adapter ([f9c76ee](https://github.com/launchdarkly/python-server-sdk/commit/f9c76ee071683f8753a9802bcfef19ae0efa1715))
+* Add AsyncConfig for the async SDK client ([#471](https://github.com/launchdarkly/python-server-sdk/issues/471)) ([0587a78](https://github.com/launchdarkly/python-server-sdk/commit/0587a780c8bb0697ca6a9ecf1d161b51eeba204f))
+* Add AsyncLDClient with FDv1 data system and public API ([#480](https://github.com/launchdarkly/python-server-sdk/issues/480)) ([fd041a5](https://github.com/launchdarkly/python-server-sdk/commit/fd041a5587cf263080d1b14eeb3ac925b80599d8))
+* Add Config.with_wrapper_information ([#501](https://github.com/launchdarkly/python-server-sdk/issues/501)) ([8a98583](https://github.com/launchdarkly/python-server-sdk/commit/8a9858318e7cbeaeef12b17a2a2077bad0175c57))
+* Add environment ID support for hooks. ([#484](https://github.com/launchdarkly/python-server-sdk/issues/484)) ([49e809f](https://github.com/launchdarkly/python-server-sdk/commit/49e809fda444fd1136fb6c20c549c787c106f56d))
+
+
+### Bug Fixes
+
+* Return empty prerequisites for a flag that fails to evaluate in all_flags_state ([#483](https://github.com/launchdarkly/python-server-sdk/issues/483)) ([73e9b07](https://github.com/launchdarkly/python-server-sdk/commit/73e9b078043d5dd495288de4860d56211f67fad2))
+
 ## [9.16.1](https://github.com/launchdarkly/python-server-sdk/compare/9.16.0...9.16.1) (2026-07-24)
 
 
