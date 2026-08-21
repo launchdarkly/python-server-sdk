@@ -43,6 +43,10 @@ class AsyncStore(_StoreBase):
         self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
         self._persistent_store_writable = False
 
+        # True if the data in the memory store may be written to the persistent
+        # store. Set on each successful apply from its persist flag.
+        self._persist = False
+
         # Serializes async store writes; held only across the awaited I/O, never with self._lock.
         self._async_persist_lock = AsyncLock()
 
@@ -105,25 +109,29 @@ class AsyncStore(_StoreBase):
         """
         collections = self._changes_to_store_data(change_set.changes)
 
-        pending: Optional[Collections] = None
+        applied = False
         is_full = False
 
         with self._lock:
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
-                    pending = self._set_basis(collections, change_set.selector, persist)
+                    applied = self._set_basis(collections, change_set.selector)
                     is_full = True
                 elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
-                    pending = self._apply_delta(collections, change_set.selector, persist)
+                    applied = self._apply_delta(collections, change_set.selector)
                 elif change_set.intent_code == IntentCode.TRANSFER_NONE:
                     return
 
                 self._change_set_listeners.notify(change_set)
+
+                if applied:
+                    # Memory now holds this data, so it may be persisted.
+                    self._persist = persist
             except Exception as e:
                 log.error("Store: couldn't apply changeset: %s", str(e))
                 return
 
-        if pending is None:
+        if not applied or not self._should_persist():
             return
 
         store = self._persistent_store
@@ -133,10 +141,10 @@ class AsyncStore(_StoreBase):
         async with self._async_persist_lock:
             try:
                 if is_full:
-                    await store.init(pending)
+                    await store.init(collections)
                 else:
-                    for kind in pending:
-                        kind_data = pending[kind]
+                    for kind in collections:
+                        kind_data = collections[kind]
                         for key in kind_data:
                             await store.upsert(kind, kind_data[key])
             except Exception as e:

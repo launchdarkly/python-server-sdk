@@ -195,10 +195,6 @@ class _StoreBase:
         # Thread synchronization
         self._lock = threading.RLock()
 
-        # True if the data in the memory store may be written to the persistent
-        # store. Set on each apply from its persist flag.
-        self._persist = False
-
     def selector(self) -> Selector:
         """Returns the current selector."""
         with self._lock:
@@ -212,30 +208,19 @@ class _StoreBase:
         """
         pass
 
-    def _should_persist(self) -> bool:
-        """
-        Returns whether the current data should be written to the persistent
-        store. The base engine has no persistent store, so it never persists;
-        subclasses override this based on their store.
-        """
-        return False
-
     def _set_basis(
-        self, collections: Collections, selector: Selector, persist: bool
-    ) -> Optional[Collections]:
+        self, collections: Collections, selector: Selector
+    ) -> bool:
         """
         Set the basis of the store. Any existing data is discarded.
 
         Args:
             collections: The new basis data
             selector: The selector identifying the data
-            persist: Whether to persist the data to the persistent store
 
         Returns:
-            The collections to persist, or None if there is nothing to persist.
+            True if the in-memory store was updated, False if it was not.
         """
-        self._persist = persist
-
         # Take snapshot for change detection if we have flag listeners
         old_data: Optional[Collections] = None
         if self._flag_change_listeners.has_listeners():
@@ -245,7 +230,7 @@ class _StoreBase:
 
         ok = self._memory_store.set_basis(collections)
         if ok is False:
-            return None
+            return False
 
         # Update dependency tracker
         self._reset_dependency_tracker(collections)
@@ -267,27 +252,24 @@ class _StoreBase:
             )
             self._send_change_events(affected_items)
 
-        return collections if self._should_persist() else None
+        return True
 
     def _apply_delta(
-        self, collections: Collections, selector: Selector, persist: bool
-    ) -> Optional[Collections]:
+        self, collections: Collections, selector: Selector
+    ) -> bool:
         """
         Apply a delta update to the store.
 
         Args:
             collections: The delta changes
             selector: The selector identifying the data
-            persist: Whether to persist the changes to the persistent store
 
         Returns:
-            The collections to persist, or None if there is nothing to persist.
+            True if the in-memory store was updated, False if it was not.
         """
-        self._persist = persist
-
         ok = self._memory_store.apply_delta(collections)
         if ok is False:
-            return None
+            return False
 
         has_listeners = self._flag_change_listeners.has_listeners()
         affected_items: Set[KindAndKey] = set()
@@ -311,7 +293,7 @@ class _StoreBase:
         if affected_items:
             self._send_change_events(affected_items)
 
-        return collections if self._should_persist() else None
+        return True
 
     def _changes_to_store_data(self, changes: List[Change]) -> Collections:
         """
@@ -412,6 +394,10 @@ class Store(_StoreBase):
         self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
         self._persistent_store_writable = False
 
+        # True if the data in the memory store may be written to the persistent
+        # store. Set on each successful apply from its persist flag.
+        self._persist = False
+
     def with_persistence(
         self,
         persistent_store: FeatureStore,
@@ -450,16 +436,16 @@ class Store(_StoreBase):
         """
         collections = self._changes_to_store_data(change_set.changes)
 
-        pending: Optional[Collections] = None
+        applied = False
         is_full = False
 
         with self._lock:
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
-                    pending = self._set_basis(collections, change_set.selector, persist)
+                    applied = self._set_basis(collections, change_set.selector)
                     is_full = True
                 elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
-                    pending = self._apply_delta(collections, change_set.selector, persist)
+                    applied = self._apply_delta(collections, change_set.selector)
                 elif change_set.intent_code == IntentCode.TRANSFER_NONE:
                     # No-op, no changes to apply
                     return
@@ -467,17 +453,21 @@ class Store(_StoreBase):
                 # Notify changeset listeners
                 self._change_set_listeners.notify(change_set)
 
-                # Persist synchronously, inline under the lock
-                if pending is not None:
-                    store = self._persistent_store
-                    assert store is not None
-                    if is_full:
-                        store.init(pending)
-                    else:
-                        for kind in pending:
-                            kind_data = pending[kind]
-                            for key in kind_data:
-                                store.upsert(kind, kind_data[key])
+                if applied:
+                    # Memory now holds this data, so it may be persisted.
+                    self._persist = persist
+
+                    # Persist synchronously, inline under the lock
+                    if self._should_persist():
+                        store = self._persistent_store
+                        assert store is not None
+                        if is_full:
+                            store.init(collections)
+                        else:
+                            for kind in collections:
+                                kind_data = collections[kind]
+                                for key in kind_data:
+                                    store.upsert(kind, kind_data[key])
 
             except Exception as e:
                 # Log error but don't re-raise - matches Go behavior
