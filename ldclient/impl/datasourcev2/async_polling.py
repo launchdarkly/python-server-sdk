@@ -242,9 +242,12 @@ class AiohttpPollingRequester(AsyncRequester):
         await self._http.close()
 
 
-class AsyncPollingDataSourceBuilder(DataSourceBuilder):
+class AsyncPollingDataSourceBuilder(DataSourceBuilder[AsyncPollingDataSource]):
     """
     Builder for a AsyncPollingDataSource.
+
+    The built polling data source implements both :class:`AsyncInitializer` and
+    :class:`AsyncSynchronizer`, so this builder can be used in either role.
     """
 
     def __init__(self):
@@ -298,7 +301,7 @@ class AsyncPollingDataSourceBuilder(DataSourceBuilder):
         )
 
 
-class AsyncFallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
+class AsyncFallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder[AsyncPollingDataSource]):
     """
     Builder for a AsyncPollingDataSource that falls back to Flag Delivery v1.
     """
