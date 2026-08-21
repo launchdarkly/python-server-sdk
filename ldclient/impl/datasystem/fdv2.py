@@ -37,13 +37,12 @@ from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class _ReadOnlyStoreView(ReadOnlyStore):
-    """Exposes only ``get``/``all`` over a store, decoding dict items.
+    """Read-only view of the data system store.
 
-    Resolves the active store on each read rather than at construction, so a held
-    instance follows the active-store swap: reads hit the persistent store before
-    the in-memory store has data, and the in-memory store afterwards. Items stored
-    as dicts are decoded into model objects; items already decoded are returned
-    unchanged, then the caller's ``callback`` is applied.
+    Serves every read from the store's active store, so a held instance follows
+    the swap from the persistent store to the in-memory store once it has data.
+    Items that a custom persistent store keeps as raw dicts are decoded into
+    model objects; items that are already models pass through unchanged.
     """
 
     def __init__(self, store: Store):

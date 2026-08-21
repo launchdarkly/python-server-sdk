@@ -160,11 +160,8 @@ class _StoreBase:
     synchronizer), reads serve from memory and the persistent store is no longer
     read from.
 
-    This base holds the in-memory store, dependency tracking, listeners, the
-    active-store swap, and the changeset-to-memory apply. It never references a
-    persistent store: subclasses own their concretely-typed store and supply the
-    persist step through the ``_stage_persist_full``/``_stage_persist_delta``
-    hooks and the ``_on_memory_store_active`` hook.
+    This base owns the in-memory store, dependency tracking, listeners, and the
+    active-store swap. It holds no persistent store of its own.
     """
 
     def __init__(
@@ -198,6 +195,10 @@ class _StoreBase:
         # Thread synchronization
         self._lock = threading.RLock()
 
+        # True if the data in the memory store may be written to the persistent
+        # store. Set on each apply from its persist flag.
+        self._persist = False
+
     def selector(self) -> Selector:
         """Returns the current selector."""
         with self._lock:
@@ -211,25 +212,13 @@ class _StoreBase:
         """
         pass
 
-    def _stage_persist_full(self, collections: Collections, persist: bool) -> Optional[Collections]:
+    def _should_persist(self) -> bool:
         """
-        Persist a full data set. Subclasses supply the persist step.
-
-        A subclass either writes the data synchronously and returns None, or
-        returns the collections for the caller to persist afterwards. The
-        subclass owns the decision of whether to persist at all.
+        Returns whether the current data should be written to the persistent
+        store. The base engine has no persistent store, so it never persists;
+        subclasses override this based on their store.
         """
-        raise NotImplementedError
-
-    def _stage_persist_delta(self, collections: Collections, persist: bool) -> Optional[Collections]:
-        """
-        Persist a delta update. Subclasses supply the persist step.
-
-        A subclass either writes the data synchronously and returns None, or
-        returns the collections for the caller to persist afterwards. The
-        subclass owns the decision of whether to persist at all.
-        """
-        raise NotImplementedError
+        return False
 
     def _set_basis(
         self, collections: Collections, selector: Selector, persist: bool
@@ -243,8 +232,10 @@ class _StoreBase:
             persist: Whether to persist the data to the persistent store
 
         Returns:
-            The collections the subclass deferred for later persistence, or None.
+            The collections to persist, or None if there is nothing to persist.
         """
+        self._persist = persist
+
         # Take snapshot for change detection if we have flag listeners
         old_data: Optional[Collections] = None
         if self._flag_change_listeners.has_listeners():
@@ -266,11 +257,8 @@ class _StoreBase:
         self._active_store = self._memory_store
 
         # In-memory store is now authoritative. The subclass reacts here (e.g. by
-        # disabling the persistent-store cache) before the persist step below.
+        # disabling the persistent-store cache) before the caller persists.
         self._on_memory_store_active()
-
-        # Persist through the subclass hook
-        pending = self._stage_persist_full(collections, persist)
 
         # Send change events if we had listeners
         if old_data is not None:
@@ -279,7 +267,7 @@ class _StoreBase:
             )
             self._send_change_events(affected_items)
 
-        return pending
+        return collections if self._should_persist() else None
 
     def _apply_delta(
         self, collections: Collections, selector: Selector, persist: bool
@@ -293,8 +281,10 @@ class _StoreBase:
             persist: Whether to persist the changes to the persistent store
 
         Returns:
-            The collections the subclass deferred for later persistence, or None.
+            The collections to persist, or None if there is nothing to persist.
         """
+        self._persist = persist
+
         ok = self._memory_store.apply_delta(collections)
         if ok is False:
             return None
@@ -317,13 +307,11 @@ class _StoreBase:
         # Update state
         self._selector = selector if selector is not None else Selector.no_selector()
 
-        pending = self._stage_persist_delta(collections, persist)
-
         # Send change events
         if affected_items:
             self._send_change_events(affected_items)
 
-        return pending
+        return collections if self._should_persist() else None
 
     def _changes_to_store_data(self, changes: List[Change]) -> Collections:
         """
@@ -424,9 +412,6 @@ class Store(_StoreBase):
         self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
         self._persistent_store_writable = False
 
-        # True if the data in the memory store may be persisted to the persistent store
-        self._persist = False
-
     def with_persistence(
         self,
         persistent_store: FeatureStore,
@@ -456,7 +441,8 @@ class Store(_StoreBase):
 
     def apply(self, change_set: ChangeSet, persist: bool) -> None:
         """
-        Apply a changeset to the store.
+        Apply a changeset to the in-memory store and, if configured, the
+        persistent store.
 
         Args:
             change_set: The changeset to apply
@@ -464,18 +450,34 @@ class Store(_StoreBase):
         """
         collections = self._changes_to_store_data(change_set.changes)
 
+        pending: Optional[Collections] = None
+        is_full = False
+
         with self._lock:
             try:
                 if change_set.intent_code == IntentCode.TRANSFER_FULL:
-                    self._set_basis(collections, change_set.selector, persist)
+                    pending = self._set_basis(collections, change_set.selector, persist)
+                    is_full = True
                 elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
-                    self._apply_delta(collections, change_set.selector, persist)
+                    pending = self._apply_delta(collections, change_set.selector, persist)
                 elif change_set.intent_code == IntentCode.TRANSFER_NONE:
                     # No-op, no changes to apply
                     return
 
                 # Notify changeset listeners
                 self._change_set_listeners.notify(change_set)
+
+                # Persist synchronously, inline under the lock
+                if pending is not None:
+                    store = self._persistent_store
+                    assert store is not None
+                    if is_full:
+                        store.init(pending)
+                    else:
+                        for kind in pending:
+                            kind_data = pending[kind]
+                            for key in kind_data:
+                                store.upsert(kind, kind_data[key])
 
             except Exception as e:
                 # Log error but don't re-raise - matches Go behavior
@@ -501,27 +503,6 @@ class Store(_StoreBase):
                 self._persistent_store.disable_cache()  # type: ignore[attr-defined]
             except Exception as e:
                 log.warning("Failed to disable persistent store cache: %s", e)
-
-    def _stage_persist_full(self, collections: Collections, persist: bool) -> Optional[Collections]:
-        self._persist = persist
-        if not self._should_persist():
-            return None
-        store = self._persistent_store
-        assert store is not None
-        store.init(collections)
-        return None
-
-    def _stage_persist_delta(self, collections: Collections, persist: bool) -> Optional[Collections]:
-        self._persist = persist
-        if not self._should_persist():
-            return None
-        store = self._persistent_store
-        assert store is not None
-        for kind in collections:
-            kind_data = collections[kind]
-            for key in kind_data:
-                store.upsert(kind, kind_data[key])
-        return None
 
     def commit(self) -> Optional[Exception]:
         """

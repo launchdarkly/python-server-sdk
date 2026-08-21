@@ -43,9 +43,6 @@ class AsyncStore(_StoreBase):
         self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
         self._persistent_store_writable = False
 
-        # True if the data in the memory store may be persisted to the persistent store
-        self._persist = False
-
         # Serializes async store writes; held only across the awaited I/O, never with self._lock.
         self._async_persist_lock = AsyncLock()
 
@@ -97,23 +94,10 @@ class AsyncStore(_StoreBase):
             except Exception as e:
                 log.warning("Failed to disable persistent store cache: %s", e)
 
-    def _stage_persist_full(self, collections: Collections, persist: bool) -> Optional[Collections]:
-        self._persist = persist
-        return collections if self._should_persist() else None
-
-    def _stage_persist_delta(self, collections: Collections, persist: bool) -> Optional[Collections]:
-        self._persist = persist
-        return collections if self._should_persist() else None
-
     async def apply(self, change_set: ChangeSet, persist: bool) -> None:
         """
-        Apply a changeset to the store using the async persist path.
-
-        The in-memory update and change-set notification run under the
-        synchronous lock with no awaits inside it. The persistent-store write is
-        awaited afterwards, outside the lock, serialized by the async persist lock.
-        The in-memory store is authoritative, so change listeners fire before the
-        awaited store write completes.
+        Apply a changeset to the in-memory store and, if configured, the async
+        persistent store.
 
         Args:
             change_set: The changeset to apply
@@ -160,10 +144,8 @@ class AsyncStore(_StoreBase):
 
     async def commit(self) -> Optional[Exception]:
         """
-        Persist the data in the memory store to the async persistent store, if configured.
-
-        The memory read happens under the synchronous lock; the store write is
-        awaited afterwards, serialized by the async persist lock.
+        Persist the contents of the memory store to the async persistent store,
+        if configured.
 
         Returns:
             Exception if the commit failed, None otherwise
@@ -174,21 +156,21 @@ class AsyncStore(_StoreBase):
 
             return __mapping
 
-        all_data: Optional[Collections] = None
-        with self._lock:
-            if self._should_persist():
-                all_data = {}
-                for kind in [FEATURES, SEGMENTS]:
-                    all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
-
-        if all_data is None:
-            return None
-
         store = self._persistent_store
         if store is None:
             return None
 
         async with self._async_persist_lock:
+            all_data: Optional[Collections] = None
+            with self._lock:
+                if self._should_persist():
+                    all_data = {}
+                    for kind in [FEATURES, SEGMENTS]:
+                        all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
+
+            if all_data is None:
+                return None
+
             try:
                 await store.init(all_data)
             except Exception as e:

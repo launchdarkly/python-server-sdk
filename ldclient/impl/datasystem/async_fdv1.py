@@ -36,11 +36,11 @@ from ldclient.versioned_data_kind import VersionedDataKind
 
 
 class _AsyncReadOnlyFeatureStoreView(AsyncReadOnlyStore):
-    """Exposes only async ``get``/``all`` over a stable async store, decoding dict items.
+    """Read-only view of an async feature store.
 
-    The wrapped store is always async and never swaps, so it is read directly.
-    Items stored as dicts are decoded into model objects; items already decoded
-    are returned unchanged.
+    Serves every read from the wrapped store. Items that a custom feature store
+    keeps as raw dicts are decoded into model objects; items that are already
+    models pass through unchanged.
     """
 
     def __init__(self, store: AsyncReadOnlyStore):

@@ -147,11 +147,11 @@ class _FeatureStoreClientWrapper(FeatureStore):
 
 
 class _ReadOnlyFeatureStoreView(ReadOnlyStore):
-    """Exposes only ``get``/``all`` over a feature store, decoding dict items.
+    """Read-only view of a feature store.
 
-    The wrapped store is stable and never swaps, so it is read directly. Items
-    stored as dicts are decoded into model objects; items already decoded are
-    returned unchanged, then the caller's ``callback`` is applied.
+    Serves every read from the wrapped store. Items that a custom feature store
+    keeps as raw dicts are decoded into model objects; items that are already
+    models pass through unchanged.
     """
 
     def __init__(self, store: FeatureStore):
