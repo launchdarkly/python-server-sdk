@@ -73,11 +73,13 @@ class Segment(ModelEntity):
         # be absent even if they are really required in the schema. That's for backward compatibility
         # with test logic that constructed incomplete JSON, and also with the file data source which
         # previously allowed users to get away with leaving out a lot of properties in the JSON.
-        self._key = req_str(data, 'key')
         self._version = req_int(data, 'version')
         self._deleted = opt_bool(data, 'deleted')
         if self._deleted:
+            # Tombstones are not guaranteed to have a key.
+            self._key = opt_str(data, 'key') or ''
             return
+        self._key = req_str(data, 'key')
         self._included = set(opt_str_list(data, 'included'))
         self._excluded = set(opt_str_list(data, 'excluded'))
         self._included_contexts = list(SegmentTarget(item) for item in opt_dict_list(data, 'includedContexts'))
