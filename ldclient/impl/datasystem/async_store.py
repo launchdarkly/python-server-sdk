@@ -169,17 +169,17 @@ class AsyncStore(_StoreBase):
             return None
 
         async with self._async_persist_lock:
-            all_data: Optional[Collections] = None
-            with self._lock:
-                if self._should_persist():
-                    all_data = {}
-                    for kind in [FEATURES, SEGMENTS]:
-                        all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
-
-            if all_data is None:
-                return None
-
             try:
+                all_data: Optional[Collections] = None
+                with self._lock:
+                    if self._should_persist():
+                        all_data = {}
+                        for kind in [FEATURES, SEGMENTS]:
+                            all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
+
+                if all_data is None:
+                    return None
+
                 await store.init(all_data)
             except Exception as e:
                 return e
@@ -205,6 +205,22 @@ class AsyncStore(_StoreBase):
         """Get the data store status provider for the persistent store, if configured."""
         with self._lock:
             return self._persistent_store_status_provider
+
+    async def refresh_persistent_initialized(self) -> None:
+        """Refreshes the persistent store's initialized state while it is active.
+
+        Once the in-memory store is active, the persistent store is no longer read
+        from, so its initialized state no longer gates reads and no query is made.
+        """
+        store = self._persistent_store
+        if store is None:
+            return
+        if self._active_store is self._memory_store:
+            return
+        refresh = getattr(store, "refresh_initialized", None)
+        if refresh is None:
+            return
+        await refresh()
 
 
 __all__ = ["AsyncStore"]

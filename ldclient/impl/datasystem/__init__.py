@@ -232,6 +232,18 @@ class AsyncDataSystem(Protocol):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    async def refresh_availability(self) -> None:
+        """
+        Refreshes any awaited state that :attr:`data_availability` depends on.
+
+        The client awaits this before reading :attr:`data_availability` so that a
+        persistent store initialized by another process is reflected while a data
+        source is configured but has not yet supplied a basis. Data systems with
+        no such state treat this as a no-op.
+        """
+        raise NotImplementedError
+
 
 class DiagnosticAccumulator(Protocol):
     def record_stream_init(self, timestamp, duration, failed):

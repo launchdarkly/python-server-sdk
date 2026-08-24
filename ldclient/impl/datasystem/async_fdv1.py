@@ -124,6 +124,10 @@ class AsyncFDv1(AsyncDataSystem):
     def store(self) -> AsyncReadOnlyStore:
         return self._store_view
 
+    async def refresh_availability(self) -> None:
+        """No-op; ``data_availability`` reads the store's initialized state directly."""
+        return None
+
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.

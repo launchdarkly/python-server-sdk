@@ -1,17 +1,26 @@
 # pylint: disable=missing-docstring
 
+import sys
 from typing import Any, Dict, List, Mapping, Optional
+from unittest.mock import patch
 
 import pytest
 
+from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
+from ldclient.async_feature_store_helpers import AsyncCachingStoreWrapper
+from ldclient.feature_store import CacheConfig
+from ldclient.impl.datasystem import DataAvailability
+from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
 from ldclient.impl.datasystem.async_store import AsyncStore
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
     AsyncFeatureStore,
+    AsyncFeatureStoreCore,
     Change,
     ChangeSet,
     ChangeType,
+    DataStoreMode,
     IntentCode,
     ObjectKind,
     Selector
@@ -196,6 +205,27 @@ async def test_commit_returns_error_on_failure():
 
 
 @pytest.mark.asyncio
+async def test_commit_returns_error_when_snapshot_encode_raises():
+    """If encoding the memory snapshot raises, commit() returns the exception
+    rather than raising it."""
+    async_store = FakeAsyncFeatureStore()
+    store = AsyncStore(Listeners(), Listeners())
+    store.with_async_persistence(async_store, True, None)
+
+    # Populate memory so the snapshot iterates a flag and calls FEATURES.encode.
+    await store.apply(_full_changeset("flag-a", 1, True), True)
+    async_store.init_called_count = 0
+
+    with patch.object(FEATURES, "encode", side_effect=RuntimeError("encode boom")):
+        err = await store.commit()
+
+    assert isinstance(err, RuntimeError)
+    assert str(err) == "encode boom"
+    # The failure happened during the snapshot, so the store was never written.
+    assert async_store.init_called_count == 0
+
+
+@pytest.mark.asyncio
 async def test_close_closes_async_store():
     async_store = FakeAsyncFeatureStore()
     store = AsyncStore(Listeners(), Listeners())
@@ -204,6 +234,148 @@ async def test_close_closes_async_store():
     err = await store.close()
     assert err is None
     assert async_store.closed is True
+
+
+class FakeAsyncCore(AsyncFeatureStoreCore):
+    """An async core whose data and initialized flag can be set out of band.
+
+    Setting ``inited`` and ``data`` directly, without going through ``init``,
+    models another process populating the store. ``query_count`` records how
+    often ``initialized_internal`` runs so caching behavior can be asserted.
+    """
+
+    def __init__(self):
+        self.data: Dict[VersionedDataKind, Dict[str, dict]] = {FEATURES: {}, SEGMENTS: {}}
+        self.inited = False
+        self.query_count = 0
+
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+        self.data = {FEATURES: dict(all_data.get(FEATURES, {})), SEGMENTS: dict(all_data.get(SEGMENTS, {}))}
+        self.inited = True
+
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
+        return self.data.get(kind, {}).get(key)
+
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
+        return dict(self.data.get(kind, {}))
+
+    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+        self.data[kind][item["key"]] = item
+        return item
+
+    async def initialized_internal(self) -> bool:
+        self.query_count += 1
+        return self.inited
+
+
+@pytest.mark.asyncio
+async def test_refresh_initialized_reflects_external_init_and_latches():
+    core = FakeAsyncCore()
+    wrapper = AsyncCachingStoreWrapper(core, CacheConfig.disabled())
+
+    assert wrapper.initialized is False
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is False
+
+    # Another process initializes the store.
+    core.inited = True
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is True
+
+    # The state has latched, so a later loss of the init key does not flip it back.
+    core.inited = False
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is True
+
+
+@pytest.mark.asyncio
+async def test_refresh_initialized_queries_every_call_when_cache_off():
+    core = FakeAsyncCore()
+    wrapper = AsyncCachingStoreWrapper(core, CacheConfig.disabled())
+
+    await wrapper.refresh_initialized()
+    await wrapper.refresh_initialized()
+    assert core.query_count == 2
+
+    core.inited = True
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is True
+    assert core.query_count == 3
+
+    # Latched: no more queries.
+    await wrapper.refresh_initialized()
+    assert core.query_count == 3
+
+
+@pytest.mark.asyncio
+async def test_refresh_initialized_infinite_cache_never_reflects_later_init():
+    core = FakeAsyncCore()
+    wrapper = AsyncCachingStoreWrapper(core, CacheConfig(expiration=sys.maxsize))
+
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is False
+    assert core.query_count == 1
+
+    # The False result is cached forever, so a later init is not observed.
+    core.inited = True
+    await wrapper.refresh_initialized()
+    assert wrapper.initialized is False
+    assert core.query_count == 1
+
+
+@pytest.mark.asyncio
+async def test_store_refresh_gates_reads_and_stops_once_memory_active():
+    core = FakeAsyncCore()
+    wrapper = AsyncCachingStoreWrapper(core, CacheConfig.disabled())
+    store = AsyncStore(Listeners(), Listeners())
+    store.with_async_persistence(wrapper, False, None)
+
+    assert store.is_initialized() is False
+    await store.refresh_persistent_initialized()
+    assert store.is_initialized() is False
+
+    # Another process initializes the store; the gate then reports initialized.
+    core.inited = True
+    await store.refresh_persistent_initialized()
+    assert store.is_initialized() is True
+
+    # Once a basis arrives the memory store is active; the persistent store is no
+    # longer queried on refresh.
+    await store.apply(_full_changeset("flag-a", 1, True), True)
+    assert store.get_active_store() is store._memory_store
+    queries_before = core.query_count
+    await store.refresh_persistent_initialized()
+    assert core.query_count == queries_before
+
+
+@pytest.mark.asyncio
+async def test_fdv2_gate_serves_store_with_data_source_after_external_init():
+    core = FakeAsyncCore()
+    core.data[FEATURES]["flag-a"] = _flag("flag-a", 1, True)
+    wrapper = AsyncCachingStoreWrapper(core, CacheConfig.disabled())
+
+    class _NeverBuiltSyncBuilder:
+        pass
+
+    ds_config = AsyncDataSystemConfig(
+        synchronizers=[_NeverBuiltSyncBuilder()],  # type: ignore[list-item]
+        data_store=wrapper,
+        data_store_mode=DataStoreMode.READ_ONLY,
+    )
+    fdv2 = AsyncFDv2(AsyncConfig(sdk_key="fake", send_events=False), ds_config)
+
+    # A synchronizer is configured but no basis has arrived, so before the store
+    # reports initialized the gate withholds the store's data.
+    await fdv2.refresh_availability()
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+
+    # Another process initializes the store; the gate now serves its data.
+    core.inited = True
+    await fdv2.refresh_availability()
+    assert fdv2.data_availability == DataAvailability.CACHED
+    flag = await fdv2.store.get(FEATURES, "flag-a")
+    assert flag is not None
+    assert flag.key == "flag-a"
 
 
 def test_sync_apply_still_persists_synchronously():
