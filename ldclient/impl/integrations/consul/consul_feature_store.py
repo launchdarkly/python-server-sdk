@@ -86,10 +86,16 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def get_all_internal(self, kind):
         items_out = {}
+        # Use the key that each item is stored under, not the key inside the item. A deleted
+        # item (a "tombstone") is not guaranteed to have a key of its own.
+        item_key_prefix = self._kind_key(kind) + '/'
         index, results = self._client.kv.get(self._kind_key(kind), recurse=True)
         for result in results:
+            db_key = result['Key']
+            if not db_key.startswith(item_key_prefix):
+                continue
             item = json.loads(result['Value'].decode('utf-8'))
-            items_out[item['key']] = item
+            items_out[db_key[len(item_key_prefix):]] = item
         return items_out
 
     def upsert_internal(self, kind, new_item):

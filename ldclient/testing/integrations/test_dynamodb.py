@@ -1,3 +1,4 @@
+import json
 import time
 
 from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import (
@@ -105,6 +106,19 @@ class DynamoDBFeatureStoreTester(PersistentFeatureStoreTester):
 
     def clear_data(self, prefix):
         DynamoDBTestHelper.clear_data_for_prefix(prefix)
+
+    def write_raw_item(self, prefix, kind, key, item):
+        client = DynamoDBTestHelper.make_client()
+        namespace = (prefix + ":" if prefix else "") + kind.namespace
+        client.put_item(
+            TableName=DynamoDBTestHelper.table_name,
+            Item={
+                _DynamoDBFeatureStoreCore.PARTITION_KEY: {'S': namespace},
+                _DynamoDBFeatureStoreCore.SORT_KEY: {'S': key},
+                _DynamoDBFeatureStoreCore.VERSION_ATTRIBUTE: {'N': str(item['version'])},
+                _DynamoDBFeatureStoreCore.ITEM_JSON_ATTRIBUTE: {'S': json.dumps(item)},
+            },
+        )
 
 
 class DynamoDBBigSegmentTester(BigSegmentStoreTester):

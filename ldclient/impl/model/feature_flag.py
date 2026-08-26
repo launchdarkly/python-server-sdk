@@ -104,11 +104,13 @@ class FeatureFlag(ModelEntity):
         # be absent even if they are really required in the schema. That's for backward compatibility
         # with test logic that constructed incomplete JSON, and also with the file data source which
         # previously allowed users to get away with leaving out a lot of properties in the JSON.
-        self._key = req_str(data, 'key')
         self._version = req_int(data, 'version')
         self._deleted = opt_bool(data, 'deleted')
         if self._deleted:
+            # Tombstones are not guaranteed to have a key.
+            self._key = opt_str(data, 'key') or ''
             return
+        self._key = req_str(data, 'key')
         self._variations = opt_list(data, 'variations')
         self._on = opt_bool(data, 'on')
         self._off_variation = opt_int(data, 'offVariation')

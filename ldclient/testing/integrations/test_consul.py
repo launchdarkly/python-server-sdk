@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from ldclient.integrations import Consul
@@ -38,6 +40,11 @@ class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
         index, keys = client.kv.get((prefix or Consul.DEFAULT_PREFIX) + "/", recurse=True, keys=True)
         for key in keys or []:
             client.kv.delete(key)
+
+    def write_raw_item(self, prefix, kind, key, item):
+        client = consul.Consul()
+        db_key = "%s/%s/%s" % (prefix or Consul.DEFAULT_PREFIX, kind.namespace, key)
+        client.kv.put(db_key, json.dumps(item))
 
 
 class TestConsulFeatureStore(PersistentFeatureStoreTestBase):

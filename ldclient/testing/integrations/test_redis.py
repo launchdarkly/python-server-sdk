@@ -54,6 +54,11 @@ class RedisFeatureStoreTester(PersistentFeatureStoreTester):
     def clear_data(self, prefix):
         RedisTestHelper.clear_data_for_prefix(prefix or Redis.DEFAULT_PREFIX)
 
+    def write_raw_item(self, prefix, kind, key, item):
+        r = RedisTestHelper.make_client()
+        items_key = "%s:%s" % (prefix or Redis.DEFAULT_PREFIX, kind.namespace)
+        r.hset(items_key, key, json.dumps(item))
+
 
 class RedisBigSegmentStoreTester(BigSegmentStoreTester):
     def create_big_segment_store(self, prefix) -> BigSegmentStore:
