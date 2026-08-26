@@ -99,7 +99,9 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         for resp in paginator.paginate(**self._make_query_for_kind(kind)):
             for item in resp['Items']:
                 item_out = self._unmarshal_item(item)
-                items_out[item_out['key']] = item_out
+                # Use the sort key that each item is stored under, not the key inside the item.
+                # A deleted item (a "tombstone") is not guaranteed to have a key of its own.
+                items_out[item[self.SORT_KEY]['S']] = item_out
         return items_out
 
     def upsert_internal(self, kind, item):
