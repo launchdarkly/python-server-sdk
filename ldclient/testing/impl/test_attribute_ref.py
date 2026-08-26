@@ -42,6 +42,25 @@ class TestAttributeRef:
         assert a.depth == 1
         assert a[0] == input
 
+    @pytest.mark.parametrize(
+        "input,expected_path",
+        [
+            ("name", "name"),
+            ("name/with/slashes", "name/with/slashes"),
+            ("a/b~c", "a/b~c"),
+            ("/ssn", "/~1ssn"),
+            ("/a~b", "/~1a~0b"),
+        ],
+    )
+    def test_literal_path_escapes_a_leading_slash(self, input: str, expected_path: str):
+        # A name that starts with a slash must be escaped, so that a consumer
+        # does not read it as a path to a nested property. Any other name is
+        # already a valid reference and stays unchanged.
+        a = AttributeRef.from_literal(input)
+        assert a.path == expected_path
+        assert AttributeRef.from_path(a.path).path == expected_path
+        assert AttributeRef.from_path(a.path)[0] == input
+
     def test_get_component(self):
         a = AttributeRef.from_path("/first/sec~1ond/third")
         assert a.depth == 3

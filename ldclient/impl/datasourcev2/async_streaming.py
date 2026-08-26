@@ -284,7 +284,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         return (decision.update, decision.should_continue)
 
 
-class AsyncStreamingDataSourceBuilder(DataSourceBuilder):
+class AsyncStreamingDataSourceBuilder(DataSourceBuilder[AsyncStreamingDataSource]):
     """
     Builder for a AsyncStreamingDataSource.
     """
