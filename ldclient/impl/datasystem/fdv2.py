@@ -1,7 +1,7 @@
 import time
 from queue import Queue
 from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, List, Optional
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.impl.datasystem import (
@@ -16,8 +16,7 @@ from ldclient.impl.datasystem.fdv2_common import (
     DataStoreStatusProviderImpl,
     FeatureStoreClientWrapper
 )
-from ldclient.impl.datasystem.store import Store
-from ldclient.impl.flag_tracker import FlagTrackerImpl
+from ldclient.impl.datasystem.store import Store, _decode
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
@@ -31,11 +30,35 @@ from ldclient.interfaces import (
     DataStoreMode,
     DataStoreStatus,
     DataStoreStatusProvider,
-    FlagTracker,
     ReadOnlyStore,
     Synchronizer
 )
 from ldclient.versioned_data_kind import VersionedDataKind
+
+
+class _ReadOnlyStoreView(ReadOnlyStore):
+    """Read-only view of the data system store.
+
+    Serves every read from the store's active store, so a held instance follows
+    the swap from the persistent store to the in-memory store once it has data.
+    Items that a custom persistent store keeps as raw dicts are decoded into
+    model objects; items that are already models pass through unchanged.
+    """
+
+    def __init__(self, store: Store):
+        self._store = store
+
+    def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        item = self._store.get_active_store().get(kind, key, lambda x: x)
+        return callback(_decode(kind, item))
+
+    def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        items = self._store.get_active_store().all(kind, lambda x: x)
+        return callback({key: _decode(kind, value) for key, value in items.items()})
+
+    @property
+    def initialized(self) -> bool:
+        return self._store.is_initialized()
 
 
 class FDv2(DataSystem):
@@ -76,6 +99,7 @@ class FDv2(DataSystem):
 
         # Create the store
         self._store = Store(self._flag_change_listeners, self._change_set_listeners)
+        self._store_view = _ReadOnlyStoreView(self._store)
 
         # Status providers
         self._data_source_status_provider = DataSourceStatusProviderImpl(Listeners())
@@ -518,7 +542,7 @@ class FDv2(DataSystem):
     @property
     def store(self) -> ReadOnlyStore:
         """Get the underlying store for flag evaluation."""
-        return self._store.get_active_store()
+        return self._store_view
 
     @property
     def data_source_status_provider(self) -> DataSourceStatusProvider:

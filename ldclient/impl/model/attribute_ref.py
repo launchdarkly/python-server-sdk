@@ -77,7 +77,13 @@ class AttributeRef:
     def from_literal(name: str) -> AttributeRef:
         if name == '':
             return AttributeRef._from_error(AttributeRef._ERR_EMPTY)
-        return AttributeRef(AttributeRef._escape(name), name, None, None)
+        if name[0] != '/':
+            # A name that does not start with a slash is already a valid
+            # reference to a top-level attribute. It needs no escaping.
+            return AttributeRef(name, name, None, None)
+        # A name that starts with a slash must be escaped. If it is not, a
+        # consumer reads it as a path to a nested property.
+        return AttributeRef('/' + AttributeRef._escape(name), name, None, None)
 
     @staticmethod
     def _from_error(error: str) -> AttributeRef:

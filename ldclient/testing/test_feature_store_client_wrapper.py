@@ -2,8 +2,8 @@ from threading import Event
 from typing import Callable, List
 from unittest.mock import Mock
 
-from ldclient.client import _FeatureStoreClientWrapper
 from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl
+from ldclient.impl.datasystem.fdv1 import _FeatureStoreClientWrapper
 from ldclient.impl.listeners import Listeners
 
 

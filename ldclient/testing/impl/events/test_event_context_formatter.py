@@ -61,3 +61,21 @@ def test_private_property_in_object():
     f = EventContextFormatter(False, ['/b/prop1', '/c/prop2/sub1'])
     c = Context.builder('a').set('b', {'prop1': True, 'prop2': 3}).set('c', {'prop1': {'sub1': True}, 'prop2': {'sub1': 4, 'sub2': 5}}).build()
     assert f.format_context(c) == {'kind': 'user', 'key': 'a', 'b': {'prop2': 3}, 'c': {'prop1': {'sub1': True}, 'prop2': {'sub2': 5}}, '_meta': {'redactedAttributes': ['/b/prop1', '/c/prop2/sub1']}}
+
+
+def test_all_private_reports_escaped_references():
+    f = EventContextFormatter(True, [])
+    c = Context.builder('a').set('/ssn', '123-45-6789').set('/a~b', 'secret').set('c/d~e', 'plain').build()
+    assert f.format_context(c) == {'kind': 'user', 'key': 'a', '_meta': {'redactedAttributes': ['/~1ssn', '/~1a~0b', 'c/d~e']}}
+
+
+def test_redact_anonymous_reports_escaped_references():
+    f = EventContextFormatter(False, [])
+    c = Context.builder('a').name('b').anonymous(True).set('/ssn', '123-45-6789').build()
+    assert f.format_context_redact_anonymous(c) == {'kind': 'user', 'key': 'a', 'anonymous': True, '_meta': {'redactedAttributes': ['name', '/~1ssn']}}
+
+
+def test_private_slash_prefixed_attribute_reports_escaped_reference():
+    f = EventContextFormatter(False, ['/~1ssn'])
+    c = Context.builder('a').name('b').set('/ssn', '123-45-6789').build()
+    assert f.format_context(c) == {'kind': 'user', 'key': 'a', 'name': 'b', '_meta': {'redactedAttributes': ['/~1ssn']}}
