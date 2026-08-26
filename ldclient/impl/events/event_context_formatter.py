@@ -76,11 +76,11 @@ class EventContextFormatter:
 
     def _check_whole_attr_private(self, attr: str, all_private: List[AttributeRef], redacted: List[str], redact_all: bool) -> bool:
         if self._all_attributes_private or redact_all:
-            redacted.append(attr)
+            redacted.append(AttributeRef.from_literal(attr).path)
             return True
         for p in all_private:
             if p.depth == 1 and p[0] == attr:
-                redacted.append(attr)
+                redacted.append(AttributeRef.from_literal(attr).path)
                 return True
         return False
 
