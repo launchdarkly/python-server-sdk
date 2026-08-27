@@ -402,29 +402,13 @@ class LDClient:
         hook_result = self.__evaluate_with_hooks(key=key, context=context, default_value=default_stage.value, method="migration_variation", block=evaluate)
         return hook_result.results['default_stage'], hook_result.results['tracker']
 
-    def _data_availability(self) -> DataAvailability:
-        """Reads the current data availability, degrading to ``DEFAULTS`` on error.
-
-        During the warm-start window (before a data source initializes) the
-        availability gate may query a persistent store, such as Redis. A store
-        I/O error must not propagate out of an evaluation, so treat it as "no
-        data available"; the caller then returns the default value with
-        ``CLIENT_NOT_READY`` instead of raising.
-        """
-        try:
-            return self._data_system.data_availability
-        except Exception as e:
-            log.error("Error checking data availability; treating data as unavailable: %s" % repr(e))
-            log.debug(traceback.format_exc())
-            return DataAvailability.DEFAULTS
-
     def _evaluate_internal(self, key: str, context: Context, default: Any, event_factory) -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
         default = self._config.get_default(key, default)
 
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        availability = self._data_availability()
+        availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
@@ -496,7 +480,7 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        availability = self._data_availability()
+        availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")

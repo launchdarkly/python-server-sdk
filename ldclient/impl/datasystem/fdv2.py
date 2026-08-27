@@ -565,7 +565,16 @@ class FDv2(DataSystem):
         if self._store.selector().is_defined():
             return DataAvailability.REFRESHED
 
-        if not self._configured_with_data_sources or self._store.is_initialized():
+        if not self._configured_with_data_sources:
+            return DataAvailability.CACHED
+
+        try:
+            store_initialized = self._store.is_initialized()
+        except Exception as e:
+            log.error("Error checking persistent store readiness; treating data as unavailable: %s", e)
+            return DataAvailability.DEFAULTS
+
+        if store_initialized:
             return DataAvailability.CACHED
 
         return DataAvailability.DEFAULTS

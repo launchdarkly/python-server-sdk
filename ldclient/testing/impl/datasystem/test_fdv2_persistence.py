@@ -3,8 +3,6 @@
 from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-import pytest
-
 from ldclient.client import Context
 from ldclient.config import Config, DataSystemConfig
 from ldclient.impl.datasystem import DataAvailability
@@ -821,11 +819,10 @@ def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start
     )
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 
-    # The gate itself raises: this is the unguarded root the fix addresses.
-    with pytest.raises(RuntimeError):
-        _ = fdv2.data_availability
+    # The gate itself must not raise: it degrades to DEFAULTS instead.
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
 
-    # Drive the same failing gate through the client and confirm it degrades
+    # Drive the same gate through the client and confirm it degrades
     # instead of propagating the error.
     client = make_client()
     try:
@@ -844,7 +841,7 @@ def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start
         client.close()
 
     assert any(
-        "Error checking data availability" in record.message
+        "Error checking persistent store readiness" in record.message
         for record in caplog.records
         if record.levelname == "ERROR"
     )
