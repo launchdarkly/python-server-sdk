@@ -149,7 +149,7 @@ async def test_async_fdv2_synchronizer_receives_updates():
     await asyncio.wait_for(ready_event.wait(), timeout=2)
 
     # Data should be available
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     # Check we can read the flag
     store = fdv2.store
@@ -215,7 +215,7 @@ async def test_async_fdv2_two_phase_init():
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     await fdv2.stop()
 
@@ -241,7 +241,7 @@ async def test_async_fdv2_initializer_async():
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     await fdv2.stop()
 
@@ -267,7 +267,7 @@ async def test_async_fdv2_fallsback_to_secondary_synchronizer():
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     await fdv2.stop()
 
@@ -294,7 +294,7 @@ async def test_async_fdv2_falls_back_to_fdv1_on_synchronizer_signal():
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     store = fdv2.store
     flag = await store.get(FEATURES, "fdv1-flag")
@@ -334,7 +334,7 @@ async def test_async_fdv2_data_availability_refreshed_with_data():
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
     assert fdv2.target_availability.at_least(DataAvailability.REFRESHED)
 
     await fdv2.stop()
@@ -638,6 +638,11 @@ class FakeAsyncStore(AsyncFeatureStore):
     def initialized(self) -> bool:
         return self._inited
 
+    async def is_initialized(self) -> bool:
+        if self.fail:
+            raise RuntimeError("store down")
+        return self._inited
+
     async def is_available(self) -> bool:
         return self._available
 
@@ -663,6 +668,9 @@ class StoreWithoutAvailability(AsyncFeatureStore):
 
     @property
     def initialized(self) -> bool:
+        return True
+
+    async def is_initialized(self) -> bool:
         return True
 
 

@@ -35,6 +35,9 @@ class FakeAsyncStore(AsyncFeatureStore):
     def initialized(self) -> bool:
         return True
 
+    async def is_initialized(self) -> bool:
+        return True
+
 
 def test_async_data_system_config_defaults():
     cfg = AsyncDataSystemConfig()

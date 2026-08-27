@@ -100,8 +100,8 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
         """Returns the store's last observed initialized state."""
         return self._inited
 
-    async def refresh_initialized(self) -> None:
-        """Refreshes :attr:`initialized` from the store's own initialized state.
+    async def is_initialized(self) -> bool:
+        """Queries the store's initialized state, updating :attr:`initialized`.
 
         Honors the cache: with caching off the store is queried on every call;
         with a TTL it is queried once per interval; with an infinite TTL it is
@@ -109,13 +109,14 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
         later calls return without I/O.
         """
         if self._inited:
-            return
+            return True
         result = self._cache.get(AsyncCachingStoreWrapper.__INITED_CACHE_KEY__)
         if result is None:
             result = bool(await self._core.initialized_internal())
             self._cache[AsyncCachingStoreWrapper.__INITED_CACHE_KEY__] = result
         if result:
             self._inited = True
+        return result
 
     async def close(self) -> None:
         """Releases the cache and closes the underlying core if it supports it."""

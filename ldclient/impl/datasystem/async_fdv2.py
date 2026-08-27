@@ -21,7 +21,11 @@ from ldclient.impl.aio.concurrency import (
     join_handle,
     spawn_handle
 )
-from ldclient.impl.datasystem import AsyncDataSystem, DiagnosticSource
+from ldclient.impl.datasystem import (
+    AsyncDataSystem,
+    DataAvailability,
+    DiagnosticSource
+)
 from ldclient.impl.datasystem.async_store import AsyncStore
 from ldclient.impl.datasystem.fdv2_common import (
     ConditionDirective,
@@ -92,16 +96,13 @@ class AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
     def initialized(self) -> bool:
         return self._store.initialized
 
-    async def refresh_initialized(self) -> None:
-        """Refreshes the inner store's initialized state, if it supports it.
+    async def is_initialized(self) -> bool:
+        """Queries the inner store's initialized state.
 
         Runs through the availability wrapper so a failed query marks the store
         unavailable like any other operation.
         """
-        refresh = getattr(self._store, "refresh_initialized", None)
-        if refresh is None:
-            return
-        await self._wrap(refresh)
+        return await self._wrap(lambda: self._store.is_initialized())
 
     def disable_cache(self) -> None:
         """Disables the inner store's cache if it supports it."""
@@ -547,6 +548,10 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             sync_reader = spawn_handle("AsyncFDv2-sync-reader", reader)
 
             while True:
+                # Honor a stop request every iteration so a queue that always has
+                # an item ready cannot starve the check.
+                if self._stop_event.is_set():
+                    return ConditionDirective.FALLBACK
                 update = await action_queue.get()
                 if isinstance(update, str):
                     if update == "quit":
@@ -608,16 +613,21 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         """Get the underlying store for flag evaluation."""
         return self._store_view
 
-    async def refresh_availability(self) -> None:
-        """Refreshes the persistent store's initialized state so a store populated
-        by another process satisfies the availability gate before a synchronizer
-        supplies a basis. A store error is logged and swallowed so the gate
-        degrades to DEFAULTS and evaluation returns the default rather than
-        propagating the error."""
+    async def data_availability(self) -> DataAvailability:  # type: ignore[override]
+        """Reports what form of data is currently available, awaiting the store's
+        readiness so a persistent store populated by another process is recognized
+        before a synchronizer supplies a basis. A persistent-store error is treated
+        as no data: it is logged and reported as ``DEFAULTS`` rather than raised."""
+        if self._store.selector().is_defined():
+            return DataAvailability.REFRESHED
+        if not self._configured_with_data_sources:
+            return DataAvailability.CACHED
         try:
-            await self._store.refresh_persistent_initialized()
+            ready = await self._store.is_ready()
         except Exception as e:
-            log.warning("Failed to refresh persistent store initialized state: %s", e)
+            log.warning("Error checking persistent store readiness: %s", e)
+            return DataAvailability.DEFAULTS
+        return DataAvailability.CACHED if ready else DataAvailability.DEFAULTS
 
 
 __all__ = [

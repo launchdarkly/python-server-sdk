@@ -227,11 +227,7 @@ class AsyncLDClient:
                 log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
                 await update_processor_ready.wait(start_wait)
 
-        # Warm the persistent store's initialized state so a store populated by
-        # another process is recognized before the readiness check.
-        await self._data_system.refresh_availability()
-
-        if self.is_initialized() is True:
+        if await self.is_initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
@@ -383,18 +379,20 @@ class AsyncLDClient:
         """Returns true if the client is in offline mode."""
         return self._config.offline
 
-    def is_initialized(self) -> bool:
+    async def is_initialized(self) -> bool:
         """Returns true if the client has successfully connected to LaunchDarkly.
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
         It might still be in the process of starting up, or it might be attempting to reconnect after an
         unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
         and given up.
+
+        This is a coroutine because determining readiness may query a persistent store.
         """
         if self.is_offline() or self._config.use_ldd:
             return True
 
-        return self._data_system.data_availability.at_least(DataAvailability.CACHED)
+        return (await self._data_system.data_availability()).at_least(DataAvailability.CACHED)
 
     async def flush(self):
         """Flushes all pending analytics events.
@@ -495,13 +493,9 @@ class AsyncLDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        # Refresh the store's initialized state only while still uninitialized;
-        # once initialized or a basis arrives, the gate reads a cached value.
-        if self._data_system.data_availability == DataAvailability.DEFAULTS:
-            await self._data_system.refresh_availability()
-
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = await self._data_system.data_availability()
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -571,13 +565,9 @@ class AsyncLDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        # Refresh the store's initialized state only while still uninitialized;
-        # once initialized or a basis arrives, the gate reads a cached value.
-        if self._data_system.data_availability == DataAvailability.DEFAULTS:
-            await self._data_system.refresh_availability()
-
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = await self._data_system.data_availability()
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")

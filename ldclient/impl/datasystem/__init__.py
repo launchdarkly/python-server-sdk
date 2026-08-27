@@ -208,11 +208,11 @@ class AsyncDataSystem(Protocol):
         """
         raise NotImplementedError
 
-    @property
     @abstractmethod
-    def data_availability(self) -> DataAvailability:
+    async def data_availability(self) -> DataAvailability:
         """
-        Indicates what form of data is currently available.
+        Indicates what form of data is currently available, awaiting the store's
+        readiness so a persistent store populated by another process is recognized.
         """
         raise NotImplementedError
 
@@ -229,18 +229,6 @@ class AsyncDataSystem(Protocol):
     def store(self) -> AsyncReadOnlyStore:
         """
         Returns the data store used by the data system.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    async def refresh_availability(self) -> None:
-        """
-        Refreshes any awaited state that :attr:`data_availability` depends on.
-
-        The client awaits this before reading :attr:`data_availability` so that a
-        persistent store initialized by another process is reflected while a data
-        source is configured but has not yet supplied a basis. Data systems with
-        no such state treat this as a no-op.
         """
         raise NotImplementedError
 

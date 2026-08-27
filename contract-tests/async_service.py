@@ -102,7 +102,7 @@ async def handle_create_client(request: aiohttp.web.Request) -> aiohttp.web.Resp
         await client.close()
         return aiohttp.web.Response(text=str(e), status=500)
 
-    if not client.is_initializing() and not options['configuration'].get('initCanFail', False):
+    if not await client.is_initializing() and not options['configuration'].get('initCanFail', False):
         await client.close()
         return aiohttp.web.Response(text='Failed to initialize', status=500)
 

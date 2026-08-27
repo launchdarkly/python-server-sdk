@@ -206,21 +206,18 @@ class AsyncStore(_StoreBase):
         with self._lock:
             return self._persistent_store_status_provider
 
-    async def refresh_persistent_initialized(self) -> None:
-        """Refreshes the persistent store's initialized state while it is active.
+    async def is_ready(self) -> bool:
+        """Reports whether the active store holds usable data.
 
-        Once the in-memory store is active, the persistent store is no longer read
-        from, so its initialized state no longer gates reads and no query is made.
+        Once the in-memory store is active its readiness is authoritative and no
+        query is made. While the persistent store is active, its readiness is
+        queried (awaiting the store), so a store populated by another process is
+        recognized.
         """
         store = self._persistent_store
-        if store is None:
-            return
-        if self._active_store is self._memory_store:
-            return
-        refresh = getattr(store, "refresh_initialized", None)
-        if refresh is None:
-            return
-        await refresh()
+        if store is None or self._active_store is self._memory_store:
+            return self._active_store.initialized
+        return await store.is_initialized()
 
 
 __all__ = ["AsyncStore"]

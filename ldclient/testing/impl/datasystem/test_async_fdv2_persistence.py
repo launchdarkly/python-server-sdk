@@ -100,6 +100,9 @@ class StubAsyncFeatureStore(AsyncFeatureStore):
     def initialized(self) -> bool:
         return self._initialized
 
+    async def is_initialized(self) -> bool:
+        return self._initialized
+
     async def is_available(self) -> bool:
         return self._available
 
@@ -151,7 +154,7 @@ async def test_async_persistent_store_read_write_mode():
 
     fdv2.start(ready)
     await _wait_for(ready)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     # A full transfer persists through init(), and the new flag lands in the store.
     assert persistent_store.init_called_count >= 1
@@ -181,7 +184,7 @@ async def test_async_persistent_store_read_only_mode():
     fdv2 = AsyncFDv2(AsyncConfig(sdk_key="dummy"), data_system_config)
     fdv2.start(ready)
     await _wait_for(ready)
-    assert fdv2.data_availability.at_least(DataAvailability.REFRESHED)
+    assert (await fdv2.data_availability()).at_least(DataAvailability.REFRESHED)
 
     # READ_ONLY: nothing is written back to the persistent store.
     assert persistent_store.init_called_count == 0

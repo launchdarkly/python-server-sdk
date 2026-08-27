@@ -408,7 +408,16 @@ class AsyncFeatureStore(ABC):
     @abstractmethod
     def initialized(self) -> bool:
         """
-        Returns whether the store has been initialized yet or not.
+        Returns the store's last observed initialized state without querying it.
+        """
+
+    @abstractmethod
+    async def is_initialized(self) -> bool:
+        """
+        Queries whether the store has been initialized, awaiting the store if a query is required.
+
+        A persistent store may have been populated by another process, so this can require I/O.
+        Implementations should latch a positive result: once the store is initialized it stays so.
         """
 
     async def close(self) -> None:
