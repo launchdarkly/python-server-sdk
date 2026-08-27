@@ -845,3 +845,25 @@ def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start
         for record in caplog.records
         if record.levelname == "ERROR"
     )
+
+
+def test_persistent_store_close_logs_and_swallows_error(caplog):
+    """A persistent-store close error is logged as a warning, not raised."""
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+
+    class ClosingFailsStore(StubFeatureStore):
+        def close(self):
+            raise RuntimeError("close boom")
+
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(ClosingFailsStore(), True, None)
+
+    # close() must log the error rather than raise it.
+    store.close()
+
+    assert any(
+        "Error closing the persistent store" in record.message
+        for record in caplog.records
+        if record.levelname == "WARNING"
+    )

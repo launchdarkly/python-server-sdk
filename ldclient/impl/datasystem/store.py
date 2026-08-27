@@ -521,7 +521,7 @@ class Store(_StoreBase):
                     return e
         return None
 
-    def close(self) -> Optional[Exception]:
+    def close(self) -> None:
         """Close the store and any persistent store if configured."""
         with self._lock:
             if self._persistent_store is not None:
@@ -532,8 +532,7 @@ class Store(_StoreBase):
                     if callable(close):
                         close()
                 except Exception as e:
-                    return e
-        return None
+                    log.warning("Error closing the persistent store: %s", e)
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""
