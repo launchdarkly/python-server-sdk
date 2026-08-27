@@ -4,6 +4,7 @@ obtain and keep the SDK's data up-to-date, operating with an optional
 persistent store in read-only or read/write mode.
 """
 
+import asyncio
 import inspect
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional
@@ -111,12 +112,16 @@ class AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
             inner_disable()
 
     def is_monitoring_enabled(self) -> bool:
-        """Returns whether the inner store supports availability checks.
+        """Returns whether the inner store opts in to availability monitoring.
 
-        Availability polling requires the store to provide an ``is_available``
-        method so the wrapper can detect recovery.
+        Delegates to the store's own opt-in. A store that does not report
+        availability is not polled, so it is never marked unavailable with no
+        path back to recovery.
         """
-        return callable(getattr(self._store, "is_available", None))
+        store_check = getattr(self._store, "is_monitoring_enabled", None)
+        if not callable(store_check):
+            return False
+        return store_check()
 
     async def _wrap(self, fn: Callable):
         try:
@@ -162,22 +167,31 @@ class AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
             log.error("Unexpected error from data store status function: %s", e)
 
     async def close(self) -> None:
-        """Stops the availability poller and closes the inner store."""
-        poller_to_stop = None
-        if not self._closed:
-            self._closed = True
-            poller_to_stop = self._poller
-            self._poller = None
+        """Stops the availability poller and closes the inner store.
 
+        Does nothing on a later call, so closing more than once is safe.
+        """
+        if self._closed:
+            return
+        self._closed = True
+
+        poller_to_stop = self._poller
+        self._poller = None
         if poller_to_stop is not None:
             poller_to_stop.stop()
-            await poller_to_stop.wait_stopped()
+            try:
+                await asyncio.wait_for(poller_to_stop.wait_stopped(), timeout=5)
+            except asyncio.TimeoutError:
+                log.warning("Timed out waiting for the persistent store availability poller to stop")
 
         close = getattr(self._store, "close", None)
         if callable(close):
-            result = close()
-            if inspect.isawaitable(result):
-                await result
+            try:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as e:
+                log.warning("Error closing the persistent store: %s", e)
 
 
 class _AsyncReadOnlyStoreView(AsyncReadOnlyStore):

@@ -646,6 +646,9 @@ class FakeAsyncStore(AsyncFeatureStore):
     async def is_available(self) -> bool:
         return self._available
 
+    def is_monitoring_enabled(self) -> bool:
+        return True
+
     async def close(self) -> None:
         self.closed = True
 
@@ -674,8 +677,19 @@ class StoreWithoutAvailability(AsyncFeatureStore):
         return True
 
 
+class StoreWithAvailabilityNoOptIn(StoreWithoutAvailability):
+    """Reports availability but does not opt in to monitoring.
+
+    Models a custom store that provides is_available yet omits
+    is_monitoring_enabled, which must not turn on availability polling.
+    """
+
+    async def is_available(self) -> bool:
+        return True
+
+
 @pytest.mark.asyncio
-async def test_is_monitoring_enabled_true_when_store_has_is_available():
+async def test_is_monitoring_enabled_true_when_store_opts_in():
     wrapper = AsyncFeatureStoreClientWrapper(FakeAsyncStore(), lambda _s: None)
     assert wrapper.is_monitoring_enabled() is True
 
@@ -683,6 +697,13 @@ async def test_is_monitoring_enabled_true_when_store_has_is_available():
 @pytest.mark.asyncio
 async def test_is_monitoring_enabled_false_without_is_available():
     wrapper = AsyncFeatureStoreClientWrapper(StoreWithoutAvailability(), lambda _s: None)
+    assert wrapper.is_monitoring_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_is_monitoring_enabled_false_when_store_does_not_opt_in():
+    # A store with is_available but no is_monitoring_enabled must not be polled.
+    wrapper = AsyncFeatureStoreClientWrapper(StoreWithAvailabilityNoOptIn(), lambda _s: None)
     assert wrapper.is_monitoring_enabled() is False
 
 
