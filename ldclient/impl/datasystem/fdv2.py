@@ -392,7 +392,7 @@ class FDv2(DataSystem):
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
-        :return: Tuple of (should_remove_sync, fallback_to_fdv1, directive)
+        :return: the ConditionDirective describing how to proceed
         """
         action_queue: Queue = Queue()
         timer = RepeatingTask(
