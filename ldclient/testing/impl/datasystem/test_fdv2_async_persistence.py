@@ -234,9 +234,25 @@ async def test_close_closes_async_store():
     store = AsyncStore(Listeners(), Listeners())
     store.with_async_persistence(async_store, True, None)
 
-    err = await store.close()
-    assert err is None
+    await store.close()
     assert async_store.closed is True
+
+
+@pytest.mark.asyncio
+async def test_close_logs_and_swallows_store_error(caplog):
+    async_store = FakeAsyncFeatureStore()
+    store = AsyncStore(Listeners(), Listeners())
+    store.with_async_persistence(async_store, True, None)
+
+    with patch.object(async_store, "close", side_effect=RuntimeError("close boom")):
+        # A close error is logged and swallowed, never raised.
+        await store.close()
+
+    assert any(
+        "Error closing the persistent store" in record.message
+        for record in caplog.records
+        if record.levelname == "WARNING"
+    )
 
 
 class FakeAsyncCore(AsyncFeatureStoreCore):

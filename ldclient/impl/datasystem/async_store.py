@@ -185,21 +185,20 @@ class AsyncStore(_StoreBase):
                 return e
         return None
 
-    async def close(self) -> Optional[Exception]:
-        """
-        Close the store and the async persistent store, if configured.
+    async def close(self) -> None:
+        """Close the store and the async persistent store, if configured.
 
-        Returns:
-            Exception if closing failed, None otherwise
+        A close error is logged as a warning rather than returned or raised,
+        because closing happens at shutdown where there is no caller left to
+        react to it.
         """
         store = self._persistent_store
         if store is None:
-            return None
+            return
         try:
             await store.close()
         except Exception as e:
-            return e
-        return None
+            log.warning("Error closing the persistent store: %s", e)
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""
