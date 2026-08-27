@@ -523,7 +523,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
-        :return: Tuple of (should_remove_sync, fallback_to_fdv1, directive)
+        :return: the ConditionDirective describing how to proceed
         """
         action_queue: AsyncQueue = AsyncQueue()
         timer = AsyncRepeatingTask(
@@ -611,8 +611,13 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
     async def refresh_availability(self) -> None:
         """Refreshes the persistent store's initialized state so a store populated
         by another process satisfies the availability gate before a synchronizer
-        supplies a basis."""
-        await self._store.refresh_persistent_initialized()
+        supplies a basis. A store error is logged and swallowed so the gate
+        degrades to DEFAULTS and evaluation returns the default rather than
+        propagating the error."""
+        try:
+            await self._store.refresh_persistent_initialized()
+        except Exception as e:
+            log.warning("Failed to refresh persistent store initialized state: %s", e)
 
 
 __all__ = [
