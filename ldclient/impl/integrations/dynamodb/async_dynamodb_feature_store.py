@@ -48,12 +48,6 @@ except ImportError:
 
 
 class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
-    """Async DynamoDB implementation of :class:`ldclient.interfaces.AsyncFeatureStoreCore`.
-
-    It stores data in the same DynamoDB table layout and key schema as the synchronous DynamoDB
-    feature store, so an async and a synchronous SDK can share one table.
-    """
-
     PARTITION_KEY = 'namespace'
     SORT_KEY = 'key'
     VERSION_ATTRIBUTE = 'version'

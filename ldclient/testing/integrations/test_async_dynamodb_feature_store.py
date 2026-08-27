@@ -54,7 +54,6 @@ class DynamoDBTestHelper:
 
     @staticmethod
     def make_client():
-        """Return a synchronous boto3 client for test setup and teardown."""
         return boto3.client('dynamodb', **DynamoDBTestHelper.options)
 
     @staticmethod
