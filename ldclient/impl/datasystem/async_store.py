@@ -186,12 +186,7 @@ class AsyncStore(_StoreBase):
         return None
 
     async def close(self) -> None:
-        """Close the store and the async persistent store, if configured.
-
-        A close error is logged as a warning rather than returned or raised,
-        because closing happens at shutdown where there is no caller left to
-        react to it.
-        """
+        """Close the store and the async persistent store, if configured."""
         store = self._persistent_store
         if store is None:
             return
