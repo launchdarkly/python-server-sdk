@@ -169,42 +169,49 @@ class AsyncStore(_StoreBase):
             return None
 
         async with self._async_persist_lock:
-            all_data: Optional[Collections] = None
-            with self._lock:
-                if self._should_persist():
-                    all_data = {}
-                    for kind in [FEATURES, SEGMENTS]:
-                        all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
-
-            if all_data is None:
-                return None
-
             try:
+                all_data: Optional[Collections] = None
+                with self._lock:
+                    if self._should_persist():
+                        all_data = {}
+                        for kind in [FEATURES, SEGMENTS]:
+                            all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
+
+                if all_data is None:
+                    return None
+
                 await store.init(all_data)
             except Exception as e:
                 return e
         return None
 
-    async def close(self) -> Optional[Exception]:
-        """
-        Close the store and the async persistent store, if configured.
-
-        Returns:
-            Exception if closing failed, None otherwise
-        """
+    async def close(self) -> None:
+        """Close the store and the async persistent store, if configured."""
         store = self._persistent_store
         if store is None:
-            return None
+            return
         try:
             await store.close()
         except Exception as e:
-            return e
-        return None
+            log.warning("Error closing the persistent store: %s", e)
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""
         with self._lock:
             return self._persistent_store_status_provider
+
+    async def is_ready(self) -> bool:
+        """Reports whether the active store holds usable data.
+
+        Once the in-memory store is active its readiness is authoritative and no
+        query is made. While the persistent store is active, its readiness is
+        queried (awaiting the store), so a store populated by another process is
+        recognized.
+        """
+        store = self._persistent_store
+        if store is None or self._active_store is self._memory_store:
+            return self._active_store.initialized
+        return await store.is_initialized()
 
 
 __all__ = ["AsyncStore"]

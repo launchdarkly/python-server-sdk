@@ -104,8 +104,8 @@ class AsyncClientEntity:
         await self._client.start(start_wait / 1000.0)
         self._listeners = AsyncListenerRegistry(self._client.flag_tracker)
 
-    def is_initializing(self) -> bool:
-        return self._client.is_initialized() if self._client else False
+    async def is_initializing(self) -> bool:
+        return await self._client.is_initialized() if self._client else False
 
     async def evaluate(self, params: dict) -> dict:
         response = {}

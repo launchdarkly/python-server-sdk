@@ -208,11 +208,11 @@ class AsyncDataSystem(Protocol):
         """
         raise NotImplementedError
 
-    @property
     @abstractmethod
-    def data_availability(self) -> DataAvailability:
+    async def data_availability(self) -> DataAvailability:
         """
-        Indicates what form of data is currently available.
+        Indicates what form of data is currently available, awaiting the store's
+        readiness so a persistent store populated by another process is recognized.
         """
         raise NotImplementedError
 

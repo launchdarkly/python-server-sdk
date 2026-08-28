@@ -109,7 +109,7 @@ async def test_close_is_idempotent():
 async def test_context_manager():
     """async with AsyncLDClient(config) as client: starts and closes the client."""
     async with AsyncLDClient(_offline_config()) as client:
-        assert client.is_initialized()
+        assert await client.is_initialized()
     assert client._closed is True
 
 

@@ -88,6 +88,10 @@ class AsyncInMemoryFeatureStore(AsyncFeatureStore, DiagnosticDescription):
         """ """
         return self._initialized
 
+    async def is_initialized(self) -> bool:
+        """ """
+        return self._initialized
+
     async def close(self) -> None:
         """ """
         pass
