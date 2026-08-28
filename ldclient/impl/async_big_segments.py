@@ -7,14 +7,14 @@ from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.aio.concurrency import AsyncRepeatingTask
 from ldclient.impl.big_segments_common import (
     EMPTY_MEMBERSHIP,
-    BigSegmentStoreStatusProviderImpl,
+    AsyncBigSegmentStoreStatusProviderImpl,
     _hash_for_user_key,
     is_stale
 )
 from ldclient.impl.util import log
 from ldclient.interfaces import (
-    BigSegmentStoreStatus,
-    BigSegmentStoreStatusProvider
+    AsyncBigSegmentStoreStatusProvider,
+    BigSegmentStoreStatus
 )
 
 
@@ -28,7 +28,7 @@ class AsyncBigSegmentStoreManager:
         self.__store = config.store
 
         self.__stale_after_millis = config.stale_after * 1000
-        self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
+        self.__status_provider = AsyncBigSegmentStoreStatusProviderImpl(self.get_status)
         self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
         self.__poll_task = None  # type: Optional[AsyncRepeatingTask]
 
@@ -49,7 +49,7 @@ class AsyncBigSegmentStoreManager:
             await self.__store.stop()
 
     @property
-    def status_provider(self) -> BigSegmentStoreStatusProvider:
+    def status_provider(self) -> AsyncBigSegmentStoreStatusProvider:
         return self.__status_provider
 
     async def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
@@ -74,14 +74,16 @@ class AsyncBigSegmentStoreManager:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
 
-    def get_status(self) -> BigSegmentStoreStatus:
+    async def get_status(self) -> BigSegmentStoreStatus:
         """Return the most recently polled status.
 
-        When no status has been cached yet, the sync variant polls the store
-        inline; the async variant (whose status getter cannot await) reports
-        the store as unavailable until the polling task has run.
+        When no status has been cached yet, poll the store inline and wait for the
+        result, so the status is accurate even if called immediately after start().
         """
-        return self.__last_status or BigSegmentStoreStatus(False, False)
+        status = self.__last_status
+        if status is None:
+            status = await self.poll_store_and_update_status()
+        return status
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below

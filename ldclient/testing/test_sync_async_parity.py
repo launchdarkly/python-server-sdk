@@ -18,6 +18,10 @@ from ldclient.client import LDClient
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.async_evaluator import AsyncEvaluator
 from ldclient.impl.evaluator import Evaluator
+from ldclient.interfaces import (
+    AsyncBigSegmentStoreStatusProvider,
+    BigSegmentStoreStatusProvider
+)
 from ldclient.migrations import AsyncMigratorBuilder, MigratorBuilder
 
 
@@ -48,6 +52,14 @@ PAIRS = [
     ),
     pytest.param(Evaluator, AsyncEvaluator, set(), set(), id="evaluator"),
     pytest.param(MigratorBuilder, AsyncMigratorBuilder, set(), set(), id="migrator_builder"),
+    pytest.param(
+        BigSegmentStoreStatusProvider, AsyncBigSegmentStoreStatusProvider,
+        # status is a synchronous property on the sync provider; a property can't await,
+        # so the async provider exposes the same readiness check as the get_status coroutine.
+        {"status"},
+        {"get_status"},
+        id="big_segment_store_status_provider",
+    ),
 ]
 
 

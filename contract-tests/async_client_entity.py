@@ -185,7 +185,7 @@ class AsyncClientEntity:
         return {"error": c.error}
 
     async def get_big_segment_store_status(self) -> dict:
-        status = self._client.big_segment_store_status_provider.status
+        status = await self._client.big_segment_store_status_provider.get_status()
         return {"available": status.available, "stale": status.stale}
 
     async def migration_variation(self, params: dict) -> dict:

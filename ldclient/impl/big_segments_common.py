@@ -9,10 +9,11 @@ identical across the two managers.
 import base64
 import time
 from hashlib import sha256
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
+    AsyncBigSegmentStoreStatusProvider,
     BigSegmentStoreStatus,
     BigSegmentStoreStatusProvider
 )
@@ -47,6 +48,37 @@ class BigSegmentStoreStatusProviderImpl(BigSegmentStoreStatusProvider):
     @property
     def status(self) -> BigSegmentStoreStatus:
         return self.__status_getter()
+
+    def add_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        self.__status_listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        self.__status_listeners.remove(listener)
+
+    def _update_status(self, new_status: BigSegmentStoreStatus):
+        last = self.__last_status
+        if last is None:
+            self.__last_status = new_status
+        elif new_status.available != last.available or new_status.stale != last.stale:
+            self.__last_status = new_status
+            self.__status_listeners.notify(new_status)
+
+
+class AsyncBigSegmentStoreStatusProviderImpl(AsyncBigSegmentStoreStatusProvider):
+    """
+    Default implementation of the AsyncBigSegmentStoreStatusProvider interface.
+
+    Mirrors :class:`BigSegmentStoreStatusProviderImpl`, except the status getter passed in
+    is a coroutine, so :meth:`get_status` is a coroutine too and awaits it.
+    """
+
+    def __init__(self, status_getter: Callable[[], Awaitable[BigSegmentStoreStatus]]):
+        self.__status_getter = status_getter
+        self.__status_listeners = Listeners()
+        self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
+
+    async def get_status(self) -> BigSegmentStoreStatus:
+        return await self.__status_getter()
 
     def add_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
         self.__status_listeners.add(listener)
