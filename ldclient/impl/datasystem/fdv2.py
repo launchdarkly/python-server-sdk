@@ -57,7 +57,7 @@ class _ReadOnlyStoreView(ReadOnlyStore):
         return self._store.is_initialized()
 
 
-class FeatureStoreClientWrapper(FeatureStore):
+class _FeatureStoreClientWrapper(FeatureStore):
     """Provides additional behavior that the client requires before or after feature store operations.
     Currently this just means sorting the data set for init() and dealing with data store status listeners.
     """
@@ -241,7 +241,7 @@ class FDv2(_FDv2Base, DataSystem):
         if data_system_config.data_store is not None:
             self._data_store_status_provider = DataStoreStatusProviderImpl(data_system_config.data_store, self._data_store_listeners)
             writable = data_system_config.data_store_mode == DataStoreMode.READ_WRITE
-            wrapper = FeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider)
+            wrapper = _FeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider)
             self._store.with_persistence(wrapper, writable, self._data_store_status_provider)
 
         # Threading
@@ -638,5 +638,4 @@ __all__ = [
     'DataSourceStatusProviderImpl',
     'DataStoreStatusProviderImpl',
     'FDv2',
-    'FeatureStoreClientWrapper',
 ]
