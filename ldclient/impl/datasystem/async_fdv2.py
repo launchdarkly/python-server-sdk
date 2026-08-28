@@ -52,7 +52,7 @@ from ldclient.interfaces import (
 from ldclient.versioned_data_kind import VersionedDataKind
 
 
-class AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
+class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
     """Adds availability tracking around an async feature store.
 
     Every store operation runs through a wrapper that watches for failures. When
@@ -261,7 +261,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             writable = data_system_config.data_store_mode == DataStoreMode.READ_WRITE
             # The async wrapper reports status through a plain callable sink, so
             # pass the provider's update method rather than the provider itself.
-            wrapper = AsyncFeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider.update_status)
+            wrapper = _AsyncFeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider.update_status)
             self._store.with_async_persistence(wrapper, writable, self._data_store_status_provider)
 
         self._store_view = _AsyncReadOnlyStoreView(self._store)
@@ -646,7 +646,6 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
 __all__ = [
     'AsyncFDv2',
-    'AsyncFeatureStoreClientWrapper',
     'ConditionDirective',
     'DataSourceStatusProviderImpl',
     'DataStoreStatusProviderImpl',

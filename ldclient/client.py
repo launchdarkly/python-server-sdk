@@ -408,8 +408,9 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = self._data_system.data_availability
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -479,8 +480,9 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = self._data_system.data_availability
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")

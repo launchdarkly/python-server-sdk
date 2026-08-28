@@ -1,15 +1,15 @@
 import time
 from queue import Queue
 from threading import Event, Thread
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
+from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.impl.datasystem import DataSystem, DiagnosticSource
 from ldclient.impl.datasystem.fdv2_common import (
     ConditionDirective,
     DataSourceStatusProviderImpl,
     DataStoreStatusProviderImpl,
-    FeatureStoreClientWrapper,
     _FDv2Base,
     fallback_condition,
     recovery_condition
@@ -25,6 +25,7 @@ from ldclient.interfaces import (
     DataSourceState,
     DataStoreMode,
     DataStoreStatus,
+    FeatureStore,
     ReadOnlyStore,
     Synchronizer
 )
@@ -54,6 +55,154 @@ class _ReadOnlyStoreView(ReadOnlyStore):
     @property
     def initialized(self) -> bool:
         return self._store.is_initialized()
+
+
+class _FeatureStoreClientWrapper(FeatureStore):
+    """Provides additional behavior that the client requires before or after feature store operations.
+    Currently this just means sorting the data set for init() and dealing with data store status listeners.
+    """
+
+    def __init__(self, store: FeatureStore, store_update_sink: DataStoreStatusProviderImpl):
+        self.store = store
+        self.__store_update_sink = store_update_sink
+        self.__monitoring_enabled = self.is_monitoring_enabled()
+
+        # Covers the following variables
+        self.__lock = ReadWriteLock()
+        self.__last_available = True
+        self.__poller: Optional[RepeatingTask] = None
+        self.__closed = False
+
+    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
+        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+
+    def get(self, kind, key, callback):
+        return self.__wrapper(lambda: self.store.get(kind, key, callback))
+
+    def all(self, kind, callback):
+        return self.__wrapper(lambda: self.store.all(kind, callback))
+
+    def delete(self, kind, key, version):
+        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+
+    def upsert(self, kind, item):
+        return self.__wrapper(lambda: self.store.upsert(kind, item))
+
+    @property
+    def initialized(self) -> bool:
+        return self.store.initialized
+
+    def disable_cache(self) -> None:
+        def _do_disable():
+            try:
+                inner = self.store
+                if hasattr(inner, "disable_cache"):
+                    inner.disable_cache()  # type: ignore[attr-defined]
+            except Exception as e:
+                log.warning("disable_cache failed on inner store: %s", e)
+
+        self.__wrapper(_do_disable)
+
+    def __wrapper(self, fn: Callable):
+        try:
+            return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __update_availability(self, available: bool):
+        state_changed = False
+        poller_to_stop = None
+        task_to_start = None
+
+        with self.__lock.write():
+            if self.__closed:
+                return
+            if available == self.__last_available:
+                return
+
+            state_changed = True
+            self.__last_available = available
+
+            if available:
+                poller_to_stop = self.__poller
+                self.__poller = None
+            elif self.__poller is None:
+                task_to_start = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+                self.__poller = task_to_start
+
+        if available:
+            log.warning("Persistent store is available again")
+        else:
+            log.warning("Detected persistent store unavailability; updates will be cached until it recovers")
+
+        status = DataStoreStatus(available, True)
+        self.__store_update_sink.update_status(status)
+
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
+
+        if task_to_start is not None:
+            task_to_start.start()
+
+    def __check_availability(self):
+        try:
+            if self.store.is_available():
+                self.__update_availability(True)
+        except BaseException as e:
+            log.error("Unexpected error from data store status function: %s", e)
+
+    def is_monitoring_enabled(self) -> bool:
+        """
+        This methods determines whether the wrapped store can support enabling monitoring.
+
+        The wrapped store must provide a monitoring_enabled method, which must
+        be true. But this alone is not sufficient.
+
+        Because this class wraps all interactions with a provided store, it can
+        technically "monitor" any store. However, monitoring also requires that
+        we notify listeners when the store is available again.
+
+        We determine this by checking the store's `available?` method, so this
+        is also a requirement for monitoring support.
+
+        These extra checks won't be necessary once `available` becomes a part
+        of the core interface requirements and this class no longer wraps every
+        feature store.
+        """
+
+        if not hasattr(self.store, 'is_monitoring_enabled'):
+            return False
+
+        if not hasattr(self.store, 'is_available'):
+            return False
+
+        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
+        if not callable(monitoring_enabled):
+            return False
+
+        return monitoring_enabled()
+
+    def close(self):
+        """
+        Close the wrapper and stop the repeating task poller if it's running.
+        Also forwards the close call to the underlying store if it has a close method.
+        """
+        poller_to_stop = None
+
+        with self.__lock.write():
+            if self.__closed:
+                return
+            self.__closed = True
+            poller_to_stop = self.__poller
+            self.__poller = None
+
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
+
+        if hasattr(self.store, "close"):
+            self.store.close()
 
 
 class FDv2(_FDv2Base, DataSystem):
@@ -92,7 +241,7 @@ class FDv2(_FDv2Base, DataSystem):
         if data_system_config.data_store is not None:
             self._data_store_status_provider = DataStoreStatusProviderImpl(data_system_config.data_store, self._data_store_listeners)
             writable = data_system_config.data_store_mode == DataStoreMode.READ_WRITE
-            wrapper = FeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider)
+            wrapper = _FeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider)
             self._store.with_persistence(wrapper, writable, self._data_store_status_provider)
 
         # Threading
@@ -380,7 +529,7 @@ class FDv2(_FDv2Base, DataSystem):
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
-        :return: Tuple of (should_remove_sync, fallback_to_fdv1, directive)
+        :return: the ConditionDirective describing how to proceed
         """
         action_queue: Queue = Queue()
         timer = RepeatingTask(
@@ -489,5 +638,4 @@ __all__ = [
     'DataSourceStatusProviderImpl',
     'DataStoreStatusProviderImpl',
     'FDv2',
-    'FeatureStoreClientWrapper',
 ]
