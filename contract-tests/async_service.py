@@ -67,6 +67,8 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'flag-change-listeners',
             'flag-value-change-listeners',
             'migrations',
+            'persistent-data-store-redis',
+            'fdv1-fallback',
         ]
     }
     return aiohttp.web.Response(

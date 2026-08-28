@@ -70,6 +70,29 @@ jobs:
           version: v3
           enable_persistence_tests: "true"
 
+        #
+        # Async SDK contract tests
+        #
+
+      - name: start async contract test service
+        run: make start-async-contract-test-service-bg
+
+      - name: Run async contract tests v2
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9001
+          token: ${{ secrets.GITHUB_TOKEN }}
+          stop_service: "false"
+          enable_persistence_tests: "true"
+
+      - name: Run async contract tests v3
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9001
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v3
+          enable_persistence_tests: "true"
+
   windows:
     runs-on: windows-latest
 
