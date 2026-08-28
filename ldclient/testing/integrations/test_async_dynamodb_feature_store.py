@@ -16,7 +16,8 @@ import pytest
 from ldclient.async_feature_store_helpers import AsyncCachingStoreWrapper
 from ldclient.feature_store import CacheConfig
 from ldclient.impl.integrations.dynamodb.async_dynamodb_feature_store import (
-    _AsyncDynamoDBFeatureStoreCore
+    _AsyncDynamoDBFeatureStoreCore,
+    have_aioboto3
 )
 from ldclient.integrations import DynamoDB
 from ldclient.interfaces import AsyncFeatureStore
@@ -207,3 +208,14 @@ def test_constructing_without_aioboto3_raises(monkeypatch):
     monkeypatch.setattr(mod, "have_aioboto3", False)
     with pytest.raises(NotImplementedError):
         mod._AsyncDynamoDBFeatureStoreCore(DynamoDBTestHelper.table_name, None, {})
+
+
+@pytest.mark.skipif(not have_aioboto3, reason="aioboto3 is not installed")
+@pytest.mark.asyncio
+async def test_get_client_after_close_raises():
+    # After close(), _get_client() must not build a new client on the
+    # already-closed exit stack; it raises instead of leaking one.
+    core = _AsyncDynamoDBFeatureStoreCore(DynamoDBTestHelper.table_name, None, {})
+    await core.close()
+    with pytest.raises(RuntimeError):
+        await core._get_client()

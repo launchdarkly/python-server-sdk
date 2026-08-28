@@ -61,13 +61,17 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
         self._session = aioboto3.Session()
         self._exit_stack = AsyncExitStack()
         self._client: Optional[Any] = None
-        # Guards lazy client creation so two concurrent coroutines cannot each enter a client.
+        self._closed = False
+        # Guards lazy client creation and close so they cannot interleave: a
+        # close must not race a client that is still being created.
         self._client_lock = asyncio.Lock()
 
     async def _get_client(self) -> Any:
         if self._client is not None:
             return self._client
         async with self._client_lock:
+            if self._closed:
+                raise RuntimeError("DynamoDB feature store is closed")
             if self._client is None:
                 self._client = await self._exit_stack.enter_async_context(self._session.client('dynamodb', **self._dynamodb_opts))
         return self._client
@@ -149,8 +153,10 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
         return resp.get('Item') is not None and len(resp['Item']) > 0
 
     async def close(self) -> None:
-        await self._exit_stack.aclose()
-        self._client = None
+        async with self._client_lock:
+            self._closed = True
+            await self._exit_stack.aclose()
+            self._client = None
 
     def describe_configuration(self, config) -> str:
         return 'DynamoDB'
