@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Awaitable, Callable, Optional, Tuple
 
 from expiringdict import ExpiringDict
 
@@ -7,15 +7,46 @@ from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.aio.concurrency import AsyncRepeatingTask
 from ldclient.impl.big_segments_common import (
     EMPTY_MEMBERSHIP,
-    BigSegmentStoreStatusProviderImpl,
     _hash_for_user_key,
     is_stale
 )
+from ldclient.impl.listeners import Listeners
 from ldclient.impl.util import log
 from ldclient.interfaces import (
-    BigSegmentStoreStatus,
-    BigSegmentStoreStatusProvider
+    AsyncBigSegmentStoreStatusProvider,
+    BigSegmentStoreStatus
 )
+
+
+class AsyncBigSegmentStoreStatusProviderImpl(AsyncBigSegmentStoreStatusProvider):
+    """
+    Default implementation of the AsyncBigSegmentStoreStatusProvider interface.
+
+    Mirrors :class:`BigSegmentStoreStatusProviderImpl`, except the status getter passed in
+    is a coroutine, so :meth:`get_status` is a coroutine too and awaits it.
+    """
+
+    def __init__(self, status_getter: Callable[[], Awaitable[BigSegmentStoreStatus]]):
+        self.__status_getter = status_getter
+        self.__status_listeners = Listeners()
+        self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
+
+    async def get_status(self) -> BigSegmentStoreStatus:
+        return await self.__status_getter()
+
+    def add_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        self.__status_listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        self.__status_listeners.remove(listener)
+
+    def _update_status(self, new_status: BigSegmentStoreStatus):
+        last = self.__last_status
+        if last is None:
+            self.__last_status = new_status
+        elif new_status.available != last.available or new_status.stale != last.stale:
+            self.__last_status = new_status
+            self.__status_listeners.notify(new_status)
 
 
 class AsyncBigSegmentStoreManager:
@@ -28,7 +59,7 @@ class AsyncBigSegmentStoreManager:
         self.__store = config.store
 
         self.__stale_after_millis = config.stale_after * 1000
-        self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
+        self.__status_provider = AsyncBigSegmentStoreStatusProviderImpl(self.get_status)
         self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
         self.__poll_task = None  # type: Optional[AsyncRepeatingTask]
 
@@ -49,7 +80,7 @@ class AsyncBigSegmentStoreManager:
             await self.__store.stop()
 
     @property
-    def status_provider(self) -> BigSegmentStoreStatusProvider:
+    def status_provider(self) -> AsyncBigSegmentStoreStatusProvider:
         return self.__status_provider
 
     async def get_user_membership(self, user_key: str) -> Tuple[Optional[dict], str]:
@@ -74,14 +105,16 @@ class AsyncBigSegmentStoreManager:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
 
-    def get_status(self) -> BigSegmentStoreStatus:
+    async def get_status(self) -> BigSegmentStoreStatus:
         """Return the most recently polled status.
 
-        When no status has been cached yet, the sync variant polls the store
-        inline; the async variant (whose status getter cannot await) reports
-        the store as unavailable until the polling task has run.
+        When no status has been cached yet, poll the store inline and wait for the
+        result, so the status is accurate even if called immediately after start().
         """
-        return self.__last_status or BigSegmentStoreStatus(False, False)
+        status = self.__last_status
+        if status is None:
+            status = await self.poll_store_and_update_status()
+        return status
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below

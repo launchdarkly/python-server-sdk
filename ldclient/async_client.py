@@ -41,9 +41,9 @@ from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.stubs import AsyncNullEventProcessor
 from ldclient.impl.util import log
 from ldclient.interfaces import (
+    AsyncBigSegmentStoreStatusProvider,
     AsyncFeatureStore,
     AsyncFlagTracker,
-    BigSegmentStoreStatusProvider,
     DataSourceStatusProvider,
     DataStoreStatusProvider
 )
@@ -691,13 +691,13 @@ class AsyncLDClient:
             return {}
 
     @property
-    def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
+    def big_segment_store_status_provider(self) -> AsyncBigSegmentStoreStatusProvider:
         """
         Returns an interface for tracking the status of a Big Segment store.
 
-        The :class:`ldclient.interfaces.BigSegmentStoreStatusProvider` has methods for checking
-        whether the Big Segment store is (as far as the SDK knows) currently operational and
-        tracking changes in this status.
+        The :class:`ldclient.interfaces.AsyncBigSegmentStoreStatusProvider` has methods for
+        checking whether the Big Segment store is (as far as the SDK knows) currently
+        operational and tracking changes in this status.
         """
         return self.__big_segment_store_manager.status_provider
 

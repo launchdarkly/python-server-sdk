@@ -302,8 +302,8 @@ async def test_stop_stops_store():
 
 
 @pytest.mark.asyncio
-async def test_status_provider_status_is_synchronous():
-    """BigSegmentStoreStatusProvider.status must be readable synchronously without an await."""
+async def test_status_provider_get_status_after_poll():
+    """AsyncBigSegmentStoreStatusProvider.get_status() reflects the last polled status."""
     store = MockAsyncBigSegmentStore()
     store.setup_metadata_always_up_to_date()
 
@@ -311,8 +311,40 @@ async def test_status_provider_status_is_synchronous():
     try:
         # Poll once to populate __last_status
         await manager.poll_store_and_update_status()
-        # status property is sync — calling it should not raise
-        status = manager.status_provider.status
+        status = await manager.status_provider.get_status()
         assert status.available is True
+    finally:
+        await manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_status_polls_inline_before_background_poll_runs():
+    """
+    get_status() must not race the background AsyncRepeatingTask: calling it immediately
+    after start() -- before the poll task has had a chance to run -- should still report an
+    accurate, available status by polling inline, mirroring the sync manager's behavior.
+    """
+    store = MockAsyncBigSegmentStore()
+    store.setup_metadata_always_up_to_date()
+
+    config = AsyncBigSegmentsConfig(store=store)
+    manager = AsyncBigSegmentStoreManager(config)
+    manager.start()
+    try:
+        status = await manager.get_status()
+        assert status.available is True
+        assert status.stale is False
+    finally:
+        await manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_get_status_with_no_store_configured():
+    """With no store configured, get_status() should report unavailable rather than hang or error."""
+    config = AsyncBigSegmentsConfig(store=None)
+    manager = AsyncBigSegmentStoreManager(config)
+    try:
+        status = await manager.get_status()
+        assert status.available is False
     finally:
         await manager.stop()
