@@ -49,7 +49,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### Deployment
+### Event loop
 
 `AsyncLDClient` runs on the caller's event loop. It targets a single event loop and is not thread-safe. Use one client for the whole application.
 
