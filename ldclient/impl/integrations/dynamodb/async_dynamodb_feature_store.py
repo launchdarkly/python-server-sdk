@@ -21,10 +21,9 @@ except ImportError:
 #
 # Implementation notes:
 #
-# * This store uses the same table layout and key schema as the synchronous DynamoDB feature store,
-# so an async and a synchronous SDK can share one table. Feature flags, segments, and any other kind
-# of entity are all put in the same table. The two required attributes are "key" (present in all
-# storeable entities) and "namespace" (used to disambiguate between flags and segments).
+# * Feature flags, segments, and any other kind of entity are all put in the same table. The two
+# required attributes are "key" (present in all storeable entities) and "namespace" (used to
+# disambiguate between flags and segments).
 #
 # * Because of DynamoDB's restrictions on attribute values (e.g. empty strings are not allowed), the
 # standard DynamoDB marshaling with one attribute per object property is not used. Instead, the
