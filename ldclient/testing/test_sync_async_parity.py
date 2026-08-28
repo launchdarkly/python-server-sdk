@@ -41,7 +41,9 @@ PAIRS = [
     pytest.param(
         InMemoryFeatureStore, AsyncInMemoryFeatureStore,
         set(),
-        {"close"},
+        # is_initialized is an awaitable readiness check; the sync store exposes
+        # readiness through the synchronous ``initialized`` property instead.
+        {"close", "is_initialized"},
         id="feature_store",
     ),
     pytest.param(Evaluator, AsyncEvaluator, set(), set(), id="evaluator"),

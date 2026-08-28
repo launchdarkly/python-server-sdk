@@ -143,18 +143,22 @@ class AsyncFDv1(AsyncDataSystem):
     def flag_change_listeners(self) -> Listeners:
         return self._flag_change_listeners
 
-    @property
-    def data_availability(self) -> DataAvailability:
+    async def data_availability(self) -> DataAvailability:
         if self._config.offline:
             return DataAvailability.DEFAULTS
 
         if self._update_processor is not None and self._update_processor.initialized():
             return DataAvailability.REFRESHED
 
-        if self._store.initialized:
-            return DataAvailability.CACHED
+        # Awaits the store so a persistent store populated by another process is
+        # recognized. A persistent-store error is logged and reported as no data.
+        try:
+            ready = await self._store.is_initialized()
+        except Exception as e:
+            log.warning("Error checking persistent store readiness: %s", e)
+            return DataAvailability.DEFAULTS
 
-        return DataAvailability.DEFAULTS
+        return DataAvailability.CACHED if ready else DataAvailability.DEFAULTS
 
     @property
     def target_availability(self) -> DataAvailability:
