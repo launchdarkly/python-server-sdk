@@ -14,7 +14,7 @@ from ldclient.config import (
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.async_fdv2 import (
     AsyncFDv2,
-    AsyncFeatureStoreClientWrapper
+    _AsyncFeatureStoreClientWrapper
 )
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, _Success
 from ldclient.integrations.test_datav2 import TestDataV2
@@ -690,27 +690,27 @@ class StoreWithAvailabilityNoOptIn(StoreWithoutAvailability):
 
 @pytest.mark.asyncio
 async def test_is_monitoring_enabled_true_when_store_opts_in():
-    wrapper = AsyncFeatureStoreClientWrapper(FakeAsyncStore(), lambda _s: None)
+    wrapper = _AsyncFeatureStoreClientWrapper(FakeAsyncStore(), lambda _s: None)
     assert wrapper.is_monitoring_enabled() is True
 
 
 @pytest.mark.asyncio
 async def test_is_monitoring_enabled_false_without_is_available():
-    wrapper = AsyncFeatureStoreClientWrapper(StoreWithoutAvailability(), lambda _s: None)
+    wrapper = _AsyncFeatureStoreClientWrapper(StoreWithoutAvailability(), lambda _s: None)
     assert wrapper.is_monitoring_enabled() is False
 
 
 @pytest.mark.asyncio
 async def test_is_monitoring_enabled_false_when_store_does_not_opt_in():
     # A store with is_available but no is_monitoring_enabled must not be polled.
-    wrapper = AsyncFeatureStoreClientWrapper(StoreWithAvailabilityNoOptIn(), lambda _s: None)
+    wrapper = _AsyncFeatureStoreClientWrapper(StoreWithAvailabilityNoOptIn(), lambda _s: None)
     assert wrapper.is_monitoring_enabled() is False
 
 
 @pytest.mark.asyncio
 async def test_init_sorts_and_delegates():
     store = FakeAsyncStore()
-    wrapper = AsyncFeatureStoreClientWrapper(store, lambda _s: None)
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda _s: None)
     await wrapper.init({FEATURES: {}, SEGMENTS: {}})
     assert len(store.init_calls) == 1
     assert wrapper.initialized is True
@@ -720,7 +720,7 @@ async def test_init_sorts_and_delegates():
 async def test_failure_marks_unavailable_polls_and_recovers():
     store = FakeAsyncStore()
     statuses: List[DataStoreStatus] = []
-    wrapper = AsyncFeatureStoreClientWrapper(store, lambda s: statuses.append(s))
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda s: statuses.append(s))
 
     # Make the next operation fail.
     store.fail = True
@@ -752,7 +752,7 @@ async def test_failure_marks_unavailable_polls_and_recovers():
 async def test_close_stops_poller_and_closes_inner():
     store = FakeAsyncStore()
     statuses: List[DataStoreStatus] = []
-    wrapper = AsyncFeatureStoreClientWrapper(store, lambda s: statuses.append(s))
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda s: statuses.append(s))
 
     # Trigger an outage so a poller is running.
     store.fail = True
@@ -771,7 +771,7 @@ async def test_close_stops_poller_and_closes_inner():
 @pytest.mark.asyncio
 async def test_successful_ops_pass_through():
     store = FakeAsyncStore()
-    wrapper = AsyncFeatureStoreClientWrapper(store, lambda _s: None)
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda _s: None)
 
     await wrapper.upsert(FEATURES, {"key": "flag-a", "version": 1})
     got = await wrapper.get(FEATURES, "flag-a")
