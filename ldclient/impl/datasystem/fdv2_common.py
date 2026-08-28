@@ -15,6 +15,7 @@ from ldclient.impl.datasystem import DataAvailability, DiagnosticAccumulator
 from ldclient.impl.datasystem.store import _StoreBase
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
+from ldclient.impl.util import log
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceState,
