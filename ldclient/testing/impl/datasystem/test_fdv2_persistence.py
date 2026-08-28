@@ -3,11 +3,13 @@
 from threading import Event
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from ldclient.client import Context
 from ldclient.config import Config, DataSystemConfig
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import DataStoreMode, FeatureStore, FlagChange
+from ldclient.testing.test_ldclient import make_client
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
@@ -782,3 +784,86 @@ def test_persistent_store_commit_handles_errors():
     assert err is not None, "Commit should return error from persistent store"
     assert isinstance(err, RuntimeError)
     assert str(err) == "Simulated persistent store failure"
+
+
+class ThrowingInitializedStore(StubFeatureStore):
+    """A persistent store whose ``initialized`` check raises, to simulate a
+    store I/O error (for example a Redis connection failure) during the
+    warm-start availability gate."""
+
+    @property
+    def initialized(self) -> bool:
+        raise RuntimeError("persistent store I/O error")
+
+
+def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start(caplog):
+    """A persistent-store error at the warm-start availability gate must not
+    propagate out of the client.
+
+    While a synchronizer is configured but has not yet supplied a basis, the
+    availability gate consults the persistent store's initialized state. If that
+    query raises, evaluation must degrade to the default value with
+    ``CLIENT_NOT_READY`` and ``all_flags_state()`` must return an invalid state,
+    rather than raising. This is the sync counterpart to the async fix in #486.
+    """
+    persistent_store = ThrowingInitializedStore()
+
+    # A synchronizer is configured but the data system is never started, so no
+    # basis arrives. This is the warm-start window in which the gate reads the
+    # persistent store's initialized state.
+    data_system_config = DataSystemConfig(
+        data_store_mode=DataStoreMode.READ_ONLY,
+        data_store=persistent_store,
+        initializers=None,
+        synchronizers=[TestDataV2.data_source().builder],
+    )
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    # The gate itself must not raise: it degrades to DEFAULTS instead.
+    assert fdv2.data_availability == DataAvailability.DEFAULTS
+
+    # Drive the same gate through the client and confirm it degrades
+    # instead of propagating the error.
+    client = make_client()
+    try:
+        client._data_system = fdv2
+        context = Context.from_dict({"key": "user", "kind": "user"})
+
+        assert client.variation("flag-key", context, default="default-value") == "default-value"
+
+        detail = client.variation_detail("flag-key", context, default="default-value")
+        assert detail.value == "default-value"
+        assert detail.reason == {"kind": "ERROR", "errorKind": "CLIENT_NOT_READY"}
+        assert detail.is_default_value() is True
+
+        assert client.all_flags_state(context).valid is False
+    finally:
+        client.close()
+
+    assert any(
+        "Error checking persistent store readiness" in record.message
+        for record in caplog.records
+        if record.levelname == "ERROR"
+    )
+
+
+def test_persistent_store_close_logs_and_swallows_error(caplog):
+    """A persistent-store close error is logged as a warning, not raised."""
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+
+    class ClosingFailsStore(StubFeatureStore):
+        def close(self):
+            raise RuntimeError("close boom")
+
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(ClosingFailsStore(), True, None)
+
+    # close() must log the error rather than raise it.
+    store.close()
+
+    assert any(
+        "Error closing the persistent store" in record.message
+        for record in caplog.records
+        if record.levelname == "WARNING"
+    )

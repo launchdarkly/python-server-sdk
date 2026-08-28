@@ -398,10 +398,16 @@ class _FDv2Base:
         if self._store.selector().is_defined():
             return DataAvailability.REFRESHED
 
-        if not self._configured_with_data_sources or self._store.is_initialized():
+        if not self._configured_with_data_sources:
             return DataAvailability.CACHED
 
-        return DataAvailability.DEFAULTS
+        try:
+            store_initialized = self._store.is_initialized()
+        except Exception as e:
+            log.error("Error checking persistent store readiness; treating data as unavailable: %s", e)
+            return DataAvailability.DEFAULTS
+
+        return DataAvailability.CACHED if store_initialized else DataAvailability.DEFAULTS
 
     @property
     def target_availability(self) -> DataAvailability:
