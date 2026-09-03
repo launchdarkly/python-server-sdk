@@ -54,10 +54,14 @@ mypy + isort + pycodestyle clean, unit suite green, both contract suites pass. *
   - 🟡 **sdk-meta async snippets** — draft PR **sdk-meta#617** (`install-async`, `import-async`,
     `init-async`, `evaluate-async` + a `python-async-syntax-only` scaffold that compiles with
     `PyCF_ALLOW_TOP_LEVEL_AWAIT`). Parse-only, mirroring sync `init`.
-  - ⏳ **ld-docs-private mdx (B2)** — HELD until sdk-meta#617 merges + the snippet package releases
-    (the mdx `version=` must point at a published snippet version; `verify` checks the `hash`). Then add
-    `Python (async)` tabs + `SDK_SNIPPET:RENDER` markers (experimental note lives inline in `init-async`,
-    shows only on the async tab) + an async deployment subsection, and run `snippets render` to stamp hashes.
+  - 🟡 **ld-docs-private mdx (B2)** — PRE-STAGED (local branch `jb/sdk-2879/python-async-docs` in
+    `wt-python-async-docs`, one `hash=0` commit, **not pushed**). Adds `Python (async)` tabs +
+    `SDK_SNIPPET:RENDER` markers to install/import/init/evaluate (experimental note lives inline in
+    `init-async`, shows only on the async tab) + an `### Asynchronous client` deployment subsection.
+    End-to-end validated locally: `snippets render` against the working-tree snippets resolved all four
+    markers and computed hashes. **To finish (post-release):** after sdk-meta#617 merges + the snippet
+    package releases, run `snippets render` against the released version to stamp real `hash`/`version`,
+    then push + open the PR (the mdx `version=` must point at a published version; `verify` checks the hash).
     Design notes for the mdx work: the page is snippet-driven; async tabs use the manual
     `start()`/`close()` form so each tab is a coherent counterpart (the `async with` sugar is shown as a
     comment in `init-async`); the async UA is a single `.sdk_metadata.json` entry (jbailey's call, diverges
