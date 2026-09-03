@@ -40,6 +40,22 @@ mypy + isort + pycodestyle clean, unit suite green, both contract suites pass. *
   9.17.0 from `main` with the fixed action. (Re-running the failed release job rebuilds the old tagged
   commit and won't work.)
 - **Consul (SDK-2907) — removed from the async roadmap.**
+- **Released:** 9.17.0 is on PyPI (published via the `manual-publish.yml` workflow after #511 fixed the
+  metadata-2.5 toolchain). #newfeatures Slack announcement posted. `origin/main` `version.py` = 9.17.0.
+- **Docs (SDK-2879) — status:**
+  - ✅ **README async section + event-loop/deployment note** — merged (#510), shipped in 9.17.0.
+  - 🟡 **readthedocs API reference** — draft PR **#513** (`docs/api-main.rst`: `async_client`,
+    `async_config`, `plugin`). `make docs` builds clean; no `[async]` extra needed.
+  - 🟡 **README async-dynamodb extra note** — draft PR **#514**.
+  - ⏳ **Docs-site SDK reference page** (`launchdarkly.com/docs/sdk/server-side/python`, in
+    `ld-docs-private`): needs the async "Initialize the client" sample (sync/async tabbed `<CodeGroup>`;
+    Fern→Mintlify-portable — mockup done, awaiting layout pick), an experimental callout, and an
+    event-loop/deployment section (single loop; construct-once + `await start()` per worker; ASGI lifespan).
+  - ⏳ **sdk-meta**: `.sdk_metadata.json` (this repo) feeds sdk-meta; may need an async capability entry.
+    The `SDK_SNIPPET:RENDER` snippet system is **not wired into ld-docs-private today**, so snippets are lower priority.
+  - ⏳ **postfork / worker-server story**: previously undocumented (no code). Now being built —
+    `SDK-3047` fork-detection (`wt-fork-detection`). Docs to follow once it lands.
+  - ✅ **Example app task created** — SDK-3021 (under epic SDK-60).
 - **Stacked-rebase gotcha:** slices are **squash-merged**, so a child stacked on a merged parent must
   be rebased with `git rebase --onto origin/main <old-parent-tip>` — GitHub's "rebase stack" button
   and a plain `git rebase main` both try to replay the parent's now-squashed commits and conflict.
