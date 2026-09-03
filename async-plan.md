@@ -48,11 +48,27 @@ mypy + isort + pycodestyle clean, unit suite green, both contract suites pass. *
     `async_config`, `plugin`). `make docs` builds clean; no `[async]` extra needed.
   - 🟡 **README async-dynamodb extra note** — draft PR **#514**.
   - ⏳ **Docs-site SDK reference page** (`launchdarkly.com/docs/sdk/server-side/python`, in
-    `ld-docs-private`): needs the async "Initialize the client" sample (sync/async tabbed `<CodeGroup>`;
-    Fern→Mintlify-portable — mockup done, awaiting layout pick), an experimental callout, and an
-    event-loop/deployment section (single loop; construct-once + `await start()` per worker; ASGI lifespan).
-  - ⏳ **sdk-meta**: `.sdk_metadata.json` (this repo) feeds sdk-meta; may need an async capability entry.
-    The `SDK_SNIPPET:RENDER` snippet system is **not wired into ld-docs-private today**, so snippets are lower priority.
+    `ld-docs-private`): the page is **snippet-driven** — every code sample is a
+    `{/* SDK_SNIPPET:RENDER:python-server-sdk/sdk-docs/<id> hash=.. version=.. */}` marker over a
+    `<CodeBlock>`. So the async work = author new async snippets in **sdk-meta** + add `Python (async)`
+    tabs/markers in the mdx + one experimental callout + an async deployment subsection.
+    (CORRECTION: I earlier said the snippet system was "not wired" — that was from a `ld-docs-private/main`
+    checkout **2560 commits stale**. On real `origin/main` it is fully wired.)
+  - ⏳ **sdk-meta snippets** (`sdk-meta/snippets/sdks/python-server-sdk/snippets/sdk-docs/`): add async
+    variants (`init-async`, `evaluate-async`, maybe `install-async`) as `*.snippet.md` (YAML frontmatter
+    + one fenced block), then run the Go tool `sdk-meta/snippets/cmd/snippets render --target=ld-docs`
+    to stamp `hash`/`version` (use `hash=0` on first wiring). See `sdk-meta/snippets/docs/AUTHORING.md`;
+    ld-docs syncs via `.github/workflows/sync-ld-docs-snippets.yml`.
+  - ⏳ **sdk-meta `.sdk_metadata.json`** (this repo): append the async UA to the **existing**
+    `python-server-sdk` entry → `userAgents: ["PythonClient", "PythonAsyncClient"]` (jbailey's call:
+    NOT a separate `python-server-sdk-async` entry, since async has no independent package and isn't a
+    tracked feature — this diverges from SDK-2658's written proposal).
+  - ⏳ **User-Agent header (SDK-2658)**: async currently reuses `PythonClient/<version>` (all async
+    requests flow through `impl/aio/transport.py` `AsyncHTTPTransport` / `make_client_session` and
+    `util._headers`, all of which call `impl/http.py::_base_headers`). Thread an async token
+    `PythonAsyncClient` through the async header sites (parameterize `_base_headers`). Analytics name
+    `python-server-sdk-async` already ships (`async_client.py:190`); billing confirmed it does not key
+    off the UA, so this is safe/additive.
   - ⏳ **postfork / worker-server story**: previously undocumented (no code). Now being built —
     `SDK-3047` fork-detection (`wt-fork-detection`). Docs to follow once it lands.
   - ✅ **Example app task created** — SDK-3021 (under epic SDK-60).
