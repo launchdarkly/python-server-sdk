@@ -390,7 +390,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         :param plugins: A list of plugins to be used with the SDK. Plugin support is currently experimental and subject to change.
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
-        :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload.
+        :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload. Payload filtering is not supported with the FDv2 data system, so this has no effect on FDv2 requests.
         :param datasystem_config: Configuration for the upcoming enhanced data system design. This is experimental and should not be set without direction from LaunchDarkly support.
         """
         self.__sdk_key = validate_sdk_key_format(sdk_key, log)
@@ -661,6 +661,9 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
        polling data sources. It will not affect TestData or FileData data
        sources, nor will it be applied to any data source provided through the
        {#data_source} config property.
+
+       Payload filtering is not supported with the FDv2 data system, so this
+       key has no effect on requests made by FDv2 data sources.
         """
         return self.__payload_filter_key
 
