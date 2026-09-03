@@ -7,7 +7,7 @@
       "languages": [
         "Python"
       ],
-      "userAgents": ["PythonClient"],
+      "userAgents": ["PythonClient", "PythonAsyncClient"],
       "features": {
         "allFlags": { "introduced": "2.0" },
         "appMetadata": { "introduced": "7.6" },

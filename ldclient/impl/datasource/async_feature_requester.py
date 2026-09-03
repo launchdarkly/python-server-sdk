@@ -9,6 +9,7 @@ from urllib import parse
 
 from ldclient.impl.aio.transport import AsyncHTTPTransport
 from ldclient.impl.datasource.datasource_common import FDV1_POLLING_ENDPOINT
+from ldclient.impl.http import ASYNC_USER_AGENT
 from ldclient.impl.util import _headers, log, throw_if_unsuccessful_response
 from ldclient.interfaces import AsyncFeatureRequester
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
@@ -30,7 +31,7 @@ class AsyncFeatureRequesterImpl(AsyncFeatureRequester):
 
     async def get_all_data(self):
         uri = self._poll_uri
-        hdrs = _headers(self._config)
+        hdrs = _headers(self._config, ASYNC_USER_AGENT)
         cache_entry = self._cache.get(uri)
         hdrs['Accept-Encoding'] = 'gzip'
         if cache_entry is not None:
