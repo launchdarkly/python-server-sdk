@@ -40,11 +40,12 @@ pip install launchdarkly-server-sdk[async]
 
 ```python
 import asyncio
-from ldclient import Config, Context
+from ldclient import Context
 from ldclient.async_client import AsyncLDClient
+from ldclient.async_config import AsyncConfig
 
 async def main():
-    async with AsyncLDClient(Config("sdk-key")) as client:
+    async with AsyncLDClient(AsyncConfig("sdk-key")) as client:
         value = await client.variation("my-flag", Context.create("user-key"), False)
         print(value)
 
