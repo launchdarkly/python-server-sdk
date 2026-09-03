@@ -29,6 +29,8 @@ Refer to the [SDK reference guide](https://docs.launchdarkly.com/sdk/server-side
 
 > [!NOTE]
 > Using Redis with the async client (big segments or a persistent data store) requires `redis>=4.2.0`, the version that introduced `redis.asyncio`. The `redis` extra itself still permits older versions for synchronous use, so install `redis>=4.2.0` when using Redis with the async client.
+>
+> Using DynamoDB with the async client requires the separate `async-dynamodb` extra (`aioboto3`), distinct from the synchronous `dynamodb` extra: `pip install launchdarkly-server-sdk[async,async-dynamodb]`.
 
 An async implementation, `AsyncLDClient`, is available for use with `asyncio`-based applications. It uses `aiohttp` for HTTP and requires installing the optional `async` extra:
 
