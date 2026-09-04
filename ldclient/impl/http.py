@@ -7,6 +7,12 @@ import urllib3
 
 from ldclient.version import VERSION
 
+#: User-Agent product token for the synchronous client.
+SYNC_USER_AGENT = "PythonClient"
+#: User-Agent product token for the asynchronous client. Sync and async ship in
+#: one package, so the token is how LaunchDarkly tells the two apart.
+ASYNC_USER_AGENT = "PythonAsyncClient"
+
 
 def _application_header_value(application: dict) -> str:
     parts = []
@@ -22,8 +28,8 @@ def _application_header_value(application: dict) -> str:
     return " ".join(parts)
 
 
-def _base_headers(config):
-    headers = {'Authorization': config.sdk_key or '', 'User-Agent': 'PythonClient/' + VERSION}
+def _base_headers(config, user_agent=SYNC_USER_AGENT):
+    headers = {'Authorization': config.sdk_key or '', 'User-Agent': user_agent + '/' + VERSION}
 
     if config._instance_id is not None:
         headers['X-LaunchDarkly-Instance-Id'] = config._instance_id

@@ -26,6 +26,7 @@ from ldclient.impl.datasourcev2.polling_common import (
     polling_payload_to_changeset,
     polling_result_to_basis
 )
+from ldclient.impl.http import ASYNC_USER_AGENT
 from ldclient.impl.util import (
     UnsuccessfulResponseException,
     _Fail,
@@ -192,7 +193,7 @@ class AiohttpPollingRequester(AsyncRequester):
             filter_query = parse.urlencode(query_params)
             uri += f"?{filter_query}"
 
-        hdrs = _headers(self._config)
+        hdrs = _headers(self._config, ASYNC_USER_AGENT)
         hdrs["Accept-Encoding"] = "gzip"
 
         if self._etag is not None:
@@ -387,7 +388,7 @@ class AiohttpFDv1PollingRequester(AsyncRequester):
             filter_query = parse.urlencode(query_params)
             uri += f"?{filter_query}"
 
-        hdrs = _headers(self._config)
+        hdrs = _headers(self._config, ASYNC_USER_AGENT)
         hdrs["Accept-Encoding"] = "gzip"
 
         if self._etag is not None:

@@ -15,7 +15,7 @@ from ld_eventsource.config.error_strategy import ErrorStrategy
 from ld_eventsource.config.retry_delay_strategy import RetryDelayStrategy
 
 from ldclient.impl.aio.transport_types import TransportResponse
-from ldclient.impl.http import _base_headers, _get_proxy_url
+from ldclient.impl.http import ASYNC_USER_AGENT, _base_headers, _get_proxy_url
 from ldclient.impl.util import log
 
 # Allows up to 5 minutes to elapse without any data sent across the stream.
@@ -123,7 +123,7 @@ class AsyncSSEFactory:
         proxy settings, and the retry/backoff policy come from the SDK config.
         ``query_params`` is an optional zero-argument callable evaluated on
         each (re)connect to produce additional query string parameters."""
-        base_headers = _base_headers(self._config)
+        base_headers = _base_headers(self._config, ASYNC_USER_AGENT)
         aiohttp_request_options: dict = {
             "timeout": aiohttp.ClientTimeout(
                 total=None,

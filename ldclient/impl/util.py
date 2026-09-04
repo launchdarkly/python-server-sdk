@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Any, Dict, Generic, Mapping, Optional, TypeVar, Union
 from urllib.parse import urlparse, urlunparse
 
-from ldclient.impl.http import _base_headers
+from ldclient.impl.http import SYNC_USER_AGENT, _base_headers
 
 
 def current_time_millis() -> int:
@@ -82,8 +82,8 @@ def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:
     return sdk_key
 
 
-def _headers(config):
-    base_headers = _base_headers(config)
+def _headers(config, user_agent=SYNC_USER_AGENT):
+    base_headers = _base_headers(config, user_agent)
     base_headers.update({'Content-Type': "application/json"})
     return base_headers
 
