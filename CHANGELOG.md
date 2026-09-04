@@ -2,6 +2,14 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.17.1](https://github.com/launchdarkly/python-server-sdk/compare/9.17.0...9.17.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* Add async modules to the readthedocs API reference ([#513](https://github.com/launchdarkly/python-server-sdk/issues/513)) ([f40d3b2](https://github.com/launchdarkly/python-server-sdk/commit/f40d3b22c808e829e9deb4ac5feab05db85674e8))
+* Report a distinct User-Agent for the async client ([#516](https://github.com/launchdarkly/python-server-sdk/issues/516)) ([514c467](https://github.com/launchdarkly/python-server-sdk/commit/514c46780cf5aa593c1f791bd1335c7048f6d235))
+
 ## [9.17.0](https://github.com/launchdarkly/python-server-sdk/compare/9.16.1...9.17.0) (2026-08-28)
 
 
