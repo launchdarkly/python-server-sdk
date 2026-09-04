@@ -51,17 +51,16 @@ mypy + isort + pycodestyle clean, unit suite green, both contract suites pass. *
     `user_agent`; async sites pass `PythonAsyncClient`; `.sdk_metadata.json` `userAgents` gets it as a
     single entry). Test `test_user_agent.py`; lint + touched suites green.
   - 🟡 **README AsyncConfig fix** — PR **#517** (`chore:`; async example passed sync `Config`).
-  - 🟡 **sdk-meta async snippets** — draft PR **sdk-meta#617** (`install-async`, `import-async`,
-    `init-async`, `evaluate-async` + a `python-async-syntax-only` scaffold that compiles with
-    `PyCF_ALLOW_TOP_LEVEL_AWAIT`). Parse-only, mirroring sync `init`.
-  - 🟡 **ld-docs-private mdx (B2)** — PRE-STAGED (local branch `jb/sdk-2879/python-async-docs` in
-    `wt-python-async-docs`, one `hash=0` commit, **not pushed**). Adds `Python (async)` tabs +
-    `SDK_SNIPPET:RENDER` markers to install/import/init/evaluate (experimental note lives inline in
-    `init-async`, shows only on the async tab) + an `### Asynchronous client` deployment subsection.
-    End-to-end validated locally: `snippets render` against the working-tree snippets resolved all four
-    markers and computed hashes. **To finish (post-release):** after sdk-meta#617 merges + the snippet
-    package releases, run `snippets render` against the released version to stamp real `hash`/`version`,
-    then push + open the PR (the mdx `version=` must point at a published version; `verify` checks the hash).
+  - ✅ **sdk-meta async snippets** — **MERGED (sdk-meta#617), released as snippets `0.26.0`**
+    (`install-async`, `import-async`, `init-async`, `evaluate-async` + a `python-async-syntax-only`
+    scaffold that compiles with `PyCF_ALLOW_TOP_LEVEL_AWAIT`). Parse-only, mirroring sync `init`.
+  - 🟡 **ld-docs-private mdx (B2)** — PR **ld-docs-private#8399** (`jb/sdk-2879/python-async-docs`).
+    Adds `Python (async)` tabs + `SDK_SNIPPET:RENDER` markers to install/import/init/evaluate
+    (experimental note inline in `init-async`, async tab only) + an `### Asynchronous client` deployment
+    subsection. Rendered against released snippets `0.26.0`; markers carry real hashes + `version=0.26.0`;
+    `snippets verify --target=ld-docs` = ok. (Gotcha for future edits: render only re-stamps `version`
+    when the body *changes* — `lddocs.go:193` preserves the version on a byte-identical body — so a
+    hand-authored body that already matches keeps `version=0`; set it to the release version by hand.)
     Design notes for the mdx work: the page is snippet-driven; async tabs use the manual
     `start()`/`close()` form so each tab is a coherent counterpart (the `async with` sugar is shown as a
     comment in `init-async`); the async UA is a single `.sdk_metadata.json` entry (jbailey's call, diverges
