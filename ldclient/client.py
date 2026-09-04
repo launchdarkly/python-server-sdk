@@ -2,9 +2,10 @@
 This submodule contains the client class that provides most of the SDK functionality.
 """
 
+import os
 import threading
 import traceback
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from ldclient.config import Config
@@ -50,6 +51,11 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 from .impl import AnyNum
 
+_FORK_WARNING_MESSAGE = (
+    "This process was forked after the LDClient was created. Background threads do not survive a fork, "
+    "so flag updates and analytics events will not work in this process. Call LDClient.postfork() after forking."
+)
+
 
 class LDClient:
     """The LaunchDarkly SDK client object.
@@ -78,6 +84,9 @@ class LDClient:
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
+        self._owner_pid = os.getpid()
+        self._fork_warned_pids: Dict[int, object] = {}
+
         self.__start_up(start_wait)
 
     def postfork(self, start_wait: float = 5):
@@ -100,9 +109,49 @@ class LDClient:
         that any listener or hook integrations be added postfork unless you are
         certain it can survive the forking process.
 
+        If the SDK is used in a forked child process before this method is
+        called, it logs a warning once per process. Calling this method clears
+        that condition for the current process.
+
         :param start_wait: the number of seconds to wait for a successful connection to LaunchDarkly
         """
+        self._owner_pid = os.getpid()
+        self._fork_warned_pids = {}
         self.__start_up(start_wait)
+
+    def _check_forked(self):
+        """
+        Log a warning once per process if this client is used in a process that was forked after
+        the client was created.
+
+        The "already warned" state is keyed by pid, not stored as a boolean. A boolean would be
+        copied into every child on fork, so a grandchild process would never get its own warning.
+
+        The state is a dict written with ``dict.setdefault``, not a ``threading.Lock``. A lock held
+        at the moment of a fork is inherited locked by the child and would hang its first
+        evaluation. ``dict.setdefault`` is atomic in CPython, so many threads log exactly one warning.
+        """
+        pid = os.getpid()
+        if pid == self._owner_pid:
+            return
+        if not self._fork_breaks_client():
+            return
+
+        token = object()
+        if self._fork_warned_pids.setdefault(pid, token) is token:
+            log.warning(_FORK_WARNING_MESSAGE)
+
+    def _fork_breaks_client(self) -> bool:
+        """
+        Return true if this configuration needs background threads. Offline mode has none. LDD mode
+        with events disabled reads flags from the persistent store and sends nothing, so a fork does
+        not break it.
+        """
+        if self._config.offline:
+            return False
+        if self._config.use_ldd and not self._config.send_events:
+            return False
+        return True
 
     def __start_up(self, start_wait: float):
         environment_metadata = get_environment_metadata(self._config, "python-server-sdk")
@@ -220,6 +269,7 @@ class LDClient:
 
         Do not attempt to use the client after calling this method.
         """
+        self._check_forked()
         log.info("Closing LaunchDarkly client..")
         self._event_processor.stop()
         self._data_system.stop()
@@ -247,6 +297,7 @@ class LDClient:
         Customers not using the builder should provide this method with the
         tracker returned from calling :func:`migration_variation`.
         """
+        self._check_forked()
         event = tracker.build()
 
         if isinstance(event, str):
@@ -271,6 +322,7 @@ class LDClient:
         :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
           numeric custom metrics; can be omitted if this event is used by only non-numeric metrics
         """
+        self._check_forked()
         if not context.valid:
             log.warning("Invalid context for track (%s)" % context.error)
         else:
@@ -289,7 +341,7 @@ class LDClient:
 
         :param context: the context to register
         """
-
+        self._check_forked()
         if not context.valid:
             log.warning("Invalid context for identify (%s)" % context.error)
         else:
@@ -331,6 +383,7 @@ class LDClient:
         schedules the next event delivery to be as soon as possible; however, the delivery still
         happens asynchronously on a worker thread, so this method will return immediately.
         """
+        self._check_forked()
         if self._config.offline:
             return
         return self._event_processor.flush()
@@ -480,6 +533,8 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
+        self._check_forked()
+
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -572,6 +627,10 @@ class LDClient:
         # :param block:
         # :return:
         """
+        # variation, variation_detail, and migration_variation all pass through here, so this one
+        # check covers every evaluation entry point.
+        self._check_forked()
+
         hooks = []  # type: List[Hook]
         with self.__hooks_lock.read():
             if len(self.__hooks) == 0:
