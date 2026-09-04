@@ -41,9 +41,9 @@ from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.stubs import AsyncNullEventProcessor
 from ldclient.impl.util import log
 from ldclient.interfaces import (
+    AsyncBigSegmentStoreStatusProvider,
     AsyncFeatureStore,
     AsyncFlagTracker,
-    BigSegmentStoreStatusProvider,
     DataSourceStatusProvider,
     DataStoreStatusProvider
 )
@@ -197,6 +197,12 @@ class AsyncLDClient:
         # Start the big-segment status poll now that a loop is running.
         self.__big_segment_store_manager.start()
 
+        # FDv2 builds its data sources from builders; wire the shared session into
+        # them before starting (FDv1 pulls the session itself via its provider).
+        datasystem_config = self._config.datasystem_config
+        if datasystem_config is not None and not self._config.offline:
+            self._wire_data_source_sessions(datasystem_config)
+
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
 
@@ -221,7 +227,7 @@ class AsyncLDClient:
                 log.info("Waiting up to " + str(start_wait) + " seconds for LaunchDarkly client to initialize...")
                 await update_processor_ready.wait(start_wait)
 
-        if self.is_initialized() is True:
+        if await self.is_initialized() is True:
             log.info("Started LaunchDarkly Client: OK")
         else:
             log.warning("Initialization timeout exceeded for LaunchDarkly Client or an error occurred. " "Feature Flags may not yet be available.")
@@ -243,7 +249,9 @@ class AsyncLDClient:
 
             return AsyncFDv1(self._config, self._select_feature_store(), self._get_session)
 
-        raise NotImplementedError("FDv2 is not yet supported in the async client")
+        from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
+
+        return AsyncFDv2(self._config, datasystem_config)
 
     def _select_feature_store(self) -> AsyncFeatureStore:
         """Choose the async feature store for the v1 data system based on the
@@ -252,6 +260,34 @@ class AsyncLDClient:
         if feature_store is None:
             return AsyncInMemoryFeatureStore()
         return feature_store
+
+    def _wire_data_source_sessions(self, data_system_config) -> None:
+        """Provide the client's aiohttp session to any async data source
+        builders so the sources they build share the client's connection pool."""
+        from ldclient.impl.datasourcev2.async_polling import (
+            AsyncFallbackToFDv1PollingDataSourceBuilder,
+            AsyncPollingDataSourceBuilder
+        )
+        from ldclient.impl.datasourcev2.async_streaming import (
+            AsyncStreamingDataSourceBuilder
+        )
+
+        builders = list(data_system_config.initializers or []) + list(
+            data_system_config.synchronizers or []
+        )
+        if data_system_config.fdv1_fallback_synchronizer is not None:
+            builders.append(data_system_config.fdv1_fallback_synchronizer)
+
+        for builder in builders:
+            if isinstance(
+                builder,
+                (
+                    AsyncFallbackToFDv1PollingDataSourceBuilder,
+                    AsyncPollingDataSourceBuilder,
+                    AsyncStreamingDataSourceBuilder,
+                ),
+            ):
+                builder.session(self._get_session())
 
     async def __register_plugins(self, environment_metadata: EnvironmentMetadata):
         for plugin in self._config.plugins:
@@ -343,18 +379,20 @@ class AsyncLDClient:
         """Returns true if the client is in offline mode."""
         return self._config.offline
 
-    def is_initialized(self) -> bool:
+    async def is_initialized(self) -> bool:
         """Returns true if the client has successfully connected to LaunchDarkly.
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
         It might still be in the process of starting up, or it might be attempting to reconnect after an
         unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
         and given up.
+
+        This is a coroutine because determining readiness may query a persistent store.
         """
         if self.is_offline() or self._config.use_ldd:
             return True
 
-        return self._data_system.data_availability.at_least(DataAvailability.CACHED)
+        return (await self._data_system.data_availability()).at_least(DataAvailability.CACHED)
 
     async def flush(self):
         """Flushes all pending analytics events.
@@ -455,8 +493,9 @@ class AsyncLDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = await self._data_system.data_availability()
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -526,8 +565,9 @@ class AsyncLDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = await self._data_system.data_availability()
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
@@ -651,13 +691,13 @@ class AsyncLDClient:
             return {}
 
     @property
-    def big_segment_store_status_provider(self) -> BigSegmentStoreStatusProvider:
+    def big_segment_store_status_provider(self) -> AsyncBigSegmentStoreStatusProvider:
         """
         Returns an interface for tracking the status of a Big Segment store.
 
-        The :class:`ldclient.interfaces.BigSegmentStoreStatusProvider` has methods for checking
-        whether the Big Segment store is (as far as the SDK knows) currently operational and
-        tracking changes in this status.
+        The :class:`ldclient.interfaces.AsyncBigSegmentStoreStatusProvider` has methods for
+        checking whether the Big Segment store is (as far as the SDK knows) currently
+        operational and tracking changes in this status.
         """
         return self.__big_segment_store_manager.status_provider
 

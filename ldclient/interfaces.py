@@ -408,7 +408,16 @@ class AsyncFeatureStore(ABC):
     @abstractmethod
     def initialized(self) -> bool:
         """
-        Returns whether the store has been initialized yet or not.
+        Returns the store's last observed initialized state without querying it.
+        """
+
+    @abstractmethod
+    async def is_initialized(self) -> bool:
+        """
+        Queries whether the store has been initialized, awaiting the store if a query is required.
+
+        A persistent store may have been populated by another process, so this can require I/O.
+        Implementations should latch a positive result: once the store is initialized it stays so.
         """
 
     async def close(self) -> None:
@@ -885,9 +894,8 @@ class BigSegmentStoreStatusProvider:
         """
         Gets the current status of the store.
 
-        Before the first poll completes, the synchronous SDK performs a blocking store query and
-        returns its result, while the async SDK (``AsyncLDClient``) returns the last polled status
-        without blocking -- ``available=False`` until the first background poll completes.
+        Before the first poll completes, this performs a blocking store query and returns its
+        result, so the status is accurate even if called immediately after the client starts.
 
         :return: the status
         """
@@ -900,6 +908,57 @@ class BigSegmentStoreStatusProvider:
 
         The listener is a function or method that will be called with a single parameter: the
         new ``BigSegmentStoreStatus``.
+
+        :param listener: the listener to add
+        """
+        pass
+
+    @abstractmethod
+    def remove_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        """
+        Unsubscribes from notifications of status changes.
+
+        :param listener: a listener that was previously added with :func:`add_listener()`; if it was not,
+            this method does nothing
+        """
+        pass
+
+
+class AsyncBigSegmentStoreStatusProvider(ABC):
+    """
+    Async interface for querying the status of a Big Segment store, for use with the async
+    client (:class:`ldclient.async_client.AsyncLDClient`). It mirrors
+    :class:`BigSegmentStoreStatusProvider`, except the current status is read with the
+    coroutine :meth:`get_status` instead of a synchronous ``status`` property (a property
+    cannot await).
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+
+    An implementation of this abstract class is returned by
+    :meth:`ldclient.async_client.AsyncLDClient.big_segment_store_status_provider`. Application
+    code never needs to implement this interface.
+    """
+
+    @abstractmethod
+    async def get_status(self) -> BigSegmentStoreStatus:
+        """
+        Gets the current status of the store.
+
+        Before the first poll completes, this awaits a store query and returns its result, so
+        the status is accurate even if called immediately after the client starts.
+
+        :return: the status
+        """
+        pass
+
+    @abstractmethod
+    def add_listener(self, listener: Callable[[BigSegmentStoreStatus], None]) -> None:
+        """
+        Subscribes for notifications of status changes. Behaves identically to
+        :meth:`BigSegmentStoreStatusProvider.add_listener`.
 
         :param listener: the listener to add
         """

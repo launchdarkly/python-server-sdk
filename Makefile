@@ -70,6 +70,15 @@ start-contract-test-service-bg:
 	@echo "Test service output will be captured in $(TEMP_TEST_OUTPUT)"
 	@make start-contract-test-service >$(TEMP_TEST_OUTPUT) 2>&1 &
 
+.PHONY: start-async-contract-test-service
+start-async-contract-test-service: install-contract-tests-deps
+	@cd contract-tests && uv run python async_service.py 9001
+
+.PHONY: start-async-contract-test-service-bg
+start-async-contract-test-service-bg:
+	@echo "Async test service output will be captured in /tmp/async-contract-test-service.log"
+	@make start-async-contract-test-service >/tmp/async-contract-test-service.log 2>&1 &
+
 .PHONY: run-contract-tests
 run-contract-tests:
 	@curl -s https://raw.githubusercontent.com/launchdarkly/sdk-test-harness/v2/downloader/run.sh \

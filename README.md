@@ -20,6 +20,46 @@ This version of the LaunchDarkly SDK is compatible with Python 3.10+.
 
 Refer to the [SDK reference guide](https://docs.launchdarkly.com/sdk/server-side/python) for instructions on getting started with using the SDK.
 
+## Async support
+
+> [!CAUTION]
+> The async implementation (`AsyncLDClient` and its associated async API) is experimental and should NOT be considered ready for production use. It may change or be removed without notice and is not subject to backwards compatibility guarantees.
+>
+> Pin to a specific minor version and review the changelog before upgrading.
+
+> [!NOTE]
+> Using Redis with the async client (big segments or a persistent data store) requires `redis>=4.2.0`, the version that introduced `redis.asyncio`. The `redis` extra itself still permits older versions for synchronous use, so install `redis>=4.2.0` when using Redis with the async client.
+>
+> Using DynamoDB with the async client requires the separate `async-dynamodb` extra (`aioboto3`), distinct from the synchronous `dynamodb` extra: `pip install launchdarkly-server-sdk[async,async-dynamodb]`.
+
+An async implementation, `AsyncLDClient`, is available for use with `asyncio`-based applications. It uses `aiohttp` for HTTP and requires installing the optional `async` extra:
+
+```
+pip install launchdarkly-server-sdk[async]
+```
+
+```python
+import asyncio
+from ldclient import Context
+from ldclient.async_client import AsyncLDClient
+from ldclient.async_config import AsyncConfig
+
+async def main():
+    async with AsyncLDClient(AsyncConfig("sdk-key")) as client:
+        value = await client.variation("my-flag", Context.create("user-key"), False)
+        print(value)
+
+asyncio.run(main())
+```
+
+### Event loop
+
+`AsyncLDClient` runs on the caller's event loop. It targets a single event loop and is not thread-safe. Use one client for the whole application.
+
+The constructor does not need a running event loop. So you can create the client once, before the application forks or preloads its workers. Then start the client on each worker's event loop with `await client.start()`. You can also use `async with AsyncLDClient(config) as client:`, which starts and closes the client for you.
+
+This model fits ASGI servers. Create the client at application startup, and start it in the ASGI lifespan handler.
+
 ## Learn more
 
 Read our [documentation](http://docs.launchdarkly.com) for in-depth instructions on configuring and using LaunchDarkly. You can also head straight to the [complete reference guide for this SDK](http://docs.launchdarkly.com/docs/python-sdk-reference).

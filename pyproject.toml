@@ -1,6 +1,6 @@
 [project]
 name = "launchdarkly-server-sdk"
-version = "9.16.1"
+version = "9.17.0"
 description = "LaunchDarkly SDK for Python"
 authors = [
     {name = "LaunchDarkly", email = "dev@launchdarkly.com"}
@@ -40,6 +40,7 @@ async = ["aiohttp>=3.9,<4"]
 redis = ["redis>=2.10.5"]
 consul = ["python-consul>=1.0.1"]
 dynamodb = ["boto3>=1.9.71"]
+async-dynamodb = ["aioboto3>=11.0"]
 test-filesource = ["pyyaml>=5.3.1", "watchdog>=3.0.0"]
 
 [dependency-groups]
@@ -49,6 +50,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "redis>=4.2.0,<9.0.0",
     "boto3>=1.9.71,<2.0.0",
+    "aioboto3>=11.0",
     "coverage>=4.4",
     "jsonpickle>1.4.1",
     "pytest-cov>=2.4.0",

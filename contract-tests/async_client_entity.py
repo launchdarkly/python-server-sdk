@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from typing import Optional
+import sys
+from typing import Any, Callable, Optional
 
 import requests
 from async_big_segment_store_fixture import AsyncBigSegmentStoreFixture
@@ -10,8 +11,22 @@ from hook import AsyncPostingHook
 
 from ldclient import Context
 from ldclient.async_client import AsyncLDClient
-from ldclient.async_config import AsyncBigSegmentsConfig, AsyncConfig
+from ldclient.async_config import (
+    AsyncBigSegmentsConfig,
+    AsyncConfig,
+    AsyncDataSystemConfig
+)
+from ldclient.feature_store import CacheConfig
+from ldclient.impl.datasourcev2.async_polling import (
+    AsyncFallbackToFDv1PollingDataSourceBuilder,
+    AsyncPollingDataSourceBuilder
+)
+from ldclient.impl.datasourcev2.async_streaming import (
+    AsyncStreamingDataSourceBuilder
+)
 from ldclient.impl.util import Result
+from ldclient.integrations import Redis
+from ldclient.interfaces import DataStoreMode
 from ldclient.migrations import (
     AsyncMigratorBuilder,
     ExecutionOrder,
@@ -42,7 +57,7 @@ class AsyncClientEntity:
 
         datasystem_config = config_params.get('dataSystem')
         if datasystem_config is not None:
-            raise NotImplementedError("FDv2 (dataSystem) is not yet supported in the async contract-test service")
+            opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
         elif config_params.get("streaming") is not None:
             streaming = config_params["streaming"]
             if streaming.get("baseUri") is not None:
@@ -93,6 +108,9 @@ class AsyncClientEntity:
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = AsyncBigSegmentsConfig(**big_config)
 
+        if config_params.get("persistentDataStore") is not None:
+            opts["feature_store"] = _create_async_persistent_store(config_params["persistentDataStore"])
+
         start_wait = config_params.get("startWaitTimeMs") or 5000
         sdk_config = AsyncConfig(**opts)
 
@@ -104,8 +122,8 @@ class AsyncClientEntity:
         await self._client.start(start_wait / 1000.0)
         self._listeners = AsyncListenerRegistry(self._client.flag_tracker)
 
-    def is_initializing(self) -> bool:
-        return self._client.is_initialized() if self._client else False
+    async def is_initializing(self) -> bool:
+        return await self._client.is_initialized() if self._client else False
 
     async def evaluate(self, params: dict) -> dict:
         response = {}
@@ -185,7 +203,7 @@ class AsyncClientEntity:
         return {"error": c.error}
 
     async def get_big_segment_store_status(self) -> dict:
-        status = self._client.big_segment_store_status_provider.status
+        status = await self._client.big_segment_store_status_provider.get_status()
         return {"available": status.available, "stale": status.stale}
 
     async def migration_variation(self, params: dict) -> dict:
@@ -267,3 +285,119 @@ class AsyncClientEntity:
 def _set_optional_time_prop(params_in: dict, name_in: str, params_out: dict, name_out: str):
     if params_in.get(name_in) is not None:
         params_out[name_out] = params_in[name_in] / 1000.0
+
+
+def _set_optional_time(params_in: dict, name_in: str, func: Callable[[float], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in] / 1000.0)
+
+
+def _set_optional_value(params_in: dict, name_in: str, func: Callable[[Any], Any]):
+    if params_in.get(name_in) is not None:
+        func(params_in[name_in])
+
+
+def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSystemConfig:
+    """Build an AsyncDataSystemConfig from the harness's dataSystem config.
+
+    Wires the FDv2 initializers, the ordered synchronizer chain, the FDv1
+    fallback synchronizer, the payload filter, and an optional async
+    persistent store. The async client injects its shared aiohttp session
+    into these builders when it starts.
+    """
+    initializers: Optional[list] = None
+    init_configs = datasystem_config.get('initializers')
+    if init_configs is not None:
+        initializers = []
+        for init_config in init_configs:
+            polling = init_config.get('polling')
+            if polling is not None:
+                polling_builder = AsyncPollingDataSourceBuilder()
+                _set_optional_value(polling, "baseUri", polling_builder.base_uri)
+                _set_optional_time(polling, "pollIntervalMs", polling_builder.poll_interval)
+                initializers.append(polling_builder)
+
+    synchronizers: Optional[list] = None
+    sync_configs = datasystem_config.get('synchronizers')
+    if sync_configs is not None:
+        sync_builders: list = []
+        for sync_config in sync_configs:
+            streaming = sync_config.get('streaming')
+            if streaming is not None:
+                builder: Any = AsyncStreamingDataSourceBuilder()
+                _set_optional_value(streaming, "baseUri", builder.base_uri)
+                _set_optional_time(streaming, "initialRetryDelayMs", builder.initial_reconnect_delay)
+                sync_builders.append(builder)
+            elif sync_config.get('polling') is not None:
+                polling = sync_config.get('polling')
+                builder = AsyncPollingDataSourceBuilder()
+                _set_optional_value(polling, "baseUri", builder.base_uri)
+                _set_optional_time(polling, "pollIntervalMs", builder.poll_interval)
+                sync_builders.append(builder)
+        if sync_builders:
+            synchronizers = sync_builders
+
+    # The FDv1 Fallback Synchronizer engages only when the server sends an FDv1
+    # Fallback Directive; it is configured apart from the FDv2 synchronizer chain.
+    fdv1_fallback_synchronizer = None
+    fdv1_fallback_config = datasystem_config.get('fdv1Fallback')
+    if fdv1_fallback_config is not None:
+        fallback_builder = AsyncFallbackToFDv1PollingDataSourceBuilder()
+        _set_optional_value(fdv1_fallback_config, "baseUri", fallback_builder.base_uri)
+        _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
+        fdv1_fallback_synchronizer = fallback_builder
+
+    if datasystem_config.get("payloadFilter") is not None:
+        opts["payload_filter_key"] = datasystem_config["payloadFilter"]
+
+    ds_kwargs: dict = {
+        "initializers": initializers,
+        "synchronizers": synchronizers,
+        "fdv1_fallback_synchronizer": fdv1_fallback_synchronizer,
+    }
+
+    store_config = datasystem_config.get("store")
+    if store_config is not None:
+        persistent_store_config = store_config.get("persistentDataStore")
+        if persistent_store_config is not None:
+            ds_kwargs["data_store"] = _create_async_persistent_store(persistent_store_config)
+            # storeMode: 0 = READ_ONLY, 1 = READ_WRITE.
+            store_mode_value = datasystem_config.get("storeMode", 0)
+            ds_kwargs["data_store_mode"] = (
+                DataStoreMode.READ_WRITE if store_mode_value == 1 else DataStoreMode.READ_ONLY
+            )
+
+    return AsyncDataSystemConfig(**ds_kwargs)
+
+
+def _create_async_persistent_store(persistent_store_config: dict):
+    """Create an async persistent feature store from the harness config.
+
+    Only Redis has an async feature store, so any other store type is rejected.
+    """
+    store_params = persistent_store_config["store"]
+    store_type = store_params["type"]
+    dsn = store_params["dsn"]
+    prefix = store_params.get("prefix")
+
+    cache_config = persistent_store_config.get("cache", {})
+    cache_mode = cache_config.get("mode", "ttl")
+
+    if cache_mode == "off":
+        caching = CacheConfig.disabled()
+    elif cache_mode == "infinite":
+        caching = CacheConfig(expiration=sys.maxsize)
+    elif cache_mode == "ttl":
+        ttl_seconds = cache_config.get("ttl", 15)
+        caching = CacheConfig(expiration=ttl_seconds)
+    else:
+        caching = CacheConfig.default()
+
+    if store_type == "redis":
+        return Redis.async_feature_store(
+            url=dsn,
+            prefix=prefix or Redis.DEFAULT_PREFIX,
+            caching=caching
+        )
+
+    raise ValueError(f"Unsupported async data store type: {store_type}")

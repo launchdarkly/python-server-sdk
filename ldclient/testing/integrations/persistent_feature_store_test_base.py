@@ -40,6 +40,18 @@ class PersistentFeatureStoreTester(FeatureStoreTester):
         """
         pass
 
+    @abstractmethod
+    def write_raw_item(self, prefix: str, kind, key: str, item: dict):
+        """
+        Override this method to write an item straight to the database, with no help from the
+        store. This lets a test set up data in a shape that the store itself does not write.
+        :param prefix: the prefix parameter for the store constructor - may be None or empty to use the default
+        :param kind: the kind of data, such as FEATURES
+        :param key: the key to store the item under
+        :param item: the item, to be stored as JSON
+        """
+        pass
+
     def create_feature_store(self) -> FeatureStore:
         return self.create_persistent_feature_store(self.prefix, self.caching)
 
@@ -62,6 +74,16 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
     @pytest.fixture(autouse=True)
     def clear_data_before_each(self, tester):
         tester.clear_data(tester.prefix)
+
+    def test_all_reads_tombstone_with_no_key(self, tester):
+        # Other LaunchDarkly SDKs write a deleted item with only a version, and no key of its
+        # own. The store must read these back with the key that the item is stored under.
+        with self.inited_store(tester) as store:
+            tester.write_raw_item(tester.prefix, FEATURES, 'deleted-flag', {'version': 5, 'deleted': True})
+
+            items = store.all(FEATURES, lambda x: x)
+            assert items == {'foo': self.make_feature('foo', 10), 'bar': self.make_feature('bar', 10)}
+            assert store.get(FEATURES, 'deleted-flag', lambda x: x) is None
 
     def test_stores_with_different_prefixes_are_independent(self):
         # This verifies that init(), get(), all(), and upsert() are all correctly using the specified key prefix.

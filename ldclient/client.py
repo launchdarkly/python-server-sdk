@@ -4,13 +4,12 @@ This submodule contains the client class that provides most of the SDK functiona
 
 import threading
 import traceback
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 from uuid import uuid4
 
 from ldclient.config import Config
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
-from ldclient.feature_store import _FeatureStoreDataSetSorter
 from ldclient.hook import (
     EvaluationSeriesContext,
     Hook,
@@ -24,15 +23,7 @@ from ldclient.impl.client_common import (
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
-from ldclient.impl.datasource.status import (
-    DataSourceStatusProviderImpl,
-    DataSourceUpdateSinkImpl
-)
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
-from ldclient.impl.datastore.status import (
-    DataStoreStatusProviderImpl,
-    DataStoreUpdateSinkImpl
-)
 from ldclient.impl.datasystem import DataAvailability, DataSystem
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
@@ -43,144 +34,21 @@ from ldclient.impl.events.diagnostics import (
 from ldclient.impl.events.event_processor import DefaultEventProcessor
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.flag_tracker import FlagTrackerImpl
-from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.feature_flag import FeatureFlag
-from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
 from ldclient.impl.util import check_uwsgi, log
 from ldclient.interfaces import (
     BigSegmentStoreStatusProvider,
     DataSourceStatusProvider,
-    DataStoreStatus,
     DataStoreStatusProvider,
-    DataStoreUpdateSink,
-    FeatureStore,
-    FlagTracker,
-    ReadOnlyStore
+    FlagTracker
 )
 from ldclient.migrations import OpTracker, Stage
 from ldclient.plugin import EnvironmentMetadata
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 from .impl import AnyNum
-
-
-class _FeatureStoreClientWrapper(FeatureStore):
-    """Provides additional behavior that the client requires before or after feature store operations.
-    Currently this just means sorting the data set for init() and dealing with data store status listeners.
-    """
-
-    def __init__(self, store: FeatureStore, store_update_sink: DataStoreUpdateSink):
-        self.store = store
-        self.__store_update_sink = store_update_sink
-        self.__monitoring_enabled = self.is_monitoring_enabled()
-
-        # Covers the following variables
-        self.__lock = ReadWriteLock()
-        self.__last_available = True
-        self.__poller: Optional[RepeatingTask] = None
-
-    def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
-
-    def get(self, kind, key, callback):
-        return self.__wrapper(lambda: self.store.get(kind, key, callback))
-
-    def all(self, kind, callback):
-        return self.__wrapper(lambda: self.store.all(kind, callback))
-
-    def delete(self, kind, key, version):
-        return self.__wrapper(lambda: self.store.delete(kind, key, version))
-
-    def upsert(self, kind, item):
-        return self.__wrapper(lambda: self.store.upsert(kind, item))
-
-    @property
-    def initialized(self) -> bool:
-        return self.store.initialized
-
-    def __wrapper(self, fn: Callable):
-        try:
-            return fn()
-        except BaseException:
-            if self.__monitoring_enabled:
-                self.__update_availability(False)
-            raise
-
-    def __update_availability(self, available: bool):
-        with self.__lock.write():
-            if available == self.__last_available:
-                return
-            self.__last_available = available
-
-        status = DataStoreStatus(available, False)
-
-        if available:
-            log.warn("Persistent store is available again")
-
-        self.__store_update_sink.update_status(status)
-
-        if available:
-            with self.__lock.write():
-                if self.__poller is not None:
-                    self.__poller.stop()
-                    self.__poller = None
-
-            return
-
-        log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
-        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
-
-        with self.__lock.write():
-            self.__poller = task
-            self.__poller.start()
-
-    def __check_availability(self):
-        try:
-            if self.store.is_available():
-                self.__update_availability(True)
-        except BaseException as e:
-            log.error("Unexpected error from data store status function: %s", e)
-
-    def is_monitoring_enabled(self) -> bool:
-        """
-        This methods determines whether the wrapped store can support enabling monitoring.
-
-        The wrapped store must provide a monitoring_enabled method, which must
-        be true. But this alone is not sufficient.
-
-        Because this class wraps all interactions with a provided store, it can
-        technically "monitor" any store. However, monitoring also requires that
-        we notify listeners when the store is available again.
-
-        We determine this by checking the store's `available?` method, so this
-        is also a requirement for monitoring support.
-
-        These extra checks won't be necessary once `available` becomes a part
-        of the core interface requirements and this class no longer wraps every
-        feature store.
-        """
-
-        if not hasattr(self.store, 'is_monitoring_enabled'):
-            return False
-
-        if not hasattr(self.store, 'is_available'):
-            return False
-
-        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
-        if not callable(monitoring_enabled):
-            return False
-
-        return monitoring_enabled()
-
-
-def _get_store_item(store, kind: VersionedDataKind, key: str) -> Any:
-    # This decorator around store.get provides backward compatibility with any custom data
-    # store implementation that might still be returning a dict, instead of our data model
-    # classes like FeatureFlag.
-    item = store.get(kind, key, lambda x: x)
-    return kind.decode(item) if isinstance(item, dict) else item
 
 
 class LDClient:
@@ -268,8 +136,8 @@ class LDClient:
         self.__big_segment_store_manager = big_segment_store_manager
 
         self._evaluator = Evaluator(
-            lambda key: _get_store_item(self._data_system.store, FEATURES, key),
-            lambda key: _get_store_item(self._data_system.store, SEGMENTS, key),
+            lambda key: self._data_system.store.get(FEATURES, key),
+            lambda key: self._data_system.store.get(SEGMENTS, key),
             lambda key: big_segment_store_manager.get_user_membership(key),
             log,
         )
@@ -540,8 +408,9 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = self._data_system.data_availability
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
@@ -554,7 +423,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
         try:
-            flag = _get_store_item(self._data_system.store, FEATURES, key)
+            flag = self._data_system.store.get(FEATURES, key)
         except Exception as e:
             log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
             log.debug(traceback.format_exc())
@@ -611,8 +480,9 @@ class LDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
-        if self._data_system.data_availability != DataAvailability.REFRESHED:
-            if self._data_system.data_availability == DataAvailability.CACHED:
+        availability = self._data_system.data_availability
+        if availability != DataAvailability.REFRESHED:
+            if availability == DataAvailability.CACHED:
                 log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")

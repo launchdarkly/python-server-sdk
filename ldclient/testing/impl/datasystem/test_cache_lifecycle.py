@@ -17,7 +17,7 @@ from ldclient.feature_store_helpers import (
 )
 from ldclient.impl.datasystem.fdv2 import (
     DataStoreStatusProviderImpl,
-    FeatureStoreClientWrapper
+    _FeatureStoreClientWrapper
 )
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.listeners import Listeners
@@ -119,12 +119,12 @@ def _delta_changeset(flag_key: str, version: int = 2) -> ChangeSet:
 
 
 def _build_store_with_persistent(persistent) -> Store:
-    """Build a Store wired the same way fdv2.py does: outer FeatureStoreClientWrapper
+    """Build a Store wired the same way fdv2.py does: outer _FeatureStoreClientWrapper
     over the user's persistent store.
     """
     listeners = Listeners()
     status_provider = DataStoreStatusProviderImpl(persistent, listeners)
-    outer = FeatureStoreClientWrapper(persistent, status_provider)
+    outer = _FeatureStoreClientWrapper(persistent, status_provider)
     store = Store(Listeners(), Listeners())
     store.with_persistence(outer, True, status_provider)
     return store
@@ -261,7 +261,7 @@ class TestCachingStoreWrapperDisable:
 
 class TestStoreDisablesPersistentCache:
     def test_set_basis_disables_cache_through_feature_store_client_wrapper(self):
-        """End-to-end: Store._set_basis -> FeatureStoreClientWrapper.disable_cache
+        """End-to-end: Store._set_basis -> _FeatureStoreClientWrapper.disable_cache
         -> CachingStoreWrapper.disable_cache."""
         core = RecordingCore()
         inner = CachingStoreWrapper(core, CacheConfig.default())
@@ -430,7 +430,7 @@ class TestCloseChain:
     def test_close_propagates_through_feature_store_client_wrapper(self):
         core = RecordingCore()
         inner = CachingStoreWrapper(core, CacheConfig.default())
-        outer = FeatureStoreClientWrapper(
+        outer = _FeatureStoreClientWrapper(
             inner, DataStoreStatusProviderImpl(inner, Listeners())
         )
 

@@ -32,6 +32,11 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 Collections = Dict[VersionedDataKind, Dict[str, dict]]
 
 
+def _decode(kind: VersionedDataKind, item: Any) -> Any:
+    """Decode a dict item into a model object; return non-dict items unchanged."""
+    return kind.decode(item) if isinstance(item, dict) else item
+
+
 class InMemoryFeatureStore(ReadOnlyStore):
     """
     The default feature store implementation, which holds all data in a
@@ -146,15 +151,17 @@ class InMemoryFeatureStore(ReadOnlyStore):
             return self._initialized
 
 
-class Store:
+class _StoreBase:
     """
-    Store is a dual-mode persistent/in-memory store that serves requests for
-    data from the evaluation algorithm.
+    Shared, store-agnostic engine for the FDv2 store.
 
-    At any given moment one of two stores is active: in-memory, or persistent.
-    Once the in-memory store has data (either from initializers or a
-    synchronizer), the persistent store is no longer read from. From that point
-    forward, calls to get data will serve from the memory store.
+    The store is dual-mode: at any moment one of two stores is active, in-memory
+    or persistent. Once the in-memory store has data (from an initializer or a
+    synchronizer), reads serve from memory and the persistent store is no longer
+    read from.
+
+    This base owns the in-memory store, dependency tracking, listeners, and the
+    active-store swap. It holds no persistent store of its own.
     """
 
     def __init__(
@@ -163,16 +170,12 @@ class Store:
         change_set_listeners: Listeners,
     ):
         """
-        Initialize a new Store.
+        Initialize a new store.
 
         Args:
             flag_change_listeners: Listeners for flag change events
             change_set_listeners: Listeners for changeset events
         """
-        self._persistent_store: Optional[FeatureStore] = None
-        self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
-        self._persistent_store_writable = False
-
         # Source of truth for flag evaluations once initialized
         self._memory_store = InMemoryFeatureStore()
 
@@ -183,9 +186,6 @@ class Store:
         self._flag_change_listeners = flag_change_listeners
         self._change_set_listeners = change_set_listeners
 
-        # True if the data in the memory store may be persisted to the persistent store
-        self._persist = False
-
         # Points to the active store. Swapped upon initialization.
         self._active_store: ReadOnlyStore = self._memory_store
 
@@ -195,87 +195,31 @@ class Store:
         # Thread synchronization
         self._lock = threading.RLock()
 
-    def with_persistence(
-        self,
-        persistent_store: FeatureStore,
-        writable: bool,
-        status_provider: Optional[DataStoreStatusProvider] = None,
-    ) -> "Store":
-        """
-        Configure the store with a persistent store for read-only or read-write access.
-
-        Args:
-            persistent_store: The persistent store implementation
-            writable: Whether the persistent store should be written to
-            status_provider: Optional status provider for the persistent store
-
-        Returns:
-            Self for method chaining
-        """
-        with self._lock:
-            self._persistent_store = persistent_store
-            self._persistent_store_writable = writable
-            self._persistent_store_status_provider = status_provider
-
-            # Initially use persistent store as active until memory store has data
-            self._active_store = persistent_store
-
-        return self
-
     def selector(self) -> Selector:
         """Returns the current selector."""
         with self._lock:
             return self._selector
 
-    def close(self) -> Optional[Exception]:
-        """Close the store and any persistent store if configured."""
-        with self._lock:
-            if self._persistent_store is not None:
-                try:
-                    # Most FeatureStore implementations don't have close methods
-                    # but we'll try to call it if it exists
-                    if hasattr(self._persistent_store, "close"):
-                        self._persistent_store.close()
-                except Exception as e:
-                    return e
-        return None
-
-    def apply(self, change_set: ChangeSet, persist: bool) -> None:
+    def _on_memory_store_active(self) -> None:
         """
-        Apply a changeset to the store.
-
-        Args:
-            change_set: The changeset to apply
-            persist: Whether the changes should be persisted to the persistent store
+        Called after the memory store becomes the active store. Subclasses use
+        this to react to the persistent store no longer being read from. The
+        default does nothing.
         """
-        collections = self._changes_to_store_data(change_set.changes)
-
-        with self._lock:
-            try:
-                if change_set.intent_code == IntentCode.TRANSFER_FULL:
-                    self._set_basis(collections, change_set.selector, persist)
-                elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
-                    self._apply_delta(collections, change_set.selector, persist)
-                elif change_set.intent_code == IntentCode.TRANSFER_NONE:
-                    # No-op, no changes to apply
-                    return
-
-                # Notify changeset listeners
-                self._change_set_listeners.notify(change_set)
-
-            except Exception as e:
-                # Log error but don't re-raise - matches Go behavior
-                log.error("Store: couldn't apply changeset: %s", str(e))
+        pass
 
     def _set_basis(
-        self, collections: Collections, selector: Selector, persist: bool
-    ) -> None:
+        self, collections: Collections, selector: Selector
+    ) -> bool:
         """
         Set the basis of the store. Any existing data is discarded.
 
         Args:
-            change_set: The changeset containing the new basis data
-            persist: Whether to persist the data to the persistent store
+            collections: The new basis data
+            selector: The selector identifying the data
+
+        Returns:
+            True if the in-memory store was updated, False if it was not.
         """
         # Take snapshot for change detection if we have flag listeners
         old_data: Optional[Collections] = None
@@ -286,33 +230,20 @@ class Store:
 
         ok = self._memory_store.set_basis(collections)
         if ok is False:
-            return
+            return False
 
         # Update dependency tracker
         self._reset_dependency_tracker(collections)
 
         # Update state
-        self._persist = persist
         self._selector = selector if selector is not None else Selector.no_selector()
 
         # Switch to memory store as active
         self._active_store = self._memory_store
 
-        # In-memory store is now authoritative. Replace the persistent-store
-        # cache with a no-op so we don't hold a duplicate copy of every flag.
-        # Done before persistent_store.init() below so the wrapper's init can
-        # skip its decode loop now that the cache is disabled.
-        if self._persistent_store is not None and hasattr(
-            self._persistent_store, "disable_cache"
-        ):
-            try:
-                self._persistent_store.disable_cache()  # type: ignore[attr-defined]
-            except Exception as e:
-                log.warning("Failed to disable persistent store cache: %s", e)
-
-        # Persist to persistent store if configured and writable
-        if self._should_persist():
-            self._persistent_store.init(collections)  # type: ignore
+        # In-memory store is now authoritative. The subclass reacts here (e.g. by
+        # disabling the persistent-store cache) before the caller persists.
+        self._on_memory_store_active()
 
         # Send change events if we had listeners
         if old_data is not None:
@@ -321,19 +252,24 @@ class Store:
             )
             self._send_change_events(affected_items)
 
+        return True
+
     def _apply_delta(
-        self, collections: Collections, selector: Selector, persist: bool
-    ) -> None:
+        self, collections: Collections, selector: Selector
+    ) -> bool:
         """
         Apply a delta update to the store.
 
         Args:
-            change_set: The changeset containing the delta changes
-            persist: Whether to persist the changes to the persistent store
+            collections: The delta changes
+            selector: The selector identifying the data
+
+        Returns:
+            True if the in-memory store was updated, False if it was not.
         """
         ok = self._memory_store.apply_delta(collections)
         if ok is False:
-            return
+            return False
 
         has_listeners = self._flag_change_listeners.has_listeners()
         affected_items: Set[KindAndKey] = set()
@@ -351,27 +287,13 @@ class Store:
                     )
 
         # Update state
-        self._persist = persist
         self._selector = selector if selector is not None else Selector.no_selector()
-
-        if self._should_persist():
-            for kind in collections:
-                kind_data: Dict[str, dict] = collections[kind]
-                for i in kind_data:
-                    item = kind_data[i]
-                    self._persistent_store.upsert(kind, item)  # type: ignore
 
         # Send change events
         if affected_items:
             self._send_change_events(affected_items)
 
-    def _should_persist(self) -> bool:
-        """Returns whether data should be persisted to the persistent store."""
-        return (
-            self._persist
-            and self._persistent_store is not None
-            and self._persistent_store_writable
-        )
+        return True
 
     def _changes_to_store_data(self, changes: List[Change]) -> Collections:
         """
@@ -441,6 +363,137 @@ class Store:
 
         return affected_items
 
+    def get_active_store(self) -> ReadOnlyStore:
+        """Get the currently active store for reading data."""
+        with self._lock:
+            return self._active_store
+
+    def is_initialized(self) -> bool:
+        """Check if the active store is initialized."""
+        return self.get_active_store().initialized
+
+
+class Store(_StoreBase):
+    """
+    Store is a dual-mode persistent/in-memory store that persists synchronously.
+
+    At any given moment one of two stores is active: in-memory, or persistent.
+    Once the in-memory store has data (either from initializers or a
+    synchronizer), the persistent store is no longer read from. From that point
+    forward, calls to get data will serve from the memory store.
+    """
+
+    def __init__(
+        self,
+        flag_change_listeners: Listeners,
+        change_set_listeners: Listeners,
+    ):
+        super().__init__(flag_change_listeners, change_set_listeners)
+
+        self._persistent_store: Optional[FeatureStore] = None
+        self._persistent_store_status_provider: Optional[DataStoreStatusProvider] = None
+        self._persistent_store_writable = False
+
+        # True if the data in the memory store may be written to the persistent
+        # store. Set on each successful apply from its persist flag.
+        self._persist = False
+
+    def with_persistence(
+        self,
+        persistent_store: FeatureStore,
+        writable: bool,
+        status_provider: Optional[DataStoreStatusProvider] = None,
+    ) -> "Store":
+        """
+        Configure the store with a persistent store for read-only or read-write access.
+
+        Args:
+            persistent_store: The persistent store implementation
+            writable: Whether the persistent store should be written to
+            status_provider: Optional status provider for the persistent store
+
+        Returns:
+            Self for method chaining
+        """
+        with self._lock:
+            self._persistent_store = persistent_store
+            self._persistent_store_writable = writable
+            self._persistent_store_status_provider = status_provider
+
+            # Initially use persistent store as active until memory store has data
+            self._active_store = persistent_store
+
+        return self
+
+    def apply(self, change_set: ChangeSet, persist: bool) -> None:
+        """
+        Apply a changeset to the in-memory store and, if configured, the
+        persistent store.
+
+        Args:
+            change_set: The changeset to apply
+            persist: Whether the changes should be persisted to the persistent store
+        """
+        collections = self._changes_to_store_data(change_set.changes)
+
+        applied = False
+        is_full = False
+
+        with self._lock:
+            try:
+                if change_set.intent_code == IntentCode.TRANSFER_FULL:
+                    applied = self._set_basis(collections, change_set.selector)
+                    is_full = True
+                elif change_set.intent_code == IntentCode.TRANSFER_CHANGES:
+                    applied = self._apply_delta(collections, change_set.selector)
+                elif change_set.intent_code == IntentCode.TRANSFER_NONE:
+                    # No-op, no changes to apply
+                    return
+
+                # Notify changeset listeners
+                self._change_set_listeners.notify(change_set)
+
+                if applied:
+                    # Memory now holds this data, so it may be persisted.
+                    self._persist = persist
+
+                    # Persist synchronously, inline under the lock
+                    if self._should_persist():
+                        store = self._persistent_store
+                        assert store is not None
+                        if is_full:
+                            store.init(collections)
+                        else:
+                            for kind in collections:
+                                kind_data = collections[kind]
+                                for key in kind_data:
+                                    store.upsert(kind, kind_data[key])
+
+            except Exception as e:
+                # Log error but don't re-raise - matches Go behavior
+                log.error("Store: couldn't apply changeset: %s", str(e))
+
+    def _should_persist(self) -> bool:
+        """Returns whether data should be persisted to the persistent store."""
+        return (
+            self._persist
+            and self._persistent_store is not None
+            and self._persistent_store_writable
+        )
+
+    def _on_memory_store_active(self) -> None:
+        # In-memory store is now authoritative. Replace the persistent-store
+        # cache with a no-op so we don't hold a duplicate copy of every flag.
+        # Done before the persist step so the wrapper's init can skip its decode
+        # loop now that the cache is disabled.
+        if self._persistent_store is not None and hasattr(
+            self._persistent_store, "disable_cache"
+        ):
+            try:
+                self._persistent_store.disable_cache()  # type: ignore[attr-defined]
+            except Exception as e:
+                log.warning("Failed to disable persistent store cache: %s", e)
+
     def commit(self) -> Optional[Exception]:
         """
         Commit persists the data in the memory store to the persistent store, if configured.
@@ -456,24 +509,30 @@ class Store:
 
         with self._lock:
             if self._should_persist():
+                store = self._persistent_store
+                assert store is not None
                 try:
                     # Get all data from memory store and write to persistent store
-                    all_data = {}
+                    all_data: Collections = {}
                     for kind in [FEATURES, SEGMENTS]:
                         all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
-                    self._persistent_store.init(all_data)  # type: ignore
+                    store.init(all_data)
                 except Exception as e:
                     return e
         return None
 
-    def get_active_store(self) -> ReadOnlyStore:
-        """Get the currently active store for reading data."""
+    def close(self) -> None:
+        """Close the store and any persistent store if configured."""
         with self._lock:
-            return self._active_store
-
-    def is_initialized(self) -> bool:
-        """Check if the active store is initialized."""
-        return self.get_active_store().initialized
+            if self._persistent_store is not None:
+                try:
+                    # Most FeatureStore implementations don't have close methods
+                    # but we'll try to call it if it exists
+                    close = getattr(self._persistent_store, "close", None)
+                    if callable(close):
+                        close()
+                except Exception as e:
+                    log.warning("Error closing the persistent store: %s", e)
 
     def get_data_store_status_provider(self) -> Optional[DataStoreStatusProvider]:
         """Get the data store status provider for the persistent store, if configured."""

@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent
@@ -21,6 +21,7 @@ from ldclient.impl.datasystem import (
     DataAvailability,
     DiagnosticAccumulator
 )
+from ldclient.impl.datasystem.store import _decode
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.stubs import AsyncNullUpdateProcessor
 from ldclient.impl.util import log
@@ -31,6 +32,26 @@ from ldclient.interfaces import (
     DataSourceStatusProvider,
     DataStoreStatusProvider
 )
+from ldclient.versioned_data_kind import VersionedDataKind
+
+
+class _AsyncReadOnlyFeatureStoreView(AsyncReadOnlyStore):
+    """Read-only view of an async feature store.
+
+    Serves every read from the wrapped store. Items that a custom feature store
+    keeps as raw dicts are decoded into model objects; items that are already
+    models pass through unchanged.
+    """
+
+    def __init__(self, store: AsyncReadOnlyStore):
+        self._store = store
+
+    async def get(self, kind: VersionedDataKind, key: str) -> Optional[Any]:
+        return _decode(kind, await self._store.get(kind, key))
+
+    async def all(self, kind: VersionedDataKind) -> Dict[str, Any]:
+        result = await self._store.all(kind)
+        return {key: _decode(kind, item) for key, item in result.items()}
 
 
 class AsyncFDv1(AsyncDataSystem):
@@ -45,6 +66,7 @@ class AsyncFDv1(AsyncDataSystem):
     def __init__(self, config: AsyncConfig, store: AsyncFeatureStore, session_provider: Callable[[], Any]):
         self._config = config
         self._store = store
+        self._store_view = _AsyncReadOnlyFeatureStoreView(store)
         # The client creates the aiohttp session lazily inside the loop; the data
         # source resolves it here when it builds its network processor at start().
         self._session_provider = session_provider
@@ -100,7 +122,7 @@ class AsyncFDv1(AsyncDataSystem):
 
     @property
     def store(self) -> AsyncReadOnlyStore:
-        return self._store
+        return self._store_view
 
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
@@ -121,18 +143,22 @@ class AsyncFDv1(AsyncDataSystem):
     def flag_change_listeners(self) -> Listeners:
         return self._flag_change_listeners
 
-    @property
-    def data_availability(self) -> DataAvailability:
+    async def data_availability(self) -> DataAvailability:
         if self._config.offline:
             return DataAvailability.DEFAULTS
 
         if self._update_processor is not None and self._update_processor.initialized():
             return DataAvailability.REFRESHED
 
-        if self._store.initialized:
-            return DataAvailability.CACHED
+        # Awaits the store so a persistent store populated by another process is
+        # recognized. A persistent-store error is logged and reported as no data.
+        try:
+            ready = await self._store.is_initialized()
+        except Exception as e:
+            log.warning("Error checking persistent store readiness: %s", e)
+            return DataAvailability.DEFAULTS
 
-        return DataAvailability.DEFAULTS
+        return DataAvailability.CACHED if ready else DataAvailability.DEFAULTS
 
     @property
     def target_availability(self) -> DataAvailability:

@@ -8,6 +8,7 @@ the async SDK client.
     compatibility guarantees.
 """
 
+from dataclasses import dataclass
 from typing import Callable, List, Optional, Set
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
@@ -17,8 +18,8 @@ from ldclient.config import (
     DEFAULT_STREAM_URI,
     GET_LATEST_FEATURES_PATH,
     STREAM_FLAGS_PATH,
+    DataSourceBuilder,
     DataSourceBuilderConfig,
-    DataSystemConfig,
     HTTPConfig,
     PrivateAttributesConfig
 )
@@ -34,7 +35,10 @@ from ldclient.interfaces import (
     AsyncDataSourceUpdateSink,
     AsyncEventProcessor,
     AsyncFeatureStore,
-    AsyncUpdateProcessor
+    AsyncInitializer,
+    AsyncSynchronizer,
+    AsyncUpdateProcessor,
+    DataStoreMode
 )
 from ldclient.plugin import AsyncPlugin
 
@@ -91,6 +95,39 @@ class AsyncBigSegmentsConfig:
         return self.__stale_after
 
 
+@dataclass(frozen=True)
+class AsyncDataSystemConfig:
+    """Configuration for the async SDK's data acquisition strategy.
+
+    This mirrors :class:`ldclient.config.DataSystemConfig` for the async client.
+    Its data sources are async builders and its data store is an async store.
+
+    .. caution::
+        This feature is experimental and should NOT be considered ready for production
+        use. It may change or be removed without notice and is not subject to backwards
+        compatibility guarantees.
+    """
+
+    initializers: Optional[List[DataSourceBuilder[AsyncInitializer]]] = None
+    """The initializers for the data system."""
+
+    synchronizers: Optional[List[DataSourceBuilder[AsyncSynchronizer]]] = None
+    """
+    The synchronizers for the data system, ordered by preference.
+    The first synchronizer is the most preferred, with subsequent synchronizers
+    serving as fallbacks in order of decreasing preference.
+    """
+
+    data_store_mode: DataStoreMode = DataStoreMode.READ_WRITE
+    """The data store mode specifies the mode in which the persistent store will operate, if present."""
+
+    data_store: Optional[AsyncFeatureStore] = None
+    """The (optional) async persistent data store instance."""
+
+    fdv1_fallback_synchronizer: Optional[DataSourceBuilder[AsyncSynchronizer]] = None
+    """An optional fallback synchronizer that will read from FDv1"""
+
+
 class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
     """Advanced configuration options for the async SDK client.
 
@@ -138,7 +175,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         enable_event_compression: bool = False,
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
-        datasystem_config: Optional[DataSystemConfig] = None,
+        datasystem_config: Optional[AsyncDataSystemConfig] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -469,7 +506,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self._data_source_update_sink
 
     @property
-    def datasystem_config(self) -> Optional[DataSystemConfig]:
+    def datasystem_config(self) -> Optional[AsyncDataSystemConfig]:
         """
         Configuration for the upcoming enhanced data system design. This is
         experimental and should not be set without direction from LaunchDarkly

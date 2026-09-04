@@ -5,7 +5,7 @@ import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.versioned_data_kind import VersionedDataKind
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 THINGS = VersionedDataKind(namespace="things", request_api_path="", stream_api_path="")
 WRONG_THINGS = VersionedDataKind(namespace="wrong", request_api_path="", stream_api_path="")
@@ -188,6 +188,20 @@ class TestCachingStoreWrapper:
         core.force_set(THINGS, item1)
         core.force_set(THINGS, item2)
         assert wrapper.all(THINGS) == {item1["key"]: item1}
+
+    @pytest.mark.parametrize("kind", [FEATURES, SEGMENTS])
+    @pytest.mark.parametrize("cached", [False, True])
+    def test_get_all_tolerates_tombstone_with_no_key(self, cached, kind):
+        # Other LaunchDarkly SDKs write deleted items to a persistent store with only the
+        # version. The store knows the key, because it is the key the item is stored under.
+        core = MockCore()
+        wrapper = make_wrapper(core, cached)
+        live_item = {"key": "item1", "version": 1}
+        tombstone = {"version": 2, "deleted": True}
+        core.data[kind] = {"item1": live_item, "item2": tombstone}
+
+        assert wrapper.all(kind) == {"item1": kind.decode(live_item)}
+        assert wrapper.get(kind, "item2") is None
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_all_changes_None_to_empty_dict(self, cached):

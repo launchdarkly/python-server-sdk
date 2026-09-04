@@ -37,6 +37,8 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
     event loop because its reads and writes never suspend between one another.
     """
 
+    __INITED_CACHE_KEY__ = "$inited"
+
     _core: AsyncFeatureStoreCore
 
     def __init__(self, core: AsyncFeatureStoreCore, cache_config: CacheConfig):
@@ -95,12 +97,26 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
 
     @property
     def initialized(self) -> bool:
-        """Returns whether ``init`` has completed in this process.
-
-        This property does not query the store: it is synchronous, but a persistent-store query is
-        a coroutine, so it reflects only whether this process has initialized the store.
-        """
+        """Returns the store's last observed initialized state."""
         return self._inited
+
+    async def is_initialized(self) -> bool:
+        """Queries the store's initialized state, updating :attr:`initialized`.
+
+        Honors the cache: with caching off the store is queried on every call;
+        with a TTL it is queried once per interval; with an infinite TTL it is
+        queried once. Once the store reports initialized the state latches and
+        later calls return without I/O.
+        """
+        if self._inited:
+            return True
+        result = self._cache.get(AsyncCachingStoreWrapper.__INITED_CACHE_KEY__)
+        if result is None:
+            result = bool(await self._core.initialized_internal())
+            self._cache[AsyncCachingStoreWrapper.__INITED_CACHE_KEY__] = result
+        if result:
+            self._inited = True
+        return result
 
     async def close(self) -> None:
         """Releases the cache and closes the underlying core if it supports it."""

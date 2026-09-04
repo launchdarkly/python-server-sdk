@@ -5,6 +5,7 @@ from semver import VersionInfo
 
 from ldclient.impl.model import *
 from ldclient.testing.builders import *
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
 def test_flag_targets_are_stored_as_sets():
@@ -41,3 +42,38 @@ def test_clause_values_preprocessed_with_time_operator(op):
     flag = make_boolean_flag_with_clauses(make_clause(None, "attr", op, 1000, "1970-01-01T00:00:02Z", True))
     assert flag.rules[0].clauses[0]._values == [1000, "1970-01-01T00:00:02Z", True]
     assert list(x.as_time for x in flag.rules[0].clauses[0]._values_preprocessed) == [1000, 2000, None]
+
+
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS])
+def test_tombstone_without_key_can_be_decoded(kind):
+    # Other LaunchDarkly SDKs write deleted items to a persistent store with only the version,
+    # so we must be able to read them back.
+    item = kind.decode({"version": 5, "deleted": True})
+    assert item.version == 5
+    assert item.deleted is True
+    assert item.key == ''
+    # The original data must round-trip unchanged, because the store re-serializes it.
+    assert item.to_json_dict() == {"version": 5, "deleted": True}
+
+
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS])
+def test_tombstone_with_placeholder_key_can_be_decoded(kind):
+    # The Go SDK and the Relay Proxy write deleted items with a placeholder key.
+    item = kind.decode({"key": "$deleted", "version": 5, "deleted": True})
+    assert item.version == 5
+    assert item.deleted is True
+    assert item.key == '$deleted'
+
+
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS])
+def test_tombstone_still_requires_version(kind):
+    with pytest.raises(ValueError):
+        kind.decode({"deleted": True})
+
+
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS])
+def test_item_that_is_not_deleted_still_requires_key(kind):
+    with pytest.raises(ValueError):
+        kind.decode({"version": 5})
+    with pytest.raises(ValueError):
+        kind.decode({"version": 5, "deleted": False})
