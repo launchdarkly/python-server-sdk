@@ -29,6 +29,7 @@ from ldclient.impl.events.event_processor_common import (
     EventOutputFormatter
 )
 from ldclient.impl.events.types import EventInput
+from ldclient.impl.http import ASYNC_USER_AGENT
 from ldclient.impl.lru_cache import SimpleLRUCache
 from ldclient.impl.sampler import Sampler
 from ldclient.impl.util import (
@@ -277,7 +278,7 @@ class DefaultAsyncEventProcessor(AsyncEventProcessor):
 
 
 async def _post_events_with_retry(http_client: AsyncHTTPTransport, config: AsyncConfig, uri: str, payload_id: Optional[str], body: str, events_description: str):
-    hdrs = _headers(config)
+    hdrs = _headers(config, ASYNC_USER_AGENT)
     hdrs['Content-Type'] = 'application/json'
     if config.enable_event_compression:
         hdrs['Content-Encoding'] = 'gzip'
