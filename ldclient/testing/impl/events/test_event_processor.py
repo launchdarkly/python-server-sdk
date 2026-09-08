@@ -2,7 +2,7 @@ import json
 import time
 import uuid
 from datetime import timedelta
-from threading import Thread
+from threading import Event, Thread
 from typing import Dict, Set
 
 import pytest
@@ -27,7 +27,7 @@ from ldclient.migrations.tracker import MigrationOpEvent
 from ldclient.migrations.types import Operation, Origin, Stage
 from ldclient.testing.builders import *
 from ldclient.testing.proxy_test_util import do_proxy_tests
-from ldclient.testing.stub_util import MockHttp
+from ldclient.testing.stub_util import MockHttp, MockResponse
 
 default_config = Config("fake_sdk_key")
 context = Context.builder('userkey').name('Red').build()
@@ -725,6 +725,54 @@ def test_does_not_block_on_full_inbox():
         start_consuming_events()
         assert message1.param == event1
         assert had_no_more
+
+
+def test_stop_returns_even_if_event_delivery_never_completes():
+    """
+    Sending an event payload can block for an unbounded time - name resolution is not covered by
+    the connect and read timeouts, so a hung resolver stalls a flush worker indefinitely. stop()
+    must give up after shutdown_timeout rather than wait on that worker, because anything it
+    blocks (notably LDClient.close(), which is commonly called from an atexit or interpreter
+    shutdown hook) would otherwise never return and the process would never exit.
+    """
+    delivery_started = Event()
+    release_delivery = Event()
+
+    def never_completes():
+        delivery_started.set()
+        release_delivery.wait()
+        return MockResponse(200, {})
+
+    mock_http._response_func = never_completes
+    ep = DefaultTestProcessor(shutdown_timeout=0.5)
+    try:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        assert delivery_started.wait(5), "the flush worker never started delivering the payload"
+
+        stopped = Event()
+        Thread(target=lambda: (ep.stop(), stopped.set()), name="ldclient.testing.events.stopper", daemon=True).start()
+
+        assert stopped.wait(10), "stop() never returned; it is waiting on a delivery that never completes"
+    finally:
+        release_delivery.set()
+
+
+def test_stop_still_delivers_buffered_events():
+    """
+    Control for test_stop_returns_even_if_event_delivery_never_completes: bounding the shutdown
+    wait must not turn stop() into a no-op. When delivery works normally, stop() still flushes
+    what is buffered before returning.
+    """
+    ep = DefaultTestProcessor(shutdown_timeout=5)
+    e = EventInputIdentify(timestamp, context)
+    ep.send_event(e)
+    ep.stop()
+
+    assert mock_http.request_data is not None, "stop() returned without delivering the buffered event"
+    output = json.loads(mock_http.request_data)
+    assert len(output) == 1
+    check_identify_event(output[0], e)
 
 
 def test_http_proxy(monkeypatch):
