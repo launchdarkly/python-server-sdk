@@ -34,7 +34,7 @@ experimental release — it's the pre-GA backlog + parked items.
   add an `environment_id` property + record calls to `AsyncFDv2` and the abstract property to
   `AsyncDataSystem`, mirroring sync #484.
 
-## Hooks & plugins async support (Jira task under SDK-60 — being filed)
+## Hooks & plugins async support (SDK-3077)
 
 `AsyncLDClient` accepts `AsyncHook`/`AsyncPlugin` only and **silently drops** sync ones; the OTel
 (`ldotel`) and observability (`ldobserve`) integrations ship sync `Hook`/`Plugin`. Decide + implement:
