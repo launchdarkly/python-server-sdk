@@ -1,5 +1,6 @@
 # pylint: disable=missing-docstring
 
+import logging
 import os
 import tempfile
 from threading import Event
@@ -846,3 +847,17 @@ def test_environment_id_is_not_recorded_from_non_valid_updates():
 
     assert fdv2.environment_id == "env-from-sync"
     fdv2.stop()
+
+
+def test_warns_when_payload_filter_key_is_configured(caplog):
+    caplog.set_level(logging.WARNING, logger="ldclient.util")
+    FDv2(Config(sdk_key="dummy", payload_filter_key="microservice-1"), DataSystemConfig(initializers=None, synchronizers=None))
+
+    assert any("Payload filtering is not supported with the FDv2 data system" in record.message for record in caplog.records)
+
+
+def test_does_not_warn_when_payload_filter_key_is_not_configured(caplog):
+    caplog.set_level(logging.WARNING, logger="ldclient.util")
+    FDv2(Config(sdk_key="dummy"), DataSystemConfig(initializers=None, synchronizers=None))
+
+    assert not any("Payload filtering" in record.message for record in caplog.records)

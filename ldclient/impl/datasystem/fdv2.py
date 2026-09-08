@@ -230,6 +230,10 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._config = config
         self._data_system_config = data_system_config
+
+        if config.payload_filter_key is not None:
+            log.warning("Payload filtering is not supported with the FDv2 data system; the configured payload filter has no effect on FDv2 requests")
+
         self._synchronizers: List[DataSourceBuilder[Synchronizer]] = list(data_system_config.synchronizers) if data_system_config.synchronizers else []
         self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer
         self._disabled = config.offline
