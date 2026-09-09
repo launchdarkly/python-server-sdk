@@ -134,9 +134,15 @@ def throw_if_unsuccessful_response(resp):
 
 
 def is_http_error_recoverable(status):
+    """
+    Reports whether a component that treats some statuses as fatal should
+    keep going.
+
+    Deprecated. Use :func:`ldclient.impl.retry.classify_http_status` instead.
+    """
     if status >= 400 and status < 500:
-        return status in _RETRYABLE_STATUSES  # all other 4xx besides these are unrecoverable
-    return True  # all other errors are recoverable
+        return status in _RETRYABLE_STATUSES  # all other 4xx besides these are treated as fatal
+    return True
 
 
 def http_error_description(status):
@@ -144,6 +150,13 @@ def http_error_description(status):
 
 
 def http_error_message(status, context, retryable_message="will retry"):
+    """
+    Builds the log message for an HTTP failure in a component that stops on
+    some statuses.
+
+    Deprecated. The FDv1 data sources build their own message instead, so
+    that it can report the real retry delay.
+    """
     return "Received %s for %s - %s" % (http_error_description(status), context, retryable_message if is_http_error_recoverable(status) else "giving up permanently")
 
 

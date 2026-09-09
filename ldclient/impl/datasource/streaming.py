@@ -1,7 +1,8 @@
 import json
 import time
+from threading import Event as ThreadEvent
 from threading import Thread
-from typing import Optional
+from typing import Callable, Optional
 from urllib import parse
 
 from ld_eventsource import SSEClient
@@ -15,16 +16,19 @@ from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
+    StreamClosedError,
     parse_path,
     record_environment_id,
     sink_or_store
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
-from ldclient.impl.util import (
-    http_error_message,
-    is_http_error_recoverable,
-    log
+from ldclient.impl.retry import (
+    FailureKind,
+    RetryState,
+    classify_http_status,
+    for_streaming
 )
+from ldclient.impl.util import http_error_description, log
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
@@ -37,13 +41,15 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
 
-MAX_RETRY_DELAY = 30
-BACKOFF_RESET_INTERVAL = 60
-JITTER_RATIO = 0.5
-
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
-    def __init__(self, config, store, ready, diagnostic_accumulator):
+    """Reads flag data from LaunchDarkly's streaming endpoint on its own thread.
+
+    The SDK owns the delay between connection attempts rather than the SSE
+    client; see :meth:`_create_sse_client` and :mod:`ldclient.impl.retry`.
+    """
+
+    def __init__(self, config, store, ready, diagnostic_accumulator, retry_state: Optional[RetryState] = None):
         Thread.__init__(self, name="ldclient.datasource.streaming")
         self.daemon = True
         self._uri = config.stream_base_uri + STREAM_ALL_PATH
@@ -55,7 +61,20 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._running = False
         self._ready = ready
         self._diagnostic_accumulator = diagnostic_accumulator
-        self._connection_attempt_start_time = None
+        self._connection_attempt_start_time: Optional[float] = None
+        self._retry = retry_state or for_streaming(config.initial_reconnect_delay)
+        self._stop_event = ThreadEvent()
+        self._signalled_healthy = False
+        self._interrupted_by_sdk = False
+        # Thread already owns the name "_started", so this flag cannot use it.
+        self._start_requested = False
+
+    def start(self):
+        if self._start_requested:
+            log.info("StreamingUpdateProcessor has already been started; ignoring")
+            return
+        self._start_requested = True
+        Thread.start(self)
 
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
@@ -65,23 +84,29 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         for action in self._sse.all:
             if isinstance(action, Start):
                 record_environment_id(self._data_source_update_sink, action.headers)
+                # A fresh stream has not proved itself healthy yet.
+                self._signalled_healthy = False
             elif isinstance(action, Event):
                 message_ok = False
+                message_handled = False
                 try:
                     message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
+                    message_handled = True
                 except json.decoder.JSONDecodeError as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    self._interrupt_stream()
 
-                    self._handle_error(e)
+                    if not self._handle_error(e):
+                        break
                 except Exception as e:
                     log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._sse.interrupt()
+                    self._interrupt_stream()
 
-                    if self._data_source_update_sink is not None:
-                        error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
+                    if not self._handle_error(e):
+                        break
 
-                        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+                if message_handled:
+                    self._record_healthy_operation()
 
                 if message_ok:
                     self._record_stream_init(False)
@@ -94,9 +119,17 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             elif isinstance(action, Fault):
-                # If the SSE client detects the stream has closed, then it will emit a fault with no-error. We can
-                # ignore this since we want the connection to continue.
+                # A Fault with no error means the connection closed cleanly. If
+                # we asked for that close, we have already recorded the failure
+                # behind it and must not record it twice. Otherwise the server
+                # closed a connection it normally leaves open, which is a
+                # connection failure the SDK backs off from.
                 if action.error is None:
+                    if self._interrupted_by_sdk:
+                        self._interrupted_by_sdk = False
+                        continue
+                    if not self._handle_error(StreamClosedError()):
+                        break
                     continue
 
                 if not self._handle_error(action.error):
@@ -118,25 +151,51 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
-            initial_retry_delay=self._config.initial_reconnect_delay,
-            retry_delay_strategy=RetryDelayStrategy.default(max_delay=MAX_RETRY_DELAY, backoff_multiplier=2, jitter_multiplier=JITTER_RATIO),
-            retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
+            # The SDK owns the retry delay, so the SSE client must never wait.
+            # A zero base delay plus the no-op base strategy holds
+            # next_retry_delay at zero, which is what these three arguments
+            # are for. The SSE client hands us the Fault before it would
+            # sleep, so we classify the failure and wait ourselves in
+            # _handle_error. Our wait is interruptible, which matters because
+            # the extended regime can ask for an hour.
+            initial_retry_delay=0,
+            retry_delay_strategy=RetryDelayStrategy(),
+            retry_delay_reset_threshold=0,
             logger=log,
         )
 
     def stop(self):
-        self.__stop_with_error_info(None)
-
-    def __stop_with_error_info(self, error: Optional[DataSourceErrorInfo]):
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
+        self._stop_event.set()
         if self._sse:
             self._sse.close()
 
         if self._data_source_update_sink is None:
             return
 
-        self._data_source_update_sink.update_status(DataSourceState.OFF, error)
+        # OFF means an explicit shutdown. No stream failure produces it.
+        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+
+    def _interrupt_stream(self):
+        """Drops the stream connection so the next read reconnects. The SSE
+        client reports the close as a Fault with no error, and the flag tells
+        the loop that this one is ours and is already accounted for."""
+        self._interrupted_by_sdk = True
+        self._sse.interrupt()
+
+    def _record_healthy_operation(self):
+        """Signals healthy operation on the first message of a fresh stream.
+
+        It fires once per stream. A later message on the same stream must not
+        restart the reset window. The SSE client's own signal is no use here
+        because it fires when the connection opens, and an open connection that
+        has sent no data yet does not show the stream is working.
+        """
+        if self._signalled_healthy:
+            return
+        self._signalled_healthy = True
+        self._retry.record_healthy()
 
     def initialized(self):
         return self._running and self._ready.is_set() is True and self._store.initialized is True
@@ -176,46 +235,49 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
     # Returns true to continue, false to stop
     def _handle_error(self, error: Exception) -> bool:
+        """Records a stream failure, reports it, and waits before the retry.
+
+        Returns True once the wait is over, or False if the processor was
+        stopped. No failure ever ends the stream by itself.
+        """
         if not self._running:
             return False  # don't retry if we've been deliberately stopped
 
+        self._record_stream_init(True)
+
+        level: Callable[..., None]
+
         if isinstance(error, json.decoder.JSONDecodeError):
+            kind = FailureKind.NORMAL
             error_info = DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time(), str(error))
-
-            log.error("Unexpected error on stream connection: %s, will retry" % error)
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = None
-
-            if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+            description = "Unparseable data on stream connection: %s" % error
+            level = log.error
         elif isinstance(error, HTTPStatusError):
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = None
-
+            kind = classify_http_status(error.status)
             error_info = DataSourceErrorInfo(DataSourceErrorKind.ERROR_RESPONSE, error.status, time.time(), str(error))
-
-            http_error_message_result = http_error_message(error.status, "stream connection")
-            if not is_http_error_recoverable(error.status):
-                log.error(http_error_message_result)
-                self._ready.set()  # if client is initializing, make it stop waiting; has no effect if already inited
-                self.__stop_with_error_info(error_info)
-                self.stop()
-                return False
-            else:
-                log.warning(http_error_message_result)
-
-                if self._data_source_update_sink is not None:
-                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+            description = "Received %s for stream connection" % http_error_description(error.status)
+            level = log.error if kind is FailureKind.UNEXPECTED else log.warning
+        elif isinstance(error, StreamClosedError):
+            kind = FailureKind.NORMAL
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.NETWORK_ERROR, 0, time.time(), str(error))
+            description = "The server closed the stream connection"
+            level = log.warning
         else:
-            log.warning("Unexpected error on stream connection: %s, will retry" % error)
-            self._record_stream_init(True)
-            self._connection_attempt_start_time = None
-
-            if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error)))
+            # A certificate failure lands here too, and is as normal as the rest.
+            kind = FailureKind.NORMAL
+            error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error))
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
-        self._connection_attempt_start_time = time.time() + self._sse.next_retry_delay
-        return True
+            description = "Error on stream connection: %s" % error
+            level = log.warning
+
+        delay = self._retry.record_failure(kind)
+        level("%s - will retry in %.1fs" % (description, delay))
+
+        if self._data_source_update_sink is not None:
+            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+
+        self._connection_attempt_start_time = time.time() + delay
+        return not self._stop_event.wait(delay)
 
     # magic methods for "with" statement (used in testing)
     def __enter__(self):

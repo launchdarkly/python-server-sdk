@@ -129,7 +129,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
                 poller_to_stop = self.__poller
                 self.__poller = None
             elif self.__poller is None:
-                task_to_start = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+                task_to_start = RepeatingTask.at_interval("ldclient.check-availability", 0.5, 0, self.__check_availability)
                 self.__poller = task_to_start
 
         if available:
@@ -536,7 +536,7 @@ class FDv2(_FDv2Base, DataSystem):
         :return: the ConditionDirective describing how to proceed
         """
         action_queue: Queue = Queue()
-        timer = RepeatingTask(
+        timer = RepeatingTask.at_interval(
             label="FDv2-sync-cond-timer",
             interval=10,
             initial_delay=10,
