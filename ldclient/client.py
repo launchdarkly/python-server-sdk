@@ -78,6 +78,12 @@ class LDClient:
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
+        # Python has no lock-free atomic flag in the standard library. Code reaches this
+        # lock only when data availability is cached, and only until the flag is set.
+        self._cached_data_warning_lock = threading.Lock()
+        self._eval_cached_data_warned = False
+        self._all_flags_cached_data_warned = False
+
         self.__start_up(start_wait)
 
     def postfork(self, start_wait: float = 5):
@@ -411,7 +417,11 @@ class LDClient:
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
-                log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
+                if not self._eval_cached_data_warned:
+                    with self._cached_data_warning_lock:
+                        if not self._eval_cached_data_warned:
+                            self._eval_cached_data_warned = True
+                            log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key + ". This message is logged once.")
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
@@ -483,7 +493,11 @@ class LDClient:
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
-                log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
+                if not self._all_flags_cached_data_warned:
+                    with self._cached_data_warning_lock:
+                        if not self._all_flags_cached_data_warned:
+                            self._all_flags_cached_data_warned = True
+                            log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
                 return FeatureFlagsState(False)

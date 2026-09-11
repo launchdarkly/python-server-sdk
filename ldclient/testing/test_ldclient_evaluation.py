@@ -1,3 +1,4 @@
+import logging
 import time
 
 from ldclient.client import Config, Context, LDClient
@@ -10,7 +11,7 @@ from ldclient.interfaces import FeatureStore
 from ldclient.testing.builders import *
 from ldclient.testing.mock_components import MockBigSegmentStore
 from ldclient.testing.stub_util import MockEventProcessor, MockUpdateProcessor
-from ldclient.testing.test_ldclient import make_client, user
+from ldclient.testing.test_ldclient import make_client, unreachable_uri, user
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 flag1 = {'key': 'key1', 'version': 100, 'on': False, 'offVariation': 0, 'variations': ['value1'], 'trackEvents': False}
@@ -425,3 +426,42 @@ def test_all_flags_state_degrades_per_flag_on_evaluator_error():
     assert metadata['good'].get('prerequisites') == ['prereq-of-good']
     assert 'prerequisites' not in metadata['bad-first']
     assert 'prerequisites' not in metadata['bad-last']
+
+
+class UninitializedUpdateProcessor(MockUpdateProcessor):
+    def initialized(self):
+        return False
+
+
+def make_client_with_cached_data(store):
+    return LDClient(
+        config=Config(
+            sdk_key='SDK_KEY',
+            base_uri=unreachable_uri,
+            events_uri=unreachable_uri,
+            stream_uri=unreachable_uri,
+            event_processor_class=MockEventProcessor,
+            update_processor_class=UninitializedUpdateProcessor,
+            feature_store=store,
+        )
+    )
+
+
+def test_cached_data_warnings_are_logged_once_per_client(caplog):
+    caplog.set_level(logging.WARNING, logger='ldclient.util')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'key1': flag1}})
+    client = make_client_with_cached_data(store)
+
+    assert client.variation('key1', user, default='default') == 'value1'
+    assert client.variation('key1', user, default='default') == 'value1'
+    assert client.all_flags_state(user).valid
+    assert client.all_flags_state(user).valid
+
+    warnings = get_log_lines(caplog, 'WARNING')
+    eval_warnings = [m for m in warnings if m.startswith('Feature Flag evaluation attempted')]
+    all_flags_warnings = [m for m in warnings if m.startswith('all_flags_state() called before')]
+    assert len(eval_warnings) == 1
+    assert len(all_flags_warnings) == 1
+    assert eval_warnings[0].endswith('This message is logged once.')
+    assert all_flags_warnings[0].endswith('This message is logged once.')
