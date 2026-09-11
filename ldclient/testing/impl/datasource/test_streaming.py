@@ -47,7 +47,12 @@ from ldclient.testing.stub_util import (
     make_put_event,
     stream_content
 )
-from ldclient.testing.test_util import SpyListener, no_retry_jitter
+from ldclient.testing.test_util import (
+    SpyListener,
+    no_retry_jitter,
+    record_healthy_windows,
+    ticking_clock
+)
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -488,24 +493,6 @@ def test_our_own_interrupt_is_not_counted_as_a_server_close():
                 assert retry.attempts == 1
 
 
-def test_second_start_is_a_no_op():
-    """A second start() must not raise. Thread.start() would, so the processor
-    guards it."""
-    store = InMemoryFeatureStore()
-    ready = Event()
-
-    with start_server() as server:
-        with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
-            server.for_path('/all', stream)
-
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
-                sp.start()
-                sp.start()
-                ready.wait(start_wait)
-                assert sp.initialized()
-
-
 def _handle_errors_without_waiting(retry, errors):
     """Drives _handle_error for each error and returns nothing. The stop event
     is pre-set so the interruptible wait returns at once."""
@@ -563,9 +550,9 @@ def test_a_server_close_and_a_transport_error_both_report_a_delay(caplog):
     assert messages[1] == "Error on stream connection: [Errno 104] reset by peer - will retry in 2.0s"
 
 
-def test_healthy_operation_is_signalled_once_per_stream():
-    """The reset window must start at the first message of a stream. Signalling
-    again on every later message would keep pushing the window out."""
+def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
+    """The window starts at the first message and stays there, however many
+    more arrive on the same stream."""
     store = InMemoryFeatureStore()
     ready = Event()
     flag = FlagBuilder('flagkey').version(1).build()
@@ -575,17 +562,61 @@ def test_healthy_operation_is_signalled_once_per_stream():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', stream)
 
-            retry = fast_retry_state()
-            healthy_count = []
-            retry.record_healthy = lambda: healthy_count.append(1)  # type: ignore[method-assign]
+            policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+            retry = RetryState(
+                initial_delay=brief_delay,
+                normal_ceiling=brief_delay,
+                extended_initial_delay=brief_delay,
+                extended_ceiling=brief_delay,
+                reset_policy=policy,
+            )
+            # The clock moves on every read, so a window that had been
+            # restarted reads back as a different time.
+            windows = record_healthy_windows(policy)
+            with ticking_clock():
+                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                    sp.start()
+                    ready.wait(start_wait)
+                    assert sp.initialized()
+                    expect_update(store, FEATURES, flag)
 
-            with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
-                sp.start()
-                ready.wait(start_wait)
-                assert sp.initialized()
-                expect_update(store, FEATURES, flag)
+            assert len(windows) >= 2, "both messages should have signalled"
+            assert len(set(windows)) == 1, "the window moved between messages"
 
-                assert healthy_count == [1]
+
+def test_a_fresh_stream_starts_a_new_reset_window():
+    """A stream teardown clears the window through record_failure, so the next
+    stream measures its own stretch rather than inheriting the old one."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event([flagv1])) as stream1:
+            with stream_content(make_put_event([flagv2])) as stream2:
+                config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+                server.for_path('/all', SequentialHandler(stream1, stream2))
+
+                policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+                retry = RetryState(
+                    initial_delay=brief_delay,
+                    normal_ceiling=brief_delay,
+                    extended_initial_delay=brief_delay,
+                    extended_ceiling=brief_delay,
+                    reset_policy=policy,
+                )
+                windows = record_healthy_windows(policy)
+                with ticking_clock():
+                    with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                        sp.start()
+                        ready.wait(start_wait)
+                        assert sp.initialized()
+
+                        stream1.close()
+                        expect_update(store, FEATURES, flagv2)
+
+                assert len(set(windows)) == 2, "the second stream reused the first window"
 
 
 @pytest.mark.parametrize(

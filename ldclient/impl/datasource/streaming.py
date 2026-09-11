@@ -64,17 +64,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._connection_attempt_start_time: Optional[float] = None
         self._retry = retry_state or for_streaming(config.initial_reconnect_delay)
         self._stop_event = ThreadEvent()
-        self._signalled_healthy = False
         self._interrupted_by_sdk = False
-        # Thread already owns the name "_started", so this flag cannot use it.
-        self._start_requested = False
-
-    def start(self):
-        if self._start_requested:
-            log.info("StreamingUpdateProcessor has already been started; ignoring")
-            return
-        self._start_requested = True
-        Thread.start(self)
 
     def run(self):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
@@ -84,8 +74,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         for action in self._sse.all:
             if isinstance(action, Start):
                 record_environment_id(self._data_source_update_sink, action.headers)
-                # A fresh stream has not proved itself healthy yet.
-                self._signalled_healthy = False
             elif isinstance(action, Event):
                 message_ok = False
                 message_handled = False
@@ -106,7 +94,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         break
 
                 if message_handled:
-                    self._record_healthy_operation()
+                    self._retry.record_success()
 
                 if message_ok:
                     self._record_stream_init(False)
@@ -183,19 +171,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         the loop that this one is ours and is already accounted for."""
         self._interrupted_by_sdk = True
         self._sse.interrupt()
-
-    def _record_healthy_operation(self):
-        """Signals healthy operation on the first message of a fresh stream.
-
-        It fires once per stream. A later message on the same stream must not
-        restart the reset window. The SSE client's own signal is no use here
-        because it fires when the connection opens, and an open connection that
-        has sent no data yet does not show the stream is working.
-        """
-        if self._signalled_healthy:
-            return
-        self._signalled_healthy = True
-        self._retry.record_healthy()
 
     def initialized(self):
         return self._running and self._ready.is_set() is True and self._store.initialized is True

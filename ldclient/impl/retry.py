@@ -101,12 +101,14 @@ class AfterHealthyFor(ResetPolicy):
     ``seconds``. This is the streaming policy."""
 
     def __init__(self, seconds: float):
-        self._seconds = seconds
+        self._healthy_seconds = seconds
         self._healthy_since: Optional[float] = None
 
     def note_healthy(self) -> None:
+        """Records the monotonic time the component became healthy. Calling
+        this again while it is still healthy does not move that time."""
         if self._healthy_since is None:
-            self._healthy_since = time.time()
+            self._healthy_since = time.monotonic()
 
     def note_failure(self) -> None:
         self._healthy_since = None
@@ -114,7 +116,7 @@ class AfterHealthyFor(ResetPolicy):
     def is_satisfied(self) -> bool:
         if self._healthy_since is None:
             return False
-        return time.time() - self._healthy_since >= self._seconds
+        return time.monotonic() - self._healthy_since >= self._healthy_seconds
 
     @property
     def healthy_since(self) -> Optional[float]:
@@ -157,19 +159,6 @@ class RetryState:
     An unexpected failure moves the state to the extended regime, which raises
     both delay bounds. The bounds stay raised until the reset condition is met,
     so a normal failure that follows cannot lower them.
-
-    Three things happen on success, and they are deliberately separate:
-
-    * :meth:`record_success` returns the operating cadence. A backoff wait
-      applies to a retry, not to every operation, so one success is enough to
-      go back to the normal cadence even while the retry state is still raised.
-    * :meth:`record_healthy` feeds the reset policy.
-    * :meth:`maybe_reset` clears the retry state, but only once the reset
-      policy is satisfied, which may need more than one success.
-
-    Conflating the first two is a real bug in another SDK: after an outage its
-    first successful poll still waited twenty minutes or more, even though it
-    already held fresh data.
     """
 
     def __init__(
@@ -252,7 +241,8 @@ class RetryState:
             computed one. LaunchDarkly does not send one on these endpoints,
             so this is an unused seam.
         """
-        self.maybe_reset()
+        # Only a time-based policy needs this: nothing runs while a stream is healthy.
+        self._reset_if_due()
         self._attempts += 1
         self._reset_policy.note_failure()
 
@@ -271,48 +261,28 @@ class RetryState:
         self._next_delay = self._compute_wait(wait_override)
         return self._next_delay
 
-    def record_success(self) -> float:
+    def record_success(self) -> None:
         """
-        Records a successful operation and returns how long to wait before the
-        next one, in seconds.
+        Records a successful operation, and resets the retry state if that is
+        now enough.
 
-        The answer is the operating cadence, even when the retry state is still
-        raised, because a backoff wait applies to a retry and not to every
-        operation. This does not clear the retry state; :meth:`maybe_reset`
-        does that once the reset policy is satisfied.
-        """
-        self.record_healthy()
-        self._next_delay = self._operating_cadence
-        return self._next_delay
-
-    def record_healthy(self) -> None:
-        """
-        Records that the component is operating normally, and resets the retry
-        state if that is now enough.
-
-        Streaming calls this once per stream, on the first message of a fresh
-        stream. Polling calls it through :meth:`record_success`.
+        The wait before the next operation becomes the operating cadence, even
+        when the retry state is still raised, because a backoff wait applies to
+        a retry and not to every operation.
         """
         self._reset_policy.note_healthy()
-        self.maybe_reset()
+        self._reset_if_due()
+        self._next_delay = self._operating_cadence
 
-    def maybe_reset(self) -> bool:
-        """
-        Clears the retry state if the reset policy is satisfied, returning the
-        delay bounds to the normal regime.
-
-        Returns True if it cleared anything. This runs on its own before every
-        failure, so a caller does not have to call it.
-        """
+    def _reset_if_due(self) -> None:
+        """Clears the retry state when the reset policy is satisfied, returning
+        the delay bounds to the normal regime."""
         if not self._reset_policy.is_satisfied():
-            return False
-        if self._n == 0 and not self._extended:
-            return False
+            return
         self._n = 0
         self._extended = False
         self._min_delay = self._initial_delay
         self._max_delay = max(self._normal_ceiling, self._initial_delay)
-        return True
 
     def _compute_wait(self, wait_override: Optional[float]) -> float:
         if wait_override is not None:
@@ -334,6 +304,8 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     A configured delay of zero or less would reconnect with no wait, so the
     documented default stands in for it. ``Config`` does not check this value,
     though it does clamp ``poll_interval``.
+
+    The extended regime never starts below the configured delay.
     """
     if initial_reconnect_delay <= 0:
         log.warning(
@@ -344,7 +316,7 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     return RetryState(
         initial_delay=initial_reconnect_delay,
         normal_ceiling=STREAMING_MAX_DELAY,
-        extended_initial_delay=EXTENDED_INITIAL_DELAY,
+        extended_initial_delay=max(EXTENDED_INITIAL_DELAY, initial_reconnect_delay),
         extended_ceiling=EXTENDED_MAX_DELAY,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
     )
@@ -364,7 +336,7 @@ def for_polling(poll_interval: float) -> RetryState:
         initial_delay=poll_interval,
         normal_ceiling=poll_interval,
         extended_initial_delay=max(EXTENDED_INITIAL_DELAY, poll_interval),
-        extended_ceiling=max(EXTENDED_MAX_DELAY, poll_interval),
+        extended_ceiling=EXTENDED_MAX_DELAY,
         reset_policy=AfterConsecutiveSuccesses(POLLING_RESET_SUCCESSES),
         operating_cadence=poll_interval,
     )

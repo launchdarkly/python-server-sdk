@@ -38,6 +38,40 @@ class _FixedRandom:
         return self.value
 
 
+class _TickingClock:
+    """Stands in for the ``time`` module, moving on with every read."""
+
+    def __init__(self, start: float, step: float):
+        self.now = start
+        self.step = step
+
+    def monotonic(self) -> float:
+        self.now += self.step
+        return self.now
+
+
+def record_healthy_windows(policy) -> list:
+    """Records the window each ``note_healthy`` call leaves in place, so a test
+    can tell one window from the next."""
+    windows: list = []
+    note = policy.note_healthy
+
+    def wrapper():
+        note()
+        windows.append(policy.healthy_since)
+
+    policy.note_healthy = wrapper  # type: ignore[method-assign]
+    return windows
+
+
+@contextmanager
+def ticking_clock(start: float = 1000.0, step: float = 1.0):
+    """Gives :mod:`ldclient.impl.retry` a clock that moves on every read, so a
+    timestamp it stored can be told apart from one it stored later."""
+    with mock.patch.object(retry, 'time', _TickingClock(start, step)):
+        yield
+
+
 @contextmanager
 def fixed_retry_jitter(fraction: float):
     """Fixes the jitter that :mod:`ldclient.impl.retry` subtracts from a delay.

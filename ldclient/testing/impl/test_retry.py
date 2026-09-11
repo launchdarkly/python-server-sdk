@@ -42,7 +42,7 @@ class _FrozenClock:
     def __init__(self, now: float):
         self.now = now
 
-    def time(self) -> float:
+    def monotonic(self) -> float:
         return self.now
 
     def advance(self, seconds: float) -> None:
@@ -135,6 +135,38 @@ class TestStreamingInitialDelayGuard:
         assert caplog.records == []
 
 
+class TestStreamingExtendedDelayFloor:
+    """RETRY 1.5.4.1: a delay that applies after an unexpected failure must not
+    be below the component's initial delay."""
+
+    @pytest.mark.parametrize(
+        "configured,expected",
+        [(1, 300), (30, 300), (300, 300), (600, 600), (3600, 3600), (0, 300), (-5, 300)],
+    )
+    def test_the_extended_delay_never_starts_below_the_configured_delay(self, configured, expected):
+        assert for_streaming(configured).record_failure(UNEXPECTED) == expected
+
+    @pytest.mark.parametrize("configured", [1, 30, 300, 600, 3600])
+    def test_an_unexpected_failure_never_waits_less_than_a_normal_one(self, configured):
+        normal = for_streaming(configured).record_failure(NORMAL)
+        unexpected = for_streaming(configured).record_failure(UNEXPECTED)
+        assert unexpected >= normal
+
+    @pytest.mark.parametrize(
+        "configured,ladder",
+        [
+            (1, [300, 600, 1200, 2400, 3600]),
+            (600, [600, 1200, 2400, 3600, 3600]),
+        ],
+        ids=["default", "clamped"],
+    )
+    def test_the_extended_ladder_still_doubles_to_the_ceiling(self, configured, ladder):
+        state = for_streaming(configured)
+        delays = [state.record_failure(UNEXPECTED)]
+        delays += [state.record_failure(NORMAL) for _ in range(4)]
+        assert delays == ladder
+
+
 class TestStreamingDelayTable:
     def test_normal_regime_doubles_up_to_the_ceiling(self):
         state = streaming_state(initial_delay=1)
@@ -210,11 +242,11 @@ class TestStreamingReset:
             state.record_failure(UNEXPECTED)
             state.record_failure(NORMAL)
 
-            state.record_healthy()
+            state.record_success()
             assert state.in_extended_regime, "the window has not elapsed yet"
 
             clock.advance(STREAMING_RESET_INTERVAL)
-            assert state.maybe_reset()
+            state.record_success()
             assert not state.in_extended_regime
             assert state.max_delay == STREAMING_MAX_DELAY
             assert state.record_failure(NORMAL) == 1
@@ -225,7 +257,7 @@ class TestStreamingReset:
             state.record_failure(NORMAL)
             state.record_failure(NORMAL)
 
-            state.record_healthy()
+            state.record_success()
             clock.advance(STREAMING_RESET_INTERVAL)
 
             # The state resets before this failure is counted, so the delay is
@@ -237,7 +269,7 @@ class TestStreamingReset:
             state = streaming_state(initial_delay=1)
             state.record_failure(NORMAL)
 
-            state.record_healthy()
+            state.record_success()
             clock.advance(STREAMING_RESET_INTERVAL - 1)
             assert state.record_failure(NORMAL) == 2
 
@@ -249,7 +281,7 @@ class TestStreamingReset:
             state = streaming_state(initial_delay=1)
             delays = []
             for _ in range(20):
-                state.record_healthy()
+                state.record_success()
                 clock.advance(5)
                 delays.append(state.record_failure(NORMAL))
                 clock.advance(1)
@@ -278,9 +310,12 @@ class TestPollingCadence:
             assert state.record_failure(UNEXPECTED) >= 30
 
     def test_a_poll_interval_longer_than_the_extended_bounds_wins(self):
+        # The ceiling is lifted by record_failure clamping it against the
+        # initial delay, not by for_polling clamping the ceiling itself.
         state = polling_state(poll_interval=2 * 60 * 60)
         assert state.record_failure(UNEXPECTED) == 2 * 60 * 60
         assert state.max_delay == 2 * 60 * 60
+        assert state.min_delay == 2 * 60 * 60
 
     def test_one_success_restores_the_cadence_while_the_state_is_still_raised(self):
         # RETRY 1.4.8. Conflating this with the reset is the bug another SDK
@@ -291,7 +326,8 @@ class TestPollingCadence:
         state.record_failure(NORMAL)
         assert state.record_failure(NORMAL) == 20 * 60
 
-        assert state.record_success() == 30
+        state.record_success()
+        assert state.next_delay == 30
         assert state.in_extended_regime, "one success does not reset the state"
 
     def test_two_successes_in_a_row_reset_the_state(self):
@@ -304,6 +340,7 @@ class TestPollingCadence:
 
         state.record_success()
         assert not state.in_extended_regime
+        assert state.next_delay == 30
         assert state.record_failure(NORMAL) == 30
 
     def test_a_failure_between_two_successes_clears_the_first(self):
@@ -348,10 +385,14 @@ class TestAttemptCount:
         with frozen_clock() as clock:
             state = streaming_state(initial_delay=1)
             state.record_failure(NORMAL)
-            state.record_healthy()
+            state.record_success()
             clock.advance(STREAMING_RESET_INTERVAL)
-            state.maybe_reset()
-            assert state.attempts == 1
+            state.record_success()
+
+            # The reset shows in the delay dropping back to the first-retry
+            # value, while the count carries on.
+            assert state.record_failure(NORMAL) == 1
+            assert state.attempts == 2
 
 
 class TestResetPolicies:
@@ -369,6 +410,26 @@ class TestResetPolicies:
             assert policy.healthy_since == started
 
             clock.advance(20)
+            assert policy.is_satisfied()
+
+    def test_many_healthy_signals_do_not_move_the_window(self):
+        """Streaming signals on every message, so an unconditional assignment
+        here would push its reset out for ever -- Go's SDK-2845."""
+        with frozen_clock() as clock:
+            policy = AfterHealthyFor(60)
+            policy.note_healthy()
+            first = policy.healthy_since
+
+            for _ in range(59):
+                clock.advance(1)
+                policy.note_healthy()
+
+            assert policy.healthy_since == first
+            assert not policy.is_satisfied()
+
+            # The threshold lands 60s after the first signal, not the last.
+            clock.advance(1)
+            policy.note_healthy()
             assert policy.is_satisfied()
 
     def test_healthy_for_is_cleared_by_a_failure(self):

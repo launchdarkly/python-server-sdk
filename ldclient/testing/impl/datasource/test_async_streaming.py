@@ -33,7 +33,11 @@ from ldclient.impl.retry import (
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
 from ldclient.testing.builders import FlagBuilder, SegmentBuilder
 from ldclient.testing.mock_async_components import MockAsyncFeatureStore
-from ldclient.testing.test_util import no_retry_jitter
+from ldclient.testing.test_util import (
+    no_retry_jitter,
+    record_healthy_windows,
+    ticking_clock
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
@@ -87,6 +91,18 @@ async def _actions_generator(actions: list):
         yield action
     # Block forever so the processor's loop doesn't exit until cancelled.
     await asyncio.Event().wait()
+
+
+def _retry_state_with(policy: AfterHealthyFor) -> RetryState:
+    """A retry state with tiny delays and a caller-supplied reset policy, so a
+    test can watch the window."""
+    return RetryState(
+        initial_delay=0.001,
+        normal_ceiling=0.001,
+        extended_initial_delay=0.001,
+        extended_ceiling=0.001,
+        reset_policy=policy,
+    )
 
 
 def _fast_retry_state(delay: float = 0.001) -> RetryState:
@@ -526,30 +542,33 @@ async def test_the_processor_asks_the_factory_to_leave_the_delay_to_the_sdk():
 
 
 @pytest.mark.asyncio
-async def test_healthy_operation_is_signalled_once_per_stream():
-    """The reset window must start at the first message of a stream. Signalling
-    again on every later message would keep pushing the window out."""
+async def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
+    """The window starts at the first message and stays there, however many
+    more arrive on the same stream."""
     flag = FlagBuilder('f1').version(1).build()
     put_data = _make_put_data(flags={'f1': _item_dict(flag)})
     patch_data = _make_patch_data(FEATURES, _item_dict(FlagBuilder('f1').version(2).build()))
     actions = [_start(), _event('put', put_data), _event('patch', patch_data)]
 
-    retry = _fast_retry_state()
-    healthy_at = []
-    retry.record_healthy = lambda: healthy_at.append(len(healthy_at))  # type: ignore[method-assign]
+    policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+    retry = _retry_state_with(policy)
+    # The clock moves on every read, so a window that had been restarted reads
+    # back as a different time.
+    windows = record_healthy_windows(policy)
 
-    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
-    proc.start()
-    await _wait_until(lambda: len(healthy_at) > 0)
-    await asyncio.sleep(0.05)
+    with ticking_clock():
+        proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+        proc.start()
+        await _wait_until(lambda: len(windows) >= 2)
+        await proc.stop()
 
-    assert healthy_at == [0]
-
-    await proc.stop()
+    assert len(set(windows)) == 1, "the window moved between messages"
 
 
 @pytest.mark.asyncio
-async def test_a_fresh_stream_signals_healthy_operation_again():
+async def test_a_fresh_stream_starts_a_new_reset_window():
+    """A stream teardown clears the window through record_failure, so the next
+    stream measures its own stretch rather than inheriting the old one."""
     from ld_eventsource.errors import HTTPStatusError
 
     flag = FlagBuilder('f1').version(1).build()
@@ -562,15 +581,18 @@ async def test_a_fresh_stream_signals_healthy_operation_again():
         _event('put', put_data),
     ]
 
-    retry = _fast_retry_state()
-    healthy_count = []
-    retry.record_healthy = lambda: healthy_count.append(1)  # type: ignore[method-assign]
+    policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+    retry = _retry_state_with(policy)
+    windows = record_healthy_windows(policy)
 
-    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
-    proc.start()
-    await _wait_until(lambda: len(healthy_count) >= 2)
+    with ticking_clock():
+        proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+        proc.start()
+        # One put per stream, so two signals in all.
+        await _wait_until(lambda: len(windows) >= 2)
+        await proc.stop()
 
-    await proc.stop()
+    assert len(set(windows)) == 2, "the second stream reused the first window"
 
 
 @pytest.mark.asyncio
