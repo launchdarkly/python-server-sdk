@@ -13,7 +13,7 @@ from queue import Empty as QueueEmpty  # noqa: F401  (shared timeout exception)
 from queue import Full as QueueFull  # noqa: F401  (shared capacity exception)
 from typing import Any, Callable, Coroutine, Optional, Set
 
-from ldclient.impl.repeating_task import DelaySource, FixedDelay
+from ldclient.impl.delay import DelaySource, FixedDelay
 from ldclient.impl.util import log
 
 
@@ -190,7 +190,7 @@ class AsyncTaskRunner:
 
 class AsyncRepeatingTask:
     """Calls a callback repeatedly on a background task, waiting whatever its
-    :class:`~ldclient.impl.repeating_task.DelaySource` gives.
+    :class:`~ldclient.impl.delay.DelaySource` gives.
     Mirrors the semantics of ``ldclient.impl.repeating_task.RepeatingTask``:
     the wait starts when the callback returns, exceptions from the callback
     are logged, and ``stop()`` prevents any further invocations but cannot be

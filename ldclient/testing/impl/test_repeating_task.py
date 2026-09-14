@@ -3,7 +3,8 @@ import time
 from queue import Empty, Queue
 from threading import Event
 
-from ldclient.impl.repeating_task import DelaySource, FixedDelay, RepeatingTask
+from ldclient.impl.delay import DelaySource
+from ldclient.impl.repeating_task import RepeatingTask
 
 
 def test_task_does_not_start_when_created():
@@ -87,12 +88,6 @@ class _MutableDelay(DelaySource):
     @property
     def next_delay(self) -> float:
         return self.seconds
-
-
-def test_fixed_delay_always_gives_the_same_wait():
-    delays = FixedDelay(2.5)
-    assert delays.next_delay == 2.5
-    assert delays.next_delay == 2.5
 
 
 def test_the_task_reads_the_delay_source_after_every_invocation():

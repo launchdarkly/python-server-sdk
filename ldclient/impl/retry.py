@@ -204,7 +204,7 @@ class RetryState:
 
     @property
     def attempts(self) -> int:
-        """How many failures this state has seen. For logging only."""
+        """How many failures since the last reset. For logging only."""
         return self._attempts
 
     @property
@@ -228,7 +228,7 @@ class RetryState:
         delay bounds."""
         return self._extended
 
-    def record_failure(self, kind: FailureKind, wait_override: Optional[float] = None) -> float:
+    def record_failure(self, kind: FailureKind) -> float:
         """
         Records a failed attempt and returns how long to wait before the next
         one, in seconds.
@@ -237,9 +237,6 @@ class RetryState:
         reflects the failure just recorded.
 
         :param kind: how the failure was classified
-        :param wait_override: a wait the server asked for, which replaces the
-            computed one. LaunchDarkly does not send one on these endpoints,
-            so this is an unused seam.
         """
         # Only a time-based policy needs this: nothing runs while a stream is healthy.
         self._reset_if_due()
@@ -248,7 +245,7 @@ class RetryState:
 
         if kind is FailureKind.UNEXPECTED and not self._extended:
             # Moving to the extended regime raises both bounds and starts the
-            # attempt count over. Only the move does this: a later unexpected
+            # delay sequence over. Only the move does this: a later unexpected
             # failure keeps counting up, so the delay is not pinned to the
             # extended initial delay.
             self._extended = True
@@ -258,7 +255,7 @@ class RetryState:
         else:
             self._n += 1
 
-        self._next_delay = self._compute_wait(wait_override)
+        self._next_delay = self._compute_wait()
         return self._next_delay
 
     def record_success(self) -> None:
@@ -280,13 +277,12 @@ class RetryState:
         if not self._reset_policy.is_satisfied():
             return
         self._n = 0
+        self._attempts = 0
         self._extended = False
         self._min_delay = self._initial_delay
         self._max_delay = max(self._normal_ceiling, self._initial_delay)
 
-    def _compute_wait(self, wait_override: Optional[float]) -> float:
-        if wait_override is not None:
-            return max(wait_override, self._operating_cadence)
+    def _compute_wait(self) -> float:
         exponent = min(max(self._n - 1, 0), _MAX_BACKOFF_EXPONENT)
         delay = min(self._min_delay * (2**exponent), self._max_delay)
         jitter = random.random() * delay / 2

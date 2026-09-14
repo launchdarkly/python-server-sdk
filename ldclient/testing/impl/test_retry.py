@@ -362,17 +362,6 @@ class TestPollingCadence:
         assert POLLING_RESET_SUCCESSES == 2
 
 
-class TestWaitOverride:
-    def test_an_override_replaces_the_computed_wait(self):
-        state = streaming_state(initial_delay=1)
-        state.record_failure(NORMAL)
-        assert state.record_failure(NORMAL, wait_override=7) == 7
-
-    def test_an_override_still_respects_the_cadence(self):
-        state = polling_state(poll_interval=30)
-        assert state.record_failure(NORMAL, wait_override=1) == 30
-
-
 class TestAttemptCount:
     def test_attempts_counts_every_failure(self):
         state = streaming_state(initial_delay=1)
@@ -380,19 +369,23 @@ class TestAttemptCount:
             state.record_failure(NORMAL)
         assert state.attempts == 5
 
-    def test_a_reset_does_not_clear_the_attempt_count(self):
-        # The count is for logging, so it should keep counting across a reset.
+    def test_a_reset_starts_the_attempt_count_over(self):
+        # The streaming spec resets both counters: "set attempt to 1, set n
+        # to 1".
         with frozen_clock() as clock:
             state = streaming_state(initial_delay=1)
             state.record_failure(NORMAL)
+            state.record_failure(NORMAL)
+            assert state.attempts == 2
+
             state.record_success()
             clock.advance(STREAMING_RESET_INTERVAL)
             state.record_success()
 
-            # The reset shows in the delay dropping back to the first-retry
-            # value, while the count carries on.
+            # The delay drops back to the first-retry value, and the count
+            # starts over with it.
             assert state.record_failure(NORMAL) == 1
-            assert state.attempts == 2
+            assert state.attempts == 1
 
 
 class TestResetPolicies:

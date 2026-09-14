@@ -1,34 +1,16 @@
 from threading import Event, Thread
-from typing import Any, Callable, Protocol
+from typing import Any, Callable
 
+from ldclient.impl.delay import DelaySource, FixedDelay
 from ldclient.impl.util import log
-
-
-class DelaySource(Protocol):
-    """Supplies the wait before a repeating task's next invocation."""
-
-    @property
-    def next_delay(self) -> float:
-        """The seconds to wait before the next invocation."""
-        ...
-
-
-class FixedDelay(DelaySource):
-    """A :class:`DelaySource` that always gives the same wait."""
-
-    def __init__(self, seconds: float):
-        self.__seconds = seconds
-
-    @property
-    def next_delay(self) -> float:
-        return self.__seconds
 
 
 class RepeatingTask:
     """
     A generic mechanism for calling a callback repeatedly on a worker thread.
 
-    The wait between invocations comes from a :class:`DelaySource`, which the
+    The wait between invocations comes from a
+    :class:`~ldclient.impl.delay.DelaySource`, which the
     task reads after each one. Use :meth:`at_interval` for the common case of
     a fixed interval.
     """
