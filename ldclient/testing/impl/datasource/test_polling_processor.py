@@ -166,8 +166,8 @@ def test_unexpected_http_error_moves_to_the_extended_regime(ignore_mock):
 
 
 def test_the_first_success_after_an_outage_polls_at_the_cadence():
-    # RETRY 1.4.8: a backoff wait applies to a retry, not to every operation.
-    # _poll returns the wait, so this reads it directly rather than measuring
+    # A backoff wait applies to a retry, not to every operation. The retry
+    # state carries the wait, so this reads it there rather than measuring
     # elapsed time.
     with no_retry_jitter():
         retry = for_polling(30)

@@ -77,7 +77,7 @@ def fixed_retry_jitter(fraction: float):
     """Fixes the jitter that :mod:`ldclient.impl.retry` subtracts from a delay.
 
     ``0`` subtracts none, so a test can assert an exact delay. A value just
-    below ``1`` subtracts as much as the spec allows, which is half.
+    below ``1`` subtracts as much as possible, which is half.
 
     Patching the retry module's own ``random`` reference keeps the change
     local to that module; every other module keeps the real source.

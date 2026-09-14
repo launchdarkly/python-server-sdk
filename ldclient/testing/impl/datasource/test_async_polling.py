@@ -253,9 +253,9 @@ class TestAsyncPollingUpdateProcessor:
 
     @pytest.mark.asyncio
     async def test_the_first_success_after_an_outage_polls_at_the_cadence(self):
-        # RETRY 1.4.8: a backoff wait applies to a retry, not to every
-        # operation. _poll returns the wait, so this reads it directly rather
-        # than measuring elapsed time.
+        # A backoff wait applies to a retry, not to every operation. The
+        # retry state carries the wait, so this reads it there rather than
+        # measuring elapsed time.
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
