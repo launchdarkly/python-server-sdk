@@ -426,16 +426,17 @@ class TestAsyncPollingUpdateProcessor:
 
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
-    async def test_second_start_call_raises(self, mock_interval):
+    async def test_second_start_call_is_a_no_op(self, mock_interval):
         mock_interval.__get__ = MagicMock(return_value=0)
 
         processor = make_processor()
         processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
 
         processor.start()
-        # Like a thread, the polling task can only be started once
-        with pytest.raises(RuntimeError):
-            processor.start()
+        task = processor._task
+        # The task guards against a second start; it logs and does nothing.
+        processor.start()
+        assert processor._task is task
 
         await processor.stop()
 

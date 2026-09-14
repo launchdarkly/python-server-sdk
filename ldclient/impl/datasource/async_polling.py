@@ -33,7 +33,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         self._requester = requester
         self._store = store
         self._ready = ready
-        self._task = AsyncRepeatingTask("ldclient.datasource.polling", config.poll_interval, 0, self._fetch_and_store)
+        self._task = AsyncRepeatingTask.at_interval("ldclient.datasource.polling", config.poll_interval, 0, self._fetch_and_store)
 
     def start(self):
         log.info("Starting AsyncPollingUpdateProcessor with request interval: " + str(self._config.poll_interval))
