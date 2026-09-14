@@ -152,9 +152,10 @@ class RetryState:
     """
     Tracks how long a data source should wait before its next attempt.
 
-    A failure moves the state on and returns the wait. The delay for attempt
-    ``n`` is ``min(min_delay * 2 ** (n - 1), max_delay)``, less a random
-    jitter of up to half of it, and never less than the operating cadence.
+    A failure moves the state on and decides the next wait, which
+    :attr:`next_delay` reports. The delay for attempt ``n`` is
+    ``min(min_delay * 2 ** (n - 1), max_delay)``, less a random jitter of up to
+    half of it, and never less than the operating cadence.
 
     An unexpected failure moves the state to the extended regime, which raises
     both delay bounds. The bounds stay raised until the reset condition is met,
@@ -228,13 +229,12 @@ class RetryState:
         delay bounds."""
         return self._extended
 
-    def record_failure(self, kind: FailureKind) -> float:
+    def record_failure(self, kind: FailureKind) -> None:
         """
-        Records a failed attempt and returns how long to wait before the next
-        one, in seconds.
+        Records a failed attempt, and decides the wait before the next one.
 
-        The state moves on before the wait is computed, so the wait always
-        reflects the failure just recorded.
+        The state moves on before the wait is computed, so :attr:`next_delay`
+        always reflects the failure just recorded.
 
         :param kind: how the failure was classified
         """
@@ -256,7 +256,6 @@ class RetryState:
             self._n += 1
 
         self._next_delay = self._compute_wait()
-        return self._next_delay
 
     def record_success(self) -> None:
         """

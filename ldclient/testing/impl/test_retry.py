@@ -82,6 +82,13 @@ def real_jitter():
         yield
 
 
+def failure_delay(state, kind=NORMAL) -> float:
+    """Records a failure and reads back the wait it decided, which is the value
+    a data source reads."""
+    state.record_failure(kind)
+    return state.next_delay
+
+
 def streaming_state(initial_delay=1):
     return for_streaming(initial_delay)
 
@@ -119,7 +126,7 @@ class TestStreamingInitialDelayGuard:
         state = for_streaming(configured)
 
         assert state.min_delay == DEFAULT_INITIAL_RECONNECT_DELAY
-        assert state.record_failure(NORMAL) == DEFAULT_INITIAL_RECONNECT_DELAY
+        assert failure_delay(state, NORMAL) == DEFAULT_INITIAL_RECONNECT_DELAY
         assert caplog.records[0].getMessage() == (
             "initial_reconnect_delay must be greater than zero; using the default of 1s"
         )
@@ -131,7 +138,7 @@ class TestStreamingInitialDelayGuard:
         state = for_streaming(configured)
 
         assert state.min_delay == configured
-        assert state.record_failure(NORMAL) == configured
+        assert failure_delay(state, NORMAL) == configured
         assert caplog.records == []
 
 
@@ -144,12 +151,12 @@ class TestStreamingExtendedDelayFloor:
         [(1, 300), (30, 300), (300, 300), (600, 600), (3600, 3600), (0, 300), (-5, 300)],
     )
     def test_the_extended_delay_never_starts_below_the_configured_delay(self, configured, expected):
-        assert for_streaming(configured).record_failure(UNEXPECTED) == expected
+        assert failure_delay(for_streaming(configured), UNEXPECTED) == expected
 
     @pytest.mark.parametrize("configured", [1, 30, 300, 600, 3600])
     def test_an_unexpected_failure_never_waits_less_than_a_normal_one(self, configured):
-        normal = for_streaming(configured).record_failure(NORMAL)
-        unexpected = for_streaming(configured).record_failure(UNEXPECTED)
+        normal = failure_delay(for_streaming(configured), NORMAL)
+        unexpected = failure_delay(for_streaming(configured), UNEXPECTED)
         assert unexpected >= normal
 
     @pytest.mark.parametrize(
@@ -162,28 +169,28 @@ class TestStreamingExtendedDelayFloor:
     )
     def test_the_extended_ladder_still_doubles_to_the_ceiling(self, configured, ladder):
         state = for_streaming(configured)
-        delays = [state.record_failure(UNEXPECTED)]
-        delays += [state.record_failure(NORMAL) for _ in range(4)]
+        delays = [failure_delay(state, UNEXPECTED)]
+        delays += [failure_delay(state, NORMAL) for _ in range(4)]
         assert delays == ladder
 
 
 class TestStreamingDelayTable:
     def test_normal_regime_doubles_up_to_the_ceiling(self):
         state = streaming_state(initial_delay=1)
-        delays = [state.record_failure(NORMAL) for _ in range(8)]
+        delays = [failure_delay(state, NORMAL) for _ in range(8)]
         assert delays == [1, 2, 4, 8, 16, 30, 30, 30]
 
     def test_extended_regime_doubles_up_to_the_ceiling(self):
         state = streaming_state(initial_delay=1)
-        delays = [state.record_failure(UNEXPECTED)]
-        delays += [state.record_failure(NORMAL) for _ in range(5)]
+        delays = [failure_delay(state, UNEXPECTED)]
+        delays += [failure_delay(state, NORMAL) for _ in range(5)]
         assert delays == [5 * 60, 10 * 60, 20 * 60, 40 * 60, 60 * 60, 60 * 60]
 
     def test_a_configured_initial_delay_raises_the_ceiling_with_it(self):
         # RETRY 1.5.4 as amended: maxDelay must not fall below initialDelay.
         state = streaming_state(initial_delay=45)
         assert state.max_delay == 45
-        assert state.record_failure(NORMAL) == 45
+        assert failure_delay(state, NORMAL) == 45
 
     def test_the_ceiling_is_sticky_once_the_extended_regime_starts(self):
         # RETRY 1.5.5: a normal failure after an unexpected one must not lower
@@ -202,9 +209,9 @@ class TestStreamingDelayTable:
         # Restarting the count on every unexpected failure would pin the delay
         # at the extended initial delay for ever.
         state = streaming_state(initial_delay=1)
-        assert state.record_failure(UNEXPECTED) == 5 * 60
-        assert state.record_failure(UNEXPECTED) == 10 * 60
-        assert state.record_failure(UNEXPECTED) == 20 * 60
+        assert failure_delay(state, UNEXPECTED) == 5 * 60
+        assert failure_delay(state, UNEXPECTED) == 10 * 60
+        assert failure_delay(state, UNEXPECTED) == 20 * 60
 
     def test_the_streaming_defaults_match_the_spec(self):
         state = streaming_state(initial_delay=1)
@@ -217,12 +224,12 @@ class TestJitter:
     def test_jitter_never_removes_more_than_half_the_delay(self):
         with fixed_retry_jitter(FULL_JITTER):
             state = streaming_state(initial_delay=8)
-            delay = state.record_failure(NORMAL)
+            delay = failure_delay(state, NORMAL)
             assert 4 <= delay < 8
 
     def test_no_jitter_leaves_the_delay_alone(self):
         state = streaming_state(initial_delay=8)
-        assert state.record_failure(NORMAL) == 8
+        assert failure_delay(state, NORMAL) == 8
 
     def test_every_delay_stays_within_the_jitter_bounds(self):
         # The real random source, so the bound has to hold for any draw rather
@@ -230,7 +237,7 @@ class TestJitter:
         with real_jitter():
             state = streaming_state(initial_delay=1)
             for base in [1, 2, 4, 8, 16, 30, 30, 30]:
-                delay = state.record_failure(NORMAL)
+                delay = failure_delay(state, NORMAL)
                 assert base / 2 <= delay <= base
 
 
@@ -249,7 +256,7 @@ class TestStreamingReset:
             state.record_success()
             assert not state.in_extended_regime
             assert state.max_delay == STREAMING_MAX_DELAY
-            assert state.record_failure(NORMAL) == 1
+            assert failure_delay(state, NORMAL) == 1
 
     def test_a_reset_also_happens_on_the_failure_that_ends_a_healthy_stretch(self):
         with frozen_clock() as clock:
@@ -262,7 +269,7 @@ class TestStreamingReset:
 
             # The state resets before this failure is counted, so the delay is
             # the first-retry delay again rather than the fourth.
-            assert state.record_failure(NORMAL) == 1
+            assert failure_delay(state, NORMAL) == 1
 
     def test_a_short_healthy_stretch_does_not_reset(self):
         with frozen_clock() as clock:
@@ -271,7 +278,7 @@ class TestStreamingReset:
 
             state.record_success()
             clock.advance(STREAMING_RESET_INTERVAL - 1)
-            assert state.record_failure(NORMAL) == 2
+            assert failure_delay(state, NORMAL) == 2
 
     def test_a_fast_flapping_connection_does_not_ratchet_into_the_extended_regime(self):
         # Every transport failure is normal, so no amount of flapping reaches
@@ -283,7 +290,7 @@ class TestStreamingReset:
             for _ in range(20):
                 state.record_success()
                 clock.advance(5)
-                delays.append(state.record_failure(NORMAL))
+                delays.append(failure_delay(state, NORMAL))
                 clock.advance(1)
 
             assert not state.in_extended_regime
@@ -294,26 +301,26 @@ class TestStreamingReset:
 class TestPollingCadence:
     def test_a_normal_failure_polls_again_on_schedule(self):
         state = polling_state(poll_interval=30)
-        assert [state.record_failure(NORMAL) for _ in range(4)] == [30, 30, 30, 30]
+        assert [failure_delay(state, NORMAL) for _ in range(4)] == [30, 30, 30, 30]
 
     def test_the_extended_regime_doubles_up_to_an_hour(self):
         state = polling_state(poll_interval=30)
-        delays = [state.record_failure(UNEXPECTED)]
-        delays += [state.record_failure(NORMAL) for _ in range(5)]
+        delays = [failure_delay(state, UNEXPECTED)]
+        delays += [failure_delay(state, NORMAL) for _ in range(5)]
         assert delays == [5 * 60, 10 * 60, 20 * 60, 40 * 60, 60 * 60, 60 * 60]
 
     def test_the_wait_never_falls_below_the_poll_interval(self):
         # RETRY 1.4.9. Full jitter would otherwise halve the delay.
         with fixed_retry_jitter(FULL_JITTER):
             state = polling_state(poll_interval=30)
-            assert state.record_failure(NORMAL) == 30
-            assert state.record_failure(UNEXPECTED) >= 30
+            assert failure_delay(state, NORMAL) == 30
+            assert failure_delay(state, UNEXPECTED) >= 30
 
     def test_a_poll_interval_longer_than_the_extended_bounds_wins(self):
         # The ceiling is lifted by record_failure clamping it against the
         # initial delay, not by for_polling clamping the ceiling itself.
         state = polling_state(poll_interval=2 * 60 * 60)
-        assert state.record_failure(UNEXPECTED) == 2 * 60 * 60
+        assert failure_delay(state, UNEXPECTED) == 2 * 60 * 60
         assert state.max_delay == 2 * 60 * 60
         assert state.min_delay == 2 * 60 * 60
 
@@ -324,7 +331,7 @@ class TestPollingCadence:
         state = polling_state(poll_interval=30)
         state.record_failure(UNEXPECTED)
         state.record_failure(NORMAL)
-        assert state.record_failure(NORMAL) == 20 * 60
+        assert failure_delay(state, NORMAL) == 20 * 60
 
         state.record_success()
         assert state.next_delay == 30
@@ -341,7 +348,7 @@ class TestPollingCadence:
         state.record_success()
         assert not state.in_extended_regime
         assert state.next_delay == 30
-        assert state.record_failure(NORMAL) == 30
+        assert failure_delay(state, NORMAL) == 30
 
     def test_a_failure_between_two_successes_clears_the_first(self):
         state = polling_state(poll_interval=30)
@@ -384,7 +391,7 @@ class TestAttemptCount:
 
             # The delay drops back to the first-retry value, and the count
             # starts over with it.
-            assert state.record_failure(NORMAL) == 1
+            assert failure_delay(state, NORMAL) == 1
             assert state.attempts == 1
 
 
@@ -460,5 +467,5 @@ class TestLongOutage:
             reset_policy=AfterHealthyFor(60),
         )
         for _ in range(5000):
-            delay = state.record_failure(NORMAL)
+            delay = failure_delay(state, NORMAL)
         assert delay == 30

@@ -109,7 +109,8 @@ class PollingUpdateProcessor(UpdateProcessor):
             # logged, the handler has exited and exc_info() is empty.
             stacktrace = e
 
-        delay = self._retry.record_failure(kind)
+        self._retry.record_failure(kind)
+        delay = self._retry.next_delay
         level("%s - will retry in %.1fs" % (description, delay), exc_info=stacktrace)
 
         if self._data_source_update_sink is not None:
