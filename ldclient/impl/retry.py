@@ -18,6 +18,7 @@ or :func:`for_polling` to build one with the right parameters and reset policy.
 
 # currently excluded from documentation - see docs/README.md
 
+import math
 import random
 import time
 from enum import Enum
@@ -34,10 +35,10 @@ EXTENDED_MAX_DELAY = 60 * 60
 # delay is configurable as ``initial_reconnect_delay``.
 STREAMING_MAX_DELAY = 30
 
-# The documented default for ``initial_reconnect_delay``, in seconds. It stands
-# in for a configured value of zero or less, which would reconnect with no wait
-# at all.
+# The documented defaults, in seconds. Each stands in for a configured value
+# that is not a positive, finite number.
 DEFAULT_INITIAL_RECONNECT_DELAY = 1
+DEFAULT_POLL_INTERVAL = 30
 
 # How long streaming must operate without a failure before its retry state
 # resets, in seconds.
@@ -195,7 +196,7 @@ class RetryState:
         self._max_delay = max(normal_ceiling, initial_delay)
         self._attempts = 0
         # Read before any outcome is recorded, this is the ordinary interval.
-        self._next_delay = operating_cadence if operating_cadence > 0 else initial_delay
+        self._next_delay = self._wait_between_operations()
 
     @property
     def next_delay(self) -> float:
@@ -262,13 +263,18 @@ class RetryState:
         Records a successful operation, and resets the retry state if that is
         now enough.
 
-        The wait before the next operation becomes the operating cadence, even
-        when the retry state is still raised, because a backoff wait applies to
-        a retry and not to every operation.
+        The wait before the next operation goes back to the ordinary interval,
+        even when the retry state is still raised, because a backoff wait
+        applies to a retry and not to every operation.
         """
         self._reset_policy.note_healthy()
         self._reset_if_due()
-        self._next_delay = self._operating_cadence
+        self._next_delay = self._wait_between_operations()
+
+    def _wait_between_operations(self) -> float:
+        """The wait when nothing is being retried: the operating cadence, or
+        the initial delay for a component that has no cadence."""
+        return self._operating_cadence if self._operating_cadence > 0 else self._initial_delay
 
     def _reset_if_due(self) -> None:
         """Clears the retry state when the reset policy is satisfied, returning
@@ -288,6 +294,19 @@ class RetryState:
         return max(delay - jitter, self._operating_cadence)
 
 
+def _positive_finite(value: float, default: float, name: str) -> float:
+    """Returns ``value`` if it is a positive, finite number of seconds, and the
+    default otherwise. A non-finite value would make the jitter arithmetic
+    produce a NaN delay, and a non-positive one would retry with no wait."""
+    if value > 0 and math.isfinite(value):
+        return value
+    log.warning(
+        "%s must be a positive, finite number of seconds; using the default of %ss"
+        % (name, default)
+    )
+    return default
+
+
 def for_streaming(initial_reconnect_delay: float) -> RetryState:
     """
     Builds the retry state for a streaming data source.
@@ -296,18 +315,14 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     is healthy from the first message of a fresh stream, and resets after a
     minute of that.
 
-    A configured delay of zero or less would reconnect with no wait, so the
-    documented default stands in for it. ``Config`` does not check this value,
-    though it does clamp ``poll_interval``.
+    ``Config`` does not check the configured delay, so the documented default
+    stands in for anything that is not a positive, finite number.
 
     The extended regime never starts below the configured delay.
     """
-    if initial_reconnect_delay <= 0:
-        log.warning(
-            "initial_reconnect_delay must be greater than zero; using the default of %ss"
-            % DEFAULT_INITIAL_RECONNECT_DELAY
-        )
-        initial_reconnect_delay = DEFAULT_INITIAL_RECONNECT_DELAY
+    initial_reconnect_delay = _positive_finite(
+        initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
+    )
     return RetryState(
         initial_delay=initial_reconnect_delay,
         normal_ceiling=STREAMING_MAX_DELAY,
@@ -326,7 +341,11 @@ def for_polling(poll_interval: float) -> RetryState:
     interval itself, which means a normal failure simply polls again on
     schedule. Polling is healthy on any successful poll, and resets after two
     in a row.
+
+    ``Config`` clamps the poll interval, but the documented default stands in
+    for anything that reaches here and is not a positive, finite number.
     """
+    poll_interval = _positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval')
     return RetryState(
         initial_delay=poll_interval,
         normal_ceiling=poll_interval,

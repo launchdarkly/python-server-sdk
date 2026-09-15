@@ -8,6 +8,7 @@ undisturbed value; the tests that are about jitter override it.
 """
 
 import logging
+import math
 import random
 from contextlib import contextmanager
 from unittest import mock
@@ -17,6 +18,7 @@ import pytest
 from ldclient.impl import retry
 from ldclient.impl.retry import (
     DEFAULT_INITIAL_RECONNECT_DELAY,
+    DEFAULT_POLL_INTERVAL,
     EXTENDED_INITIAL_DELAY,
     EXTENDED_MAX_DELAY,
     POLLING_RESET_SUCCESSES,
@@ -107,29 +109,66 @@ class TestClassifyHttpStatus:
         assert classify_http_status(status) is NORMAL
 
 
-class TestStreamingInitialDelayGuard:
-    """``Config`` does not check ``initial_reconnect_delay``, and a value of
-    zero would reconnect with no wait at all."""
+class TestFactoryInputGuards:
+    """``Config`` does not check ``initial_reconnect_delay`` at all, and only
+    clamps ``poll_interval``. A non-positive value would retry with no wait; a
+    non-finite one makes the jitter arithmetic produce NaN."""
 
-    @pytest.mark.parametrize("configured", [0, -1, -0.5])
-    def test_a_non_positive_delay_falls_back_to_the_default(self, configured, caplog):
+    @pytest.mark.parametrize(
+        "configured",
+        [0, -1, -0.5, float('inf'), float('-inf'), float('nan')],
+        ids=["zero", "negative", "negative-fraction", "inf", "-inf", "nan"],
+    )
+    def test_streaming_falls_back_to_the_default(self, configured, caplog):
         caplog.set_level(logging.WARNING)
 
         state = for_streaming(configured)
+        delay = failure_delay(state, NORMAL)
 
         assert state.min_delay == DEFAULT_INITIAL_RECONNECT_DELAY
-        assert failure_delay(state, NORMAL) == DEFAULT_INITIAL_RECONNECT_DELAY
+        assert delay == DEFAULT_INITIAL_RECONNECT_DELAY
+        assert math.isfinite(delay) and delay > 0
         assert caplog.records[0].getMessage() == (
-            "initial_reconnect_delay must be greater than zero; using the default of 1s"
+            "initial_reconnect_delay must be a positive, finite number of seconds; "
+            "using the default of 1s"
+        )
+
+    @pytest.mark.parametrize(
+        "configured",
+        [0, -5, float('inf'), float('-inf'), float('nan')],
+        ids=["zero", "negative", "inf", "-inf", "nan"],
+    )
+    def test_polling_falls_back_to_the_default(self, configured, caplog):
+        caplog.set_level(logging.WARNING)
+
+        state = for_polling(configured)
+        delay = failure_delay(state, NORMAL)
+
+        assert state.operating_cadence == DEFAULT_POLL_INTERVAL
+        assert delay == DEFAULT_POLL_INTERVAL
+        assert math.isfinite(delay) and delay > 0
+        assert caplog.records[0].getMessage() == (
+            "poll_interval must be a positive, finite number of seconds; "
+            "using the default of 30s"
         )
 
     @pytest.mark.parametrize("configured", [0.001, 0.5, 1, 5, 45])
-    def test_a_positive_delay_is_left_alone(self, configured, caplog):
+    def test_a_positive_streaming_delay_is_left_alone(self, configured, caplog):
         caplog.set_level(logging.WARNING)
 
         state = for_streaming(configured)
 
         assert state.min_delay == configured
+        assert failure_delay(state, NORMAL) == configured
+        assert caplog.records == []
+
+    @pytest.mark.parametrize("configured", [0.001, 1, 30, 300, 2 * 60 * 60])
+    def test_a_positive_poll_interval_is_left_alone(self, configured, caplog):
+        caplog.set_level(logging.WARNING)
+
+        state = for_polling(configured)
+
+        assert state.operating_cadence == configured
         assert failure_delay(state, NORMAL) == configured
         assert caplog.records == []
 
@@ -231,6 +270,32 @@ class TestJitter:
             for base in [1, 2, 4, 8, 16, 30, 30, 30]:
                 delay = failure_delay(state, NORMAL)
                 assert base / 2 <= delay <= base
+
+
+class TestWaitBetweenOperations:
+    def test_a_streaming_success_does_not_schedule_a_zero_wait(self):
+        """Streaming has no cadence, so a success falls back to the initial
+        delay. Zero would tell a scheduler to run again immediately."""
+        state = for_streaming(1)
+        state.record_failure(NORMAL)
+        state.record_success()
+
+        assert state.next_delay == 1
+
+    def test_a_polling_success_schedules_the_cadence(self):
+        state = for_polling(30)
+        state.record_failure(NORMAL)
+        state.record_success()
+
+        assert state.next_delay == 30
+
+    def test_a_fresh_state_and_a_success_agree(self):
+        """The constructor and record_success share one expression, so the two
+        cannot drift apart."""
+        for state in (for_streaming(5), for_polling(45)):
+            fresh = state.next_delay
+            state.record_success()
+            assert state.next_delay == fresh
 
 
 class TestStreamingReset:
