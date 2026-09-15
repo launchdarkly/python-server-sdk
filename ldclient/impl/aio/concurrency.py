@@ -215,6 +215,7 @@ class AsyncRepeatingTask:
             log.info("Task %s has already been started; ignoring" % self.__label)
             return
         self.__task = asyncio.ensure_future(self._run())
+        self.__task.add_done_callback(_log_task_exception)
         try:
             self.__task.set_name(f"{self.__label}.repeating")
         except AttributeError:

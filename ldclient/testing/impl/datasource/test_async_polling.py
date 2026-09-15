@@ -284,7 +284,7 @@ class TestAsyncPollingUpdateProcessor:
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         call_count = 0
 
@@ -314,7 +314,7 @@ class TestAsyncPollingUpdateProcessor:
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         call_count = 0
 
