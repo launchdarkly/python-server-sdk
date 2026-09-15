@@ -178,6 +178,48 @@ class TestRepeatingTaskParity:
         assert counts['n'] == 1
 
     @pytest.mark.asyncio
+    async def test_async_a_task_that_dies_is_logged(self, caplog):
+        """Without a done callback the held reference suppresses asyncio's own
+        warning, so a dead loop would be entirely silent."""
+        caplog.set_level(logging.ERROR)
+
+        class Exploding:
+            @property
+            def next_delay(self):
+                raise RuntimeError("delay source is broken")
+
+        async def action():
+            pass
+
+        task = aio.AsyncRepeatingTask("test.repeating", Exploding(), 0, action)
+        task.start()
+        await _async_wait_until(lambda: caplog.records, timeout=2)
+        task.stop()
+
+        assert "Unhandled exception in background task" in caplog.records[0].getMessage()
+
+    @pytest.mark.asyncio
+    async def test_async_interval_starts_when_the_callback_returns(self):
+        """A slow callback must not shorten its own wait: one invocation to the
+        next is the interval plus however long the callback took."""
+        work = 0.15
+        interval = 0.15
+        starts: list = []
+
+        async def action():
+            starts.append(time.time())
+            await asyncio.sleep(work)
+
+        task = aio.AsyncRepeatingTask.at_interval("test.repeating", interval, 0, action)
+        task.start()
+        await _async_wait_until(lambda: len(starts) >= 2, timeout=3)
+        task.stop()
+
+        # Measuring the interval from the start of the callback would give
+        # about `interval`; measuring from its return gives interval + work.
+        assert (starts[1] - starts[0]) >= (interval + work) * 0.9
+
+    @pytest.mark.asyncio
     async def test_async_second_start_logs_and_does_not_raise(self, caplog):
         """Mirrors the sync primitive. A raise here can surface out of a caller
         that is documented as safe to call more than once."""

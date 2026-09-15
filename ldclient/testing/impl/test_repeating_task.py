@@ -79,34 +79,69 @@ def test_task_executes_until_stopped():
     assert no_more_items is True
 
 
-class _MutableDelay(DelaySource):
-    """A delay source a test can move between invocations."""
+class _RecordingDelay(DelaySource):
+    """A delay source that records each read, so a test can see when the task
+    asks for a wait rather than only what the action saw."""
 
-    def __init__(self, seconds: float):
+    def __init__(self, seconds: float, events: list):
         self.seconds = seconds
+        self._events = events
 
     @property
     def next_delay(self) -> float:
+        self._events.append(('read', self.seconds))
         return self.seconds
 
 
 def test_the_task_reads_the_delay_source_after_every_invocation():
-    """A value the action decides takes effect on the next wait."""
-    reads = Queue()
-    delays = _MutableDelay(0.01)
+    """One read per invocation, after it. A task that read the source once up
+    front would show a read before the first invocation, and would never see
+    the value the action set."""
+    events: list = []
+    delays = _RecordingDelay(0.01, events)
 
     def do_task():
-        reads.put(delays.seconds)
-        delays.seconds = 0.02  # what the next wait must use
+        events.append('invoke')
+        delays.seconds = 0.02
 
-    task = RepeatingTask("ldclient.testing.mutable-delay", delays, 0, do_task)
+    task = RepeatingTask("ldclient.testing.recording-delay", delays, 0, do_task)
     try:
         task.start()
-        assert reads.get(True, 1) == 0.01
-        assert reads.get(True, 1) == 0.02
-        assert reads.get(True, 1) == 0.02
+        deadline = time.time() + 2
+        while events.count('invoke') < 3 and time.time() < deadline:
+            time.sleep(0.005)
     finally:
         task.stop()
+
+    # Reads and invocations alternate, starting with an invocation, and every
+    # read sees 0.02 -- the initial 0.01 is never read.
+    assert events[:5] == ['invoke', ('read', 0.02), 'invoke', ('read', 0.02), 'invoke']
+
+
+def test_the_interval_starts_when_the_callback_returns():
+    """A slow callback must not shorten its own wait: one invocation to the
+    next is the interval plus however long the callback took."""
+    work = 0.15
+    interval = 0.15
+    starts = Queue()
+
+    def do_task():
+        starts.put(time.time())
+        time.sleep(work)
+
+    task = RepeatingTask.at_interval("ldclient.testing.slow-callback", interval, 0, do_task)
+    try:
+        first = None
+        task.start()
+        first = starts.get(True, 2)
+        second = starts.get(True, 2)
+    finally:
+        task.stop()
+
+    # Measuring the interval from the start of the callback would give about
+    # `interval`; measuring from its return gives interval + work. The 10%
+    # slack is for scheduling noise, and leaves the two regimes far apart.
+    assert (second - first) >= (interval + work) * 0.9
 
 
 def test_whatever_the_action_returns_is_ignored():
