@@ -65,7 +65,7 @@ class AsyncBigSegmentStoreManager:
 
         if self.__store:
             self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
-            self.__poll_task = AsyncRepeatingTask("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
+            self.__poll_task = AsyncRepeatingTask.at_interval("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
 
     def start(self):
         """Starts the status polling task. Separated from __init__ so the manager

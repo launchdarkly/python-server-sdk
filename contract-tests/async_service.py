@@ -69,6 +69,8 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'migrations',
             'persistent-data-store-redis',
             'fdv1-fallback',
+            'retry-conformance-fdv1-streaming',
+            'retry-conformance-fdv1-polling',
         ]
     }
     return aiohttp.web.Response(

@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 
 import pytest
 
@@ -53,12 +54,18 @@ def test_client_starts_in_streaming_mode():
                 assert r.headers['Authorization'] == sdk_key
 
 
-def test_client_fails_to_start_in_streaming_mode_with_401_error():
+def test_client_does_not_initialize_in_streaming_mode_with_401_error():
+    """A rejected SDK key no longer fails fast. The constructor waits out the
+    full start_wait and returns uninitialized, while the SDK keeps retrying in
+    the background."""
     with start_server() as stream_server:
         stream_server.for_path('/all', BasicResponse(401))
         config = Config(sdk_key=sdk_key, stream_uri=stream_server.uri, send_events=False)
 
-        with LDClient(config=config) as client:
+        started = time.time()
+        with LDClient(config=config, start_wait=0.5) as client:
+            elapsed = time.time() - started
+            assert elapsed >= 0.5
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) is False
 
@@ -91,12 +98,16 @@ def test_client_starts_in_polling_mode():
             assert r.headers['Authorization'] == sdk_key
 
 
-def test_client_fails_to_start_in_polling_mode_with_401_error():
+def test_client_does_not_initialize_in_polling_mode_with_401_error():
+    """As with streaming, a rejected SDK key no longer fails fast."""
     with start_server() as poll_server:
         poll_server.for_path('/sdk/latest-all', BasicResponse(401))
         config = Config(sdk_key=sdk_key, base_uri=poll_server.uri, stream=False, send_events=False)
 
-        with LDClient(config=config) as client:
+        started = time.time()
+        with LDClient(config=config, start_wait=0.5) as client:
+            elapsed = time.time() - started
+            assert elapsed >= 0.5
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) is False
 

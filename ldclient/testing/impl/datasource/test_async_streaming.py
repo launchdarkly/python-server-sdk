@@ -7,9 +7,13 @@ rather than making real network connections.
 
 import asyncio
 import json
+import logging
+import ssl
 from unittest import mock
 
+import aiohttp
 import pytest
+from aiohttp.client_reqrep import ConnectionKey
 
 from ldclient.config import Config
 from ldclient.impl.datasource import async_streaming
@@ -17,9 +21,23 @@ from ldclient.impl.datasource.async_streaming import (
     AsyncStreamingUpdateProcessor
 )
 from ldclient.impl.model import ModelEntity
+from ldclient.impl.retry import (
+    EXTENDED_INITIAL_DELAY,
+    EXTENDED_MAX_DELAY,
+    STREAMING_MAX_DELAY,
+    STREAMING_RESET_INTERVAL,
+    AfterHealthyFor,
+    RetryState,
+    for_streaming
+)
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
 from ldclient.testing.builders import FlagBuilder, SegmentBuilder
 from ldclient.testing.mock_async_components import MockAsyncFeatureStore
+from ldclient.testing.test_util import (
+    no_retry_jitter,
+    record_healthy_windows,
+    ticking_clock
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
@@ -75,6 +93,57 @@ async def _actions_generator(actions: list):
     await asyncio.Event().wait()
 
 
+def _retry_state_with(policy: AfterHealthyFor) -> RetryState:
+    """A retry state with tiny delays and a caller-supplied reset policy, so a
+    test can watch the window."""
+    return RetryState(
+        initial_delay=0.001,
+        normal_ceiling=0.001,
+        extended_initial_delay=0.001,
+        extended_ceiling=0.001,
+        reset_policy=policy,
+    )
+
+
+def _fast_retry_state(delay: float = 0.001) -> RetryState:
+    """A retry state with tiny delays, so a test does not have to wait out the
+    real extended-regime delay of five minutes."""
+    return RetryState(
+        initial_delay=delay,
+        normal_ceiling=delay,
+        extended_initial_delay=delay,
+        extended_ceiling=delay,
+        reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
+    )
+
+
+# aiohttp's connection errors read the connection key when they are turned
+# into a string, which the data source does, so a real one is needed here.
+_CONNECTION_KEY = ConnectionKey(
+    host='stream.launchdarkly.com',
+    port=443,
+    is_ssl=True,
+    ssl=True,
+    proxy=None,
+    proxy_auth=None,
+    proxy_headers_hash=None,
+    server_hostname=None,
+)
+
+
+def _zero_delay_retry_state() -> RetryState:
+    """A retry state whose normal regime waits no time at all, so a test can
+    drive ``_handle_error`` without a real sleep. The extended bounds stay
+    real, so a misclassification still shows up in ``max_delay``."""
+    return RetryState(
+        initial_delay=0,
+        normal_ceiling=STREAMING_MAX_DELAY,
+        extended_initial_delay=EXTENDED_INITIAL_DELAY,
+        extended_ceiling=EXTENDED_MAX_DELAY,
+        reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
+    )
+
+
 class _MockSSE:
     """Stand-in for AsyncSSEClient exposing the surface the processor uses."""
 
@@ -101,31 +170,33 @@ class _MockSSEFactory:
     def __init__(self, actions: list):
         self._actions = actions
         self.created: list = []
+        self.sdk_managed_retry: list = []
 
-    def create(self, url: str, initial_retry_delay: float) -> _MockSSE:
+    def create(self, url: str, initial_retry_delay: float, sdk_managed_retry: bool = False) -> _MockSSE:
         sse = _MockSSE(self._actions)
         self.created.append(sse)
+        self.sdk_managed_retry.append(sdk_managed_retry)
         return sse
 
 
-def _make_processor(actions, config=None, store=None, ready_event=None, diag=None):
+def _make_processor(actions, config=None, store=None, ready_event=None, diag=None, retry_state=None):
     config = config or _make_config()
     store = store or MockAsyncFeatureStore()
     ready_event = ready_event or asyncio.Event()
     factory = _MockSSEFactory(actions)
-    proc = AsyncStreamingUpdateProcessor(config, store, ready_event, diag, factory)
+    proc = AsyncStreamingUpdateProcessor(config, store, ready_event, diag, factory, retry_state=retry_state)
     return proc, store, ready_event, factory
 
 
 async def _run_with_actions(actions: list, config=None, store=None, ready_event=None,
-                            diag=None, extra_ready_timeout=3.0):
+                            diag=None, extra_ready_timeout=3.0, retry_state=None):
     """Run the processor against a fake SSE action sequence.
 
     Starts the processor and waits for the ready event (up to
     *extra_ready_timeout* seconds), then returns
     ``(processor, store, ready_event, factory)``.
     """
-    proc, store, ready, factory = _make_processor(actions, config, store, ready_event, diag)
+    proc, store, ready, factory = _make_processor(actions, config, store, ready_event, diag, retry_state)
     proc.start()
     try:
         await asyncio.wait_for(ready.wait(), timeout=extra_ready_timeout)
@@ -223,27 +294,111 @@ async def test_fault_with_error_does_not_set_ready_by_itself():
 
 
 @pytest.mark.asyncio
-async def test_fault_none_error_is_ignored():
-    """A Fault with error=None (clean close) should not update status or stop the processor."""
+async def test_server_close_backs_off_and_does_not_stop_the_processor():
+    """A Fault with error=None is the server closing a connection it normally
+    leaves open. The SDK backs off rather than reconnecting at once, but the
+    processor keeps running."""
     flag = FlagBuilder('f1').version(1).build()
     put_data = _make_put_data(flags={'f1': _item_dict(flag)})
     actions = [
         _start(),
         _event('put', put_data),
-        _fault(error=None),  # clean close — should be ignored
+        _fault(error=None),  # clean close by the server
     ]
 
-    proc, store, ready, _ = await _run_with_actions(actions)
+    retry = _fast_retry_state()
+    proc, store, ready, factory = _make_processor(actions, retry_state=retry)
+    proc.start()
+    await asyncio.wait_for(ready.wait(), timeout=3.0)
+    await _wait_until(lambda: retry.attempts >= 1)
 
-    assert ready.is_set()
     assert store.initialized
+    assert not factory.created[0].closed
+    assert not retry.in_extended_regime
 
     await proc.stop()
 
 
 @pytest.mark.asyncio
-async def test_unrecoverable_http_error_stops_processor():
-    """An unrecoverable HTTP status closes the stream and reports OFF with error info."""
+async def test_server_close_reports_a_network_error():
+    from ldclient.impl.datasource.async_status import (
+        AsyncDataSourceUpdateSinkImpl
+    )
+    from ldclient.impl.listeners import Listeners
+
+    store = MockAsyncFeatureStore()
+    statuses = []
+    listeners = Listeners()
+    listeners.add(lambda s: statuses.append(s))
+
+    config = _make_config()
+    config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, listeners, Listeners())
+
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    actions = [_start(), _event('put', put_data), _fault(error=None)]
+
+    proc, store, ready, _ = _make_processor(actions, config=config, store=store, retry_state=_fast_retry_state())
+    proc.start()
+    await _wait_until(lambda: any(s.state == DataSourceState.INTERRUPTED for s in statuses))
+
+    interrupted = [s for s in statuses if s.state == DataSourceState.INTERRUPTED]
+    assert interrupted[0].error is not None
+    assert interrupted[0].error.kind == DataSourceErrorKind.NETWORK_ERROR
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_repeated_server_closes_stay_on_the_normal_curve():
+    """A load balancer draining during a rolling deploy closes streams
+    cleanly, over and over. That must never reach the extended regime."""
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    actions = []
+    for _ in range(10):
+        actions += [_start(), _event('put', put_data), _fault(error=None)]
+
+    retry = _fast_retry_state()
+    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+    proc.start()
+    await _wait_until(lambda: retry.attempts >= 10, timeout=5.0)
+
+    assert not retry.in_extended_regime
+    assert retry.max_delay == _fast_retry_state().max_delay
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_our_own_interrupt_is_not_counted_as_a_server_close():
+    """Bad JSON makes the SDK drop the connection itself. The SSE client then
+    reports that close as a Fault with no error, and counting it would record
+    the same failure twice and wait twice."""
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    actions = [
+        _start(),
+        _event('put', put_data),
+        _event('patch', 'not valid json'),
+        _fault(error=None),  # the close our own interrupt caused
+    ]
+
+    retry = _fast_retry_state()
+    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+    proc.start()
+    await _wait_until(lambda: retry.attempts >= 1)
+    await asyncio.sleep(0.1)
+
+    assert retry.attempts == 1
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_http_error_keeps_the_processor_running():
+    """A rejected SDK key is retried like any other failure. The state never
+    goes OFF, and initialization is not falsely unblocked."""
     from ld_eventsource.errors import HTTPStatusError
 
     from ldclient.impl.datasource.async_status import (
@@ -261,21 +416,183 @@ async def test_unrecoverable_http_error_stops_processor():
 
     actions = [_start(), _fault(error=HTTPStatusError(401))]
 
-    proc, store, ready, factory = await _run_with_actions(actions, config=config, store=store)
+    proc, store, ready, factory = await _run_with_actions(
+        actions, config=config, store=store, extra_ready_timeout=0.2,
+        retry_state=_fast_retry_state(),
+    )
 
-    # The unrecoverable error unblocks initialization without initializing the store.
-    assert ready.is_set()
+    assert not ready.is_set()
     assert not proc.initialized()
-    assert factory.created[0].closed
+    assert not factory.created[0].closed
+    assert all(s.state != DataSourceState.OFF for s in statuses)
     assert any(
-        s.state == DataSourceState.OFF
-        and s.error is not None
+        s.error is not None
         and s.error.kind == DataSourceErrorKind.ERROR_RESPONSE
         and s.error.status_code == 401
         for s in statuses
     )
 
     await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_http_error_moves_to_the_extended_regime():
+    from ld_eventsource.errors import HTTPStatusError
+
+    actions = [_start(), _fault(error=HTTPStatusError(401))]
+    retry = _fast_retry_state()
+    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+    proc.start()
+    await _wait_until(lambda: retry.in_extended_regime)
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_normal_http_error_stays_in_the_normal_regime():
+    from ld_eventsource.errors import HTTPStatusError
+
+    actions = [_start(), _fault(error=HTTPStatusError(503))]
+    retry = _fast_retry_state()
+    proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+    proc.start()
+    await _wait_until(lambda: retry.attempts >= 1)
+
+    assert not retry.in_extended_regime
+
+    await proc.stop()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        aiohttp.ClientConnectorCertificateError(
+            _CONNECTION_KEY, ssl.SSLCertVerificationError("self-signed certificate")
+        ),
+        aiohttp.ClientConnectorSSLError(_CONNECTION_KEY, OSError("handshake failed")),
+        ssl.SSLEOFError("EOF occurred in violation of protocol"),
+        ConnectionResetError(104, "reset by peer"),
+    ],
+    ids=["aiohttp-certificate", "aiohttp-tls", "peer-close-handshake", "reset"],
+)
+@pytest.mark.asyncio
+async def test_transport_failures_stay_in_the_normal_regime(error):
+    """No transport failure reaches the extended regime, an aiohttp
+    certificate failure included. Only an HTTP status can do that."""
+    retry = _zero_delay_retry_state()
+    proc, store, ready, _ = _make_processor([], retry_state=retry)
+    proc._running = True
+
+    # A misclassification would wait five minutes here, so bound the wait
+    # rather than let the test hang.
+    assert await asyncio.wait_for(proc._handle_error(error), timeout=2.0)
+
+    assert not retry.in_extended_regime
+    assert retry.max_delay == STREAMING_MAX_DELAY
+
+
+class _NoSleep:
+    """Stands in for the ``asyncio`` module inside async_streaming, so the wait
+    in _handle_error returns at once. ``sleep`` is all that module uses."""
+
+    def __init__(self):
+        self.slept: list = []
+
+    async def sleep(self, seconds):
+        self.slept.append(seconds)
+
+
+@pytest.mark.asyncio
+async def test_the_log_reports_the_growing_retry_delay(caplog):
+    """The message has to carry the real delay, so someone reading logs can see
+    the backoff working. The vaguer wording it replaced could not show this."""
+    from ld_eventsource.errors import HTTPStatusError
+
+    caplog.set_level(logging.WARNING)
+    no_sleep = _NoSleep()
+
+    with no_retry_jitter(), mock.patch.object(async_streaming, 'asyncio', no_sleep):
+        retry = for_streaming(1)
+        proc, store, ready, _ = _make_processor([], retry_state=retry)
+        proc._running = True
+
+        await proc._handle_error(HTTPStatusError(401))
+        await proc._handle_error(HTTPStatusError(401))
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "Received HTTP error 401 (invalid SDK key) for stream connection - will retry in 300.0s",
+        "Received HTTP error 401 (invalid SDK key) for stream connection - will retry in 600.0s",
+    ]
+    # An error a person has to fix is logged at error level, every time.
+    assert [r.levelno for r in caplog.records] == [logging.ERROR, logging.ERROR]
+    # The reported delay is the one actually waited.
+    assert no_sleep.slept == [5 * 60, 10 * 60]
+
+
+@pytest.mark.asyncio
+async def test_the_processor_asks_the_factory_to_leave_the_delay_to_the_sdk():
+    proc, store, ready, factory = _make_processor([])
+    proc.start()
+    await _wait_until(lambda: len(factory.created) > 0)
+
+    assert factory.sdk_managed_retry == [True]
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
+    """The window starts at the first message and stays there, however many
+    more arrive on the same stream."""
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    patch_data = _make_patch_data(FEATURES, _item_dict(FlagBuilder('f1').version(2).build()))
+    actions = [_start(), _event('put', put_data), _event('patch', patch_data)]
+
+    policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+    retry = _retry_state_with(policy)
+    # The clock moves on every read, so a window that had been restarted reads
+    # back as a different time.
+    windows = record_healthy_windows(policy)
+
+    with ticking_clock():
+        proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+        proc.start()
+        await _wait_until(lambda: len(windows) >= 2)
+        await proc.stop()
+
+    assert len(set(windows)) == 1, "the window moved between messages"
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_stream_starts_a_new_reset_window():
+    """A stream teardown clears the window through record_failure, so the next
+    stream measures its own stretch rather than inheriting the old one."""
+    from ld_eventsource.errors import HTTPStatusError
+
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    actions = [
+        _start(),
+        _event('put', put_data),
+        _fault(error=HTTPStatusError(503)),
+        _start(),
+        _event('put', put_data),
+    ]
+
+    policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+    retry = _retry_state_with(policy)
+    windows = record_healthy_windows(policy)
+
+    with ticking_clock():
+        proc, store, ready, _ = _make_processor(actions, retry_state=retry)
+        proc.start()
+        # One put per stream, so two signals in all.
+        await _wait_until(lambda: len(windows) >= 2)
+        await proc.stop()
+
+    assert len(set(windows)) == 2, "the second stream reused the first window"
 
 
 @pytest.mark.asyncio
@@ -295,13 +612,16 @@ async def test_stop_closes_sse_and_finishes_task():
 
 
 @pytest.mark.asyncio
-async def test_second_start_raises():
+async def test_second_start_is_a_no_op():
+    """AsyncLDClient.start() is documented as an idempotent no-op, so nothing
+    underneath it may raise on a repeat call."""
     actions = [_start()]
-    proc, store, ready, _ = _make_processor(actions)
+    proc, store, ready, factory = _make_processor(actions)
     proc.start()
     try:
-        with pytest.raises(RuntimeError):
-            proc.start()
+        proc.start()
+        await _wait_until(lambda: len(factory.created) > 0)
+        assert len(factory.created) == 1
     finally:
         await proc.stop()
 

@@ -176,12 +176,12 @@ class DefaultEventProcessor(EventProcessor):
     def __init__(self, config, http=None, dispatcher_class=None, diagnostic_accumulator=None):
         self._inbox = queue.Queue(config.events_max_pending)
         self._inbox_full = False
-        self._flush_timer = RepeatingTask("ldclient.events.flush", config.flush_interval, config.flush_interval, self.flush)
-        self._contexts_flush_timer = RepeatingTask("ldclient.events.context-flush", config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
+        self._flush_timer = RepeatingTask.at_interval("ldclient.events.flush", config.flush_interval, config.flush_interval, self.flush)
+        self._contexts_flush_timer = RepeatingTask.at_interval("ldclient.events.context-flush", config.context_keys_flush_interval, config.context_keys_flush_interval, self._flush_contexts)
         self._flush_timer.start()
         self._contexts_flush_timer.start()
         if diagnostic_accumulator is not None:
-            self._diagnostic_event_timer = RepeatingTask("ldclient.events.send-diagnostic", config.diagnostic_recording_interval, config.diagnostic_recording_interval, self._send_diagnostic)
+            self._diagnostic_event_timer = RepeatingTask.at_interval("ldclient.events.send-diagnostic", config.diagnostic_recording_interval, config.diagnostic_recording_interval, self._send_diagnostic)
             self._diagnostic_event_timer.start()
         else:
             self._diagnostic_event_timer = None
