@@ -398,7 +398,7 @@ class _PollingAutoUpdaterV2:
         self._paths = resolved_paths
         self._on_change = on_change_callback
         self._file_times = self._check_file_times()
-        self._timer = RepeatingTask(
+        self._timer = RepeatingTask.at_interval(
             "ldclient.datasource.filev2.poll", interval, interval, self._poll
         )
         self._timer.start()

@@ -67,7 +67,7 @@ class BigSegmentStoreManager:
 
         if self.__store:
             self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
-            self.__poll_task = RepeatingTask("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
+            self.__poll_task = RepeatingTask.at_interval("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 
     def stop(self):

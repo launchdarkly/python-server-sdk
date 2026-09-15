@@ -9,11 +9,11 @@ equivalents (``threading.Event``/``Lock``, ``queue.Queue``, ``RepeatingTask``,
 
 import asyncio
 import inspect
-import time
 from queue import Empty as QueueEmpty  # noqa: F401  (shared timeout exception)
 from queue import Full as QueueFull  # noqa: F401  (shared capacity exception)
 from typing import Any, Callable, Coroutine, Optional, Set
 
+from ldclient.impl.delay import DelaySource, FixedDelay
 from ldclient.impl.util import log
 
 
@@ -189,33 +189,42 @@ class AsyncTaskRunner:
 
 
 class AsyncRepeatingTask:
-    """Calls a callback repeatedly at fixed intervals on a background task.
+    """Calls a callback repeatedly on a background task, waiting whatever its
+    :class:`~ldclient.impl.delay.DelaySource` gives.
     Mirrors the semantics of ``ldclient.impl.repeating_task.RepeatingTask``:
-    the interval is measured from the start of each invocation, exceptions
-    from the callback are logged, and ``stop()`` prevents any further
-    invocations but cannot be undone."""
+    the wait starts when the callback returns, exceptions from the callback
+    are logged, and ``stop()`` prevents any further invocations but cannot be
+    undone."""
 
-    def __init__(self, label: str, interval: float, initial_delay: float, callable: Callable):
+    def __init__(self, label: str, delays: DelaySource, initial_delay: float, callable: Callable):
         self.__label = label
-        self.__interval = interval
+        self.__delays = delays
         self.__initial_delay = initial_delay
         self.__action = callable
         self.__stop = AsyncEvent()
         self.__task: Optional[asyncio.Task] = None
 
+    @staticmethod
+    def at_interval(label: str, interval: float, initial_delay: float, callable: Callable) -> 'AsyncRepeatingTask':
+        """Creates a task that runs at a fixed interval."""
+        return AsyncRepeatingTask(label, FixedDelay(interval), initial_delay, callable)
+
     def start(self):
-        """Starts the background task. Like a thread, the task can only be
-        started once."""
+        """Starts the background task, if it is not running already."""
         if self.__task is not None:
-            raise RuntimeError("tasks can only be started once")
+            log.info("Task %s has already been started; ignoring" % self.__label)
+            return
         self.__task = asyncio.ensure_future(self._run())
+        self.__task.add_done_callback(_log_task_exception)
         try:
             self.__task.set_name(f"{self.__label}.repeating")
         except AttributeError:
             pass
 
     def stop(self):
-        """Tells the background task to stop. It cannot be restarted after this."""
+        """Tells the background task to stop.
+
+        The stop is permanent. A later ``start()`` does not resume the task."""
         self.__stop.set()
         task = self.__task
         # When stop() is called from within the action itself, let the loop
@@ -237,14 +246,15 @@ class AsyncRepeatingTask:
                     return
             stopped = self.__stop.is_set()
             while not stopped:
-                next_time = time.time() + self.__interval
                 try:
                     result = self.__action()
                     if inspect.isawaitable(result):
                         await result
                 except Exception as e:
                     log.exception("Unexpected exception on worker task: %s" % e)
-                delay = next_time - time.time()
+                # The wait starts when the callback returns, so a slow callback
+                # never shortens it.
+                delay = self.__delays.next_delay
                 if delay > 0:
                     stopped = await self.__stop.wait(delay)
                 else:
