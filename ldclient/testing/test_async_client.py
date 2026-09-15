@@ -3,6 +3,7 @@ Tests for AsyncLDClient.
 """
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -500,3 +501,40 @@ async def test_all_flags_state_degrades_gracefully_when_evaluator_raises():
     assert flags_state['flag-good'].get('prerequisites') == ['prereq-x']
     assert 'prerequisites' not in flags_state['flag-bad-last']
     assert 'prerequisites' not in flags_state['flag-bad-first']
+
+
+class UninitializedAsyncUpdateProcessor(MockAsyncUpdateProcessor):
+    def initialized(self) -> bool:
+        return False
+
+
+@pytest.mark.asyncio
+async def test_cached_data_warnings_are_logged_once_per_client(caplog):
+    caplog.set_level(logging.WARNING, logger='ldclient.util')
+    store = MockAsyncFeatureStore()
+    await store.force_set(FEATURES, _make_flag('my-flag', 'hello'))
+    store._initialized = True
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=UninitializedAsyncUpdateProcessor,
+        send_events=False,
+    )
+    client = AsyncLDClient(config)
+    await client.start(start_wait=1.0)
+    context = Context.create('user-1')
+
+    assert await client.variation('my-flag', context, 'default') == 'hello'
+    assert await client.variation('my-flag', context, 'default') == 'hello'
+    assert (await client.all_flags_state(context)).valid
+    assert (await client.all_flags_state(context)).valid
+
+    warnings = [r.message for r in caplog.records if r.levelname == 'WARNING']
+    eval_warnings = [m for m in warnings if m.startswith('Feature Flag evaluation attempted')]
+    all_flags_warnings = [m for m in warnings if m.startswith('all_flags_state() called before')]
+    assert len(eval_warnings) == 1
+    assert len(all_flags_warnings) == 1
+    assert eval_warnings[0].endswith('This message is logged once.')
+    assert all_flags_warnings[0].endswith('This message is logged once.')
+
+    await client.close()
