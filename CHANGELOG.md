@@ -2,6 +2,20 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.18.0](https://github.com/launchdarkly/python-server-sdk/compare/9.17.0...9.18.0) (2026-09-15)
+
+
+### Features
+
+* warn that payload filtering has no effect with FDv2 ([#518](https://github.com/launchdarkly/python-server-sdk/issues/518)) ([296311f](https://github.com/launchdarkly/python-server-sdk/commit/296311f9ea73f09e96bd8dfb7410405e08794776))
+
+
+### Bug Fixes
+
+* Add async modules to the readthedocs API reference ([#513](https://github.com/launchdarkly/python-server-sdk/issues/513)) ([f40d3b2](https://github.com/launchdarkly/python-server-sdk/commit/f40d3b22c808e829e9deb4ac5feab05db85674e8))
+* Log the cached-data evaluation warning only once per client ([#520](https://github.com/launchdarkly/python-server-sdk/issues/520)) ([59ce998](https://github.com/launchdarkly/python-server-sdk/commit/59ce998668b6907fb0663699127b0b9895cbdcef))
+* Report a distinct User-Agent for the async client ([#516](https://github.com/launchdarkly/python-server-sdk/issues/516)) ([514c467](https://github.com/launchdarkly/python-server-sdk/commit/514c46780cf5aa593c1f791bd1335c7048f6d235))
+
 ## [9.17.0](https://github.com/launchdarkly/python-server-sdk/compare/9.16.1...9.17.0) (2026-08-28)
 
 
