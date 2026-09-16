@@ -454,7 +454,7 @@ class TestAttemptCount:
         assert state._attempts == 5
 
     def test_a_reset_starts_the_attempt_count_over(self):
-        # A reset clears both counters, so the next failure is attempt 1.
+        # A reset clears the counter, so the next failure is attempt 1.
         with frozen_clock() as clock:
             state = for_streaming(1)
             state.record_failure(NORMAL)

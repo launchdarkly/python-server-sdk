@@ -140,9 +140,9 @@ class RetryState:
     Tracks how long a data source should wait before its next attempt.
 
     A failure moves the state on and decides the next wait, which
-    :attr:`next_delay` reports. The delay for attempt ``n`` is
-    ``min(min_delay * 2 ** (n - 1), max_delay)``, less a random jitter of up to
-    half of it, and never less than the operating cadence.
+    :attr:`next_delay` reports. The delay is
+    ``min(min_delay * 2 ** (attempts - 1), max_delay)``, less a random jitter
+    of up to half of it, and never less than the operating cadence.
 
     An unexpected failure moves the state to the extended regime, which raises
     both delay bounds. The bounds stay raised until the reset condition is met,
@@ -179,11 +179,10 @@ class RetryState:
         self._reset_policy = reset_policy
         self._operating_cadence = operating_cadence
 
-        self._n = 0
+        self._attempts = 0
         self._extended = False
         self._min_delay = self._normal_initial_delay
         self._max_delay = max(self._normal_ceiling_delay, self._normal_initial_delay)
-        self._attempts = 0
         # Read before any outcome is recorded, this is the ordinary interval.
         self._next_delay = self._operating_cadence
 
@@ -204,7 +203,6 @@ class RetryState:
         """
         # Only a time-based policy needs this: nothing runs while a stream is healthy.
         self._reset_if_due()
-        self._attempts += 1
         self._reset_policy.note_failure()
 
         if kind is FailureKind.UNEXPECTED and not self._extended:
@@ -215,11 +213,11 @@ class RetryState:
             self._extended = True
             self._min_delay = self._extended_initial_delay
             self._max_delay = max(self._extended_ceiling_delay, self._min_delay)
-            self._n = 1
+            self._attempts = 1
         else:
-            self._n += 1
+            self._attempts += 1
 
-        exponent = min(max(self._n - 1, 0), _MAX_BACKOFF_EXPONENT)
+        exponent = min(max(self._attempts - 1, 0), _MAX_BACKOFF_EXPONENT)
         delay = min(self._min_delay * (2**exponent), self._max_delay)
         jitter = random.random() * delay / 2
 
@@ -243,7 +241,6 @@ class RetryState:
         the delay bounds to the normal regime."""
         if not self._reset_policy.is_satisfied():
             return
-        self._n = 0
         self._attempts = 0
         self._extended = False
         self._min_delay = self._normal_initial_delay
