@@ -50,7 +50,7 @@ def fast_retry_state(delay=0.05):
     """A retry state with tiny delays, so a test does not have to wait out the
     real extended-regime delay of five minutes."""
     return RetryState(
-        initial_delay=delay,
+        normal_initial_delay=delay,
         normal_ceiling=delay,
         extended_initial_delay=delay,
         extended_ceiling=delay,
@@ -161,7 +161,7 @@ def test_unexpected_http_error_moves_to_the_extended_regime(ignore_mock):
 
     # The extended regime starts at five minutes, so only the first poll runs.
     assert not ready.wait(0.4)
-    assert retry.in_extended_regime
+    assert retry._extended
     assert mock_requester.request_count == 1
 
 
@@ -181,11 +181,11 @@ def test_the_first_success_after_an_outage_polls_at_the_cadence():
         mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
         processor._poll()
         assert retry.next_delay == 30
-        assert retry.in_extended_regime, "one success restores the cadence but does not reset"
+        assert retry._extended, "one success restores the cadence but does not reset"
 
         processor._poll()
         assert retry.next_delay == 30
-        assert not retry.in_extended_regime, "two successes in a row reset the state"
+        assert not retry._extended, "two successes in a row reset the state"
 
 
 @pytest.mark.parametrize(
@@ -206,7 +206,7 @@ def test_transport_failures_poll_again_at_the_cadence(error):
     mock_requester.exception = error
     processor._poll()
     assert retry.next_delay == 30
-    assert not retry.in_extended_regime
+    assert not retry._extended
 
 
 @mock.patch('ldclient.config.Config.poll_interval', new_callable=mock.PropertyMock, return_value=0.05)
@@ -316,7 +316,7 @@ def test_an_extended_regime_wait_is_cut_short_by_stop():
     while mock_requester.request_count < 1 and time.time() < deadline:
         time.sleep(0.01)
     assert mock_requester.request_count == 1
-    assert retry.in_extended_regime, "the wait under test should be minutes long"
+    assert retry._extended, "the wait under test should be minutes long"
 
     worker = _polling_thread()
     assert worker is not None

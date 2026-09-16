@@ -116,12 +116,6 @@ class AfterHealthyFor(ResetPolicy):
             return False
         return time.monotonic() - self._healthy_since >= self._healthy_seconds
 
-    @property
-    def healthy_since(self) -> Optional[float]:
-        """When the current healthy stretch began, or None if the component is
-        not currently healthy."""
-        return self._healthy_since
-
 
 class AfterConsecutiveSuccesses(ResetPolicy):
     """Resets once ``count`` operations in a row have succeeded. This is the
@@ -139,11 +133,6 @@ class AfterConsecutiveSuccesses(ResetPolicy):
 
     def is_satisfied(self) -> bool:
         return self._successes >= self._count
-
-    @property
-    def successes(self) -> int:
-        """How many operations have succeeded in a row."""
-        return self._successes
 
 
 class RetryState:
@@ -170,15 +159,16 @@ class RetryState:
         operating_cadence: float = 0,
     ):
         """
-        :param normal_initial_delay: the delay before the first retry in the normal regime, in seconds
+        :param normal_initial_delay: the delay before the first retry in the
+            normal regime, in seconds
         :param normal_ceiling: the longest normal-regime delay, in seconds
         :param extended_initial_delay: the delay before the first retry in the
             extended regime, in seconds
         :param extended_ceiling: the longest extended-regime delay, in seconds
         :param reset_policy: decides when the retry state resets
-        :param operating_cadence: the rate the component normally operates at,
-            in seconds; no wait is ever shorter than this. Zero disables the
-            floor, which is what streaming wants.
+        :param operating_cadence: the wait between healthy operations, in
+            seconds; no wait is ever shorter than this. Zero for a component
+            that operates continuously.
         """
         self._normal_initial_delay = normal_initial_delay
         self._normal_ceiling = normal_ceiling
@@ -193,39 +183,13 @@ class RetryState:
         self._max_delay = max(self._normal_ceiling, self._normal_initial_delay)
         self._attempts = 0
         # Read before any outcome is recorded, this is the ordinary interval.
-        self._next_delay = self._wait_between_operations()
+        self._next_delay = self._operating_cadence
 
     @property
     def next_delay(self) -> float:
-        """The wait before the next attempt, in seconds, as the last recorded
+        """The wait before the next operation, in seconds, as the last recorded
         outcome decided it."""
         return self._next_delay
-
-    @property
-    def attempts(self) -> int:
-        """How many failures since the last reset. For logging only."""
-        return self._attempts
-
-    @property
-    def min_delay(self) -> float:
-        """The delay the current regime starts from, in seconds."""
-        return self._min_delay
-
-    @property
-    def max_delay(self) -> float:
-        """The longest delay the current regime allows, in seconds."""
-        return self._max_delay
-
-    @property
-    def operating_cadence(self) -> float:
-        """The rate the component normally operates at, in seconds."""
-        return self._operating_cadence
-
-    @property
-    def in_extended_regime(self) -> bool:
-        """Whether an unexpected failure has moved this state to the extended
-        delay bounds."""
-        return self._extended
 
     def record_failure(self, kind: FailureKind) -> None:
         """
@@ -270,12 +234,7 @@ class RetryState:
         """
         self._reset_policy.note_healthy()
         self._reset_if_due()
-        self._next_delay = self._wait_between_operations()
-
-    def _wait_between_operations(self) -> float:
-        """The wait when nothing is being retried: the operating cadence, or
-        the initial delay for a component that has no cadence."""
-        return self._operating_cadence if self._operating_cadence >= 0 else self._normal_initial_delay
+        self._next_delay = self._operating_cadence
 
     def _reset_if_due(self) -> None:
         """Clears the retry state when the reset policy is satisfied, returning
@@ -306,9 +265,11 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     """
     Builds the retry state for a streaming data source.
 
-    Streaming has no operating cadence, so there is no floor on the wait. It
-    is healthy from the first message of a fresh stream, and resets after a
-    minute of that.
+    Streaming's operating cadence is zero, so there is no delay during
+    healthy operation. Stream failures use either the normal or extended
+    initial delay to determine their backoff wait. A stream returns to
+    healthy operation after establishing a successful connection with no
+    failures during the ``STREAMING_RESET_INTERVAL``.
 
     ``Config`` does not check the configured delay, so the documented default
     stands in for anything that is not a positive, finite number.

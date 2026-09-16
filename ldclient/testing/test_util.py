@@ -58,7 +58,7 @@ def record_healthy_windows(policy) -> list:
 
     def wrapper():
         note()
-        windows.append(policy.healthy_since)
+        windows.append(policy._healthy_since)
 
     policy.note_healthy = wrapper  # type: ignore[method-assign]
     return windows

@@ -22,9 +22,9 @@ from ldclient.impl.datasource.async_streaming import (
 )
 from ldclient.impl.model import ModelEntity
 from ldclient.impl.retry import (
+    DEFAULT_STREAMING_MAX_DELAY,
     EXTENDED_INITIAL_DELAY,
     EXTENDED_MAX_DELAY,
-    STREAMING_MAX_DELAY,
     STREAMING_RESET_INTERVAL,
     AfterHealthyFor,
     RetryState,
@@ -97,7 +97,7 @@ def _retry_state_with(policy: AfterHealthyFor) -> RetryState:
     """A retry state with tiny delays and a caller-supplied reset policy, so a
     test can watch the window."""
     return RetryState(
-        initial_delay=0.001,
+        normal_initial_delay=0.001,
         normal_ceiling=0.001,
         extended_initial_delay=0.001,
         extended_ceiling=0.001,
@@ -109,7 +109,7 @@ def _fast_retry_state(delay: float = 0.001) -> RetryState:
     """A retry state with tiny delays, so a test does not have to wait out the
     real extended-regime delay of five minutes."""
     return RetryState(
-        initial_delay=delay,
+        normal_initial_delay=delay,
         normal_ceiling=delay,
         extended_initial_delay=delay,
         extended_ceiling=delay,
@@ -136,8 +136,8 @@ def _zero_delay_retry_state() -> RetryState:
     drive ``_handle_error`` without a real sleep. The extended bounds stay
     real, so a misclassification still shows up in ``max_delay``."""
     return RetryState(
-        initial_delay=0,
-        normal_ceiling=STREAMING_MAX_DELAY,
+        normal_initial_delay=0,
+        normal_ceiling=DEFAULT_STREAMING_MAX_DELAY,
         extended_initial_delay=EXTENDED_INITIAL_DELAY,
         extended_ceiling=EXTENDED_MAX_DELAY,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
@@ -310,11 +310,11 @@ async def test_server_close_backs_off_and_does_not_stop_the_processor():
     proc, store, ready, factory = _make_processor(actions, retry_state=retry)
     proc.start()
     await asyncio.wait_for(ready.wait(), timeout=3.0)
-    await _wait_until(lambda: retry.attempts >= 1)
+    await _wait_until(lambda: retry._attempts >= 1)
 
     assert store.initialized
     assert not factory.created[0].closed
-    assert not retry.in_extended_regime
+    assert not retry._extended
 
     await proc.stop()
 
@@ -362,10 +362,10 @@ async def test_repeated_server_closes_stay_on_the_normal_curve():
     retry = _fast_retry_state()
     proc, store, ready, _ = _make_processor(actions, retry_state=retry)
     proc.start()
-    await _wait_until(lambda: retry.attempts >= 10, timeout=5.0)
+    await _wait_until(lambda: retry._attempts >= 10, timeout=5.0)
 
-    assert not retry.in_extended_regime
-    assert retry.max_delay == _fast_retry_state().max_delay
+    assert not retry._extended
+    assert retry._max_delay == _fast_retry_state()._max_delay
 
     await proc.stop()
 
@@ -387,10 +387,10 @@ async def test_our_own_interrupt_is_not_counted_as_a_server_close():
     retry = _fast_retry_state()
     proc, store, ready, _ = _make_processor(actions, retry_state=retry)
     proc.start()
-    await _wait_until(lambda: retry.attempts >= 1)
+    await _wait_until(lambda: retry._attempts >= 1)
     await asyncio.sleep(0.1)
 
-    assert retry.attempts == 1
+    assert retry._attempts == 1
 
     await proc.stop()
 
@@ -443,7 +443,7 @@ async def test_unexpected_http_error_moves_to_the_extended_regime():
     retry = _fast_retry_state()
     proc, store, ready, _ = _make_processor(actions, retry_state=retry)
     proc.start()
-    await _wait_until(lambda: retry.in_extended_regime)
+    await _wait_until(lambda: retry._extended)
 
     await proc.stop()
 
@@ -456,9 +456,9 @@ async def test_normal_http_error_stays_in_the_normal_regime():
     retry = _fast_retry_state()
     proc, store, ready, _ = _make_processor(actions, retry_state=retry)
     proc.start()
-    await _wait_until(lambda: retry.attempts >= 1)
+    await _wait_until(lambda: retry._attempts >= 1)
 
-    assert not retry.in_extended_regime
+    assert not retry._extended
 
     await proc.stop()
 
@@ -487,8 +487,8 @@ async def test_transport_failures_stay_in_the_normal_regime(error):
     # rather than let the test hang.
     assert await asyncio.wait_for(proc._handle_error(error), timeout=2.0)
 
-    assert not retry.in_extended_regime
-    assert retry.max_delay == STREAMING_MAX_DELAY
+    assert not retry._extended
+    assert retry._max_delay == DEFAULT_STREAMING_MAX_DELAY
 
 
 class _NoSleep:

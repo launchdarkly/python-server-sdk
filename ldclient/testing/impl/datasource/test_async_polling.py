@@ -62,7 +62,7 @@ def fast_retry_state(delay=0.001):
     """A retry state with tiny delays, so a test does not have to wait out the
     real extended-regime delay of five minutes."""
     return RetryState(
-        initial_delay=delay,
+        normal_initial_delay=delay,
         normal_ceiling=delay,
         extended_initial_delay=delay,
         extended_ceiling=delay,
@@ -247,7 +247,7 @@ class TestAsyncPollingUpdateProcessor:
         processor.start()
         await asyncio.sleep(0.05)
 
-        assert retry.in_extended_regime
+        assert retry._extended
 
         await processor.stop()
 
@@ -270,11 +270,11 @@ class TestAsyncPollingUpdateProcessor:
             processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
             await processor._fetch_and_store()
             assert retry.next_delay == 30
-            assert retry.in_extended_regime, "one success restores the cadence but does not reset"
+            assert retry._extended, "one success restores the cadence but does not reset"
 
             await processor._fetch_and_store()
             assert retry.next_delay == 30
-            assert not retry.in_extended_regime, "two successes in a row reset the state"
+            assert not retry._extended, "two successes in a row reset the state"
 
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
@@ -390,7 +390,7 @@ class TestAsyncPollingUpdateProcessor:
 
         await processor._fetch_and_store()
         assert retry.next_delay == 30
-        assert not retry.in_extended_regime
+        assert not retry._extended
 
     @pytest.mark.asyncio
     async def test_the_log_reports_the_growing_retry_delay(self, caplog):

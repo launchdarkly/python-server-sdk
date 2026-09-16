@@ -63,7 +63,7 @@ def fast_retry_state(delay=brief_delay):
     """A retry state with tiny delays, so a test does not have to wait out the
     real extended-regime delay of five minutes."""
     return RetryState(
-        initial_delay=delay,
+        normal_initial_delay=delay,
         normal_ceiling=delay,
         extended_initial_delay=delay,
         extended_ceiling=delay,
@@ -311,7 +311,7 @@ def test_unexpected_http_error_backs_off_a_long_way(status):
                 assert not ready.wait(1)
                 assert not sp.initialized()
                 assert sp.is_alive()
-                assert sp._retry.in_extended_regime
+                assert sp._retry._extended
                 server.should_have_requests(1)
 
 
@@ -426,8 +426,8 @@ def test_server_close_backs_off_and_keeps_the_stream_running():
                     stream1.close()
                     expect_update(store, FEATURES, flagv2)
 
-                    assert retry.attempts >= 1
-                    assert not retry.in_extended_regime
+                    assert retry._attempts >= 1
+                    assert not retry._extended
 
                     interrupted = [s for s in spy.statuses if s.state == DataSourceState.INTERRUPTED]
                     assert len(interrupted) >= 1
@@ -448,9 +448,9 @@ def test_server_close_uses_the_normal_delay_curve():
     delays = []
     for _ in range(8):
         sp._handle_error(StreamClosedError())
-        delays.append(retry.max_delay)
+        delays.append(retry._max_delay)
 
-    assert not retry.in_extended_regime
+    assert not retry._extended
     assert delays == [30] * 8
 
 
@@ -490,7 +490,7 @@ def test_our_own_interrupt_is_not_counted_as_a_server_close():
 
                 # One failure for the bad JSON, not a second for the close it
                 # caused.
-                assert retry.attempts == 1
+                assert retry._attempts == 1
 
 
 def _handle_errors_without_waiting(retry, errors):
@@ -564,7 +564,7 @@ def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
 
             policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
             retry = RetryState(
-                initial_delay=brief_delay,
+                normal_initial_delay=brief_delay,
                 normal_ceiling=brief_delay,
                 extended_initial_delay=brief_delay,
                 extended_ceiling=brief_delay,
@@ -600,7 +600,7 @@ def test_a_fresh_stream_starts_a_new_reset_window():
 
                 policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
                 retry = RetryState(
-                    initial_delay=brief_delay,
+                    normal_initial_delay=brief_delay,
                     normal_ceiling=brief_delay,
                     extended_initial_delay=brief_delay,
                     extended_ceiling=brief_delay,
@@ -640,8 +640,8 @@ def test_transport_failures_stay_in_the_normal_regime(error):
 
     sp._handle_error(error)
 
-    assert not retry.in_extended_regime
-    assert retry.max_delay == 30
+    assert not retry._extended
+    assert retry._max_delay == 30
 
 
 def test_http_proxy(monkeypatch):
