@@ -617,18 +617,16 @@ class TestAsyncPollingUpdateProcessor:
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
     async def test_second_start_call_is_a_no_op(self, mock_interval):
-        # AsyncLDClient.start() is documented as an idempotent no-op, so
-        # nothing underneath it may raise on a repeat call.
         mock_interval.__get__ = MagicMock(return_value=0)
 
         processor = make_processor()
         processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
 
         processor.start()
-        first_task = processor._task
+        task = processor._task
+        # The task guards against a second start; it logs and does nothing.
         processor.start()
-
-        assert processor._task is first_task
+        assert processor._task is task
 
         await processor.stop()
 

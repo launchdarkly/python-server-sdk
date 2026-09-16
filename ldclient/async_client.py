@@ -91,6 +91,11 @@ class AsyncLDClient:
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
 
+        # One event loop runs the client. No await separates the check and the set of
+        # these flags, so plain booleans are safe.
+        self._eval_cached_data_warned = False
+        self._all_flags_cached_data_warned = False
+
         # Build the object graph here (loop-free). start() supplies the loop-bound
         # resources: the HTTP session (created lazily), the data source, the
         # big-segment poll, and the event processor. Evaluation before start()
@@ -496,7 +501,9 @@ class AsyncLDClient:
         availability = await self._data_system.data_availability()
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
-                log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key)
+                if not self._eval_cached_data_warned:
+                    self._eval_cached_data_warned = True
+                    log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key + ". This message is logged once.")
             else:
                 log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
                 reason = error_reason('CLIENT_NOT_READY')
@@ -568,7 +575,9 @@ class AsyncLDClient:
         availability = await self._data_system.data_availability()
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
-                log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store")
+                if not self._all_flags_cached_data_warned:
+                    self._all_flags_cached_data_warned = True
+                    log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
             else:
                 log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
                 return FeatureFlagsState(False)
