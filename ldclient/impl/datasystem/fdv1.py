@@ -101,7 +101,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
             return
 
         log.warn("Detected persistent store unavailability; updates will be cached until it recovers")
-        task = RepeatingTask("ldclient.check-availability", 0.5, 0, self.__check_availability)
+        task = RepeatingTask.at_interval("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
         with self.__lock.write():
             self.__poller = task
