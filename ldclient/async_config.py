@@ -15,6 +15,8 @@ from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.config import (
     DEFAULT_BASE_URI,
     DEFAULT_EVENTS_URI,
+    DEFAULT_INITIAL_RECONNECT_DELAY,
+    DEFAULT_POLL_INTERVAL,
     DEFAULT_STREAM_URI,
     GET_LATEST_FEATURES_PATH,
     STREAM_FLAGS_PATH,
@@ -28,6 +30,7 @@ from ldclient.impl.aio.concurrency import AsyncEvent
 from ldclient.impl.util import (
     log,
     validate_application_info,
+    validate_positive_finite,
     validate_sdk_key_format
 )
 from ldclient.interfaces import (
@@ -149,11 +152,11 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         flush_interval: float = 5,
         stream_uri: str = DEFAULT_STREAM_URI,
         stream: bool = True,
-        initial_reconnect_delay: float = 1,
+        initial_reconnect_delay: float = DEFAULT_INITIAL_RECONNECT_DELAY,
         defaults: dict = {},
         send_events: Optional[bool] = None,
         update_processor_class: Optional[Callable[['AsyncConfig', AsyncFeatureStore, AsyncEvent], AsyncUpdateProcessor]] = None,
-        poll_interval: float = 30,
+        poll_interval: float = DEFAULT_POLL_INTERVAL,
         use_ldd: bool = False,
         feature_store: Optional[AsyncFeatureStore] = None,
         feature_requester_class=None,
@@ -255,8 +258,13 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__stream_uri = stream_uri.rstrip('/')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
-        self.__initial_reconnect_delay = initial_reconnect_delay
-        self.__poll_interval = max(poll_interval, 30.0)
+        self.__initial_reconnect_delay = validate_positive_finite(
+            initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay', log
+        )
+        self.__poll_interval = max(
+            validate_positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval', log),
+            DEFAULT_POLL_INTERVAL,
+        )
         self.__use_ldd = use_ldd
         self.__feature_store = AsyncInMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class

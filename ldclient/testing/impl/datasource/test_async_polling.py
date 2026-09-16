@@ -63,9 +63,9 @@ def fast_retry_state(delay=0.001):
     real extended-regime delay of five minutes."""
     return RetryState(
         normal_initial_delay=delay,
-        normal_ceiling=delay,
+        normal_ceiling_delay=delay,
         extended_initial_delay=delay,
-        extended_ceiling=delay,
+        extended_ceiling_delay=delay,
         reset_policy=AfterConsecutiveSuccesses(POLLING_RESET_SUCCESSES),
         operating_cadence=delay,
     )

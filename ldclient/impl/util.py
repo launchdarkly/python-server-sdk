@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 import sys
 import time
@@ -58,6 +59,25 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
         return ""
 
     return value
+
+
+def validate_positive_finite(value: float, default: float, name: str, logger: logging.Logger) -> float:
+    """
+    Validates that a number of seconds is positive and finite.
+
+    A non-finite value makes later arithmetic produce NaN, and a non-positive
+    one makes a wait no wait at all.
+
+    :param value: the number of seconds to validate
+    :param default: the value to use when ``value`` is not usable
+    :param name: the option name, for the warning message
+    :param logger: the logger to use for logging warnings
+    :return: ``value``, or ``default`` if ``value`` is not positive and finite
+    """
+    if value > 0 and math.isfinite(value):
+        return value
+    logger.warning("%s must be a positive, finite number of seconds; using the default of %ss" % (name, default))
+    return default
 
 
 def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:

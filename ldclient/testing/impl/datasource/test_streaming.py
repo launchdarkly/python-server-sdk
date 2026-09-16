@@ -64,9 +64,9 @@ def fast_retry_state(delay=brief_delay):
     real extended-regime delay of five minutes."""
     return RetryState(
         normal_initial_delay=delay,
-        normal_ceiling=delay,
+        normal_ceiling_delay=delay,
         extended_initial_delay=delay,
-        extended_ceiling=delay,
+        extended_ceiling_delay=delay,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
     )
 
@@ -565,9 +565,9 @@ def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
             policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
             retry = RetryState(
                 normal_initial_delay=brief_delay,
-                normal_ceiling=brief_delay,
+                normal_ceiling_delay=brief_delay,
                 extended_initial_delay=brief_delay,
-                extended_ceiling=brief_delay,
+                extended_ceiling_delay=brief_delay,
                 reset_policy=policy,
             )
             # The clock moves on every read, so a window that had been
@@ -601,9 +601,9 @@ def test_a_fresh_stream_starts_a_new_reset_window():
                 policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
                 retry = RetryState(
                     normal_initial_delay=brief_delay,
-                    normal_ceiling=brief_delay,
+                    normal_ceiling_delay=brief_delay,
                     extended_initial_delay=brief_delay,
-                    extended_ceiling=brief_delay,
+                    extended_ceiling_delay=brief_delay,
                     reset_policy=policy,
                 )
                 windows = record_healthy_windows(policy)

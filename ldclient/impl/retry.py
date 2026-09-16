@@ -18,24 +18,24 @@ or :func:`for_polling` to build one with the right parameters and reset policy.
 
 # currently excluded from documentation - see docs/README.md
 
-import math
 import random
 import time
 from enum import Enum
 from typing import Optional, Protocol
 
-from ldclient.impl.util import log
+from ldclient.config import (
+    DEFAULT_INITIAL_RECONNECT_DELAY,
+    DEFAULT_POLL_INTERVAL
+)
+from ldclient.impl.util import log, validate_positive_finite
 
-# The documented defaults, in seconds. Each stands in for a configured value
-# that is not a positive, finite number.
-DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY = 1
-DEFAULT_STREAMING_MAX_DELAY = 30
-DEFAULT_POLL_INTERVAL = 30
+# The delay ceiling of the normal regime for streaming, in seconds.
+NORMAL_STREAMING_CEILING_DELAY = 30
 
 # The delay bounds of the extended regime, in seconds. A component enters the
 # extended regime after an unexpected failure.
 EXTENDED_INITIAL_DELAY = 5 * 60
-EXTENDED_MAX_DELAY = 60 * 60
+EXTENDED_CEILING_DELAY = 60 * 60
 
 # How long streaming must operate without a failure before its retry state
 # resets, in seconds.
@@ -152,35 +152,37 @@ class RetryState:
     def __init__(
         self,
         normal_initial_delay: float,
-        normal_ceiling: float,
+        normal_ceiling_delay: float,
         extended_initial_delay: float,
-        extended_ceiling: float,
+        extended_ceiling_delay: float,
         reset_policy: ResetPolicy,
         operating_cadence: float = 0,
     ):
         """
         :param normal_initial_delay: the delay before the first retry in the
             normal regime, in seconds
-        :param normal_ceiling: the longest normal-regime delay, in seconds
+        :param normal_ceiling_delay: the longest normal-regime delay, in
+            seconds
         :param extended_initial_delay: the delay before the first retry in the
             extended regime, in seconds
-        :param extended_ceiling: the longest extended-regime delay, in seconds
+        :param extended_ceiling_delay: the longest extended-regime delay, in
+            seconds
         :param reset_policy: decides when the retry state resets
         :param operating_cadence: the wait between healthy operations, in
             seconds; no wait is ever shorter than this. Zero for a component
             that operates continuously.
         """
         self._normal_initial_delay = normal_initial_delay
-        self._normal_ceiling = normal_ceiling
+        self._normal_ceiling_delay = normal_ceiling_delay
         self._extended_initial_delay = extended_initial_delay
-        self._extended_ceiling = extended_ceiling
+        self._extended_ceiling_delay = extended_ceiling_delay
         self._reset_policy = reset_policy
         self._operating_cadence = operating_cadence
 
         self._n = 0
         self._extended = False
         self._min_delay = self._normal_initial_delay
-        self._max_delay = max(self._normal_ceiling, self._normal_initial_delay)
+        self._max_delay = max(self._normal_ceiling_delay, self._normal_initial_delay)
         self._attempts = 0
         # Read before any outcome is recorded, this is the ordinary interval.
         self._next_delay = self._operating_cadence
@@ -212,7 +214,7 @@ class RetryState:
             # extended initial delay.
             self._extended = True
             self._min_delay = self._extended_initial_delay
-            self._max_delay = max(self._extended_ceiling, self._min_delay)
+            self._max_delay = max(self._extended_ceiling_delay, self._min_delay)
             self._n = 1
         else:
             self._n += 1
@@ -245,20 +247,7 @@ class RetryState:
         self._attempts = 0
         self._extended = False
         self._min_delay = self._normal_initial_delay
-        self._max_delay = max(self._normal_ceiling, self._normal_initial_delay)
-
-
-def _positive_finite(value: float, default: float, name: str) -> float:
-    """Returns ``value`` if it is a positive, finite number of seconds, and the
-    default otherwise. A non-finite value would make the jitter arithmetic
-    produce a NaN delay, and a non-positive one would retry with no wait."""
-    if value > 0 and math.isfinite(value):
-        return value
-    log.warning(
-        "%s must be a positive, finite number of seconds; using the default of %ss"
-        % (name, default)
-    )
-    return default
+        self._max_delay = max(self._normal_ceiling_delay, self._normal_initial_delay)
 
 
 def for_streaming(initial_reconnect_delay: float) -> RetryState:
@@ -276,14 +265,14 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
 
     The extended regime never starts below the configured delay.
     """
-    initial_reconnect_delay = _positive_finite(
-        initial_reconnect_delay, DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
+    initial_reconnect_delay = validate_positive_finite(
+        initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay', log
     )
     return RetryState(
         normal_initial_delay=initial_reconnect_delay,
-        normal_ceiling=DEFAULT_STREAMING_MAX_DELAY,
+        normal_ceiling_delay=NORMAL_STREAMING_CEILING_DELAY,
         extended_initial_delay=max(EXTENDED_INITIAL_DELAY, initial_reconnect_delay),
-        extended_ceiling=EXTENDED_MAX_DELAY,
+        extended_ceiling_delay=EXTENDED_CEILING_DELAY,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
         operating_cadence=0
     )
@@ -302,12 +291,12 @@ def for_polling(poll_interval: float) -> RetryState:
     ``Config`` clamps the poll interval, but the documented default stands in
     for anything that reaches here and is not a positive, finite number.
     """
-    poll_interval = _positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval')
+    poll_interval = validate_positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval', log)
     return RetryState(
         normal_initial_delay=poll_interval,
-        normal_ceiling=poll_interval,
+        normal_ceiling_delay=poll_interval,
         extended_initial_delay=max(EXTENDED_INITIAL_DELAY, poll_interval),
-        extended_ceiling=EXTENDED_MAX_DELAY,
+        extended_ceiling_delay=EXTENDED_CEILING_DELAY,
         reset_policy=AfterConsecutiveSuccesses(POLLING_RESET_SUCCESSES),
         operating_cadence=poll_interval,
     )

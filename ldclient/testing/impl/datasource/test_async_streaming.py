@@ -22,9 +22,9 @@ from ldclient.impl.datasource.async_streaming import (
 )
 from ldclient.impl.model import ModelEntity
 from ldclient.impl.retry import (
-    DEFAULT_STREAMING_MAX_DELAY,
+    EXTENDED_CEILING_DELAY,
     EXTENDED_INITIAL_DELAY,
-    EXTENDED_MAX_DELAY,
+    NORMAL_STREAMING_CEILING_DELAY,
     STREAMING_RESET_INTERVAL,
     AfterHealthyFor,
     RetryState,
@@ -98,9 +98,9 @@ def _retry_state_with(policy: AfterHealthyFor) -> RetryState:
     test can watch the window."""
     return RetryState(
         normal_initial_delay=0.001,
-        normal_ceiling=0.001,
+        normal_ceiling_delay=0.001,
         extended_initial_delay=0.001,
-        extended_ceiling=0.001,
+        extended_ceiling_delay=0.001,
         reset_policy=policy,
     )
 
@@ -110,9 +110,9 @@ def _fast_retry_state(delay: float = 0.001) -> RetryState:
     real extended-regime delay of five minutes."""
     return RetryState(
         normal_initial_delay=delay,
-        normal_ceiling=delay,
+        normal_ceiling_delay=delay,
         extended_initial_delay=delay,
-        extended_ceiling=delay,
+        extended_ceiling_delay=delay,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
     )
 
@@ -137,9 +137,9 @@ def _zero_delay_retry_state() -> RetryState:
     real, so a misclassification still shows up in ``max_delay``."""
     return RetryState(
         normal_initial_delay=0,
-        normal_ceiling=DEFAULT_STREAMING_MAX_DELAY,
+        normal_ceiling_delay=NORMAL_STREAMING_CEILING_DELAY,
         extended_initial_delay=EXTENDED_INITIAL_DELAY,
-        extended_ceiling=EXTENDED_MAX_DELAY,
+        extended_ceiling_delay=EXTENDED_CEILING_DELAY,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
     )
 
@@ -488,7 +488,7 @@ async def test_transport_failures_stay_in_the_normal_regime(error):
     assert await asyncio.wait_for(proc._handle_error(error), timeout=2.0)
 
     assert not retry._extended
-    assert retry._max_delay == DEFAULT_STREAMING_MAX_DELAY
+    assert retry._max_delay == NORMAL_STREAMING_CEILING_DELAY
 
 
 class _NoSleep:

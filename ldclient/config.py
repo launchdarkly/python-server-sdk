@@ -15,6 +15,7 @@ from ldclient.hook import Hook
 from ldclient.impl.util import (
     log,
     validate_application_info,
+    validate_positive_finite,
     validate_sdk_key_format
 )
 from ldclient.interfaces import (
@@ -35,6 +36,11 @@ STREAM_FLAGS_PATH = '/flags'
 DEFAULT_BASE_URI = 'https://app.launchdarkly.com'
 DEFAULT_EVENTS_URI = 'https://events.launchdarkly.com'
 DEFAULT_STREAM_URI = 'https://stream.launchdarkly.com'
+
+# Defaults, in seconds, for the two configurable data source intervals. The
+# poll interval is also its own minimum.
+DEFAULT_INITIAL_RECONNECT_DELAY = 1
+DEFAULT_POLL_INTERVAL = 30
 
 
 class BigSegmentsConfig:
@@ -295,11 +301,11 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         flush_interval: float = 5,
         stream_uri: str = DEFAULT_STREAM_URI,
         stream: bool = True,
-        initial_reconnect_delay: float = 1,
+        initial_reconnect_delay: float = DEFAULT_INITIAL_RECONNECT_DELAY,
         defaults: dict = {},
         send_events: Optional[bool] = None,
         update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]] = None,
-        poll_interval: float = 30,
+        poll_interval: float = DEFAULT_POLL_INTERVAL,
         use_ldd: bool = False,
         feature_store: Optional[FeatureStore] = None,
         feature_requester_class=None,
@@ -401,8 +407,13 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__stream_uri = stream_uri.rstrip('/')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
-        self.__initial_reconnect_delay = initial_reconnect_delay
-        self.__poll_interval = max(poll_interval, 30.0)
+        self.__initial_reconnect_delay = validate_positive_finite(
+            initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay', log
+        )
+        self.__poll_interval = max(
+            validate_positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval', log),
+            DEFAULT_POLL_INTERVAL,
+        )
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
