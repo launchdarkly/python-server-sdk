@@ -26,19 +26,16 @@ from typing import Optional, Protocol
 
 from ldclient.impl.util import log
 
+# The documented defaults, in seconds. Each stands in for a configured value
+# that is not a positive, finite number.
+DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY = 1
+DEFAULT_STREAMING_MAX_DELAY = 30
+DEFAULT_POLL_INTERVAL = 30
+
 # The delay bounds of the extended regime, in seconds. A component enters the
 # extended regime after an unexpected failure.
 EXTENDED_INITIAL_DELAY = 5 * 60
 EXTENDED_MAX_DELAY = 60 * 60
-
-# The delay bounds of the normal regime for streaming, in seconds. The initial
-# delay is configurable as ``initial_reconnect_delay``.
-STREAMING_MAX_DELAY = 30
-
-# The documented defaults, in seconds. Each stands in for a configured value
-# that is not a positive, finite number.
-DEFAULT_INITIAL_RECONNECT_DELAY = 1
-DEFAULT_POLL_INTERVAL = 30
 
 # How long streaming must operate without a failure before its retry state
 # resets, in seconds.
@@ -165,7 +162,7 @@ class RetryState:
 
     def __init__(
         self,
-        initial_delay: float,
+        normal_initial_delay: float,
         normal_ceiling: float,
         extended_initial_delay: float,
         extended_ceiling: float,
@@ -173,7 +170,7 @@ class RetryState:
         operating_cadence: float = 0,
     ):
         """
-        :param initial_delay: the delay before the first retry, in seconds
+        :param normal_initial_delay: the delay before the first retry in the normal regime, in seconds
         :param normal_ceiling: the longest normal-regime delay, in seconds
         :param extended_initial_delay: the delay before the first retry in the
             extended regime, in seconds
@@ -183,7 +180,7 @@ class RetryState:
             in seconds; no wait is ever shorter than this. Zero disables the
             floor, which is what streaming wants.
         """
-        self._initial_delay = initial_delay
+        self._normal_initial_delay = normal_initial_delay
         self._normal_ceiling = normal_ceiling
         self._extended_initial_delay = extended_initial_delay
         self._extended_ceiling = extended_ceiling
@@ -192,8 +189,8 @@ class RetryState:
 
         self._n = 0
         self._extended = False
-        self._min_delay = initial_delay
-        self._max_delay = max(normal_ceiling, initial_delay)
+        self._min_delay = self._normal_initial_delay
+        self._max_delay = max(self._normal_ceiling, self._normal_initial_delay)
         self._attempts = 0
         # Read before any outcome is recorded, this is the ordinary interval.
         self._next_delay = self._wait_between_operations()
@@ -256,7 +253,11 @@ class RetryState:
         else:
             self._n += 1
 
-        self._next_delay = self._compute_wait()
+        exponent = min(max(self._n - 1, 0), _MAX_BACKOFF_EXPONENT)
+        delay = min(self._min_delay * (2**exponent), self._max_delay)
+        jitter = random.random() * delay / 2
+
+        self._next_delay = max(delay - jitter, self._operating_cadence)
 
     def record_success(self) -> None:
         """
@@ -274,7 +275,7 @@ class RetryState:
     def _wait_between_operations(self) -> float:
         """The wait when nothing is being retried: the operating cadence, or
         the initial delay for a component that has no cadence."""
-        return self._operating_cadence if self._operating_cadence > 0 else self._initial_delay
+        return self._operating_cadence if self._operating_cadence >= 0 else self._normal_initial_delay
 
     def _reset_if_due(self) -> None:
         """Clears the retry state when the reset policy is satisfied, returning
@@ -284,14 +285,8 @@ class RetryState:
         self._n = 0
         self._attempts = 0
         self._extended = False
-        self._min_delay = self._initial_delay
-        self._max_delay = max(self._normal_ceiling, self._initial_delay)
-
-    def _compute_wait(self) -> float:
-        exponent = min(max(self._n - 1, 0), _MAX_BACKOFF_EXPONENT)
-        delay = min(self._min_delay * (2**exponent), self._max_delay)
-        jitter = random.random() * delay / 2
-        return max(delay - jitter, self._operating_cadence)
+        self._min_delay = self._normal_initial_delay
+        self._max_delay = max(self._normal_ceiling, self._normal_initial_delay)
 
 
 def _positive_finite(value: float, default: float, name: str) -> float:
@@ -321,14 +316,15 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     The extended regime never starts below the configured delay.
     """
     initial_reconnect_delay = _positive_finite(
-        initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
+        initial_reconnect_delay, DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
     )
     return RetryState(
-        initial_delay=initial_reconnect_delay,
-        normal_ceiling=STREAMING_MAX_DELAY,
+        normal_initial_delay=initial_reconnect_delay,
+        normal_ceiling=DEFAULT_STREAMING_MAX_DELAY,
         extended_initial_delay=max(EXTENDED_INITIAL_DELAY, initial_reconnect_delay),
         extended_ceiling=EXTENDED_MAX_DELAY,
         reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
+        operating_cadence=0
     )
 
 
@@ -347,7 +343,7 @@ def for_polling(poll_interval: float) -> RetryState:
     """
     poll_interval = _positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval')
     return RetryState(
-        initial_delay=poll_interval,
+        normal_initial_delay=poll_interval,
         normal_ceiling=poll_interval,
         extended_initial_delay=max(EXTENDED_INITIAL_DELAY, poll_interval),
         extended_ceiling=EXTENDED_MAX_DELAY,
