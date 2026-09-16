@@ -19,9 +19,9 @@ from ldclient.impl import retry
 from ldclient.impl.retry import (
     DEFAULT_POLL_INTERVAL,
     DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY,
-    DEFAULT_STREAMING_MAX_DELAY,
+    EXTENDED_CEILING_DELAY,
     EXTENDED_INITIAL_DELAY,
-    EXTENDED_MAX_DELAY,
+    NORMAL_STREAMING_CEILING_DELAY,
     POLLING_RESET_SUCCESSES,
     STREAMING_RESET_INTERVAL,
     AfterConsecutiveSuccesses,
@@ -229,11 +229,11 @@ class TestStreamingDelayTable:
         state = for_streaming(1)
         state.record_failure(UNEXPECTED)
         assert state._extended
-        assert state._max_delay == EXTENDED_MAX_DELAY
+        assert state._max_delay == EXTENDED_CEILING_DELAY
 
         state.record_failure(NORMAL)
         assert state._extended
-        assert state._max_delay == EXTENDED_MAX_DELAY
+        assert state._max_delay == EXTENDED_CEILING_DELAY
         assert state._min_delay == EXTENDED_INITIAL_DELAY
 
     def test_a_second_unexpected_failure_keeps_counting_up(self):
@@ -246,7 +246,7 @@ class TestStreamingDelayTable:
 
     def test_the_streaming_defaults_match_the_spec(self):
         state = for_streaming(1)
-        assert state._max_delay == DEFAULT_STREAMING_MAX_DELAY
+        assert state._max_delay == NORMAL_STREAMING_CEILING_DELAY
         assert state._operating_cadence == 0
         assert STREAMING_RESET_INTERVAL == 60
 
@@ -331,7 +331,7 @@ class TestStreamingReset:
             clock.advance(STREAMING_RESET_INTERVAL)
             state.record_success()
             assert not state._extended
-            assert state._max_delay == DEFAULT_STREAMING_MAX_DELAY
+            assert state._max_delay == NORMAL_STREAMING_CEILING_DELAY
             assert failure_delay(state, NORMAL) == 1
 
     def test_a_reset_also_happens_on_the_failure_that_ends_a_healthy_stretch(self):
@@ -370,8 +370,8 @@ class TestStreamingReset:
                 clock.advance(1)
 
             assert not state._extended
-            assert max(delays) == DEFAULT_STREAMING_MAX_DELAY
-            assert state._max_delay == DEFAULT_STREAMING_MAX_DELAY
+            assert max(delays) == NORMAL_STREAMING_CEILING_DELAY
+            assert state._max_delay == NORMAL_STREAMING_CEILING_DELAY
 
 
 class TestPollingCadence:
@@ -535,9 +535,9 @@ class TestLongOutage:
     def test_a_long_outage_cannot_overflow_the_delay(self):
         state = RetryState(
             normal_initial_delay=1,
-            normal_ceiling=30,
+            normal_ceiling_delay=30,
             extended_initial_delay=EXTENDED_INITIAL_DELAY,
-            extended_ceiling=EXTENDED_MAX_DELAY,
+            extended_ceiling_delay=EXTENDED_CEILING_DELAY,
             reset_policy=AfterHealthyFor(60),
         )
         for _ in range(5000):
