@@ -25,6 +25,7 @@ from ldclient.interfaces import (
 )
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import MockFeatureRequester, MockResponse
+from ldclient.testing.sync_util import wait_until
 from ldclient.testing.test_util import SpyListener, no_retry_jitter
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -46,9 +47,12 @@ def teardown_function():
         pp.stop()
 
 
+ONE_HOUR = 60 * 60
+
+
 def fast_retry_state(delay=0.05):
-    """A retry state with tiny delays, so a test does not have to wait out the
-    real extended-regime delay of five minutes."""
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
     return RetryState(
         normal_initial_delay=delay,
         normal_ceiling_delay=delay,
@@ -160,8 +164,8 @@ def test_unexpected_http_error_moves_to_the_extended_regime(ignore_mock):
     setup_processor(Config("SDK_KEY"), retry_state=retry)
 
     # The extended regime starts at five minutes, so only the first poll runs.
-    assert not ready.wait(0.4)
-    assert retry._extended
+    wait_until(lambda: retry.next_delay > 0.1)
+    assert not ready.wait(0.1)
     assert mock_requester.request_count == 1
 
 
@@ -330,6 +334,36 @@ def test_an_extended_regime_wait_is_cut_short_by_stop():
     # would still be sitting in a 300-second sleep.
     assert not worker.is_alive()
     assert elapsed < 1
+
+
+def test_an_absurd_poll_interval_does_not_kill_the_worker_thread():
+    """``Event.wait`` raises above ``threading.TIMEOUT_MAX``, and that raise is
+    outside the try block around the poll, so the thread used to die while the
+    SDK still reported itself healthy."""
+    mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
+    setup_processor(Config("SDK_KEY", poll_interval=1e10))
+
+    assert ready.wait(2)
+    worker = _polling_thread()
+    assert worker is not None
+
+    # A thread that raised on the wait exits as soon as the first poll returns.
+    worker.join(0.3)
+    assert worker.is_alive()
+
+
+def test_stop_twice_and_stop_before_start_are_safe():
+    """Neither a stop before the first poll nor a second stop should raise,
+    including while an hour-long wait is pending."""
+    mock_requester.exception = UnsuccessfulResponseException(401)
+    processor = PollingUpdateProcessor(
+        Config("SDK_KEY"), mock_requester, store, ready, retry_state=fast_retry_state(ONE_HOUR)
+    )
+
+    processor.stop()
+    processor.stop()
+    processor.start()
+    processor.stop()
 
 
 def test_stop_reports_off():

@@ -1,5 +1,6 @@
 import json
 import time
+from threading import TIMEOUT_MAX
 from threading import Event as ThreadEvent
 from threading import Thread
 from typing import Callable, Optional
@@ -107,11 +108,8 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         log.info("StreamingUpdateProcessor initialized ok.")
                         self._ready.set()
             elif isinstance(action, Fault):
-                # A Fault with no error means the connection closed cleanly. If
-                # we asked for that close, we have already recorded the failure
-                # behind it and must not record it twice. Otherwise the server
-                # closed a connection it normally leaves open, which is a
-                # connection failure the SDK backs off from.
+                # A Fault with no error is a clean close. An interrupt the SDK
+                # asked for is not a failure.
                 if action.error is None:
                     if self._interrupted_by_sdk:
                         self._interrupted_by_sdk = False
@@ -139,13 +137,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
-            # The SDK owns the retry delay, so the SSE client must never wait.
-            # A zero base delay plus the no-op base strategy holds
-            # next_retry_delay at zero, which is what these three arguments
-            # are for. The SSE client hands us the Fault before it would
-            # sleep, so we classify the failure and wait ourselves in
-            # _handle_error. Our wait is interruptible, which matters because
-            # the extended regime can ask for an hour.
+            # The SSE client's retry is disabled; the SDK owns the delay.
             initial_retry_delay=0,
             retry_delay_strategy=RetryDelayStrategy(),
             retry_delay_reset_threshold=0,
@@ -253,7 +245,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
         self._connection_attempt_start_time = time.time() + delay
-        return not self._stop_event.wait(delay)
+        return not self._stop_event.wait(min(delay, TIMEOUT_MAX))
 
     # magic methods for "with" statement (used in testing)
     def __enter__(self):

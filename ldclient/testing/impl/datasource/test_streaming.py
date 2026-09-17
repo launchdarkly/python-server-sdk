@@ -22,6 +22,7 @@ from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.retry import (
+    NORMAL_STREAMING_CEILING_DELAY,
     STREAMING_RESET_INTERVAL,
     AfterHealthyFor,
     RetryState,
@@ -47,6 +48,7 @@ from ldclient.testing.stub_util import (
     make_put_event,
     stream_content
 )
+from ldclient.testing.sync_util import wait_until
 from ldclient.testing.test_util import (
     SpyListener,
     no_retry_jitter,
@@ -57,11 +59,12 @@ from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 brief_delay = 0.001
+ONE_HOUR = 60 * 60
 
 
 def fast_retry_state(delay=brief_delay):
-    """A retry state with tiny delays, so a test does not have to wait out the
-    real extended-regime delay of five minutes."""
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
     return RetryState(
         normal_initial_delay=delay,
         normal_ceiling_delay=delay,
@@ -306,12 +309,15 @@ def test_unexpected_http_error_backs_off_a_long_way(status):
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
-                # Initialization is not falsely unblocked: the caller waits out
-                # its own start_wait and then finds the client uninitialized.
-                assert not ready.wait(1)
+                server.wait_until_request_received()
+                # The next attempt is past the normal ceiling, so the failure
+                # has been recorded and the extended regime is in use.
+                wait_until(lambda: sp._retry.next_delay > NORMAL_STREAMING_CEILING_DELAY)
+
+                # Initialization is not falsely unblocked.
+                assert not ready.wait(0.1)
                 assert not sp.initialized()
                 assert sp.is_alive()
-                assert sp._retry._extended
                 server.should_have_requests(1)
 
 
@@ -548,6 +554,30 @@ def test_a_server_close_and_a_transport_error_both_report_a_delay(caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert messages[0] == "The server closed the stream connection - will retry in 1.0s"
     assert messages[1] == "Error on stream connection: [Errno 104] reset by peer - will retry in 2.0s"
+
+
+def test_an_extended_regime_wait_is_cut_short_by_stop():
+    """The reason the wait has to be interruptible at all. Shutdown must not
+    sit through an hour-long backoff."""
+    store = InMemoryFeatureStore()
+    with start_server() as server:
+        config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+        server.for_path('/all', BasicResponse(401))
+        retry = fast_retry_state(ONE_HOUR)
+
+        with StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry) as sp:
+            sp.start()
+            server.wait_until_request_received()
+            # Confirm the wait under test really is long before measuring the stop.
+            wait_until(lambda: retry.next_delay > 60)
+
+            started = time.time()
+            sp.stop()
+            sp.join(5)
+            elapsed = time.time() - started
+
+            assert not sp.is_alive()
+            assert elapsed < 2, "stop() took %.2fs" % elapsed
 
 
 def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
@@ -798,8 +828,11 @@ def test_failure_transitions_from_valid():
 
         with StreamingUpdateProcessor(config, store, ready, None) as sp:
             sp.start()
+            server.wait_until_request_received()
+            wait_until(lambda: len(spy.statuses) == 2)
+
             # The 401 is retried five minutes out, so readiness never fires.
-            assert not ready.wait(1)
+            assert not ready.wait(0.1)
             server.should_have_requests(1)
 
             assert len(spy.statuses) == 2

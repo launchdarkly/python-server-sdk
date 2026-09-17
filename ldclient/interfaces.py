@@ -1013,7 +1013,8 @@ class DataSourceState(Enum):
     """
     Indicates that the data source has been permanently shut down.
 
-    This means the SDK client was explicitly shut down, or that its configuration could not be parsed.
+    This could be because the SDK client was explicitly shut down, because its configuration could not
+    be parsed, or because the data source encountered a condition it will not retry.
     """
 
 

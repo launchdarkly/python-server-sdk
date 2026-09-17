@@ -1,5 +1,4 @@
 import logging
-import math
 import re
 import sys
 import time
@@ -59,25 +58,6 @@ def validate_application_value(value: Any, name: str, logger: logging.Logger) ->
         return ""
 
     return value
-
-
-def validate_positive_finite(value: float, default: float, name: str, logger: logging.Logger) -> float:
-    """
-    Validates that a number of seconds is positive and finite.
-
-    A non-finite value makes later arithmetic produce NaN, and a non-positive
-    one makes a wait no wait at all.
-
-    :param value: the number of seconds to validate
-    :param default: the value to use when ``value`` is not usable
-    :param name: the option name, for the warning message
-    :param logger: the logger to use for logging warnings
-    :return: ``value``, or ``default`` if ``value`` is not positive and finite
-    """
-    if value > 0 and math.isfinite(value):
-        return value
-    logger.warning("%s must be a positive, finite number of seconds; using the default of %ss" % (name, default))
-    return default
 
 
 def validate_sdk_key_format(sdk_key: str, logger: logging.Logger) -> str:
@@ -155,14 +135,11 @@ def throw_if_unsuccessful_response(resp):
 
 def is_http_error_recoverable(status):
     """
-    Reports whether a component that treats some statuses as fatal should
-    keep going.
-
     Deprecated. Use :func:`ldclient.impl.retry.classify_http_status` instead.
     """
     if status >= 400 and status < 500:
-        return status in _RETRYABLE_STATUSES  # all other 4xx besides these are treated as fatal
-    return True
+        return status in _RETRYABLE_STATUSES  # all other 4xx besides these are unrecoverable
+    return True  # all other errors are recoverable
 
 
 def http_error_description(status):
@@ -171,11 +148,8 @@ def http_error_description(status):
 
 def http_error_message(status, context, retryable_message="will retry"):
     """
-    Builds the log message for an HTTP failure in a component that stops on
-    some statuses.
-
-    Deprecated. The FDv1 data sources build their own message instead, so
-    that it can report the real retry delay.
+    Deprecated. The FDv1 data sources build their own message, so that it can
+    report the real retry delay.
     """
     return "Received %s for %s - %s" % (http_error_description(status), context, retryable_message if is_http_error_recoverable(status) else "giving up permanently")
 

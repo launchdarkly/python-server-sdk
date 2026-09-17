@@ -5,6 +5,7 @@ Tests for AsyncFeatureRequesterImpl and AsyncPollingUpdateProcessor.
 import asyncio
 import logging
 import ssl
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -58,9 +59,12 @@ _CONNECTION_KEY = ConnectionKey(
 )
 
 
+ONE_HOUR = 60 * 60
+
+
 def fast_retry_state(delay=0.001):
-    """A retry state with tiny delays, so a test does not have to wait out the
-    real extended-regime delay of five minutes."""
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
     return RetryState(
         normal_initial_delay=delay,
         normal_ceiling_delay=delay,
@@ -468,6 +472,30 @@ class TestAsyncPollingUpdateProcessor:
         await processor.stop()
 
         assert order == ['poll_done', 'transport_closed']
+
+    @pytest.mark.asyncio
+    async def test_an_extended_regime_wait_is_cut_short_by_stop(self):
+        """Shutdown must not sit through an hour-long backoff. The in-flight-poll
+        case is test_stop_cancels_polling_task_cleanly; this one stops while the
+        task is waiting between polls."""
+        retry = fast_retry_state(ONE_HOUR)
+        processor = make_processor(retry_state=retry)
+        processor._requester.get_all_data = AsyncMock(
+            side_effect=UnsuccessfulResponseException(401)
+        )
+
+        processor.start()
+        # Confirm the wait under test really is long before measuring the stop.
+        deadline = time.time() + 2
+        while retry.next_delay <= 60 and time.time() < deadline:
+            await asyncio.sleep(0.01)
+        assert retry.next_delay > 60, "the wait under test should be minutes long"
+
+        started = time.time()
+        await processor.stop()
+        elapsed = time.time() - started
+
+        assert elapsed < 2, "stop() took %.2fs" % elapsed
 
     @pytest.mark.asyncio
     async def test_stop_cancels_polling_task_cleanly(self):

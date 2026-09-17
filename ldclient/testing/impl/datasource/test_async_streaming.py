@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import ssl
+import time
 from unittest import mock
 
 import aiohttp
@@ -105,9 +106,12 @@ def _retry_state_with(policy: AfterHealthyFor) -> RetryState:
     )
 
 
+ONE_HOUR = 60 * 60
+
+
 def _fast_retry_state(delay: float = 0.001) -> RetryState:
-    """A retry state with tiny delays, so a test does not have to wait out the
-    real extended-regime delay of five minutes."""
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
     return RetryState(
         normal_initial_delay=delay,
         normal_ceiling_delay=delay,
@@ -593,6 +597,37 @@ async def test_a_fresh_stream_starts_a_new_reset_window():
         await proc.stop()
 
     assert len(set(windows)) == 2, "the second stream reused the first window"
+
+
+@pytest.mark.asyncio
+async def test_an_extended_regime_wait_is_cut_short_by_stop():
+    """Shutdown must not sit through an hour-long backoff. The healthy-stop case
+    is test_stop_closes_sse_and_finishes_task; this one stops mid-wait."""
+    from ld_eventsource.errors import HTTPStatusError
+
+    retry = _fast_retry_state(ONE_HOUR)
+    proc, store, ready, _ = _make_processor(
+        [_start(), _fault(error=HTTPStatusError(401))], retry_state=retry
+    )
+    proc.start()
+    # Confirm the wait under test really is long before measuring the stop.
+    await _wait_until(lambda: retry.next_delay > 60)
+
+    started = time.time()
+    await proc.stop()
+    elapsed = time.time() - started
+
+    assert elapsed < 2, "stop() took %.2fs" % elapsed
+    leaked = [t for t in proc._runner._tasks if not t.done()]
+    assert leaked == [], "stop() returned with the task still running: %r" % leaked
+
+
+@pytest.mark.asyncio
+async def test_stop_before_start_and_stop_twice_are_safe():
+    proc, store, ready, _ = _make_processor([])
+
+    await proc.stop()
+    await proc.stop()
 
 
 @pytest.mark.asyncio

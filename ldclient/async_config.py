@@ -30,7 +30,6 @@ from ldclient.impl.aio.concurrency import AsyncEvent
 from ldclient.impl.util import (
     log,
     validate_application_info,
-    validate_positive_finite,
     validate_sdk_key_format
 )
 from ldclient.interfaces import (
@@ -258,13 +257,8 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__stream_uri = stream_uri.rstrip('/')
         self.__update_processor_class = update_processor_class
         self.__stream = stream
-        self.__initial_reconnect_delay = validate_positive_finite(
-            initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay', log
-        )
-        self.__poll_interval = max(
-            validate_positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval', log),
-            DEFAULT_POLL_INTERVAL,
-        )
+        self.__initial_reconnect_delay = initial_reconnect_delay
+        self.__poll_interval = max(poll_interval, DEFAULT_POLL_INTERVAL)
         self.__use_ldd = use_ldd
         self.__feature_store = AsyncInMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class

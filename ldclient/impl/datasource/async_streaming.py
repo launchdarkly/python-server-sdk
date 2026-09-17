@@ -126,11 +126,8 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
                             log.info("AsyncStreamingUpdateProcessor initialized ok.")
                             self._ready.set()
                 elif isinstance(action, Fault):
-                    # A Fault with no error means the connection closed cleanly.
-                    # If we asked for that close, we have already recorded the
-                    # failure behind it and must not record it twice. Otherwise
-                    # the server closed a connection it normally leaves open,
-                    # which is a connection failure the SDK backs off from.
+                    # A Fault with no error is a clean close. An interrupt the
+                    # SDK asked for is not a failure.
                     if action.error is None:
                         if self._interrupted_by_sdk:
                             self._interrupted_by_sdk = False
