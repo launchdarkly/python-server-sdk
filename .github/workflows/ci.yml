@@ -142,6 +142,13 @@ jobs:
         working-directory: ${{ runner.temp }}/sdist
         run: make lint
 
+      # start-contract-test-service depends on install-contract-tests-deps, and
+      # the -bg target backgrounds the whole chain. Without a blocking install
+      # first, the dependency sync races the harness connecting to the service.
+      - name: Install the contract test dependencies from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make install-contract-tests-deps
+
       - name: Start the contract test service from the sdist
         working-directory: ${{ runner.temp }}/sdist
         run: make start-contract-test-service-bg
