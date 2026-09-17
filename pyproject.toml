@@ -100,3 +100,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["ldclient"]
 exclude = ["ldclient/testing"]
+
+# The sdist keeps what a consumer or a downstream redistributor needs: the
+# package, the tests, the contract-test service, the docs source, the Makefile
+# and PROVENANCE.md. Repository-management files are of no use outside this
+# repository. Hatchling force-includes .gitignore so the sdist can be rebuilt
+# with the same exclusions, so it cannot be listed here.
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.github",
+  "/.codeclimate.yml",
+  "/.readthedocs.yml",
+  "/.sdk_metadata.json",
+  "/CODEOWNERS",
+  "/release-please-config.json",
+  "/.release-please-manifest.json",
+]
