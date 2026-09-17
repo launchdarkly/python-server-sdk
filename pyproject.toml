@@ -101,18 +101,20 @@ build-backend = "hatchling.build"
 packages = ["ldclient"]
 exclude = ["ldclient/testing"]
 
-# The sdist keeps what a consumer or a downstream redistributor needs: the
-# package, the tests, the contract-test service, the docs source, the Makefile
-# and PROVENANCE.md. Repository-management files are of no use outside this
-# repository. Hatchling force-includes .gitignore so the sdist can be rebuilt
-# with the same exclusions, so it cannot be listed here.
+# An allowlist, so that a new repository-management file cannot leak into the
+# sdist by default. The CI sdist job proves the list is complete: it builds the
+# sdist, unpacks it, and fails if fewer tests collect there than in the
+# checkout. Hatchling force-includes pyproject.toml, README.md, LICENSE.txt,
+# PKG-INFO and .gitignore whatever this says, so the sdist always builds.
 [tool.hatch.build.targets.sdist]
-exclude = [
-  "/.github",
-  "/.codeclimate.yml",
-  "/.readthedocs.yml",
-  "/.sdk_metadata.json",
-  "/CODEOWNERS",
-  "/release-please-config.json",
-  "/.release-please-manifest.json",
+include = [
+  "/ldclient",
+  "/contract-tests",
+  "/docs",
+  "/Makefile",
+  "/setup.cfg",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/SECURITY.md",
+  "/PROVENANCE.md",
 ]
