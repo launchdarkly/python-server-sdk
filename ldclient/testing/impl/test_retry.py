@@ -112,9 +112,9 @@ class TestClassifyHttpStatus:
 
 
 class TestFactoryInputGuards:
-    """``Config`` does not check ``initial_reconnect_delay`` at all, and only
-    clamps ``poll_interval``. A non-positive value would retry with no wait; a
-    non-finite one makes the jitter arithmetic produce NaN."""
+    """A ``RetryState`` can be built without going through ``Config``, so the
+    factories guard their own input. A non-positive value would retry with no
+    wait; a non-finite one makes the jitter arithmetic produce NaN."""
 
     @pytest.mark.parametrize(
         "configured",

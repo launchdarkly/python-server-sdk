@@ -257,8 +257,8 @@ def for_streaming(initial_reconnect_delay: float) -> RetryState:
     healthy operation after establishing a successful connection with no
     failures during the ``STREAMING_RESET_INTERVAL``.
 
-    ``Config`` does not check the configured delay, so the documented default
-    stands in for anything that is not a positive, finite number.
+    ``Config`` validates the configured delay, so this guard only catches a
+    state built without it.
 
     The extended regime never starts below the configured delay.
     """
@@ -285,8 +285,8 @@ def for_polling(poll_interval: float) -> RetryState:
     schedule. Polling is healthy on any successful poll, and resets after two
     in a row.
 
-    ``Config`` clamps the poll interval, but the documented default stands in
-    for anything that reaches here and is not a positive, finite number.
+    ``Config`` validates and clamps the poll interval, so this guard only
+    catches a state built without it.
     """
     poll_interval = validate_positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval', log)
     return RetryState(
