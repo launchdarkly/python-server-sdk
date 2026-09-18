@@ -137,6 +137,13 @@ jobs:
       - name: Run the tests from the sdist
         working-directory: ${{ runner.temp }}/sdist
         run: make test
+        env:
+          # The file-data-source modules skip themselves on this variable
+          # because they flake in CI. The linux and windows jobs set it, and
+          # this job must too, or it fails for reasons that say nothing about
+          # whether the sdist is complete. The tests still get collected, so
+          # the count check above is unaffected.
+          LD_SKIP_FLAKY_TESTS: true
 
       - name: Verify typehints from the sdist
         working-directory: ${{ runner.temp }}/sdist
