@@ -5,10 +5,16 @@ Pure helpers shared by the FDv1 polling and streaming data sources.
 # currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
-from typing import Mapping, Optional, Protocol, runtime_checkable
+from typing import (
+    Mapping,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    runtime_checkable
+)
 
 from ldclient.impl.util import _LD_ENVID_HEADER
-from ldclient.interfaces import DataSourceUpdateSink, FeatureStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 STREAM_ALL_PATH = '/all'
@@ -17,7 +23,28 @@ FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
 ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
-def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore):
+class StreamClosedError(Exception):
+    """The stream connection closed cleanly, and the SDK did not ask for it.
+
+    The service normally leaves the connection open, so a close the SDK did
+    not ask for is a connection failure. The SDK backs off before it
+    reconnects, rather than reconnecting at once.
+
+    It is a NORMAL failure, not an UNEXPECTED one. A load balancer draining
+    during a rolling deploy closes streams cleanly, and putting that in the
+    extended regime would take a whole fleet out of service for up to an
+    hour.
+    """
+
+    def __init__(self):
+        super().__init__("the server closed the stream connection")
+
+
+_Sink = TypeVar('_Sink')
+_Store = TypeVar('_Store')
+
+
+def sink_or_store(sink: Optional[_Sink], store: _Store) -> Union[_Sink, _Store]:
     """
     The original implementation of the data sources relied on the feature store
     directly, which we are trying to move away from. Customers who might have

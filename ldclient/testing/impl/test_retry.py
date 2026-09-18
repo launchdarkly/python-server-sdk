@@ -15,10 +15,12 @@ from unittest import mock
 
 import pytest
 
+from ldclient.config import (
+    DEFAULT_INITIAL_RECONNECT_DELAY,
+    DEFAULT_POLL_INTERVAL
+)
 from ldclient.impl import retry
 from ldclient.impl.retry import (
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY,
     EXTENDED_CEILING_DELAY,
     EXTENDED_INITIAL_DELAY,
     NORMAL_STREAMING_CEILING_DELAY,
@@ -110,9 +112,9 @@ class TestClassifyHttpStatus:
 
 
 class TestFactoryInputGuards:
-    """``Config`` does not check ``initial_reconnect_delay`` at all, and only
-    clamps ``poll_interval``. A non-positive value would retry with no wait; a
-    non-finite one makes the jitter arithmetic produce NaN."""
+    """``Config`` reports these options as configured, so the factories are the
+    only guard. A non-positive value would retry with no wait; a non-finite one
+    makes the jitter arithmetic produce NaN."""
 
     @pytest.mark.parametrize(
         "configured",
@@ -125,12 +127,11 @@ class TestFactoryInputGuards:
         state = for_streaming(configured)
         delay = failure_delay(state, NORMAL)
 
-        assert state._min_delay == DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY
-        assert delay == DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY
+        assert state._min_delay == DEFAULT_INITIAL_RECONNECT_DELAY
+        assert delay == DEFAULT_INITIAL_RECONNECT_DELAY
         assert math.isfinite(delay) and delay > 0
         assert caplog.records[0].getMessage() == (
-            "initial_reconnect_delay must be a positive, finite number of seconds; "
-            "using the default of 1s"
+            "initial_reconnect_delay must be a positive, finite number of seconds; using the default of 1s"
         )
 
     @pytest.mark.parametrize(
@@ -148,11 +149,10 @@ class TestFactoryInputGuards:
         assert delay == DEFAULT_POLL_INTERVAL
         assert math.isfinite(delay) and delay > 0
         assert caplog.records[0].getMessage() == (
-            "poll_interval must be a positive, finite number of seconds; "
-            "using the default of 30s"
+            "poll_interval must be a positive, finite number of seconds; using the default of 30s"
         )
 
-    @pytest.mark.parametrize("configured", [0.001, 0.5, 1, 5, 45])
+    @pytest.mark.parametrize("configured", [0.001, 0.5, 1, 5, 30])
     def test_a_positive_streaming_delay_is_left_alone(self, configured, caplog):
         caplog.set_level(logging.WARNING)
 
@@ -171,6 +171,24 @@ class TestFactoryInputGuards:
         assert state._operating_cadence == configured
         assert failure_delay(state, NORMAL) == configured
         assert caplog.records == []
+
+
+class TestStreamingCeilings:
+    """A configured reconnect delay longer than a regime's ceiling raises that
+    bound. The configured value wins over our default, rather than being cut
+    down to it."""
+
+    @pytest.mark.parametrize("configured", [600, 7200, 86400])
+    def test_a_delay_past_the_normal_ceiling_raises_the_bound(self, configured):
+        assert failure_delay(for_streaming(configured), NORMAL) == configured
+
+    @pytest.mark.parametrize("configured", [7200, 86400])
+    def test_a_delay_past_the_extended_ceiling_raises_the_bound(self, configured):
+        assert failure_delay(for_streaming(configured), UNEXPECTED) == configured
+
+    @pytest.mark.parametrize("configured", [0.5, 1, 30])
+    def test_a_delay_within_the_normal_ceiling_is_untouched(self, configured):
+        assert failure_delay(for_streaming(configured), NORMAL) == configured
 
 
 class TestStreamingExtendedDelayFloor:
@@ -217,11 +235,11 @@ class TestStreamingDelayTable:
         delays += [failure_delay(state, NORMAL) for _ in range(5)]
         assert delays == [5 * 60, 10 * 60, 20 * 60, 40 * 60, 60 * 60, 60 * 60]
 
-    def test_a_configured_initial_delay_raises_the_ceiling_with_it(self):
-        # The ceiling must not fall below the initial delay.
-        state = for_streaming(45)
-        assert state._max_delay == 45
-        assert failure_delay(state, NORMAL) == 45
+    @pytest.mark.parametrize("configured", [1, 30, 45, 600])
+    def test_the_ceiling_is_never_below_what_was_configured(self, configured):
+        # A configured delay longer than the normal ceiling raises the bound, so
+        # the first wait is never shorter than what the caller asked for.
+        assert for_streaming(configured)._max_delay == max(NORMAL_STREAMING_CEILING_DELAY, configured)
 
     def test_the_ceiling_is_sticky_once_the_extended_regime_starts(self):
         # A normal failure after an unexpected one must not lower the bounds
@@ -393,12 +411,20 @@ class TestPollingCadence:
             assert failure_delay(state, UNEXPECTED) >= 30
 
     def test_a_poll_interval_longer_than_the_extended_bounds_wins(self):
-        # The ceiling is lifted by record_failure clamping it against the
-        # initial delay, not by for_polling clamping the ceiling itself.
-        state = for_polling(2 * 60 * 60)
-        assert failure_delay(state, UNEXPECTED) == 2 * 60 * 60
-        assert state._max_delay == 2 * 60 * 60
-        assert state._min_delay == 2 * 60 * 60
+        """Unlike the streaming delay, the poll interval is not clamped to the
+        extended ceiling. Nothing may poll faster than the configured interval,
+        so the cadence wins where the two conflict."""
+        two_hours = 2 * 60 * 60
+        assert two_hours > EXTENDED_CEILING_DELAY
+
+        state = for_polling(two_hours)
+
+        assert failure_delay(state, UNEXPECTED) == two_hours
+        assert state._max_delay == two_hours
+        assert state._min_delay == two_hours
+        assert failure_delay(state, NORMAL) == two_hours
+        state.record_success()
+        assert state.next_delay == two_hours
 
     def test_one_success_restores_the_cadence_while_the_state_is_still_raised(self):
         # A backoff wait applies to a retry, not to every operation.

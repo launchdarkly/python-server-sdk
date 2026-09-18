@@ -1,15 +1,33 @@
+import logging
+import ssl
 import time
 from threading import Event
 from typing import List
 
 import pytest
+from ld_eventsource import SSEClient
+from ld_eventsource.actions import Fault
+from ld_eventsource.config import (
+    ConnectStrategy,
+    ErrorStrategy,
+    RetryDelayStrategy
+)
+from ld_eventsource.errors import HTTPStatusError
 
 from ldclient.config import Config
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.impl.datasource.datasource_common import StreamClosedError
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.retry import (
+    NORMAL_STREAMING_CEILING_DELAY,
+    STREAMING_RESET_INTERVAL,
+    AfterHealthyFor,
+    RetryState,
+    for_streaming
+)
 from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState,
@@ -30,11 +48,31 @@ from ldclient.testing.stub_util import (
     make_put_event,
     stream_content
 )
-from ldclient.testing.test_util import SpyListener
+from ldclient.testing.sync_util import wait_until
+from ldclient.testing.test_util import (
+    SpyListener,
+    no_retry_jitter,
+    record_healthy_windows,
+    ticking_clock
+)
 from ldclient.version import VERSION
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 brief_delay = 0.001
+ONE_HOUR = 60 * 60
+
+
+def fast_retry_state(delay=brief_delay):
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
+    return RetryState(
+        normal_initial_delay=delay,
+        normal_ceiling_delay=delay,
+        extended_initial_delay=delay,
+        extended_ceiling_delay=delay,
+        reset_policy=AfterHealthyFor(STREAMING_RESET_INTERVAL),
+    )
+
 
 # These long timeouts are necessary because of a problem in the Windows CI environment where HTTP requests to
 # the test server running at localhost tests are *extremely* slow. It looks like a similar issue to what's
@@ -257,7 +295,9 @@ def test_recoverable_http_error(status):
 
 
 @pytest.mark.parametrize("status", [401, 403, 404])
-def test_unrecoverable_http_error(status):
+def test_unexpected_http_error_backs_off_a_long_way(status):
+    """An error that needs a person to fix it does not stop the stream, but the
+    next attempt is five minutes out, so only one request is made here."""
     error_handler = BasicResponse(status)
     store = InMemoryFeatureStore()
     ready = Event()
@@ -269,9 +309,369 @@ def test_unrecoverable_http_error(status):
 
             with StreamingUpdateProcessor(config, store, ready, None) as sp:
                 sp.start()
-                ready.wait(5)
+                server.wait_until_request_received()
+                # The next attempt is past the normal ceiling, so the failure
+                # has been recorded and the extended regime is in use.
+                wait_until(lambda: sp._retry.next_delay > NORMAL_STREAMING_CEILING_DELAY)
+
+                # Initialization is not falsely unblocked.
+                assert not ready.wait(0.1)
                 assert not sp.initialized()
+                assert sp.is_alive()
                 server.should_have_requests(1)
+
+
+@pytest.mark.parametrize("status", [401, 403, 404])
+def test_unexpected_http_error_keeps_retrying(status):
+    """The same failure with the delay compressed: the stream recovers once the
+    service does, rather than staying down for ever."""
+    error_handler = BasicResponse(status)
+    store = InMemoryFeatureStore()
+    ready = Event()
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            error_then_success = SequentialHandler(error_handler, stream)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+
+            spy = SpyListener()
+            listeners = Listeners()
+            listeners.add(spy)
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
+            server.for_path('/all', error_then_success)
+
+            with StreamingUpdateProcessor(config, store, ready, None, retry_state=fast_retry_state()) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sp.initialized()
+                server.should_have_requests(2)
+
+                assert all(s.state != DataSourceState.OFF for s in spy.statuses)
+                assert spy.statuses[0].state == DataSourceState.INITIALIZING
+                assert spy.statuses[0].error.status_code == status
+                assert spy.statuses[-1].state == DataSourceState.VALID
+
+
+def test_sse_client_hands_us_the_fault_before_it_waits():
+    """Pins the ld_eventsource ordering the SDK relies on.
+
+    The SDK computes and takes the retry delay itself, which only works
+    because SSEClient yields the Fault to the caller before its next connect
+    attempt sleeps. A library change that slept first would make this test
+    time out rather than fail quietly.
+    """
+    with start_server() as server:
+        server.for_path('/all', BasicResponse(503))
+        client = SSEClient(
+            connect=ConnectStrategy.http(url=server.uri + '/all'),
+            error_strategy=ErrorStrategy.always_continue(),
+            initial_retry_delay=30,
+            retry_delay_strategy=RetryDelayStrategy.default(max_delay=30, backoff_multiplier=2),
+            retry_delay_reset_threshold=0,
+        )
+        try:
+            started = time.time()
+            first = next(iter(client.all))
+            elapsed = time.time() - started
+        finally:
+            client.close()
+
+        assert isinstance(first, Fault)
+        assert isinstance(first.error, HTTPStatusError)
+        # The library has a long delay queued up but has not taken it yet.
+        assert client.next_retry_delay >= 15
+        assert elapsed < 5
+
+
+def test_the_sdk_configures_the_sse_client_never_to_wait():
+    """The SDK owns the delay, so the library's own delay must stay at zero
+    however long the outage lasts."""
+    store = InMemoryFeatureStore()
+    with start_server() as server:
+        server.for_path('/all', BasicResponse(503))
+        config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=30)
+        sp = StreamingUpdateProcessor(config, store, Event(), None)
+        client = sp._create_sse_client()
+        try:
+            actions = iter(client.all)
+            first = next(actions)
+            second = next(actions)
+        finally:
+            client.close()
+
+        assert isinstance(first, Fault)
+        assert isinstance(second, Fault)
+        assert client.next_retry_delay == 0
+
+
+def test_server_close_backs_off_and_keeps_the_stream_running():
+    """The service normally leaves the connection open, so a clean close is a
+    connection failure: the SDK reports it and backs off, rather than
+    reconnecting in a tight loop."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event([flagv1])) as stream1:
+            with stream_content(make_put_event([flagv2])) as stream2:
+                config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+
+                spy = SpyListener()
+                listeners = Listeners()
+                listeners.add(spy)
+                config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
+                server.for_path('/all', SequentialHandler(stream1, stream2))
+
+                retry = fast_retry_state()
+                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                    sp.start()
+                    ready.wait(start_wait)
+                    assert sp.initialized()
+
+                    stream1.close()
+                    expect_update(store, FEATURES, flagv2)
+
+                    assert retry._attempts >= 1
+                    assert not retry._extended
+
+                    interrupted = [s for s in spy.statuses if s.state == DataSourceState.INTERRUPTED]
+                    assert len(interrupted) >= 1
+                    assert interrupted[0].error.kind == DataSourceErrorKind.NETWORK_ERROR
+
+
+def test_server_close_uses_the_normal_delay_curve():
+    """A clean close is a NORMAL failure. Classifying it UNEXPECTED would put
+    a routine load-balancer drain into the extended regime and take a fleet
+    out of service for up to an hour."""
+    store = InMemoryFeatureStore()
+    config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
+    retry = for_streaming(1)
+    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp._running = True
+    sp._stop_event.set()  # so the wait returns at once
+
+    delays = []
+    for _ in range(8):
+        sp._handle_error(StreamClosedError())
+        delays.append(retry._max_delay)
+
+    assert not retry._extended
+    assert delays == [30] * 8
+
+
+def test_our_own_interrupt_is_not_counted_as_a_server_close():
+    """Bad JSON makes the SDK drop the connection itself. The SSE client then
+    reports that close as a Fault with no error, and counting it would record
+    the same failure twice and wait twice."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as valid_stream, stream_content(make_invalid_put_event()) as invalid_stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+
+            statuses: List[DataSourceStatus] = []
+            listeners = Listeners()
+
+            # The stream fixture holds the connection open, so it has to be
+            # closed for the server to move on to the next handler. This
+            # mirrors test_invalid_json_triggers_listener.
+            def listener(s):
+                if len(statuses) == 0:
+                    invalid_stream.close()
+                statuses.append(s)
+
+            listeners.add(listener)
+
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
+            server.for_path('/all', SequentialHandler(invalid_stream, valid_stream))
+
+            retry = fast_retry_state()
+            with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sp.initialized()
+                server.should_have_requests(2)
+
+                # One failure for the bad JSON, not a second for the close it
+                # caused.
+                assert retry._attempts == 1
+
+
+def _handle_errors_without_waiting(retry, errors):
+    """Drives _handle_error for each error and returns nothing. The stop event
+    is pre-set so the interruptible wait returns at once."""
+    store = InMemoryFeatureStore()
+    config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
+    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp._running = True
+    sp._stop_event.set()
+    for error in errors:
+        sp._handle_error(error)
+
+
+def test_the_log_reports_the_growing_retry_delay(caplog):
+    """The message has to carry the real delay, so someone reading logs can see
+    the backoff working. The vaguer wording it replaced could not show this."""
+    caplog.set_level(logging.WARNING)
+
+    with no_retry_jitter():
+        retry = for_streaming(1)
+        _handle_errors_without_waiting(retry, [HTTPStatusError(401), HTTPStatusError(401)])
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "Received HTTP error 401 (invalid SDK key) for stream connection - will retry in 300.0s",
+        "Received HTTP error 401 (invalid SDK key) for stream connection - will retry in 600.0s",
+    ]
+    # An error a person has to fix is logged at error level, every time.
+    assert [r.levelno for r in caplog.records] == [logging.ERROR, logging.ERROR]
+
+
+def test_a_normal_failure_logs_a_short_delay_at_warning_level(caplog):
+    caplog.set_level(logging.WARNING)
+
+    with no_retry_jitter():
+        retry = for_streaming(1)
+        _handle_errors_without_waiting(retry, [HTTPStatusError(503), HTTPStatusError(503)])
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "Received HTTP error 503 for stream connection - will retry in 1.0s",
+        "Received HTTP error 503 for stream connection - will retry in 2.0s",
+    ]
+    assert [r.levelno for r in caplog.records] == [logging.WARNING, logging.WARNING]
+
+
+def test_a_server_close_and_a_transport_error_both_report_a_delay(caplog):
+    caplog.set_level(logging.WARNING)
+
+    with no_retry_jitter():
+        retry = for_streaming(1)
+        _handle_errors_without_waiting(retry, [StreamClosedError(), ConnectionResetError(104, "reset by peer")])
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages[0] == "The server closed the stream connection - will retry in 1.0s"
+    assert messages[1] == "Error on stream connection: [Errno 104] reset by peer - will retry in 2.0s"
+
+
+def test_an_extended_regime_wait_is_cut_short_by_stop():
+    """The reason the wait has to be interruptible at all. Shutdown must not
+    sit through an hour-long backoff."""
+    store = InMemoryFeatureStore()
+    with start_server() as server:
+        config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+        server.for_path('/all', BasicResponse(401))
+        retry = fast_retry_state(ONE_HOUR)
+
+        with StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry) as sp:
+            sp.start()
+            server.wait_until_request_received()
+            # Confirm the wait under test really is long before measuring the stop.
+            wait_until(lambda: retry.next_delay > 60)
+
+            started = time.time()
+            sp.stop()
+            sp.join(5)
+            elapsed = time.time() - started
+
+            assert not sp.is_alive()
+            assert elapsed < 2, "stop() took %.2fs" % elapsed
+
+
+def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
+    """The window starts at the first message and stays there, however many
+    more arrive on the same stream."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flag = FlagBuilder('flagkey').version(1).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event([flag]) + make_patch_event(FEATURES, flag)) as stream:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+            server.for_path('/all', stream)
+
+            policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+            retry = RetryState(
+                normal_initial_delay=brief_delay,
+                normal_ceiling_delay=brief_delay,
+                extended_initial_delay=brief_delay,
+                extended_ceiling_delay=brief_delay,
+                reset_policy=policy,
+            )
+            # The clock moves on every read, so a window that had been
+            # restarted reads back as a different time.
+            windows = record_healthy_windows(policy)
+            with ticking_clock():
+                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                    sp.start()
+                    ready.wait(start_wait)
+                    assert sp.initialized()
+                    expect_update(store, FEATURES, flag)
+
+            assert len(windows) >= 2, "both messages should have signalled"
+            assert len(set(windows)) == 1, "the window moved between messages"
+
+
+def test_a_fresh_stream_starts_a_new_reset_window():
+    """A stream teardown clears the window through record_failure, so the next
+    stream measures its own stretch rather than inheriting the old one."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event([flagv1])) as stream1:
+            with stream_content(make_put_event([flagv2])) as stream2:
+                config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+                server.for_path('/all', SequentialHandler(stream1, stream2))
+
+                policy = AfterHealthyFor(STREAMING_RESET_INTERVAL)
+                retry = RetryState(
+                    normal_initial_delay=brief_delay,
+                    normal_ceiling_delay=brief_delay,
+                    extended_initial_delay=brief_delay,
+                    extended_ceiling_delay=brief_delay,
+                    reset_policy=policy,
+                )
+                windows = record_healthy_windows(policy)
+                with ticking_clock():
+                    with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                        sp.start()
+                        ready.wait(start_wait)
+                        assert sp.initialized()
+
+                        stream1.close()
+                        expect_update(store, FEATURES, flagv2)
+
+                assert len(set(windows)) == 2, "the second stream reused the first window"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ssl.SSLCertVerificationError("unable to get local issuer certificate"),
+        ssl.SSLEOFError("EOF occurred in violation of protocol"),
+        ConnectionResetError(104, "reset by peer"),
+    ],
+    ids=["certificate", "peer-close-handshake", "reset"],
+)
+def test_transport_failures_stay_in_the_normal_regime(error):
+    """No transport failure reaches the extended regime, a bad certificate
+    included. Only an HTTP status can do that."""
+    store = InMemoryFeatureStore()
+    config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
+    retry = for_streaming(1)
+    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp._running = True
+    sp._stop_event.set()  # so the wait returns at once
+
+    sp._handle_error(error)
+
+    assert not retry._extended
+    assert retry._max_delay == 30
 
 
 def test_http_proxy(monkeypatch):
@@ -407,6 +807,8 @@ def test_invalid_json_triggers_listener():
 
 
 def test_failure_transitions_from_valid():
+    """A rejected SDK key after the stream was valid reports INTERRUPTED. OFF
+    is reserved for an explicit shutdown."""
     store = InMemoryFeatureStore()
     ready = Event()
     error_handler = BasicResponse(401)
@@ -426,14 +828,18 @@ def test_failure_transitions_from_valid():
 
         with StreamingUpdateProcessor(config, store, ready, None) as sp:
             sp.start()
-            ready.wait(start_wait)
+            server.wait_until_request_received()
+            wait_until(lambda: len(spy.statuses) == 2)
+
+            # The 401 is retried five minutes out, so readiness never fires.
+            assert not ready.wait(0.1)
             server.should_have_requests(1)
 
             assert len(spy.statuses) == 2
 
             assert spy.statuses[0].state == DataSourceState.VALID
 
-            assert spy.statuses[1].state == DataSourceState.OFF
+            assert spy.statuses[1].state == DataSourceState.INTERRUPTED
             assert spy.statuses[1].error.kind == DataSourceErrorKind.ERROR_RESPONSE
             assert spy.statuses[1].error.status_code == 401
 

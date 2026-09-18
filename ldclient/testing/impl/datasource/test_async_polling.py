@@ -3,9 +3,14 @@ Tests for AsyncFeatureRequesterImpl and AsyncPollingUpdateProcessor.
 """
 
 import asyncio
+import logging
+import ssl
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
+from aiohttp.client_reqrep import ConnectionKey
 
 from ldclient.config import Config
 from ldclient.impl.aio.transport_types import TransportResponse
@@ -13,6 +18,12 @@ from ldclient.impl.datasource.async_feature_requester import (
     AsyncFeatureRequesterImpl
 )
 from ldclient.impl.datasource.async_polling import AsyncPollingUpdateProcessor
+from ldclient.impl.retry import (
+    POLLING_RESET_SUCCESSES,
+    AfterConsecutiveSuccesses,
+    RetryState,
+    for_polling
+)
 from ldclient.impl.util import UnsuccessfulResponseException
 from ldclient.interfaces import (
     AsyncDataSourceUpdateSink,
@@ -20,6 +31,7 @@ from ldclient.interfaces import (
     DataSourceState
 )
 from ldclient.testing.mock_async_components import MockAsyncFeatureStore
+from ldclient.testing.test_util import no_retry_jitter
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 # Sample data returned by a successful poll
@@ -33,7 +45,37 @@ def make_config(**kwargs):
     return Config('SDK_KEY', **kwargs)
 
 
-def make_processor(config=None, store=None, ready=None, requester=None):
+# aiohttp's connection errors read the connection key when they are turned
+# into a string, which the data source does, so a real one is needed here.
+_CONNECTION_KEY = ConnectionKey(
+    host='app.launchdarkly.com',
+    port=443,
+    is_ssl=True,
+    ssl=True,
+    proxy=None,
+    proxy_auth=None,
+    proxy_headers_hash=None,
+    server_hostname=None,
+)
+
+
+ONE_HOUR = 60 * 60
+
+
+def fast_retry_state(delay=0.001):
+    """A retry state whose every delay is ``delay``: small enough to skip the
+    real extended-regime wait, or large enough to prove a stop interrupts one."""
+    return RetryState(
+        normal_initial_delay=delay,
+        normal_ceiling_delay=delay,
+        extended_initial_delay=delay,
+        extended_ceiling_delay=delay,
+        reset_policy=AfterConsecutiveSuccesses(POLLING_RESET_SUCCESSES),
+        operating_cadence=delay,
+    )
+
+
+def make_processor(config=None, store=None, ready=None, requester=None, retry_state=None):
     if config is None:
         config = make_config()
     if store is None:
@@ -48,6 +90,7 @@ def make_processor(config=None, store=None, ready=None, requester=None):
         requester=requester,
         store=store,
         ready=ready,
+        retry_state=retry_state,
     )
 
 
@@ -174,30 +217,68 @@ class TestAsyncPollingUpdateProcessor:
 
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
-    async def test_unrecoverable_http_error_stops_polling_and_sets_ready(self, mock_interval):
+    async def test_unexpected_http_error_keeps_polling_and_leaves_ready_unset(self, mock_interval):
         mock_interval.__get__ = MagicMock(return_value=0)
 
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         mock_requester = AsyncMock(side_effect=UnsuccessfulResponseException(401))
         processor._requester.get_all_data = mock_requester
 
         processor.start()
-        await asyncio.wait_for(ready.wait(), timeout=2.0)
+        await asyncio.sleep(0.1)
 
-        assert ready.is_set()
+        # A rejected SDK key must not falsely unblock initialization, and it
+        # must not stop the poller.
+        assert not ready.is_set()
         assert not processor.initialized()
-
-        # The polling task must have stopped itself: no further polls occur.
-        await asyncio.sleep(0.05)
-        snapshot = mock_requester.call_count
-        await asyncio.sleep(0.05)
-        assert mock_requester.call_count == snapshot
+        assert mock_requester.call_count >= 2
 
         await processor.stop()
+
+    @pytest.mark.asyncio
+    @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
+    async def test_unexpected_http_error_moves_to_the_extended_regime(self, mock_interval):
+        mock_interval.__get__ = MagicMock(return_value=0)
+
+        retry = fast_retry_state()
+        processor = make_processor(retry_state=retry)
+        processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+
+        processor.start()
+        await asyncio.sleep(0.05)
+
+        assert retry._extended
+
+        await processor.stop()
+
+    @pytest.mark.asyncio
+    async def test_the_first_success_after_an_outage_polls_at_the_cadence(self):
+        # A backoff wait applies to a retry, not to every operation. The
+        # retry state carries the wait, so this reads it there rather than
+        # measuring elapsed time.
+        store = MockAsyncFeatureStore()
+        ready = asyncio.Event()
+        config = make_config()
+        with no_retry_jitter():
+            retry = for_polling(30)
+            processor = make_processor(config=config, store=store, ready=ready, retry_state=retry)
+
+            processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+            await processor._fetch_and_store()
+            assert retry.next_delay == 5 * 60
+
+            processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+            await processor._fetch_and_store()
+            assert retry.next_delay == 30
+            assert retry._extended, "one success restores the cadence but does not reset"
+
+            await processor._fetch_and_store()
+            assert retry.next_delay == 30
+            assert not retry._extended, "two successes in a row reset the state"
 
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
@@ -207,7 +288,7 @@ class TestAsyncPollingUpdateProcessor:
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         call_count = 0
 
@@ -237,7 +318,7 @@ class TestAsyncPollingUpdateProcessor:
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
         config = make_config()
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         call_count = 0
 
@@ -291,6 +372,69 @@ class TestAsyncPollingUpdateProcessor:
 
         await processor.stop()
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            aiohttp.ClientConnectorCertificateError(
+                _CONNECTION_KEY, ssl.SSLCertVerificationError("self-signed certificate")
+            ),
+            aiohttp.ClientConnectorSSLError(_CONNECTION_KEY, OSError("handshake failed")),
+            ssl.SSLEOFError("EOF occurred in violation of protocol"),
+            ConnectionResetError(104, "reset by peer"),
+        ],
+        ids=["aiohttp-certificate", "aiohttp-tls", "peer-close-handshake", "reset"],
+    )
+    @pytest.mark.asyncio
+    async def test_transport_failures_poll_again_at_the_cadence(self, error):
+        """No transport failure reaches the extended regime, an aiohttp
+        certificate failure included. Only an HTTP status can do that."""
+        retry = for_polling(30)
+        processor = make_processor(retry_state=retry)
+        processor._requester.get_all_data = AsyncMock(side_effect=error)
+
+        await processor._fetch_and_store()
+        assert retry.next_delay == 30
+        assert not retry._extended
+
+    @pytest.mark.asyncio
+    async def test_the_log_reports_the_growing_retry_delay(self, caplog):
+        """The message has to carry the real delay, so someone reading logs can
+        see the backoff working."""
+        caplog.set_level(logging.WARNING)
+
+        with no_retry_jitter():
+            retry = for_polling(30)
+            processor = make_processor(retry_state=retry)
+            processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+
+            await processor._fetch_and_store()
+            await processor._fetch_and_store()
+
+        messages = [r.getMessage() for r in caplog.records]
+        assert messages == [
+            "Received HTTP error 401 (invalid SDK key) for polling request - will retry in 300.0s",
+            "Received HTTP error 401 (invalid SDK key) for polling request - will retry in 600.0s",
+        ]
+        # An error a person has to fix is logged at error level, every time.
+        assert [r.levelno for r in caplog.records] == [logging.ERROR, logging.ERROR]
+
+    @pytest.mark.asyncio
+    async def test_a_transport_error_reports_a_delay_and_keeps_its_stacktrace(self, caplog):
+        caplog.set_level(logging.WARNING)
+
+        with no_retry_jitter():
+            retry = for_polling(30)
+            processor = make_processor(retry_state=retry)
+            processor._requester.get_all_data = AsyncMock(side_effect=ConnectionResetError(104, "reset by peer"))
+
+            await processor._fetch_and_store()
+
+        record = caplog.records[0]
+        assert record.getMessage() == "Error encountered when updating flags: [Errno 104] reset by peer - will retry in 30.0s"
+        # The handler has exited by the time this is logged, so the exception
+        # has to be carried explicitly for the traceback to survive.
+        assert record.exc_info is not None
+
     @pytest.mark.asyncio
     async def test_stop_closes_requester(self):
         processor = make_processor()
@@ -330,6 +474,30 @@ class TestAsyncPollingUpdateProcessor:
         assert order == ['poll_done', 'transport_closed']
 
     @pytest.mark.asyncio
+    async def test_an_extended_regime_wait_is_cut_short_by_stop(self):
+        """Shutdown must not sit through an hour-long backoff. The in-flight-poll
+        case is test_stop_cancels_polling_task_cleanly; this one stops while the
+        task is waiting between polls."""
+        retry = fast_retry_state(ONE_HOUR)
+        processor = make_processor(retry_state=retry)
+        processor._requester.get_all_data = AsyncMock(
+            side_effect=UnsuccessfulResponseException(401)
+        )
+
+        processor.start()
+        # Confirm the wait under test really is long before measuring the stop.
+        deadline = time.time() + 2
+        while retry.next_delay <= 60 and time.time() < deadline:
+            await asyncio.sleep(0.01)
+        assert retry.next_delay > 60, "the wait under test should be minutes long"
+
+        started = time.time()
+        await processor.stop()
+        elapsed = time.time() - started
+
+        assert elapsed < 2, "stop() took %.2fs" % elapsed
+
+    @pytest.mark.asyncio
     async def test_stop_cancels_polling_task_cleanly(self):
         store = MockAsyncFeatureStore()
         ready = asyncio.Event()
@@ -357,7 +525,7 @@ class TestAsyncPollingUpdateProcessor:
 
     @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
-    async def test_unrecoverable_error_updates_sink_to_off(self, mock_interval):
+    async def test_unexpected_error_updates_sink_to_interrupted_never_off(self, mock_interval):
         mock_interval.__get__ = MagicMock(return_value=0)
 
         store = MockAsyncFeatureStore()
@@ -367,7 +535,7 @@ class TestAsyncPollingUpdateProcessor:
         sink = MagicMock(spec=AsyncDataSourceUpdateSink)
         config._data_source_update_sink = sink
 
-        processor = make_processor(config=config, store=store, ready=ready)
+        processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
         processor._data_source_update_sink = sink
 
         processor._requester.get_all_data = AsyncMock(
@@ -375,14 +543,64 @@ class TestAsyncPollingUpdateProcessor:
         )
 
         processor.start()
-        await asyncio.wait_for(ready.wait(), timeout=2.0)
+        await asyncio.sleep(0.05)
 
-        # Verify the sink was told to go OFF
-        calls = [call for call in sink.update_status.call_args_list if call.args[0] == DataSourceState.OFF]
-        assert len(calls) >= 1
-        error_info = calls[0].args[1]
+        interrupted = [c for c in sink.update_status.call_args_list if c.args[0] == DataSourceState.INTERRUPTED]
+        assert len(interrupted) >= 1
+        error_info = interrupted[0].args[1]
         assert error_info.kind == DataSourceErrorKind.ERROR_RESPONSE
         assert error_info.status_code == 403
+
+        assert not any(c.args[0] == DataSourceState.OFF for c in sink.update_status.call_args_list)
+
+        await processor.stop()
+
+    @pytest.mark.asyncio
+    @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
+    async def test_stop_updates_sink_to_off(self, mock_interval):
+        mock_interval.__get__ = MagicMock(return_value=0)
+
+        config = make_config()
+        sink = MagicMock(spec=AsyncDataSourceUpdateSink)
+        config._data_source_update_sink = sink
+
+        processor = make_processor(config=config)
+        processor._data_source_update_sink = sink
+        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+
+        processor.start()
+        await processor.stop()
+
+        assert any(c.args[0] == DataSourceState.OFF for c in sink.update_status.call_args_list)
+
+    @pytest.mark.asyncio
+    @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
+    async def test_valid_status_is_reported_before_ready_is_set(self, mock_interval):
+        # Mirrors go-server-sdk#442: a caller that wakes on readiness must not
+        # still be able to read INITIALIZING.
+        mock_interval.__get__ = MagicMock(return_value=0)
+
+        from ldclient.impl.datasource.async_status import (
+            AsyncDataSourceUpdateSinkImpl
+        )
+        from ldclient.impl.listeners import Listeners
+
+        store = MockAsyncFeatureStore()
+        ready = asyncio.Event()
+        observed = []
+        listeners = Listeners()
+        listeners.add(lambda status: observed.append((status.state, ready.is_set())))
+
+        config = make_config()
+        config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, listeners, Listeners())
+
+        processor = make_processor(config=config, store=store, ready=ready)
+        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+
+        processor.start()
+        await asyncio.wait_for(ready.wait(), timeout=2.0)
+
+        assert observed[0] == (DataSourceState.VALID, False)
 
         await processor.stop()
 
@@ -449,15 +667,14 @@ class TestAsyncPollingUpdateProcessor:
         requester.close = AsyncMock()
         processor = make_processor(requester=requester)
 
-        # Replace the repeating task so wait_stopped() hangs until we cancel stop().
+        # Replace the task's wait so it hangs until we cancel stop().
         waiting = asyncio.Event()
 
         async def hang():
             waiting.set()
             await asyncio.Event().wait()
 
-        processor._task = MagicMock()
-        processor._task.wait_stopped = hang
+        processor._task.wait_stopped = hang  # type: ignore[method-assign]
 
         stop_task = asyncio.create_task(processor.stop())
         await asyncio.wait_for(waiting.wait(), timeout=2.0)

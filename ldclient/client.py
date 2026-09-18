@@ -369,10 +369,11 @@ class LDClient:
 
         If this returns false, it means the client has not yet obtained any flag data. It might still be
         starting up, or attempting to reconnect after an unsuccessful attempt, or it might have received
-        an unrecoverable error (such as an invalid SDK key) and given up. In this state, feature flag
-        evaluations will return default values -- unless you are using a persistent store integration and
-        flag data had already been stored by a successfully connected SDK in the past. You can use
-        :attr:`data_source_status_provider` to get information on errors, or to wait for a successful retry.
+        an error that needs to be fixed (such as an invalid SDK key). In this state, feature flag
+        evaluations will return default values -- unless you are using a persistent store integration
+        and flag data had already been stored by a successfully connected SDK in the past. You can use
+        :attr:`data_source_status_provider` to get information on errors, or to wait for a
+        successful retry.
 
         :return: true if the client is initialized and has flag data available
         """

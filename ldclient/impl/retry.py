@@ -24,13 +24,14 @@ import time
 from enum import Enum
 from typing import Optional, Protocol
 
+from ldclient.config import (
+    DEFAULT_INITIAL_RECONNECT_DELAY,
+    DEFAULT_POLL_INTERVAL
+)
 from ldclient.impl.util import log
 
-# The documented defaults, in seconds. Each stands in for a configured value
-# that is not a positive, finite number.
-DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY = 1
+# The delay ceiling of the normal regime for streaming, in seconds.
 NORMAL_STREAMING_CEILING_DELAY = 30
-DEFAULT_POLL_INTERVAL = 30
 
 # The delay bounds of the extended regime, in seconds. A component enters the
 # extended regime after an unexpected failure.
@@ -51,6 +52,22 @@ _NORMAL_4XX_STATUSES = frozenset([400, 408, 429])
 # An upper bound on the backoff exponent, so a long outage cannot overflow the
 # delay computation. Any real ceiling is reached long before this.
 _MAX_BACKOFF_EXPONENT = 30
+
+
+def _usable_delay(value: float, default: float, name: str) -> float:
+    """
+    Returns the delay to use. A value that is not a positive, finite number of
+    seconds is replaced by the default.
+
+    :param value: the configured number of seconds
+    :param default: the value to use when ``value`` is not usable
+    :param name: the option name, for the warning message
+    """
+
+    if value > 0 and math.isfinite(value):
+        return value
+    log.warning("%s must be a positive, finite number of seconds; using the default of %ss" % (name, default))
+    return default
 
 
 class FailureKind(Enum):
@@ -247,36 +264,16 @@ class RetryState:
         self._max_delay = max(self._normal_ceiling_delay, self._normal_initial_delay)
 
 
-def _positive_finite(value: float, default: float, name: str) -> float:
-    """Returns ``value`` if it is a positive, finite number of seconds, and the
-    default otherwise. A non-finite value would make the jitter arithmetic
-    produce a NaN delay, and a non-positive one would retry with no wait."""
-    if value > 0 and math.isfinite(value):
-        return value
-    log.warning(
-        "%s must be a positive, finite number of seconds; using the default of %ss"
-        % (name, default)
-    )
-    return default
-
-
 def for_streaming(initial_reconnect_delay: float) -> RetryState:
     """
     Builds the retry state for a streaming data source.
 
-    Streaming's operating cadence is zero, so there is no delay during
-    healthy operation. Stream failures use either the normal or extended
-    initial delay to determine their backoff wait. A stream returns to
-    healthy operation after establishing a successful connection with no
-    failures during the ``STREAMING_RESET_INTERVAL``.
-
-    ``Config`` does not check the configured delay, so the documented default
-    stands in for anything that is not a positive, finite number.
-
-    The extended regime never starts below the configured delay.
+    Streaming's cadence is zero, so a healthy stream never waits. An invalid
+    delay value is replaced by the documented default; one longer than a
+    ceiling raises that bound rather than being cut down to it.
     """
-    initial_reconnect_delay = _positive_finite(
-        initial_reconnect_delay, DEFAULT_STREAMING_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
+    initial_reconnect_delay = _usable_delay(
+        initial_reconnect_delay, DEFAULT_INITIAL_RECONNECT_DELAY, 'initial_reconnect_delay'
     )
     return RetryState(
         normal_initial_delay=initial_reconnect_delay,
@@ -292,16 +289,12 @@ def for_polling(poll_interval: float) -> RetryState:
     """
     Builds the retry state for a polling data source.
 
-    The poll interval is polling's operating cadence, so no wait is ever
-    shorter than it. In the normal regime the delay bounds are the poll
-    interval itself, which means a normal failure simply polls again on
-    schedule. Polling is healthy on any successful poll, and resets after two
-    in a row.
-
-    ``Config`` clamps the poll interval, but the documented default stands in
-    for anything that reaches here and is not a positive, finite number.
+    The poll interval is polling's cadence and its normal ceiling, so a normal
+    failure waits the interval rather than backing off past it. An invalid
+    interval is replaced by the documented default. No wait is ever shorter
+    than the interval, so the cadence wins over the extended ceiling.
     """
-    poll_interval = _positive_finite(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval')
+    poll_interval = _usable_delay(poll_interval, DEFAULT_POLL_INTERVAL, 'poll_interval')
     return RetryState(
         normal_initial_delay=poll_interval,
         normal_ceiling_delay=poll_interval,
