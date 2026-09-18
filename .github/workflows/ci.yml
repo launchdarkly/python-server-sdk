@@ -93,6 +93,91 @@ jobs:
           version: v3
           enable_persistence_tests: "true"
 
+  # Proves the sdist is complete and functional, since the sdist file list is an
+  # allowlist and an omission there is otherwise invisible. The test-count check
+  # is what makes this meaningful: without it, an sdist missing half its tests
+  # would still pass the tests it did ship. The contract-test steps cover the
+  # other half, since a missing contract-tests directory changes no test count.
+  sdist:
+    name: sdist (functional)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Count the tests in the checkout
+        run: |
+          uv sync --all-extras
+          count=$(uv run pytest --collect-only -q | grep -oE '[0-9]+ tests? collected' | grep -oE '^[0-9]+')
+          echo "The checkout collects $count tests."
+          echo "checkout_tests=$count" >> "$GITHUB_ENV"
+
+      - name: Build and unpack the sdist
+        run: |
+          uv build --sdist --out-dir dist
+          mkdir -p "$RUNNER_TEMP/sdist"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/sdist" --strip-components=1
+
+      - name: Check that the sdist ships every test
+        working-directory: ${{ runner.temp }}/sdist
+        run: |
+          uv sync --all-extras
+          count=$(uv run pytest --collect-only -q | grep -oE '[0-9]+ tests? collected' | grep -oE '^[0-9]+')
+          echo "The sdist collects $count tests; the checkout collected $checkout_tests."
+          if [ "$count" -lt "$checkout_tests" ]; then
+            echo "::error::The sdist is missing tests. Add the missing paths to the include list in [tool.hatch.build.targets.sdist]."
+            exit 1
+          fi
+
+      - name: Run the tests from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make test
+        env:
+          # The file-data-source modules skip themselves on this variable
+          # because they flake in CI. The linux and windows jobs set it, and
+          # this job must too, or it fails for reasons that say nothing about
+          # whether the sdist is complete. The tests still get collected, so
+          # the count check above is unaffected.
+          LD_SKIP_FLAKY_TESTS: true
+
+      - name: Verify typehints from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make lint
+
+      # start-contract-test-service depends on install-contract-tests-deps, and
+      # the -bg target backgrounds the whole chain. Without a blocking install
+      # first, the dependency sync races the harness connecting to the service.
+      - name: Install the contract test dependencies from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make install-contract-tests-deps
+
+      - name: Start the contract test service from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make start-contract-test-service-bg
+
+      - name: Run contract tests against the sdist
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9000
+          enable_persistence_tests: "false"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start the async contract test service from the sdist
+        working-directory: ${{ runner.temp }}/sdist
+        run: make start-async-contract-test-service-bg
+
+      - name: Run async contract tests against the sdist
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        with:
+          test_service_port: 9001
+          enable_persistence_tests: "false"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   windows:
     runs-on: windows-latest
 

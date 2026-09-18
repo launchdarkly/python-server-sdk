@@ -100,3 +100,21 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["ldclient"]
 exclude = ["ldclient/testing"]
+
+# An allowlist, so that a new repository-management file cannot leak into the
+# sdist by default. The CI sdist job proves the list is complete: it builds the
+# sdist, unpacks it, and fails if fewer tests collect there than in the
+# checkout. Hatchling force-includes pyproject.toml, README.md, LICENSE.txt,
+# PKG-INFO and .gitignore whatever this says, so the sdist always builds.
+[tool.hatch.build.targets.sdist]
+include = [
+  "/ldclient",
+  "/contract-tests",
+  "/docs",
+  "/Makefile",
+  "/setup.cfg",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/SECURITY.md",
+  "/PROVENANCE.md",
+]
