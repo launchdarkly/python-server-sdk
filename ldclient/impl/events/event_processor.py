@@ -10,6 +10,7 @@ import uuid
 from collections import namedtuple
 from random import Random
 from threading import Event, Lock, Thread
+from typing import Optional
 
 import urllib3
 
@@ -38,6 +39,21 @@ __MAX_FLUSH_THREADS__ = 5
 
 
 EventProcessorMessage = namedtuple('EventProcessorMessage', ['type', 'param'])
+
+
+class _Deadline:
+    """
+    Tracks how much of a time budget is left, so that a sequence of blocking waits can share a
+    single overall limit. A timeout of None means there is no limit.
+    """
+
+    def __init__(self, timeout: Optional[float]):
+        self._end = None if timeout is None else time.monotonic() + timeout
+
+    def remaining(self) -> Optional[float]:
+        if self._end is None:
+            return None
+        return max(0.0, self._end - time.monotonic())
 
 
 class EventPayloadSendTask:
@@ -161,12 +177,21 @@ class EventDispatcher(EventDispatcherBase):
             self._diagnostic_flush_workers.execute(task.run)
 
     def _do_shutdown(self):
+        # Delivery of an event payload can block for an unbounded time - notably when name
+        # resolution hangs, which the connect and read timeouts do not cover - so these waits are
+        # bounded. Worker threads are daemons, so any that are still stuck do not keep the process
+        # alive; the events they were carrying are simply lost.
+        deadline = _Deadline(self._config.shutdown_timeout)
+
         self._flush_workers.stop()
-        self._flush_workers.wait()
+        drained = self._flush_workers.wait(deadline.remaining())
 
         if self._diagnostic_flush_workers:
             self._diagnostic_flush_workers.stop()
-            self._diagnostic_flush_workers.wait()
+            drained = self._diagnostic_flush_workers.wait(deadline.remaining()) and drained
+
+        if not drained:
+            log.warning("Timed out waiting for analytics events to be delivered while shutting down; some events were dropped")
 
         if self._close_http:
             self._http.clear()
@@ -188,6 +213,7 @@ class DefaultEventProcessor(EventProcessor):
 
         self._close_lock = Lock()
         self._closed = False
+        self._shutdown_timeout = config.shutdown_timeout
 
         (dispatcher_class or EventDispatcher)(self._inbox, config, http, diagnostic_accumulator)
 
@@ -208,8 +234,10 @@ class DefaultEventProcessor(EventProcessor):
             self._diagnostic_event_timer.stop()
         self.flush()
         # Note that here we are not calling _post_to_inbox, because we *do* want to wait if the inbox
-        # is full; an orderly shutdown can't happen unless these messages are received.
-        self._post_message_and_wait('stop')
+        # is full; an orderly shutdown can't happen unless these messages are received. The wait is
+        # bounded, though, so that a stalled event delivery cannot block the caller forever.
+        if not self._post_message_and_wait('stop', self._shutdown_timeout):
+            log.warning("Timed out waiting for the event processor to shut down after %s seconds; some analytics events may not have been delivered" % self._shutdown_timeout)
 
     def _post_to_inbox(self, message):
         try:
@@ -230,10 +258,25 @@ class DefaultEventProcessor(EventProcessor):
     def _wait_until_inactive(self):
         self._post_message_and_wait('test_sync')
 
-    def _post_message_and_wait(self, type):
+    def _post_message_and_wait(self, type, timeout: Optional[float] = None) -> bool:
+        """
+        Posts a message to the dispatcher and waits for it to be handled, for at most the given
+        number of seconds (None means wait indefinitely). Returns True if it was handled, or False
+        if the timeout elapsed while posting the message or while waiting for the reply.
+        """
         reply = Event()
-        self._inbox.put(EventProcessorMessage(type, reply))
-        reply.wait()
+        deadline = _Deadline(timeout)
+        try:
+            remaining = deadline.remaining()
+            if remaining is None:
+                self._inbox.put(EventProcessorMessage(type, reply))
+            else:
+                # A zero timeout means "don't block at all" to Queue.put, so treat it as such
+                # rather than passing a value it would reject.
+                self._inbox.put(EventProcessorMessage(type, reply), block=remaining > 0, timeout=remaining or None)
+        except queue.Full:
+            return False
+        return reply.wait(deadline.remaining())
 
     # These magic methods allow use of the "with" block in tests
     def __enter__(self):
