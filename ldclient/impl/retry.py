@@ -54,19 +54,18 @@ _NORMAL_4XX_STATUSES = frozenset([400, 408, 429])
 _MAX_BACKOFF_EXPONENT = 30
 
 
-def _usable_delay(value: float, default: float, name: str, ceiling: float = math.inf) -> float:
+def _usable_delay(value: float, default: float, name: str) -> float:
     """
-    Returns the delay to use, clamped to the ceiling. A value that is
-    not a positive, finite number of seconds is replaced by the default.
+    Returns the delay to use. A value that is not a positive, finite number of
+    seconds is replaced by the default.
 
     :param value: the configured number of seconds
     :param default: the value to use when ``value`` is not usable
     :param name: the option name, for the warning message
-    :param ceiling: the longest delay allowed
     """
 
     if value > 0 and math.isfinite(value):
-        return min(value, ceiling)
+        return value
     log.warning("%s must be a positive, finite number of seconds; using the default of %ss" % (name, default))
     return default
 
