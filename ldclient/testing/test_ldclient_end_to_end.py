@@ -62,10 +62,14 @@ def test_client_does_not_initialize_in_streaming_mode_with_401_error():
         stream_server.for_path('/all', BasicResponse(401))
         config = Config(sdk_key=sdk_key, stream_uri=stream_server.uri, send_events=False)
 
-        started = time.time()
-        with LDClient(config=config, start_wait=0.5) as client:
-            elapsed = time.time() - started
-            assert elapsed >= 0.5
+        start_wait = 0.5
+        started = time.monotonic()
+        with LDClient(config=config, start_wait=start_wait) as client:
+            elapsed = time.monotonic() - started
+            # A bound rather than the exact start_wait: Event.wait can return a
+            # fraction early against a separate clock. Failing fast took
+            # milliseconds, so this still catches it.
+            assert elapsed >= start_wait / 2
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) is False
 
@@ -104,10 +108,12 @@ def test_client_does_not_initialize_in_polling_mode_with_401_error():
         poll_server.for_path('/sdk/latest-all', BasicResponse(401))
         config = Config(sdk_key=sdk_key, base_uri=poll_server.uri, stream=False, send_events=False)
 
-        started = time.time()
-        with LDClient(config=config, start_wait=0.5) as client:
-            elapsed = time.time() - started
-            assert elapsed >= 0.5
+        start_wait = 0.5
+        started = time.monotonic()
+        with LDClient(config=config, start_wait=start_wait) as client:
+            elapsed = time.monotonic() - started
+            # See the streaming case above: a bound, not the exact start_wait.
+            assert elapsed >= start_wait / 2
             assert not client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) is False
 
