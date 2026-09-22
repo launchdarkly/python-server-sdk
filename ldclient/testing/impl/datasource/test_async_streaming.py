@@ -400,6 +400,30 @@ async def test_our_own_interrupt_is_not_counted_as_a_server_close():
 
 
 @pytest.mark.asyncio
+async def test_a_leaked_interrupt_flag_does_not_swallow_a_server_close():
+    """interrupt() is a no-op when the connection has already gone, so no
+    Fault arrives to clear the flag. A new connection must clear it, or the
+    next genuine close is recorded as ours and the backoff is skipped."""
+    put_data = _make_put_data()
+    actions = [
+        _start(),
+        _event('put', put_data),
+        _fault(error=None),  # a close the SDK did not ask for
+    ]
+
+    retry = _fast_retry_state()
+    proc, _, _, _ = _make_processor(actions, retry_state=retry)
+    proc._interrupted_by_sdk = True
+    proc.start()
+    await _wait_until(lambda: retry._attempts >= 1)
+    await asyncio.sleep(0.1)
+
+    assert retry._attempts == 1
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
 async def test_unexpected_http_error_keeps_the_processor_running():
     """A rejected SDK key is retried like any other failure. The state never
     goes OFF, and initialization is not falsely unblocked."""

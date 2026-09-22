@@ -499,6 +499,34 @@ def test_our_own_interrupt_is_not_counted_as_a_server_close():
                 assert retry._attempts == 1
 
 
+def test_a_leaked_interrupt_flag_does_not_swallow_a_server_close():
+    """interrupt() is a no-op when the connection has already gone, so no
+    Fault arrives to clear the flag. A new connection must clear it, or the
+    next genuine close is recorded as ours and the backoff is skipped."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+    flagv2 = FlagBuilder('flagkey').version(2).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event([flagv1])) as stream1:
+            with stream_content(make_put_event([flagv2])) as stream2:
+                config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+                server.for_path('/all', SequentialHandler(stream1, stream2))
+
+                retry = fast_retry_state()
+                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                    sp._interrupted_by_sdk = True
+                    sp.start()
+                    ready.wait(start_wait)
+                    assert sp.initialized()
+
+                    stream1.close()
+                    expect_update(store, FEATURES, flagv2)
+
+                    assert retry._attempts == 1
+
+
 def _handle_errors_without_waiting(retry, errors):
     """Drives _handle_error for each error and returns nothing. The stop event
     is pre-set so the interruptible wait returns at once."""

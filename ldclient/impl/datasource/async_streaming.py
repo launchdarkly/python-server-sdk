@@ -89,6 +89,10 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             self._connection_attempt_start_time = time.time()
             async for action in self._sse.all:
                 if isinstance(action, Start):
+                    # interrupt() is a no-op when the connection has already gone, so
+                    # clear a stale flag here rather than swallow the next real close.
+                    self._interrupted_by_sdk = False
+
                     # On reconnect after an error the timer was cleared; reset it here.
                     # For the initial connect the pre-loop timestamp is already set.
                     if self._connection_attempt_start_time is None:
@@ -256,7 +260,6 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             description = "The server closed the stream connection"
             level = log.warning
         else:
-            # A certificate failure lands here too, and is as normal as the rest.
             kind = FailureKind.NORMAL
             error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error))
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of HTTP client internals
@@ -270,9 +273,12 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
-        self._connection_attempt_start_time = time.time() + delay
         if delay > 0:
             await asyncio.sleep(delay)
+
+        # Read after the wait, so a clock change during it cannot skew the
+        # stream-init latency we report.
+        self._connection_attempt_start_time = time.time()
         return self._running
 
     # magic methods for "with" statement (used in testing)

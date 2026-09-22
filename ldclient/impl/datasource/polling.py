@@ -100,7 +100,6 @@ class PollingUpdateProcessor(UpdateProcessor):
             level = log.error if kind is FailureKind.UNEXPECTED else log.warning
             stacktrace = None
         except Exception as e:
-            # A certificate failure lands here too, and is as normal as the rest.
             kind = FailureKind.NORMAL
             error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
             description = "Error encountered when updating flags: %s" % e

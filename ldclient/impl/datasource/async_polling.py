@@ -63,9 +63,10 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
-        # Wait for the current poll to finish before closing the transport, so we do
-        # not close it while a request is still using it. The close is in a finally
-        # so an owned transport is still released if stop() is cancelled mid-wait.
+        # OFF is reported first, so a listener sees the shutdown at once. The wait
+        # that follows only drains a poll already in flight, so the transport is
+        # not closed while that request still uses it. The close is in a finally,
+        # so an owned transport is released even if stop() is cancelled mid-wait.
         try:
             await self._task.wait_stopped()
         finally:
@@ -95,7 +96,6 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
             level = log.error if kind is FailureKind.UNEXPECTED else log.warning
             stacktrace = None
         except Exception as e:
-            # A certificate failure lands here too, and is as normal as the rest.
             kind = FailureKind.NORMAL
             error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e))
             description = "Error encountered when updating flags: %s" % e

@@ -74,6 +74,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._connection_attempt_start_time = time.time()
         for action in self._sse.all:
             if isinstance(action, Start):
+                # interrupt() is a no-op when the connection has already gone, so
+                # clear a stale flag here rather than swallow the next real close.
+                self._interrupted_by_sdk = False
                 record_environment_id(self._data_source_update_sink, action.headers)
             elif isinstance(action, Event):
                 message_ok = False
@@ -137,7 +140,9 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                 url=self._uri, headers=http_factory.base_headers, pool=stream_http_factory.create_pool_manager(1, self._uri), urllib3_request_options={"timeout": stream_http_factory.timeout}
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
-            # The SSE client's retry is disabled; the SDK owns the delay.
+            # The SSE client's retry is disabled; the SDK owns the delay. The base
+            # strategy returns the delay unchanged, so the wait is always zero;
+            # omitting it would select the library's own backoff.
             initial_retry_delay=0,
             retry_delay_strategy=RetryDelayStrategy(),
             retry_delay_reset_threshold=0,
@@ -230,7 +235,6 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             description = "The server closed the stream connection"
             level = log.warning
         else:
-            # A certificate failure lands here too, and is as normal as the rest.
             kind = FailureKind.NORMAL
             error_info = DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(error))
             # no stacktrace here because, for a typical connection error, it'll just be a lengthy tour of urllib3 internals
@@ -244,8 +248,12 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
-        self._connection_attempt_start_time = time.time() + delay
-        return not self._stop_event.wait(min(delay, TIMEOUT_MAX))
+        interrupted = self._stop_event.wait(min(delay, TIMEOUT_MAX))
+
+        # Read after the wait, so a clock change during it cannot skew the
+        # stream-init latency we report.
+        self._connection_attempt_start_time = time.time()
+        return not interrupted
 
     # magic methods for "with" statement (used in testing)
     def __enter__(self):

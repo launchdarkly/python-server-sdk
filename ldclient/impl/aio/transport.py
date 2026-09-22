@@ -140,7 +140,9 @@ class AsyncSSEFactory:
         if proxy:
             aiohttp_request_options["proxy"] = proxy
         if sdk_managed_retry:
-            # The SSE client's retry is disabled; the SDK owns the delay.
+            # The SSE client's retry is disabled; the SDK owns the delay. The base
+            # strategy returns the delay unchanged, so the wait is always zero;
+            # omitting it would select the library's own backoff.
             retry_options: dict = {
                 "initial_retry_delay": 0,
                 "retry_delay_strategy": RetryDelayStrategy(),
