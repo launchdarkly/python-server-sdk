@@ -85,6 +85,17 @@ class PersistentFeatureStoreTestBase(FeatureStoreTestBase):
             assert items == {'foo': self.make_feature('foo', 10), 'bar': self.make_feature('bar', 10)}
             assert store.get(FEATURES, 'deleted-flag', lambda x: x) is None
 
+    def test_all_reads_empty_collection(self, tester):
+        # A store that holds no items of a kind must read that kind as an empty collection.
+        # Some database clients report "nothing matched" with a null value rather than an
+        # empty list.
+        with self.store(tester) as store:
+            store.init({FEATURES: {}})
+
+            # A second instance reads through to the database instead of its own cache.
+            with self.store(tester) as other_store:
+                assert other_store.all(FEATURES, lambda x: x) == {}
+
     def test_stores_with_different_prefixes_are_independent(self):
         # This verifies that init(), get(), all(), and upsert() are all correctly using the specified key prefix.
         # The delete() method isn't tested separately because it's implemented as a variant of upsert().

@@ -89,8 +89,9 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         # Use the key that each item is stored under, not the key inside the item. A deleted
         # item (a "tombstone") is not guaranteed to have a key of its own.
         item_key_prefix = self._kind_key(kind) + '/'
+        # A recursive get returns None, not an empty list, when no key has this prefix.
         index, results = self._client.kv.get(self._kind_key(kind), recurse=True)
-        for result in results:
+        for result in results or []:
             db_key = result['Key']
             if not db_key.startswith(item_key_prefix):
                 continue
