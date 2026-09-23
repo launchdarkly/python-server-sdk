@@ -63,10 +63,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
-        # OFF is reported first, so a listener sees the shutdown at once. The wait
-        # that follows only drains a poll already in flight, so the transport is
-        # not closed while that request still uses it. The close is in a finally,
-        # so an owned transport is released even if stop() is cancelled mid-wait.
+        # Do not close the transport while an in-flight request still uses it.
         try:
             await self._task.wait_stopped()
         finally:

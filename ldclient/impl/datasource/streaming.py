@@ -141,8 +141,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
             # The SSE client's retry is disabled; the SDK owns the delay. The base
-            # strategy returns the delay unchanged, so the wait is always zero;
-            # omitting it would select the library's own backoff.
+            # strategy must be passed: omitting it selects the library's backoff.
             initial_retry_delay=0,
             retry_delay_strategy=RetryDelayStrategy(),
             retry_delay_reset_threshold=0,
