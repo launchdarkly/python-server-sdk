@@ -1,7 +1,7 @@
 import logging
 import ssl
 import time
-from threading import Event
+from threading import Event, Thread
 from typing import List
 
 import pytest
@@ -525,6 +525,73 @@ def test_a_leaked_interrupt_flag_does_not_swallow_a_server_close():
                     expect_update(store, FEATURES, flagv2)
 
                     assert retry._attempts == 1
+
+
+def test_stop_before_start_does_not_raise():
+    """stop() can land before run() has built the SSE client."""
+    config = Config(sdk_key='sdk-key', stream_uri='http://localhost')
+    sp = StreamingUpdateProcessor(config, InMemoryFeatureStore(), Event(), None)
+    sp.stop()
+
+
+def test_a_stop_before_the_connection_exists_still_ends_the_run():
+    """stop() has nothing to close when run() has not built the client yet, so
+    the run itself must not go on to read a connection nobody will close."""
+    store = InMemoryFeatureStore()
+    ready = Event()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            server.for_path('/all', stream)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+            sp = StreamingUpdateProcessor(config, store, ready, None)
+
+            sp.stop()
+            thread = Thread(target=sp.run, daemon=True)
+            thread.start()
+            thread.join(update_wait)
+
+            assert not thread.is_alive()
+            assert not ready.is_set()
+            assert not store.initialized
+
+
+def test_a_raise_inside_the_loop_closes_the_connection():
+    """A raise the loop does not catch must not leak the connection pool."""
+    store = InMemoryFeatureStore()
+    closes: List[int] = []
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream:
+            server.for_path('/all', stream)
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
+            sp = StreamingUpdateProcessor(config, store, Event(), None)
+
+            # KeyboardInterrupt is not an Exception, so the loop cannot catch it.
+            def explode(*args, **kwargs):
+                raise KeyboardInterrupt()
+
+            sp._process_message = explode  # type: ignore[method-assign]
+
+            real_create = sp._create_sse_client
+
+            def create_and_watch_close():
+                client = real_create()
+                real_close = client.close
+
+                def close():
+                    closes.append(1)
+                    real_close()
+
+                client.close = close  # type: ignore[method-assign]
+                return client
+
+            sp._create_sse_client = create_and_watch_close  # type: ignore[method-assign]
+
+            with pytest.raises(KeyboardInterrupt):
+                sp.run()
+
+            assert closes == [1]
 
 
 def _handle_errors_without_waiting(retry, errors):

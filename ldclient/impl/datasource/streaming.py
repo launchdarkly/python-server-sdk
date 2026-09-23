@@ -64,6 +64,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         self._diagnostic_accumulator = diagnostic_accumulator
         self._connection_attempt_start_time: Optional[float] = None
         self._retry = retry_state or for_streaming(config.initial_reconnect_delay)
+        self._sse: Optional[SSEClient] = None
         self._stop_event = ThreadEvent()
         self._interrupted_by_sdk = False
 
@@ -71,59 +72,69 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         log.info("Starting StreamingUpdateProcessor connecting to uri: " + self._uri)
         self._running = True
         self._sse = self._create_sse_client()
+
+        # stop() may have run before the client existed, in which case it had
+        # nothing to close. Never read a connection nobody is left to close.
+        if self._stop_event.is_set():
+            self._sse.close()
+            return
+
         self._connection_attempt_start_time = time.time()
-        for action in self._sse.all:
-            if isinstance(action, Start):
-                # interrupt() is a no-op when the connection has already gone, so
-                # clear a stale flag here rather than swallow the next real close.
-                self._interrupted_by_sdk = False
-                record_environment_id(self._data_source_update_sink, action.headers)
-            elif isinstance(action, Event):
-                message_ok = False
-                message_handled = False
-                try:
-                    message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
-                    message_handled = True
-                except json.decoder.JSONDecodeError as e:
-                    log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._interrupt_stream()
+        try:
+            for action in self._sse.all:
+                if isinstance(action, Start):
+                    # interrupt() is a no-op when the connection has already gone, so
+                    # clear a stale flag here rather than swallow the next real close.
+                    self._interrupted_by_sdk = False
+                    record_environment_id(self._data_source_update_sink, action.headers)
+                elif isinstance(action, Event):
+                    message_ok = False
+                    message_handled = False
+                    try:
+                        message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
+                        message_handled = True
+                    except json.decoder.JSONDecodeError as e:
+                        log.info("Error while handling stream event; will restart stream: %s" % e)
+                        self._interrupt_stream()
 
-                    if not self._handle_error(e):
-                        break
-                except Exception as e:
-                    log.info("Error while handling stream event; will restart stream: %s" % e)
-                    self._interrupt_stream()
+                        if not self._handle_error(e):
+                            break
+                    except Exception as e:
+                        log.info("Error while handling stream event; will restart stream: %s" % e)
+                        self._interrupt_stream()
 
-                    if not self._handle_error(e):
-                        break
+                        if not self._handle_error(e):
+                            break
 
-                if message_handled:
-                    self._retry.record_success()
+                    if message_handled:
+                        self._retry.record_success()
 
-                if message_ok:
-                    self._record_stream_init(False)
-                    self._connection_attempt_start_time = None
+                    if message_ok:
+                        self._record_stream_init(False)
+                        self._connection_attempt_start_time = None
 
-                    if self._data_source_update_sink is not None:
-                        self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+                        if self._data_source_update_sink is not None:
+                            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
-                    if not self._ready.is_set():
-                        log.info("StreamingUpdateProcessor initialized ok.")
-                        self._ready.set()
-            elif isinstance(action, Fault):
-                # A Fault with no error is a clean close. An interrupt the SDK
-                # asked for is not a failure.
-                if action.error is None:
-                    if self._interrupted_by_sdk:
-                        self._interrupted_by_sdk = False
+                        if not self._ready.is_set():
+                            log.info("StreamingUpdateProcessor initialized ok.")
+                            self._ready.set()
+                elif isinstance(action, Fault):
+                    # A Fault with no error is a clean close. An interrupt the SDK
+                    # asked for is not a failure.
+                    if action.error is None:
+                        if self._interrupted_by_sdk:
+                            self._interrupted_by_sdk = False
+                            continue
+                        if not self._handle_error(StreamClosedError()):
+                            break
                         continue
-                    if not self._handle_error(StreamClosedError()):
-                        break
-                    continue
 
-                if not self._handle_error(action.error):
-                    break
-        self._sse.close()
+                    if not self._handle_error(action.error):
+                        break
+        finally:
+            # A raise inside the loop must not leak the connection pool.
+            self._sse.close()
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time:
@@ -152,14 +163,15 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         log.info("Stopping StreamingUpdateProcessor")
         self._running = False
         self._stop_event.set()
+
+        # OFF means an explicit shutdown. No stream failure produces it. It is
+        # reported before teardown, so a slow close cannot hold back the status
+        # that tells a waiter to give up. The sink drops anything after OFF.
+        if self._data_source_update_sink is not None:
+            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+
         if self._sse:
             self._sse.close()
-
-        if self._data_source_update_sink is None:
-            return
-
-        # OFF means an explicit shutdown. No stream failure produces it.
-        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
     def _interrupt_stream(self):
         """Drops the stream connection so the next read reconnects. The SSE

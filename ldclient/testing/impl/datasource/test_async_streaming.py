@@ -873,3 +873,38 @@ async def test_diagnostics_recorded_on_successful_init():
     assert recorded[0]['failed'] is False
 
     await proc.stop()
+
+
+@pytest.mark.asyncio
+async def test_off_is_reported_before_teardown():
+    """A slow close must not hold back the status that tells a waiter to give
+    up, so OFF goes out before the connection and session are torn down."""
+    order = []
+
+    class _OrderingSink:
+        async def init(self, all_data):
+            pass
+
+        def update_status(self, new_state, new_error):
+            order.append(new_state)
+
+    config = _make_config()
+    config._data_source_update_sink = _OrderingSink()
+
+    flag = FlagBuilder('f1').version(1).build()
+    put_data = _make_put_data(flags={'f1': _item_dict(flag)})
+    proc, _, _, factory = await _run_with_actions([_start(), _event('put', put_data)], config=config)
+
+    sse = factory.created[0]
+    real_close = sse.close
+
+    async def close():
+        order.append('closed')
+        await real_close()
+
+    sse.close = close
+
+    await proc.stop()
+
+    assert DataSourceState.OFF in order
+    assert order.index(DataSourceState.OFF) < order.index('closed')

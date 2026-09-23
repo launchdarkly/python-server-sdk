@@ -574,6 +574,30 @@ class TestAsyncPollingUpdateProcessor:
         assert any(c.args[0] == DataSourceState.OFF for c in sink.update_status.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_a_poll_finishing_after_stop_reports_nothing(self):
+        """The poll still in flight when stop() ran must not report after OFF."""
+        from ldclient.impl.datasource.async_status import (
+            AsyncDataSourceUpdateSinkImpl
+        )
+        from ldclient.impl.listeners import Listeners
+
+        store = MockAsyncFeatureStore()
+        observed = []
+        listeners = Listeners()
+        listeners.add(lambda status: observed.append(status.state))
+
+        config = make_config()
+        config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, listeners, Listeners())
+
+        processor = make_processor(config=config, store=store)
+        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+
+        await processor.stop()
+        await processor._fetch_and_store()
+
+        assert observed == [DataSourceState.OFF]
+
+    @pytest.mark.asyncio
     @patch('ldclient.config.Config.poll_interval', new_callable=MagicMock)
     async def test_valid_status_is_reported_before_ready_is_set(self, mock_interval):
         # Mirrors go-server-sdk#442: a caller that wakes on readiness must not

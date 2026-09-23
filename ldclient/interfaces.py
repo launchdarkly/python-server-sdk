@@ -1011,10 +1011,14 @@ class DataSourceState(Enum):
 
     OFF = 'off'
     """
-    Indicates that the data source has been permanently shut down.
+    Indicates that the data source is permanently shut down.
 
     This could be because the SDK client was explicitly shut down, because its configuration could not
     be parsed, or because the data source encountered a condition it will not retry.
+
+    No further state or data follows. A request or connection that was still in flight when the data
+    source stopped is not reported, so this state is final for the lifetime of the data source. It is
+    reported when the shutdown begins rather than when the last connection closes.
     """
 
 

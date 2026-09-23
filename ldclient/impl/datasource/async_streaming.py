@@ -166,22 +166,23 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
     async def stop(self):
-        # Cancel the run task first: otherwise, if stop() is called before _run has executed, the
-        # loop could run _run at the teardown await and create a fresh SSE connection against the
-        # session we're closing. Once the runner is stopped, teardown is safe.
-        await self._runner.stop_all()
-
         log.info("Stopping AsyncStreamingUpdateProcessor")
         self._running = False
+
+        # OFF means an explicit shutdown. No stream failure produces it. It is
+        # reported before teardown, so a slow close cannot hold back the status
+        # that tells a waiter to give up. The sink drops anything after OFF.
+        if self._data_source_update_sink is not None:
+            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+
+        # Cancel the run task before the teardown awaits: otherwise, if stop() is called before
+        # _run has executed, the loop could run _run at the teardown await and create a fresh SSE
+        # connection against the session we're closing. Once the runner is stopped, teardown is safe.
+        await self._runner.stop_all()
+
         if self._sse:
             await self._sse.close()
         await self._close_owned_session()
-
-        if self._data_source_update_sink is None:
-            return
-
-        # OFF means an explicit shutdown. No stream failure produces it.
-        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
     async def _interrupt_stream(self):
         """Drops the stream connection so the next read reconnects. The SSE

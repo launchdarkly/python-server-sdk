@@ -382,6 +382,23 @@ def test_stop_reports_off():
     assert spy.statuses[-1].state == DataSourceState.OFF
 
 
+def test_a_poll_finishing_after_stop_reports_nothing():
+    """The poll still in flight when stop() ran must not report after OFF."""
+    spy = SpyListener()
+    listeners = Listeners()
+    listeners.add(spy)
+
+    config = Config("SDK_KEY")
+    config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
+    mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
+    processor = PollingUpdateProcessor(config, mock_requester, store, ready)
+
+    processor.stop()
+    processor._poll()
+
+    assert [status.state for status in spy.statuses] == [DataSourceState.OFF]
+
+
 def test_valid_status_is_reported_before_ready_is_set():
     # Mirrors go-server-sdk#442: a caller that wakes on readiness must not
     # still be able to read INITIALIZING.
