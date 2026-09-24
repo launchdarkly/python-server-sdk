@@ -175,8 +175,8 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
-        # Cancel the run task before tearing down the rest: otherwise _run could
-        # start a fresh SSE connection against the session we are closing.
+        # Cancel the run task before tearing down the rest, preventing _run from
+        # starting a fresh SSE connection against the session we are closing.
         await self._runner.stop_all()
 
         if self._sse:

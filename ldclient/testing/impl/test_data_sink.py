@@ -97,8 +97,8 @@ def test_off_is_terminal():
     sink.update_status(DataSourceState.OFF, None)
 
     # A poll or stream connection still in flight when the data source stopped.
-    # Two branches, not two of the states: a plain state change, and one carrying
-    # an error, which is what survives the same-state dedup.
+    # Test both a plain state change and one carrying an error, so neither can
+    # get through.
     sink.update_status(DataSourceState.VALID, None)
     sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.NETWORK_ERROR, 0, time.time(), 'late'))
 
