@@ -175,9 +175,8 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         if self._data_source_update_sink is not None:
             self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
-        # Cancel the run task before the teardown awaits: otherwise, if stop() is called before
-        # _run has executed, the loop could run _run at the teardown await and create a fresh SSE
-        # connection against the session we're closing. Once the runner is stopped, teardown is safe.
+        # Cancel the run task before tearing down the rest: otherwise _run could
+        # start a fresh SSE connection against the session we are closing.
         await self._runner.stop_all()
 
         if self._sse:
