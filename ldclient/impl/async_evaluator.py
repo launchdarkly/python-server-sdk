@@ -15,7 +15,8 @@ from ldclient.impl.evaluator_common import (
     _match_clause_by_kind,
     _match_single_context_value,
     _maybe_negate,
-    check_targets
+    check_targets,
+    mark_override_affected
 )
 from ldclient.impl.events.types import EventFactory
 from ldclient.impl.model import *
@@ -56,15 +57,23 @@ class AsyncEvaluator:
     async def evaluate(self, flag: FeatureFlag, context: Context, event_factory: EventFactory) -> EvalResult:
         state = EvalResult()
         state.original_flag_key = flag.key
+        # Reading the flag's own definition is the first read of the evaluation, so the marking
+        # starts from the flag's override marker.
+        state.override_affected = flag.is_override
         try:
             state.detail = await self._evaluate(flag, context, state, event_factory)
         except EvaluationException as e:
             if self.__logger is not None:
                 self.__logger.error('Could not evaluate flag "%s": %s' % (flag.key, e.message))
             state.detail = EvaluationDetail(None, None, {'kind': 'ERROR', 'errorKind': e.error_kind})
+            # An evaluation that fails is still marked when it read an override definition.
+            if state.override_affected:
+                mark_override_affected(state.detail)
             return state
         if state.big_segments_status is not None:
             state.detail.reason['bigSegmentsStatus'] = state.big_segments_status
+        if state.override_affected:
+            mark_override_affected(state.detail)
         return state
 
     async def _evaluate(self, flag: FeatureFlag, context: Context, state: EvalResult, event_factory: EventFactory) -> EvaluationDetail:
@@ -120,9 +129,21 @@ class AsyncEvaluator:
                     log.warning("Missing prereq flag: " + prereq_key)
                     failed_prereq = prereq
                 else:
-                    state.depth += 1
-                    prereq_res = await self._evaluate(prereq_flag, context, state, event_factory)
-                    state.depth -= 1
+                    # The prerequisite is an evaluation in its own right. Its marking starts from
+                    # its own definition and covers only the definitions its subtree reads. The
+                    # parent's marking is restored and merged afterward, so the marking propagates
+                    # upward only. A failure inside the subtree still merges what was read.
+                    parent_override_affected = state.override_affected
+                    state.override_affected = prereq_flag.is_override
+                    try:
+                        state.depth += 1
+                        prereq_res = await self._evaluate(prereq_flag, context, state, event_factory)
+                        state.depth -= 1
+                    finally:
+                        prereq_override_affected = state.override_affected
+                        state.override_affected = parent_override_affected or prereq_override_affected
+                    if prereq_override_affected:
+                        mark_override_affected(prereq_res)
                     # Note that if the prerequisite flag is off, we don't consider it a match no matter what its
                     # off variation was. But we still need to evaluate it in order to generate an event.
                     if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
@@ -146,7 +167,14 @@ class AsyncEvaluator:
         if clause.op == 'segmentMatch':
             for seg_key in clause.values:
                 segment = await self.__get_segment(seg_key)
-                if segment is not None and await self._segment_matches_context(segment, context, state):
+                if segment is None:
+                    continue
+                # The segment definition was read at this point, so an override segment marks the
+                # evaluation whether or not it matches. A segment that does not match still shapes
+                # the outcome, for example through a negated clause.
+                if segment.is_override:
+                    state.override_affected = True
+                if await self._segment_matches_context(segment, context, state):
                     return _maybe_negate(clause, True)
             return _maybe_negate(clause, False)
 
