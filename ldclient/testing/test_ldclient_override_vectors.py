@@ -1,7 +1,8 @@
 """
 Runs the OVERRIDE specification test vectors. Each vector sets up LaunchDarkly data, an
 override layer, and an initialization state. The test evaluates one flag through the full
-client stack and checks the value, the variation index, and the reason.
+client stack and checks the value, the variation index, the reason, and the marking handed to the
+event processor.
 """
 import json
 import os
@@ -11,6 +12,7 @@ import pytest
 
 from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import custom
+from ldclient.impl.events.types import EventInputEvaluation
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
 from ldclient.testing.mock_components import (
     HangingSynchronizer,
@@ -83,3 +85,11 @@ def test_override_spec_vector(vector: Dict[str, Any]):
         assert detail.value == expect['value'], "value"
         assert detail.variation_index == expect['variationIndex'], "variationIndex"
         assert_reason(expect['reason'], detail.reason)
+
+        # summaryOverrideAffected is the marking the client hands to the event processor for this
+        # evaluation. The event processor keys individual-event suppression and the summary
+        # counter marker on that scalar, not on the reason.
+        if 'summaryOverrideAffected' in expect:
+            records = [e for e in client._event_processor._events if isinstance(e, EventInputEvaluation) and e.key == evaluate['flagKey']]
+            assert len(records) == 1, "expected exactly one evaluation record for the flag"
+            assert records[0].override_affected is expect['summaryOverrideAffected'], "summaryOverrideAffected"
