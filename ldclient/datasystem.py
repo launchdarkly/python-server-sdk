@@ -4,7 +4,11 @@ Configuration for LaunchDarkly's data acquisition strategy.
 
 from typing import List, Optional
 
-from ldclient.config import DataSourceBuilder, DataSystemConfig
+from ldclient.config import (
+    DataSourceBuilder,
+    DataSystemConfig,
+    OverrideSourceBuilder
+)
 from ldclient.impl.datasourcev2.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
     PollingDataSourceBuilder
@@ -32,6 +36,7 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         self._fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
         self._store_mode: DataStoreMode = DataStoreMode.READ_ONLY
         self._data_store: Optional[FeatureStore] = None
+        self._override_source: Optional[OverrideSourceBuilder] = None
 
     def initializers(self, initializers: Optional[List[DataSourceBuilder[Initializer]]]) -> "ConfigBuilder":
         """
@@ -80,6 +85,35 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         self._store_mode = store_mode
         return self
 
+    def overrides(self, source: OverrideSourceBuilder) -> "ConfigBuilder":
+        """
+        Configures the SDK with an override source. Flag overrides are currently experimental
+        and subject to change.
+
+        The source supplies flag and segment definitions that take precedence over data
+        received from LaunchDarkly on a per-key basis. Overrides let an operator force one or
+        more flags to a known state on a running client, whether or not the client can reach
+        LaunchDarkly. Flags not present in the override data are unaffected.
+
+        The override source is not a data source. It has no effect on the client's
+        initialization status or data source status. Configuring it changes nothing until the
+        source actually supplies an override. At most one override source is accepted.
+
+        Example, with the file-based source and the SDK's default data sources:
+        ::
+
+            from ldclient import datasystem
+            from ldclient.integrations.overrides import FileOverrideSourceBuilder
+
+            source = FileOverrideSourceBuilder(['/etc/launchdarkly/overrides.json'])
+            config = Config(sdk_key, datasystem_config=datasystem.default().overrides(source).build())
+
+        :param source: a builder for the override source, such as
+          :class:`ldclient.integrations.overrides.FileOverrideSourceBuilder`
+        """
+        self._override_source = source
+        return self
+
     def build(self) -> DataSystemConfig:
         """
         Builds the data system configuration.
@@ -90,6 +124,7 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
             fdv1_fallback_synchronizer=self._fdv1_fallback_synchronizer,
             data_store_mode=self._store_mode,
             data_store=self._data_store,
+            override_source=self._override_source,
         )
 
 

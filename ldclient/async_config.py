@@ -21,6 +21,7 @@ from ldclient.config import (
     DataSourceBuilder,
     DataSourceBuilderConfig,
     HTTPConfig,
+    OverrideSourceBuilder,
     PrivateAttributesConfig
 )
 from ldclient.hook import AsyncHook
@@ -126,6 +127,13 @@ class AsyncDataSystemConfig:
 
     fdv1_fallback_synchronizer: Optional[DataSourceBuilder[AsyncSynchronizer]] = None
     """An optional fallback synchronizer that will read from FDv1"""
+
+    override_source: Optional[OverrideSourceBuilder] = None
+    """
+    An optional override source. Its flag and segment definitions take precedence over
+    LaunchDarkly data at evaluation time. Flag overrides are currently experimental and subject
+    to change.
+    """
 
 
 class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
