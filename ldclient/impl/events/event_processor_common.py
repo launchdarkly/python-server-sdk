@@ -181,7 +181,7 @@ class EventOutputFormatter:
             }
             counters = []
             for ckey, cval in flag_data.counters.items():
-                variation, version = ckey
+                variation, version, override_affected = ckey
                 counter = {'count': cval.count, 'value': cval.value}
                 if variation is not None:
                     counter['variation'] = variation
@@ -189,6 +189,9 @@ class EventOutputFormatter:
                     counter['unknown'] = True
                 else:
                     counter['version'] = version
+                # The marker is present only when true, like the unknown marker.
+                if override_affected:
+                    counter['overrideAffected'] = True
                 counters.append(counter)
             flag_data_out['counters'] = counters
             flags_out[key] = flag_data_out
@@ -266,9 +269,11 @@ class EventDispatcherBase:
             context = event.context
             if not event.exclude_from_summaries:
                 self._outbox.add_to_summary(event)
-            if event.track_events:
+            # An override-affected evaluation appears only in the summary counters. It produces
+            # no individual feature event and no debug event, even when the flag requests them.
+            if event.track_events and not event.override_affected:
                 full_event = event
-            if self._should_debug_event(event):
+            if not event.override_affected and self._should_debug_event(event):
                 debug_event = DebugEvent(event)
         elif isinstance(event, EventInputIdentify):
             if self._omit_anonymous_contexts:

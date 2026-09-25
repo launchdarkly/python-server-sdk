@@ -41,8 +41,8 @@ def test_summarize_event_increments_counters():
     data = es.snapshot()
 
     expected = {
-        'flag1': EventSummaryFlag({'user'}, 'default1', {(1, flag1.version): EventSummaryCounter(2, 'value1'), (2, flag1.version): EventSummaryCounter(1, 'value2')}),
-        'flag2': EventSummaryFlag({'user'}, 'default2', {(1, flag2.version): EventSummaryCounter(1, 'value99')}),
-        'badkey': EventSummaryFlag({'user'}, 'default3', {(None, None): EventSummaryCounter(1, 'default3')}),
+        'flag1': EventSummaryFlag({'user'}, 'default1', {(1, flag1.version, False): EventSummaryCounter(2, 'value1'), (2, flag1.version, False): EventSummaryCounter(1, 'value2')}),
+        'flag2': EventSummaryFlag({'user'}, 'default2', {(1, flag2.version, False): EventSummaryCounter(1, 'value99')}),
+        'badkey': EventSummaryFlag({'user'}, 'default3', {(None, None, False): EventSummaryCounter(1, 'default3')}),
     }
     assert data.flags == expected
