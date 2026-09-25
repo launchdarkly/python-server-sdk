@@ -28,6 +28,7 @@ from ldclient.datasystem import (
 from ldclient.feature_store import CacheConfig
 from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
 from ldclient.integrations import Consul, DynamoDB, Redis
+from ldclient.integrations.overrides import FileOverrideSourceBuilder
 from ldclient.interfaces import DataStoreMode
 
 
@@ -44,6 +45,8 @@ class ClientEntity:
             }
 
         datasystem_config = config.get('dataSystem')
+        if config.get('overrides') is not None and datasystem_config is None:
+            raise ValueError("flag overrides require the data system to be configured")
         if datasystem_config is not None:
             datasystem = custom()
 
@@ -106,6 +109,10 @@ class ClientEntity:
                     store_mode = DataStoreMode.READ_WRITE if store_mode_value == 1 else DataStoreMode.READ_ONLY
 
                     datasystem.data_store(store, store_mode)
+
+            overrides_config = config.get('overrides')
+            if overrides_config is not None:
+                datasystem.overrides(_make_override_source(overrides_config))
 
             opts["datasystem_config"] = datasystem.build()
 
@@ -323,6 +330,18 @@ def _set_optional_time(params_in: dict, name_in: str, func: Callable[[float], An
 def _set_optional_value(params_in: dict, name_in: str, func: Callable[[Any], Any]):
     if params_in.get(name_in) is not None:
         func(params_in[name_in])
+
+
+def _make_override_source(params: dict) -> FileOverrideSourceBuilder:
+    """
+    Builds the file-based override source from the harness's overrides configuration. The
+    files are written by the harness on a file system shared with this service.
+    """
+    builder = FileOverrideSourceBuilder(params["filePaths"])
+    _set_optional_value(params, "duplicateKeysHandling", builder.duplicate_keys_handling)
+    _set_optional_value(params, "changeDetection", builder.change_detection)
+    _set_optional_time(params, "pollIntervalMs", builder.poll_interval)
+    return builder
 
 
 def _create_persistent_store(persistent_store_config: dict):
