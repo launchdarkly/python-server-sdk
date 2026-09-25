@@ -158,6 +158,17 @@ class DataSystem(Protocol):
         """
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def override_source_configured(self) -> bool:
+        """
+        Reports whether the data system was built with an override source. The value is
+        fixed at construction. When true, the store served by :attr:`store` overlays the
+        override layer, and the client serves an overridden flag before it has LaunchDarkly
+        data.
+        """
+        raise NotImplementedError
+
 
 class AsyncDataSystem(Protocol):
     """
@@ -229,6 +240,15 @@ class AsyncDataSystem(Protocol):
     def store(self) -> AsyncReadOnlyStore:
         """
         Returns the data store used by the data system.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def override_source_configured(self) -> bool:
+        """
+        Reports whether the data system was built with an override source. The value is
+        fixed at construction.
         """
         raise NotImplementedError
 

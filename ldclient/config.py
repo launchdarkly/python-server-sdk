@@ -24,6 +24,7 @@ from ldclient.interfaces import (
     EventProcessor,
     FeatureStore,
     Initializer,
+    OverrideSource,
     Synchronizer,
     UpdateProcessor
 )
@@ -255,6 +256,23 @@ class DataSourceBuilder(Protocol[T_co]):  # pylint: disable=too-few-public-metho
         raise NotImplementedError
 
 
+class OverrideSourceBuilder(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    Protocol for building an override source. Flag overrides are currently experimental and
+    subject to change.
+    """
+
+    def build(self, config: DataSourceBuilderConfig) -> OverrideSource:
+        """
+        Builds the override source. Invalid configuration raises an exception, which the client
+        constructor propagates.
+
+        :param config: the SDK configuration
+        :return: the built override source
+        """
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
 class DataSystemConfig:
     """Configuration for LaunchDarkly's data acquisition strategy."""
@@ -277,6 +295,13 @@ class DataSystemConfig:
 
     fdv1_fallback_synchronizer: Optional[DataSourceBuilder[Synchronizer]] = None
     """An optional fallback synchronizer that will read from FDv1"""
+
+    override_source: Optional[OverrideSourceBuilder] = None
+    """
+    An optional override source. Its flag and segment definitions take precedence over
+    LaunchDarkly data at evaluation time. Flag overrides are currently experimental and subject
+    to change.
+    """
 
 
 class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
@@ -715,4 +740,4 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
             log.warning("Missing or blank SDK key")
 
 
-__all__ = ['Config', 'BigSegmentsConfig', 'DataSourceBuilder', 'DataSystemConfig', 'HTTPConfig']
+__all__ = ['Config', 'BigSegmentsConfig', 'DataSourceBuilder', 'DataSystemConfig', 'HTTPConfig', 'OverrideSourceBuilder']
