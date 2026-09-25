@@ -10,7 +10,7 @@ All notable changes to the LaunchDarkly Python SDK will be documented in this fi
 * Add retry state for RETRY-spec backoff ([#522](https://github.com/launchdarkly/python-server-sdk/issues/522)) ([e734558](https://github.com/launchdarkly/python-server-sdk/commit/e734558d52dbd3eeeb9d378f283dd3d3f5cee611))
 * Drive repeating tasks from a delay source ([9abe8cb](https://github.com/launchdarkly/python-server-sdk/commit/9abe8cbb878445b500211c89f0e3176fdbe4587a))
 * Retry indefinitely after a data source failure instead of stopping permanently in FDv1 ([e17e173](https://github.com/launchdarkly/python-server-sdk/commit/e17e1730de44f4494befd4df260381f7548ca74a))
-* warn that payload filtering has no effect with FDv2 ([#518](https://github.com/launchdarkly/python-server-sdk/issues/518)) ([296311f](https://github.com/launchdarkly/python-server-sdk/commit/296311f9ea73f09e96bd8dfb7410405e08794776))
+* Warn that payload filtering has no effect with FDv2 ([#518](https://github.com/launchdarkly/python-server-sdk/issues/518)) ([296311f](https://github.com/launchdarkly/python-server-sdk/commit/296311f9ea73f09e96bd8dfb7410405e08794776))
 * Warn when the SDK is used in a forked process without postfork ([#512](https://github.com/launchdarkly/python-server-sdk/issues/512)) ([75402e9](https://github.com/launchdarkly/python-server-sdk/commit/75402e90f38a154466ab8b2bdd53a819720e0001))
 
 
