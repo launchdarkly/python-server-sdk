@@ -4,6 +4,7 @@ client tests.
 """
 import asyncio
 import threading
+import time
 from typing import Any, Dict, Optional
 
 import pytest
@@ -12,6 +13,7 @@ from ldclient.async_client import AsyncLDClient
 from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.context import Context
 from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.events.types import EventInputEvaluation
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
 from ldclient.testing.builders import FlagBuilder
 from ldclient.testing.mock_async_components import MockAsyncEventProcessor
@@ -189,5 +191,36 @@ async def test_flag_value_change_listener_sees_override_value_changes():
         change = await asyncio.wait_for(changes.get(), 5)
         assert change.old_value == 'ld-value'
         assert change.new_value == 'override-value'
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_evaluation_events_carry_override_affected_marking():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        assert await client.variation('overridden-flag', user, False) is True
+        records = [e for e in client._event_processor.events if isinstance(e, EventInputEvaluation)]
+        assert [e.key for e in records] == ['overridden-flag']
+        assert records[0].override_affected is True
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_turns_off_event_tracking_for_override_affected_flags():
+    overridden = FlagBuilder('overridden-flag').version(7).on(False).off_variation(0).variations(True).track_events(True).debug_events_until_date(int(time.time() * 1000) + 100000).build().to_json_dict()
+    plain = FlagBuilder('plain-tracked').version(1).on(False).off_variation(0).variations(True).track_events(True).build().to_json_dict()
+    source = MockOverrideSource(flags={'overridden-flag': overridden})
+    client = await make_initialized_client({'plain-tracked': plain}, source)
+    try:
+        state = await client.all_flags_state(user, with_reasons=True)
+        flags_state = state.to_json_dict()['$flagsState']
+        assert flags_state['plain-tracked']['trackEvents'] is True
+        assert 'trackEvents' not in flags_state['overridden-flag']
+        assert 'debugEventsUntilDate' not in flags_state['overridden-flag']
+        assert flags_state['overridden-flag']['reason']['overrideAffected'] is True
+        assert state.get_flag_value('overridden-flag') is True
     finally:
         await client.close()

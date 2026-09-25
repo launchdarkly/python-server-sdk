@@ -455,7 +455,12 @@ class LDClient:
                     tracker = OpTracker(key, flag, context, detail, default_stage)
                     return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': stage, 'tracker': tracker})
 
-            detail = EvaluationDetail(default_stage.value, None, error_reason('WRONG_TYPE'))
+            # The type mismatch replaces the reason. The evaluation read the same definitions,
+            # so the new reason keeps the override-affected marking.
+            reason = error_reason('WRONG_TYPE')
+            if detail.reason.get('overrideAffected') is True:
+                reason['overrideAffected'] = True
+            detail = EvaluationDetail(default_stage.value, None, reason)
             tracker = OpTracker(key, flag, context, detail, default_stage)
             return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': default_stage, 'tracker': tracker})
 
@@ -517,7 +522,7 @@ class LDClient:
                 detail = result.detail
                 if detail.is_default_value():
                     detail = EvaluationDetail(default, None, detail.reason)
-                self._send_event(event_factory.new_eval_event(flag, context, detail, default))
+                self._send_event(event_factory.new_eval_event(flag, context, detail, default, None, result.override_affected))
                 return detail, flag
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
@@ -607,14 +612,26 @@ class LDClient:
                 result = self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
                 prerequisites = result.prerequisites
+                override_affected = result.override_affected
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
+                override_affected = False
 
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
+            track_events = flag.get('trackEvents', False) or requires_experiment_data
+            track_reason = requires_experiment_data
+            debug_events_until_date = flag.get('debugEventsUntilDate', None)
+            if override_affected:
+                # A consumer of this state sends individual events according to these fields.
+                # An override-affected evaluation produces no individual events, so the state
+                # turns them off for this flag. The flag, its value, and its reason stay.
+                track_events = False
+                track_reason = False
+                debug_events_until_date = None
             flag_state = {
                 'key': flag['key'],
                 'value': detail.value,
@@ -622,9 +639,9 @@ class LDClient:
                 'reason': detail.reason,
                 'version': flag['version'],
                 'prerequisites': prerequisites,
-                'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
-                'trackReason': requires_experiment_data,
-                'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
+                'trackEvents': track_events,
+                'trackReason': track_reason,
+                'debugEventsUntilDate': debug_events_until_date,
             }
 
             state.add_flag(flag_state, with_reasons, details_only_if_tracked)

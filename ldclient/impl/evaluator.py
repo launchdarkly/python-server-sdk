@@ -146,7 +146,7 @@ class Evaluator:
                     # off variation was. But we still need to evaluate it in order to generate an event.
                     if (not prereq_flag.on) or prereq_res.variation_index != prereq.variation:
                         failed_prereq = prereq
-                    event = event_factory.new_eval_event(prereq_flag, context, prereq_res, None, flag)
+                    event = event_factory.new_eval_event(prereq_flag, context, prereq_res, None, flag, prereq_override_affected)
                     state.add_event(event)
                 if failed_prereq:
                     return {'kind': 'PREREQUISITE_FAILED', 'prerequisiteKey': failed_prereq.key}

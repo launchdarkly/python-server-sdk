@@ -2,7 +2,9 @@
 Tests for flag overrides through the client: the override source lifecycle, the overlay at the
 store read boundary, the not-initialized gate, the all-flags state, and flag change notifications.
 """
+import json
 import logging
+import time
 from queue import Empty, Queue
 from typing import Any, Dict, Optional
 
@@ -11,9 +13,13 @@ import pytest
 from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import custom
 from ldclient.evaluation import EvaluationDetail
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
 from ldclient.impl.datasystem.fdv1 import FDv1
+from ldclient.impl.events.event_processor import DefaultEventProcessor
+from ldclient.impl.events.types import EventInputEvaluation
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
 from ldclient.interfaces import DataSourceState, FlagChange
+from ldclient.migrations import Stage
 from ldclient.testing.builders import (
     FlagBuilder,
     FlagRuleBuilder,
@@ -26,7 +32,7 @@ from ldclient.testing.mock_components import (
     MockOverrideSource,
     StaticInitializer
 )
-from ldclient.testing.stub_util import MockEventProcessor
+from ldclient.testing.stub_util import MockEventProcessor, MockHttp
 
 user = Context.create('user-key')
 
@@ -253,3 +259,171 @@ def test_data_source_status_is_unaffected_by_overrides():
     with make_uninitialized_client(source) as client:
         assert client.is_initialized() is False
         assert client.data_source_status_provider.status.state == DataSourceState.INITIALIZING
+
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+def evaluation_events_by_key(client: LDClient) -> Dict[str, EventInputEvaluation]:
+    """The evaluation records the client handed to the event processor, keyed by flag key."""
+    records = {}
+    processor: Any = client._event_processor
+    for event in processor._events:
+        if isinstance(event, EventInputEvaluation):
+            records[event.key] = event
+    return records
+
+
+def test_override_evaluation_events_carry_override_affected_marking():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    with make_uninitialized_client(source) as client:
+        assert client.variation('overridden-flag', user, False) is True
+        records = evaluation_events_by_key(client)
+        assert list(records.keys()) == ['overridden-flag']
+        assert records['overridden-flag'].override_affected is True
+
+
+def test_ordinary_evaluation_events_are_not_marked():
+    normal = FlagBuilder('flag-normal').version(100).on(False).off_variation(0).variations('normal-value').track_events(True).build().to_json_dict()
+    source = MockOverrideSource(flags={'other': single_value_flag('other', True)})
+    with make_initialized_client({'flag-normal': normal}, source) as client:
+        client.variation('flag-normal', user, 'default')
+        records = evaluation_events_by_key(client)
+        assert records['flag-normal'].override_affected is False
+        assert records['flag-normal'].track_events is True
+
+
+def tracked_bool_flag(key: str) -> FlagBuilder:
+    return FlagBuilder(key).version(100).variations(False, True).off_variation(0).fallthrough_variation(1).track_events(True)
+
+
+def test_overridden_prerequisite_marks_the_dependent_evaluation_records():
+    # top-flag (LaunchDarkly) --> mid-flag (LaunchDarkly) --> leaf-flag (overridden)
+    #                         --> plain-flag (LaunchDarkly)
+    # The LaunchDarkly copy of leaf-flag is off, so the chain passes only through the override.
+    ld_data = {
+        'top-flag': tracked_bool_flag('top-flag').on(True).prerequisite('mid-flag', 1).prerequisite('plain-flag', 1).build().to_json_dict(),
+        'mid-flag': tracked_bool_flag('mid-flag').on(True).prerequisite('leaf-flag', 1).build().to_json_dict(),
+        'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict(),
+        'leaf-flag': tracked_bool_flag('leaf-flag').on(False).build().to_json_dict(),
+    }
+    source = MockOverrideSource(flags={'leaf-flag': tracked_bool_flag('leaf-flag').on(True).build().to_json_dict()})
+    with make_initialized_client(ld_data, source) as client:
+        detail = client.variation_detail('top-flag', user, False)
+        assert detail.value is True
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+
+        records = evaluation_events_by_key(client)
+        assert sorted(records.keys()) == ['leaf-flag', 'mid-flag', 'plain-flag', 'top-flag']
+        assert records['top-flag'].override_affected is True
+        assert records['mid-flag'].override_affected is True
+        assert records['leaf-flag'].override_affected is True
+        assert records['plain-flag'].override_affected is False
+        assert records['mid-flag'].prereq_of is not None and records['mid-flag'].prereq_of.key == 'top-flag'
+        assert records['leaf-flag'].prereq_of is not None and records['leaf-flag'].prereq_of.key == 'mid-flag'
+        assert records['leaf-flag'].reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        assert records['plain-flag'].reason == {'kind': 'FALLTHROUGH'}
+
+
+def test_all_flags_state_turns_off_event_tracking_for_override_affected_flags():
+    debug_until = int(time.time() * 1000) + 100000
+    ld_data = {
+        'plain-tracked': FlagBuilder('plain-tracked').version(1).on(False).off_variation(0).variations(True).track_events(True).debug_events_until_date(debug_until).build().to_json_dict(),
+        'dependent-tracked': FlagBuilder('dependent-tracked').version(1).on(True).variations(False, True).fallthrough_variation(1).prerequisite('overridden-flag', 0).track_events(True).debug_events_until_date(debug_until).build().to_json_dict(),
+    }
+    # The overridden flag is on and serves variation 0, so the dependent flag's prerequisite passes.
+    overridden = FlagBuilder('overridden-flag').version(7).on(True).fallthrough_variation(0).variations(True).track_events(True).debug_events_until_date(debug_until).build().to_json_dict()
+    source = MockOverrideSource(flags={'overridden-flag': overridden})
+    with make_initialized_client(ld_data, source) as client:
+        state = client.all_flags_state(user, with_reasons=True)
+        assert state.valid is True
+        flags_state = state.to_json_dict()['$flagsState']
+
+        # A flag with no override keeps its tracking fields.
+        assert flags_state['plain-tracked']['trackEvents'] is True
+        assert flags_state['plain-tracked']['debugEventsUntilDate'] == debug_until
+
+        # The overridden flag and the flag that depends on it stay in the state with their values
+        # and marked reasons, but with no tracking fields.
+        for key in ('overridden-flag', 'dependent-tracked'):
+            assert flags_state[key]['reason']['overrideAffected'] is True, key
+            assert 'trackEvents' not in flags_state[key], key
+            assert 'trackReason' not in flags_state[key], key
+            assert 'debugEventsUntilDate' not in flags_state[key], key
+        assert state.get_flag_value('overridden-flag') is True
+        assert state.get_flag_value('dependent-tracked') is True
+        assert flags_state['overridden-flag']['version'] == 7
+
+
+def test_all_flags_state_keeps_details_of_override_affected_flags_when_details_only_for_tracked_flags():
+    # With details only for tracked flags, an override-affected flag counts as untracked, so its
+    # version and reason are omitted like any other untracked flag, and its value stays.
+    overridden = FlagBuilder('overridden-flag').version(7).on(False).off_variation(0).variations(True).track_events(True).build().to_json_dict()
+    source = MockOverrideSource(flags={'overridden-flag': overridden})
+    with make_initialized_client({}, source) as client:
+        state = client.all_flags_state(user, with_reasons=True, details_only_for_tracked_flags=True)
+        flags_state = state.to_json_dict()['$flagsState']
+        assert state.get_flag_value('overridden-flag') is True
+        assert 'version' not in flags_state['overridden-flag']
+        assert 'reason' not in flags_state['overridden-flag']
+
+
+def test_wrong_type_result_of_overridden_flag_stays_marked():
+    details = []
+
+    class CapturingHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='capturing-hook')
+
+        def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+            return data
+
+        def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
+            details.append(detail)
+            return data
+
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', 'not-a-stage')})
+    datasystem = custom().synchronizers(HangingSynchronizer().builder).overrides(source.builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor, hooks=[CapturingHook()])
+    with LDClient(config, start_wait=0) as client:
+        stage, _ = client.migration_variation('overridden-flag', user, Stage.OFF)
+        assert stage == Stage.OFF
+        assert len(details) == 1
+        assert details[0].value == 'off'
+        assert details[0].reason == {'kind': 'ERROR', 'errorKind': 'WRONG_TYPE', 'overrideAffected': True}
+
+
+def test_override_affected_evaluations_appear_only_in_summary_output():
+    # End to end through the real event processor: the overridden flag requests individual
+    # feature events and debug events, and an ordinary flag requests feature events.
+    debug_until = int(time.time() * 1000) + 100000
+    overridden = FlagBuilder('flag-tracked-override').version(300).on(False).off_variation(0).variations('override-value').track_events(True).debug_events_until_date(debug_until).build().to_json_dict()
+    normal = FlagBuilder('flag-normal').version(100).on(False).off_variation(0).variations('normal-value').track_events(True).build().to_json_dict()
+    source = MockOverrideSource(flags={'flag-tracked-override': overridden})
+    mock_http = MockHttp()
+
+    initializer = StaticInitializer({'flag-normal': normal}, {})
+    datasystem = custom().initializers([initializer.builder]).overrides(source.builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, diagnostic_opt_out=True, event_processor_class=lambda config: DefaultEventProcessor(config, mock_http))
+    with LDClient(config, start_wait=5) as client:
+        assert client.is_initialized() is True
+        for _ in range(2):
+            assert client.variation('flag-tracked-override', user, 'default1') == 'override-value'
+        assert client.variation('flag-normal', user, 'default2') == 'normal-value'
+        client.flush()
+        client._event_processor._wait_until_inactive()
+
+    assert mock_http.request_data is not None
+    output = json.loads(mock_http.request_data)
+    kinds = sorted(e['kind'] for e in output)
+    assert kinds == ['feature', 'index', 'summary']
+    feature = [e for e in output if e['kind'] == 'feature'][0]
+    assert feature['key'] == 'flag-normal'
+    summary = [e for e in output if e['kind'] == 'summary'][0]
+    assert summary['features']['flag-tracked-override']['default'] == 'default1'
+    assert summary['features']['flag-tracked-override']['counters'] == [
+        {'count': 2, 'value': 'override-value', 'variation': 0, 'version': 300, 'overrideAffected': True}
+    ]
+    assert summary['features']['flag-normal']['counters'] == [{'count': 1, 'value': 'normal-value', 'variation': 0, 'version': 100}]
