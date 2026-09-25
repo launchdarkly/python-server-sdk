@@ -57,6 +57,12 @@ class EvaluationDetail:
         * ``inExperiment``: This is true if the evaluation resulted in an experiment rollout and
           served one of the variations in the experiment. Otherwise it is false.
 
+        * ``overrideAffected``: This is true if a flag override affected the evaluation, directly
+          or indirectly. It is present only when true. An evaluation is affected when the flag
+          itself, a prerequisite flag at any depth, or a segment consulted during rule matching
+          came from the SDK's override store. Flag overrides are currently experimental and
+          subject to change.
+
         * ``bigSegmentsStatus``: describes the validity of Big Segment information, if and only if
           the flag evaluation required querying at least one Big Segment; otherwise it returns None.
           Allowable values are defined in :class:`BigSegmentsStatus`. For more information, read the
