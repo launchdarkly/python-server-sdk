@@ -16,6 +16,11 @@ from ldclient.impl.datasystem.fdv2_common import (
 )
 from ldclient.impl.datasystem.store import Store, _decode
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.overrides import (
+    OverrideLayer,
+    OverrideSinkImpl,
+    OverrideStoreView
+)
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
@@ -26,6 +31,8 @@ from ldclient.interfaces import (
     DataStoreMode,
     DataStoreStatus,
     FeatureStore,
+    FlagChange,
+    OverrideSource,
     ReadOnlyStore,
     Synchronizer
 )
@@ -257,6 +264,20 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._store_view = _ReadOnlyStoreView(self._store)
 
+        # The following are set only when an override source is configured. The layer holds the
+        # override entries. The overlay serves them in preference to the store's data at the
+        # store read boundary. The source populates the layer at runtime. The override system
+        # has no effect on initialization status or data availability. Building the source
+        # here makes an invalid source configuration a construction error, like any other
+        # invalid component configuration.
+        self._override_source: Optional[OverrideSource] = None
+        self._override_layer: Optional[OverrideLayer] = None
+        self._overlay: Optional[OverrideStoreView] = None
+        if data_system_config.override_source is not None and not self._disabled:
+            self._override_source = data_system_config.override_source.build(config)
+            self._override_layer = OverrideLayer()
+            self._overlay = OverrideStoreView(self._store_view, self._override_layer)
+
     def _create_store(self, flag_change_listeners: Listeners, change_set_listeners: Listeners) -> Store:
         return Store(flag_change_listeners, change_set_listeners)
 
@@ -288,6 +309,17 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._stop_event.clear()
 
+        if self._override_source is not None and self._override_layer is not None:
+            # The source starts before the main thread, so a source that loads synchronously
+            # has its overrides in place before the client begins evaluating.
+            sink = OverrideSinkImpl(
+                self._override_layer,
+                self._store_view,
+                lambda key: self._flag_change_listeners.notify(FlagChange(key)),
+                self._flag_change_listeners.has_listeners,
+            )
+            self._override_source.start(sink)
+
         # Start the main coordination thread
         main_thread = Thread(
             target=self._run_main_loop,
@@ -300,6 +332,12 @@ class FDv2(_FDv2Base, DataSystem):
 
     def stop(self):
         """Stop the FDv2 data system and all associated threads."""
+        if self._override_source is not None:
+            try:
+                self._override_source.close()
+            except Exception as e:
+                log.error("Error closing the override source: %s", e)
+
         self._stop_event.set()
 
         with self._lock.write():
@@ -633,8 +671,17 @@ class FDv2(_FDv2Base, DataSystem):
 
     @property
     def store(self) -> ReadOnlyStore:
-        """Get the underlying store for flag evaluation."""
+        """
+        Get the store for flag evaluation. When an override source is configured, this is the
+        overlay that serves override entries in preference to LaunchDarkly data.
+        """
+        if self._overlay is not None:
+            return self._overlay
         return self._store_view
+
+    @property
+    def override_source_configured(self) -> bool:
+        return self._override_source is not None
 
 
 __all__ = [
