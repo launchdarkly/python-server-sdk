@@ -26,6 +26,7 @@ from ldclient.impl.datasourcev2.async_streaming import (
 )
 from ldclient.impl.util import Result
 from ldclient.integrations import Redis
+from ldclient.integrations.overrides import FileOverrideSourceBuilder
 from ldclient.interfaces import DataStoreMode
 from ldclient.migrations import (
     AsyncMigratorBuilder,
@@ -56,8 +57,10 @@ class AsyncClientEntity:
             }
 
         datasystem_config = config_params.get('dataSystem')
+        if config_params.get('overrides') is not None and datasystem_config is None:
+            raise ValueError("flag overrides require the data system to be configured")
         if datasystem_config is not None:
-            opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
+            opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts, config_params.get('overrides'))
         elif config_params.get("streaming") is not None:
             streaming = config_params["streaming"]
             if streaming.get("baseUri") is not None:
@@ -297,13 +300,13 @@ def _set_optional_value(params_in: dict, name_in: str, func: Callable[[Any], Any
         func(params_in[name_in])
 
 
-def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSystemConfig:
+def _build_async_data_system(datasystem_config: dict, opts: dict, overrides_config: Optional[dict] = None) -> AsyncDataSystemConfig:
     """Build an AsyncDataSystemConfig from the harness's dataSystem config.
 
     Wires the FDv2 initializers, the ordered synchronizer chain, the FDv1
-    fallback synchronizer, the payload filter, and an optional async
-    persistent store. The async client injects its shared aiohttp session
-    into these builders when it starts.
+    fallback synchronizer, the payload filter, an optional async persistent
+    store, and the optional file-based override source. The async client
+    injects its shared aiohttp session into these builders when it starts.
     """
     initializers: Optional[list] = None
     init_configs = datasystem_config.get('initializers')
@@ -356,6 +359,9 @@ def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSy
         "fdv1_fallback_synchronizer": fdv1_fallback_synchronizer,
     }
 
+    if overrides_config is not None:
+        ds_kwargs["override_source"] = _make_override_source(overrides_config)
+
     store_config = datasystem_config.get("store")
     if store_config is not None:
         persistent_store_config = store_config.get("persistentDataStore")
@@ -368,6 +374,18 @@ def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSy
             )
 
     return AsyncDataSystemConfig(**ds_kwargs)
+
+
+def _make_override_source(params: dict) -> FileOverrideSourceBuilder:
+    """
+    Builds the file-based override source from the harness's overrides configuration. The
+    files are written by the harness on a file system shared with this service.
+    """
+    builder = FileOverrideSourceBuilder(params["filePaths"])
+    _set_optional_value(params, "duplicateKeysHandling", builder.duplicate_keys_handling)
+    _set_optional_value(params, "changeDetection", builder.change_detection)
+    _set_optional_time(params, "pollIntervalMs", builder.poll_interval)
+    return builder
 
 
 def _create_async_persistent_store(persistent_store_config: dict):
