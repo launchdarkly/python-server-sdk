@@ -9,7 +9,7 @@ from typing import Optional
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent, AsyncRepeatingTask
-from ldclient.impl.datasource.datasource_common import sink_or_store
+from ldclient.impl.datasource.datasource_common import async_sink_or_store
 from ldclient.impl.retry import (
     FailureKind,
     RetryState,
@@ -73,7 +73,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         """Makes one poll request and records the outcome on the retry state."""
         try:
             all_data = await self._requester.get_all_data()
-            await sink_or_store(self._data_source_update_sink, self._store).init(all_data)
+            await async_sink_or_store(self._data_source_update_sink, self._store).init(all_data)
 
             if self._data_source_update_sink is not None:
                 self._data_source_update_sink.update_status(DataSourceState.VALID, None)

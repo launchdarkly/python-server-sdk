@@ -5,16 +5,15 @@ Pure helpers shared by the FDv1 polling and streaming data sources.
 # currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
-from typing import (
-    Mapping,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-    runtime_checkable
-)
+from typing import Mapping, Optional, Protocol, Union, runtime_checkable
 
 from ldclient.impl.util import _LD_ENVID_HEADER
+from ldclient.interfaces import (
+    AsyncDataSourceUpdateSink,
+    AsyncFeatureStore,
+    DataSourceUpdateSink,
+    FeatureStore
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 STREAM_ALL_PATH = '/all'
@@ -40,11 +39,7 @@ class StreamClosedError(Exception):
         super().__init__("the server closed the stream connection")
 
 
-_Sink = TypeVar('_Sink')
-_Store = TypeVar('_Store')
-
-
-def sink_or_store(sink: Optional[_Sink], store: _Store) -> Union[_Sink, _Store]:
+def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore) -> Union[DataSourceUpdateSink, FeatureStore]:
     """
     The original implementation of the data sources relied on the feature store
     directly, which we are trying to move away from. Customers who might have
@@ -55,6 +50,18 @@ def sink_or_store(sink: Optional[_Sink], store: _Store) -> Union[_Sink, _Store]:
     The next major release should be able to simplify this structure and
     remove the need for fall back to the data store because the update sink
     should always be present.
+    """
+    if sink is None:
+        return store
+
+    return sink
+
+
+def async_sink_or_store(sink: Optional[AsyncDataSourceUpdateSink], store: AsyncFeatureStore) -> Union[AsyncDataSourceUpdateSink, AsyncFeatureStore]:
+    """
+    The async counterpart of :func:`sink_or_store`, kept separate so each side
+    names its own sink and store types. One shared generic function accepted a
+    sync sink beside an async store without complaint.
     """
     if sink is None:
         return store

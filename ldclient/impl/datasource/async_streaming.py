@@ -7,7 +7,7 @@ Default implementation of the streaming component.
 import asyncio
 import json
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 from urllib import parse
 
 from ld_eventsource.actions import Event, Fault, Start
@@ -18,8 +18,8 @@ from ldclient.impl.aio.transport import AsyncSSEFactory, make_client_session
 from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
     StreamClosedError,
-    parse_path,
-    sink_or_store
+    async_sink_or_store,
+    parse_path
 )
 from ldclient.impl.retry import (
     FailureKind,
@@ -34,7 +34,7 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState
 )
-from ldclient.versioned_data_kind import FEATURES, SEGMENTS
+from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 
 class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
@@ -196,10 +196,10 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
     # Returns True if we initialized the feature store
     async def _process_message(self, msg: Event) -> bool:
         """Process a single SSE event.  Returns True on a successful ``put``."""
-        target = sink_or_store(self._data_source_update_sink, self._store)
+        target = async_sink_or_store(self._data_source_update_sink, self._store)
         if msg.event == 'put':
             all_data = json.loads(msg.data)
-            init_data = {FEATURES: all_data['data']['flags'], SEGMENTS: all_data['data']['segments']}
+            init_data: Mapping[VersionedDataKind, Mapping[str, dict]] = {FEATURES: all_data['data']['flags'], SEGMENTS: all_data['data']['segments']}
             log.debug("Received put event with %d flags and %d segments", len(init_data[FEATURES]), len(init_data[SEGMENTS]))
             await target.init(init_data)
             return True
