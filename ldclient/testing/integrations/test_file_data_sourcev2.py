@@ -183,7 +183,7 @@ def test_initializer_handles_duplicate_keys():
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Fail)
-        assert "was used more than once" in result.error
+        assert "is specified by multiple files" in result.error
     finally:
         os.remove(path1)
         os.remove(path2)
@@ -248,7 +248,8 @@ def test_initializer_handles_flag_values():
         flag_change = flag_changes[0]
         assert flag_change.key == "flag2"
         assert flag_change.object['key'] == "flag2"
-        assert flag_change.object['on'] is True
+        assert flag_change.object['on'] is False
+        assert flag_change.object['offVariation'] == 0
         assert flag_change.object['variations'] == ["value2"]
     finally:
         os.remove(path)
