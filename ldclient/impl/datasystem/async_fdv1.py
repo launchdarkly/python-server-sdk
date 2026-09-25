@@ -124,6 +124,11 @@ class AsyncFDv1(AsyncDataSystem):
     def store(self) -> AsyncReadOnlyStore:
         return self._store_view
 
+    @property
+    def override_source_configured(self) -> bool:
+        # Overrides are an option of the FDv2 data system only.
+        return False
+
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """
         Sets the diagnostic accumulator for streaming initialization metrics.
