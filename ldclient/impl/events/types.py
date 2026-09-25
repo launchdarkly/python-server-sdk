@@ -52,6 +52,7 @@ class EventInputEvaluation(EventInput):
         "track_events",
         "sampling_ratio",
         "exclude_from_summaries",
+        "override_affected",
     ]
 
     def __init__(
@@ -66,6 +67,7 @@ class EventInputEvaluation(EventInput):
         default_value: Any,
         prereq_of: Optional[FeatureFlag] = None,
         track_events: bool = False,
+        override_affected: bool = False,
     ):
         super().__init__(timestamp, context, 1 if flag is None else flag.sampling_ratio)
         self.key = key
@@ -79,6 +81,11 @@ class EventInputEvaluation(EventInput):
         self.exclude_from_summaries = (
             False if flag is None else flag.exclude_from_summaries
         )
+        # True when a flag override affected this evaluation, directly or through a
+        # prerequisite or segment. The event processor keys on this scalar alone, never on the
+        # reason: such an evaluation produces no individual feature or debug event and is
+        # counted in a summary counter that carries the override-affected marker.
+        self.override_affected = override_affected
 
     def to_debugging_dict(self) -> dict:
         return {
@@ -94,6 +101,7 @@ class EventInputEvaluation(EventInput):
             "track_events": self.track_events,
             "exclude_from_summaries": self.exclude_from_summaries,
             "sampling_ratio": self.sampling_ratio,
+            "override_affected": self.override_affected,
         }
 
 
@@ -155,6 +163,7 @@ class EventFactory:
         detail: EvaluationDetail,
         default_value: Any,
         prereq_of_flag: Optional[FeatureFlag] = None,
+        override_affected: bool = False,
     ) -> EventInputEvaluation:
         add_experiment_data = self.is_experiment(flag, detail.reason)
         return EventInputEvaluation(
@@ -168,6 +177,7 @@ class EventFactory:
             default_value,
             prereq_of_flag,
             flag.track_events or add_experiment_data,
+            override_affected,
         )
 
     def new_default_event(
