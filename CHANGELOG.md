@@ -2,6 +2,27 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.18.0](https://github.com/launchdarkly/python-server-sdk/compare/9.17.0...9.18.0) (2026-09-25)
+
+
+### Features
+
+* Add retry state for RETRY-spec backoff ([#522](https://github.com/launchdarkly/python-server-sdk/issues/522)) ([e734558](https://github.com/launchdarkly/python-server-sdk/commit/e734558d52dbd3eeeb9d378f283dd3d3f5cee611))
+* Drive repeating tasks from a delay source ([9abe8cb](https://github.com/launchdarkly/python-server-sdk/commit/9abe8cbb878445b500211c89f0e3176fdbe4587a))
+* Retry indefinitely after a data source failure instead of stopping permanently in FDv1 ([e17e173](https://github.com/launchdarkly/python-server-sdk/commit/e17e1730de44f4494befd4df260381f7548ca74a))
+* warn that payload filtering has no effect with FDv2 ([#518](https://github.com/launchdarkly/python-server-sdk/issues/518)) ([296311f](https://github.com/launchdarkly/python-server-sdk/commit/296311f9ea73f09e96bd8dfb7410405e08794776))
+* Warn when the SDK is used in a forked process without postfork ([#512](https://github.com/launchdarkly/python-server-sdk/issues/512)) ([75402e9](https://github.com/launchdarkly/python-server-sdk/commit/75402e90f38a154466ab8b2bdd53a819720e0001))
+
+
+### Bug Fixes
+
+* Add async modules to the readthedocs API reference ([#513](https://github.com/launchdarkly/python-server-sdk/issues/513)) ([f40d3b2](https://github.com/launchdarkly/python-server-sdk/commit/f40d3b22c808e829e9deb4ac5feab05db85674e8))
+* Log the cached-data evaluation warning only once per client ([#520](https://github.com/launchdarkly/python-server-sdk/issues/520)) ([59ce998](https://github.com/launchdarkly/python-server-sdk/commit/59ce998668b6907fb0663699127b0b9895cbdcef))
+* Read all items when a collection is empty ([#524](https://github.com/launchdarkly/python-server-sdk/issues/524)) ([1087147](https://github.com/launchdarkly/python-server-sdk/commit/108714738b1ef0b955321b502bfa65dbced5eaee))
+* Repeating task wait duration is no longer reduced by a slow callback duration. ([9abe8cb](https://github.com/launchdarkly/python-server-sdk/commit/9abe8cbb878445b500211c89f0e3176fdbe4587a))
+* Report a distinct User-Agent for the async client ([#516](https://github.com/launchdarkly/python-server-sdk/issues/516)) ([514c467](https://github.com/launchdarkly/python-server-sdk/commit/514c46780cf5aa593c1f791bd1335c7048f6d235))
+* Warn and use the documented default for an invalid poll interval or initial reconnect delay ([e17e173](https://github.com/launchdarkly/python-server-sdk/commit/e17e1730de44f4494befd4df260381f7548ca74a))
+
 ## [9.17.0](https://github.com/launchdarkly/python-server-sdk/compare/9.16.1...9.17.0) (2026-08-28)
 
 
