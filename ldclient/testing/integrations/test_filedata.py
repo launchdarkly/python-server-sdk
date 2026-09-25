@@ -861,6 +861,34 @@ def test_watcher_matches_the_destination_of_a_move_event(tmp_path, make_watcher)
 
 
 @watchdog_required
+def test_watcher_ignores_events_that_do_not_change_the_file(tmp_path, make_watcher):
+    # Opening and reading a watched file produces notifications too. A reload reads the files,
+    # so reacting to those would make every reload trigger the next one.
+    import watchdog.events
+
+    path = os.path.join(str(tmp_path), 'data.json')
+    real_path = os.path.join(os.path.realpath(str(tmp_path)), 'data.json')
+    write_file(path, 'a')
+    w = make_watcher([path])
+    w.watcher._handle_event(watchdog.events.FileOpenedEvent(real_path))
+    w.watcher._handle_event(watchdog.events.FileClosedNoWriteEvent(real_path))
+    w.require_no_change()
+    w.watcher._handle_event(watchdog.events.FileClosedEvent(real_path))
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_does_not_signal_when_the_file_is_only_read(tmp_path, make_watcher):
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, 'a')
+    w = make_watcher([path])
+    for _ in range(3):
+        with open(path, 'rb') as f:
+            f.read()
+    w.require_no_change()
+
+
+@watchdog_required
 def test_watcher_detects_file_deletion(tmp_path, make_watcher):
     path = os.path.join(str(tmp_path), 'data.json')
     write_file(path, 'a')

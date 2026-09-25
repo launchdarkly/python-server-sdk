@@ -53,6 +53,10 @@ DEFAULT_RETRY_DELAY = 1.0
 # because it does not exist yet.
 _WATCH_RETRY_INTERVAL = 1.0
 
+# The watchdog event types that can change a file's content or presence. Opening or reading a
+# file also produces events, and a reload reads the files, so those must not count as changes.
+_CHANGE_EVENT_TYPES = frozenset(["created", "modified", "moved", "deleted", "closed"])
+
 
 class DuplicateKeysHandling(str, Enum):
     """
@@ -614,6 +618,8 @@ class Watcher:
                 self._retry_task.stop()
 
     def _handle_event(self, event) -> None:
+        if getattr(event, "event_type", None) not in _CHANGE_EVENT_TYPES:
+            return
         candidates = [getattr(event, "src_path", None), getattr(event, "dest_path", None)]
         for candidate in candidates:
             if isinstance(candidate, bytes):
