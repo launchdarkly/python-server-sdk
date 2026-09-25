@@ -118,11 +118,16 @@ class AsyncSSEFactory:
         self._http_options = http_options if http_options is not None else config.http
         self._proxy = proxy if proxy is not None else (self._http_options.http_proxy or None)
 
-    def create(self, url: str, initial_retry_delay: float, query_params=None) -> AsyncSSEClient:
-        """Builds an SSE client for the given stream URL. Headers, timeouts,
-        proxy settings, and the retry/backoff policy come from the SDK config.
-        ``query_params`` is an optional zero-argument callable evaluated on
-        each (re)connect to produce additional query string parameters."""
+    def create(self, url: str, initial_retry_delay: float, query_params=None, sdk_managed_retry: bool = False) -> AsyncSSEClient:
+        """Builds an SSE client for the given stream URL. Headers, timeouts and
+        proxy settings come from the SDK config. ``query_params`` is an
+        optional zero-argument callable evaluated on each (re)connect to
+        produce additional query string parameters.
+
+        ``sdk_managed_retry`` moves the delay between connection attempts to
+        the caller. The SSE client then never waits, and
+        ``initial_retry_delay`` is ignored. When it is false, the SSE client
+        backs off on its own."""
         base_headers = _base_headers(self._config, ASYNC_USER_AGENT)
         aiohttp_request_options: dict = {
             "timeout": aiohttp.ClientTimeout(
@@ -134,6 +139,24 @@ class AsyncSSEFactory:
         proxy = self._proxy or _get_proxy_url(url)
         if proxy:
             aiohttp_request_options["proxy"] = proxy
+        if sdk_managed_retry:
+            # The SSE client's retry is disabled; the SDK owns the delay. The base
+            # strategy must be passed: omitting it selects the library's backoff.
+            retry_options: dict = {
+                "initial_retry_delay": 0,
+                "retry_delay_strategy": RetryDelayStrategy(),
+                "retry_delay_reset_threshold": 0,
+            }
+        else:
+            retry_options = {
+                "initial_retry_delay": initial_retry_delay,
+                "retry_delay_strategy": RetryDelayStrategy.default(
+                    max_delay=MAX_RETRY_DELAY,
+                    backoff_multiplier=2,
+                    jitter_multiplier=JITTER_RATIO,
+                ),
+                "retry_delay_reset_threshold": BACKOFF_RESET_INTERVAL,
+            }
         return AsyncSSEClient(
             connect=AsyncConnectStrategy.http(
                 url=url,
@@ -143,12 +166,6 @@ class AsyncSSEFactory:
                 query_params=query_params,
             ),
             error_strategy=ErrorStrategy.always_continue(),  # we'll make error-handling decisions when we see a Fault
-            initial_retry_delay=initial_retry_delay,
-            retry_delay_strategy=RetryDelayStrategy.default(
-                max_delay=MAX_RETRY_DELAY,
-                backoff_multiplier=2,
-                jitter_multiplier=JITTER_RATIO,
-            ),
-            retry_delay_reset_threshold=BACKOFF_RESET_INTERVAL,
             logger=log,
+            **retry_options,
         )

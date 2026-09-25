@@ -1,3 +1,4 @@
+import time
 from typing import Callable, Dict
 
 import mock
@@ -6,7 +7,11 @@ import pytest
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
 from ldclient.impl.listeners import Listeners
-from ldclient.interfaces import DataSourceErrorKind, DataSourceState
+from ldclient.interfaces import (
+    DataSourceErrorInfo,
+    DataSourceErrorKind,
+    DataSourceState
+)
 from ldclient.testing.builders import (
     FlagBuilder,
     FlagRuleBuilder,
@@ -80,6 +85,42 @@ def test_interrupting_initializing_stays_initializing():
     sink.update_status(DataSourceState.INTERRUPTED, None)
     assert sink.status.state == DataSourceState.INITIALIZING
     assert sink.status.error is None
+
+
+def test_off_is_terminal():
+    spy = SpyListener()
+    status_listener = Listeners()
+    status_listener.add(spy)
+
+    sink = DataSourceUpdateSinkImpl(InMemoryFeatureStore(), status_listener, Listeners())
+    sink.update_status(DataSourceState.VALID, None)
+    sink.update_status(DataSourceState.OFF, None)
+
+    # A poll or stream connection still in flight when the data source stopped.
+    # Test both a plain state change and one carrying an error, so neither can
+    # get through.
+    sink.update_status(DataSourceState.VALID, None)
+    sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.NETWORK_ERROR, 0, time.time(), 'late'))
+
+    assert sink.status.state == DataSourceState.OFF
+    assert sink.status.error is None
+    assert [status.state for status in spy.statuses] == [DataSourceState.VALID, DataSourceState.OFF]
+
+
+@mock.patch('ldclient.feature_store.InMemoryFeatureStore.init', side_effect=[Exception('cannot init')])
+def test_store_error_after_off_reports_nothing(mock_init, prereq_data):
+    spy = SpyListener()
+    status_listener = Listeners()
+    status_listener.add(spy)
+
+    sink = DataSourceUpdateSinkImpl(InMemoryFeatureStore(), status_listener, Listeners())
+    sink.update_status(DataSourceState.OFF, None)
+
+    with pytest.raises(Exception):
+        sink.init(prereq_data)
+
+    assert sink.status.state == DataSourceState.OFF
+    assert [status.state for status in spy.statuses] == [DataSourceState.OFF]
 
 
 def test_listener_is_only_triggered_for_state_changes():

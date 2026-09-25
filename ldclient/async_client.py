@@ -389,8 +389,8 @@ class AsyncLDClient:
 
         If this returns false, it means that the client has not yet successfully connected to LaunchDarkly.
         It might still be in the process of starting up, or it might be attempting to reconnect after an
-        unsuccessful attempt, or it might have received an unrecoverable error (such as an invalid SDK key)
-        and given up.
+        unsuccessful attempt, or it might have received an error that needs to be fixed (such
+        as an invalid SDK key).
 
         This is a coroutine because determining readiness may query a persistent store.
         """
