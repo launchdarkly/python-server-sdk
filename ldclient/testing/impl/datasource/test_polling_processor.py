@@ -165,7 +165,7 @@ def test_unexpected_http_error_moves_to_the_extended_regime(ignore_mock):
 
     # The extended regime starts at five minutes, so only the first poll runs.
     wait_until(lambda: retry.next_delay > 0.1)
-    assert not ready.wait(0.1)
+    assert not ready.is_set()
     assert mock_requester.request_count == 1
 
 
