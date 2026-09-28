@@ -83,6 +83,7 @@ def status():
             'persistent-data-store-redis',
             'persistent-data-store-dynamodb',
             'persistent-data-store-consul',
+            'persistent-data-store-recovery',
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',

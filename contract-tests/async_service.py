@@ -68,6 +68,7 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'flag-value-change-listeners',
             'migrations',
             'persistent-data-store-redis',
+            'persistent-data-store-recovery',
             'fdv1-fallback',
             'retry-conformance-fdv1-streaming',
             'retry-conformance-fdv1-polling',
