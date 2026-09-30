@@ -1,5 +1,7 @@
 import queue
+import time
 from threading import Event, Lock, Thread
+from typing import Optional
 
 from ldclient.impl.util import log
 
@@ -35,16 +37,25 @@ class FixedThreadPool:
         return True
 
     """
-    Waits until all currently busy worker threads have completed their jobs.
+    Waits until all currently busy worker threads have completed their jobs, or until the
+    specified number of seconds has elapsed. A timeout of None means to wait indefinitely.
+    Returns True if all jobs completed, or False if the timeout elapsed first.
     """
 
-    def wait(self):
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + timeout
         while True:
             with self._lock:
                 if self._busy_count == 0:
-                    return
+                    return True
                 self._event.clear()
-            self._event.wait()
+            if deadline is None:
+                self._event.wait()
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self._event.wait(remaining)
 
     """
     Tells all the worker threads to terminate once all active jobs have completed.
