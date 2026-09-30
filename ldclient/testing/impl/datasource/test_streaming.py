@@ -315,7 +315,7 @@ def test_unexpected_http_error_backs_off_a_long_way(status):
                 wait_until(lambda: sp._retry.next_delay > NORMAL_STREAMING_CEILING_DELAY)
 
                 # Initialization is not falsely unblocked.
-                assert not ready.wait(0.1)
+                assert not ready.is_set()
                 assert not sp.initialized()
                 assert sp.is_alive()
                 server.should_have_requests(1)
@@ -927,7 +927,7 @@ def test_failure_transitions_from_valid():
             wait_until(lambda: len(spy.statuses) == 2)
 
             # The 401 is retried five minutes out, so readiness never fires.
-            assert not ready.wait(0.1)
+            assert not ready.is_set()
             server.should_have_requests(1)
 
             assert len(spy.statuses) == 2
