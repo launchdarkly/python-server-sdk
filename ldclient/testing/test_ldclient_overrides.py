@@ -63,7 +63,7 @@ def test_override_is_served_when_client_is_not_initialized():
         detail = client.variation_detail('overridden-flag', user, False)
         assert detail.value is True
         assert detail.variation_index == 0
-        assert detail.reason == {'kind': 'OFF', 'overrideAffected': True}
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
 
 
 def test_non_overridden_flag_still_short_circuits_when_client_is_not_initialized():
@@ -140,7 +140,7 @@ def test_override_takes_precedence_over_launchdarkly_data():
     with make_initialized_client({'flag-precedence': ld_flag, 'flag-normal': normal}, source) as client:
         detail = client.variation_detail('flag-precedence', user, 'default')
         assert detail.value == 'override-value'
-        assert detail.reason == {'kind': 'OFF', 'overrideAffected': True}
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
         detail = client.variation_detail('flag-normal', user, 'default')
         assert detail.value == 'normal-value'
         assert detail.reason == {'kind': 'OFF'}
@@ -206,7 +206,7 @@ def test_all_flags_state_reflects_overrides_when_initialized():
         state = client.all_flags_state(user, with_reasons=True)
         assert state.valid is True
         assert state.to_values_map() == {'flag-precedence': 'override-value', 'flag-normal': 'normal-value', 'override-only': 'only-value'}
-        assert state.get_flag_reason('flag-precedence') == {'kind': 'OFF', 'overrideAffected': True}
+        assert state.get_flag_reason('flag-precedence') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
         assert state.get_flag_reason('flag-normal') == {'kind': 'OFF'}
 
 
