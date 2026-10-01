@@ -79,7 +79,7 @@ async def test_override_is_served_when_client_is_not_initialized():
         assert await client.is_initialized() is False
         detail = await client.variation_detail('overridden-flag', user, False)
         assert detail.value is True
-        assert detail.reason == {'kind': 'OFF', 'overrideAffected': True}
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
     finally:
         await client.close()
     assert source.close_count == 1
@@ -127,13 +127,13 @@ async def test_override_takes_precedence_over_launchdarkly_data_and_all_flags_re
     try:
         detail = await client.variation_detail('flag-precedence', user, 'default')
         assert detail.value == 'override-value'
-        assert detail.reason == {'kind': 'OFF', 'overrideAffected': True}
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
         detail = await client.variation_detail('flag-normal', user, 'default')
         assert detail.reason == {'kind': 'OFF'}
 
         state = await client.all_flags_state(user, with_reasons=True)
         assert state.to_values_map() == {'flag-precedence': 'override-value', 'flag-normal': 'normal-value'}
-        assert state.get_flag_reason('flag-precedence') == {'kind': 'OFF', 'overrideAffected': True}
+        assert state.get_flag_reason('flag-precedence') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
     finally:
         await client.close()
 
