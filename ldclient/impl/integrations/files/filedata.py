@@ -141,9 +141,10 @@ def abs_file_paths(paths: List[str]) -> List[str]:
 def make_flag_with_value(key: str, value: Any) -> FeatureFlag:
     """
     Expands a flag-key-to-value entry into a full flag definition that returns the given value
-    for every context. The flag is off and serves its single variation as the off variation.
+    for every context. The flag is on, has the value as its only variation, and serves that
+    variation as its fallthrough.
     """
-    return FeatureFlag({"key": key, "version": 1, "on": False, "offVariation": 0, "variations": [value]})
+    return FeatureFlag({"key": key, "version": 1, "on": True, "fallthrough": {"variation": 0}, "variations": [value]})
 
 
 def read_file(path: str) -> Document:

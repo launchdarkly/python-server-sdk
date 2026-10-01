@@ -160,14 +160,15 @@ def test_abs_file_paths():
     assert paths[1] == '/absolute/data.json'
 
 
-def test_make_flag_with_value_is_off_and_serves_the_value():
+def test_make_flag_with_value_is_on_and_serves_the_value_by_fallthrough():
     flag = make_flag_with_value('flag1', 'value1')
     assert flag.key == 'flag1'
     assert flag.version == 1
-    assert flag.on is False
-    assert flag.off_variation == 0
+    assert flag.on is True
+    assert flag.off_variation is None
+    assert flag.fallthrough.variation == 0
     assert flag.variations == ['value1']
-    assert flag.to_json_dict() == {'key': 'flag1', 'version': 1, 'on': False, 'offVariation': 0, 'variations': ['value1']}
+    assert flag.to_json_dict() == {'key': 'flag1', 'version': 1, 'on': True, 'fallthrough': {'variation': 0}, 'variations': ['value1']}
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +187,8 @@ def test_merge_combines_documents():
     assert list(result.flags.keys()) == ['flag1', 'flag2']
     assert list(result.segments.keys()) == ['seg1']
     assert result.flags['flag2'].variations == ['value2']
-    assert result.flags['flag2'].on is False
+    assert result.flags['flag2'].on is True
+    assert result.flags['flag2'].fallthrough.variation == 0
 
 
 def test_merge_duplicate_keys_fail():
