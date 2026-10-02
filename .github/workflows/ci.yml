@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@jb/sdk-3244/consul-2-0
         with:
           redis: true
           consul: true
@@ -198,7 +198,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@jb/sdk-3244/consul-2-0
         with:
           redis: true
           consul: true
