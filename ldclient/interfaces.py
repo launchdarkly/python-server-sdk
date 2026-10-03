@@ -2128,6 +2128,73 @@ class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
+class OverrideSink(Protocol):  # pylint: disable=too-few-public-methods
+    """
+    OverrideSink receives the contents of the SDK's flag and segment override layer. The SDK
+    implements it and passes it to an :class:`OverrideSource` when the source starts. Override
+    sources call it, they do not implement it.
+
+    Flag overrides are currently experimental and subject to change.
+    """
+
+    @abstractmethod
+    def set_overrides(self, flags: Mapping[str, Any], segments: Mapping[str, Any]) -> None:
+        """
+        Replaces the entire override layer with the given flag and segment definitions. Each call
+        is a full snapshot: entries absent from the call are removed from the layer, and empty
+        mappings clear the layer. The new contents are visible to evaluations when the call
+        returns.
+
+        The mappings are keyed by flag key and segment key. Each value is a full definition,
+        either a :class:`ldclient.impl.model.FeatureFlag` or :class:`ldclient.impl.model.Segment`
+        model object or its JSON dictionary form. A dictionary that is not a valid definition
+        raises ``ValueError``. The SDK itself marks the entries as overrides.
+
+        This method is safe to call from any thread. Calls are serialized by the SDK.
+
+        :param flags: the flag definitions, keyed by flag key
+        :param segments: the segment definitions, keyed by segment key
+        """
+        raise NotImplementedError
+
+
+class OverrideSource(Protocol):
+    """
+    OverrideSource supplies flag and segment overrides that take precedence over LaunchDarkly data
+    at evaluation time, on a per-key basis. Overrides exist for resilience during an incident.
+    They let an operator force one or more flags to a known state on a running client, whether
+    or not the client can reach LaunchDarkly.
+
+    An override source is not a data source. It does not participate in the data system's
+    initializer and synchronizer pipeline. The override layer it populates has no effect on the
+    client's initialization status, data availability, or data source status.
+
+    To configure an override source, use :meth:`ldclient.datasystem.ConfigBuilder.overrides`.
+
+    Flag overrides are currently experimental and subject to change.
+    """
+
+    @abstractmethod
+    def start(self, sink: OverrideSink) -> None:
+        """
+        Begins supplying overrides to the sink and returns without blocking on long-running
+        work. Implementations typically perform an initial load synchronously, then push a full
+        replacement snapshot to the sink whenever their backing data changes, until
+        :meth:`close` is called. A failed load leaves the previously supplied layer untouched by
+        not calling the sink.
+
+        :param sink: the sink that receives each snapshot
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        """
+        Stops the source and releases any resources it holds.
+        """
+        raise NotImplementedError
+
+
 class AsyncInitializer(Protocol):  # pylint: disable=too-few-public-methods
     """
     AsyncInitializer represents a component capable of retrieving a single data result
