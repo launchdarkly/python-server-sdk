@@ -125,9 +125,9 @@ class AsyncFDv1(AsyncDataSystem):
         return self._store_view
 
     @property
-    def override_source_configured(self) -> bool:
+    def override_layer(self) -> None:
         # Overrides are an option of the FDv2 data system only.
-        return False
+        return None
 
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         """

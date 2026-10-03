@@ -234,9 +234,9 @@ class FDv1(DataSystem):
         return self._store_view
 
     @property
-    def override_source_configured(self) -> bool:
+    def override_layer(self) -> None:
         # Overrides are an option of the FDv2 data system only.
-        return False
+        return None
 
     @property
     def environment_id(self) -> Optional[str]:

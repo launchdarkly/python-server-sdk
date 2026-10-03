@@ -677,8 +677,8 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         return self._store_view
 
     @property
-    def override_source_configured(self) -> bool:
-        return self._override_source is not None
+    def override_layer(self) -> Optional[OverrideLayer]:
+        return self._override_layer
 
     async def data_availability(self) -> DataAvailability:  # type: ignore[override]
         """Reports what form of data is currently available, awaiting the store's
