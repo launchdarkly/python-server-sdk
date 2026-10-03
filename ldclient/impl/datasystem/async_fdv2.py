@@ -343,7 +343,12 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             listeners = self._flag_change_listeners
 
             def notify(key: str) -> None:
-                loop.call_soon_threadsafe(listeners.notify, FlagChange(key))
+                try:
+                    loop.call_soon_threadsafe(listeners.notify, FlagChange(key))
+                except RuntimeError:
+                    # A reload can finish after the client closed. The loop is closed then,
+                    # and the notification has nobody left to reach.
+                    log.debug("Dropped the flag change notification for %s because the event loop is closed", key)
 
             sink = OverrideSinkImpl(self._override_layer, self._store._memory_store, notify, listeners.has_listeners)
             self._override_source.start(sink)
