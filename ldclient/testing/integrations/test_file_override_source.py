@@ -4,9 +4,10 @@ absent files, change detection in both modes, failure retention, and its Info lo
 """
 import logging
 import os
+import threading
 import time
 from queue import Empty, Queue
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pytest
 
@@ -162,6 +163,18 @@ def test_builder_clamps_poll_interval_to_the_minimum(caplog):
     source = FileOverrideSourceBuilder(['a']).poll_interval(2.5).build(SDKConfig('SDK_KEY'))
     assert isinstance(source, _FileOverrideSource)
     assert source._poll_interval == 2.5
+
+
+@pytest.mark.parametrize('seconds', ['1', None, True], ids=['string', 'none', 'bool'])
+def test_builder_rejects_a_poll_interval_that_is_not_a_number(seconds):
+    with pytest.raises(TypeError):
+        FileOverrideSourceBuilder(['a']).poll_interval(seconds)
+
+
+@pytest.mark.parametrize('seconds', [float('nan'), float('inf'), float('-inf')], ids=['nan', 'inf', '-inf'])
+def test_builder_rejects_a_poll_interval_that_is_not_finite(seconds):
+    with pytest.raises(ValueError):
+        FileOverrideSourceBuilder(['a']).poll_interval(seconds)
 
 
 def test_builder_rejects_watching_without_watchdog(monkeypatch):
@@ -367,6 +380,56 @@ def test_source_retries_a_failed_load_without_a_change_signal(tmp_path, sources,
         os.utime(path, ns=(observed.st_atime_ns, observed.st_mtime_ns))
         assert os.stat(path).st_size == observed.st_size
         assert flag_values(sink.require_snapshot()) == {'flag1': False}
+
+
+@pytest.mark.parametrize("mode", [ChangeDetection.POLLING, pytest.param(ChangeDetection.WATCHING, marks=watchdog_required)])
+def test_source_detects_an_edit_made_during_the_initial_load(tmp_path, sources, monkeypatch, mode):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{"flagValues": {"flag1": "initial"}}')
+    original_reload_now = filedata.Reloader.reload_now
+
+    def load_then_edit(reloader: filedata.Reloader) -> None:
+        # The edit lands after the files were read and before start returns.
+        original_reload_now(reloader)
+        write_file(path, '{"flagValues": {"flag1": "edited-after-the-first-read"}}')
+
+    monkeypatch.setattr(filedata.Reloader, 'reload_now', load_then_edit)
+    _, sink = build_source(sources, [path], lambda b: b.change_detection(mode).poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
+
+    # The initial snapshot holds what the first read saw. The edit is detected and applied
+    # without any further change to the file.
+    assert flag_values(sink.require_snapshot()) == {'flag1': 'initial'}
+    assert flag_values(sink.require_snapshot()) == {'flag1': 'edited-after-the-first-read'}
+
+
+def reloader_threads() -> Set[threading.Thread]:
+    return {t for t in threading.enumerate() if t.name == 'ldclient.filedata.reloader'}
+
+
+def test_source_close_stops_the_reloader_when_the_change_detector_fails_to_close(tmp_path, sources, monkeypatch):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{}')
+    before = reloader_threads()
+    source, sink = build_source(sources, [path])
+    sink.require_snapshot()
+    started = reloader_threads() - before
+    assert len(started) == 1
+
+    detector: Any = source._change_detector
+    original_close = detector.close
+
+    def failing_close() -> None:
+        original_close()
+        raise RuntimeError("detector close failure")
+
+    monkeypatch.setattr(detector, 'close', failing_close)
+
+    # The failure propagates, and the reloader is stopped all the same: its worker ends.
+    with pytest.raises(RuntimeError):
+        source.close()
+    worker = started.pop()
+    worker.join(TEST_TIMEOUT)
+    assert not worker.is_alive()
 
 
 def test_source_does_not_supply_snapshots_after_close(tmp_path, sources):

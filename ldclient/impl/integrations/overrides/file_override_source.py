@@ -75,10 +75,19 @@ class _FileOverrideSource(OverrideSource):
             retry_delay=DEFAULT_RETRY_DELAY,
             skip_unchanged=True,
         )
+        # Change detection is set up before the initial load, so an edit made while the files
+        # are first read is picked up by the reload it triggers instead of waiting for a later
+        # change.
         with self._lock:
             if self._closed:
                 return
             self._reloader = reloader
+            if self._change_detection == ChangeDetection.WATCHING:
+                self._change_detector = Watcher(self._paths, reloader.trigger)
+            else:
+                poller = Poller(self._paths, self._poll_interval, reloader.trigger)
+                poller.start()
+                self._change_detector = poller
 
         # The initial load runs synchronously, so overrides present in the files are in effect
         # by the time the client constructor returns. A file that does not exist yet
@@ -86,16 +95,6 @@ class _FileOverrideSource(OverrideSource):
         # client runs with no overrides, the failure is logged, and the retry recovers once
         # the file is readable.
         reloader.reload_now()
-
-        with self._lock:
-            if self._closed:
-                return
-            if self._change_detection == ChangeDetection.WATCHING:
-                self._change_detector = Watcher(self._paths, reloader.trigger)
-            else:
-                poller = Poller(self._paths, self._poll_interval, reloader.trigger)
-                poller.start()
-                self._change_detector = poller
 
     def close(self) -> None:
         with self._lock:
@@ -106,10 +105,14 @@ class _FileOverrideSource(OverrideSource):
             reloader = self._reloader
             self._change_detector = None
             self._reloader = None
-        if change_detector is not None:
-            change_detector.close()
-        if reloader is not None:
-            reloader.close()
+        try:
+            if change_detector is not None:
+                change_detector.close()
+        finally:
+            # The reloader stops even when the change detector fails to close, so no reload
+            # can run after close.
+            if reloader is not None:
+                reloader.close()
 
 
 def _log_overrides_in_effect(merged: MergeResult) -> None:
