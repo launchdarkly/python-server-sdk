@@ -186,6 +186,7 @@ class EventFactory:
         context: Context,
         default_value: Any,
         reason: Optional[dict],
+        override_affected: bool = False,
     ) -> EventInputEvaluation:
         return EventInputEvaluation(
             self._timestamp_fn(),
@@ -198,6 +199,7 @@ class EventFactory:
             default_value,
             None,
             flag.track_events,
+            override_affected,
         )
 
     def new_unknown_flag_event(

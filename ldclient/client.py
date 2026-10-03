@@ -545,11 +545,13 @@ class LDClient:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
-                # The evaluation read the flag definition before it failed, so a definition from
-                # the override layer marks the result.
-                if is_override_definition(flag):
+                # The evaluation read the flag definition before it failed. A definition from
+                # the override layer marks the result, so the failure is reported in the
+                # summary counters only, like any other override-affected evaluation.
+                override_affected = is_override_definition(flag)
+                if override_affected:
                     reason['overrideAffected'] = True
-                self._send_event(event_factory.new_default_event(flag, context, default, reason))
+                self._send_event(event_factory.new_default_event(flag, context, default, reason, override_affected))
                 return EvaluationDetail(default, None, reason), flag
 
     def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
@@ -652,11 +654,11 @@ class LDClient:
                 reason = error_reason('EXCEPTION')
                 # The evaluation read the flag definition before it failed, so a definition from
                 # the override layer marks the result.
-                if is_override_definition(flag):
+                override_affected = is_override_definition(flag)
+                if override_affected:
                     reason['overrideAffected'] = True
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
-                override_affected = False
 
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
             track_events = flag.get('trackEvents', False) or requires_experiment_data
