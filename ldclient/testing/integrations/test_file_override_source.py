@@ -171,6 +171,12 @@ def test_builder_rejects_a_poll_interval_that_is_not_a_number(seconds):
         FileOverrideSourceBuilder(['a']).poll_interval(seconds)
 
 
+def test_builder_rejects_a_poll_interval_longer_than_the_runtime_can_wait():
+    with pytest.raises(ValueError) as excinfo:
+        FileOverrideSourceBuilder(['a']).poll_interval(1e20)
+    assert 'must not exceed' in str(excinfo.value)
+
+
 @pytest.mark.parametrize('seconds', [float('nan'), float('inf'), float('-inf')], ids=['nan', 'inf', '-inf'])
 def test_builder_rejects_a_poll_interval_that_is_not_finite(seconds):
     with pytest.raises(ValueError):
