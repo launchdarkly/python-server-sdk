@@ -27,6 +27,7 @@ counters, so LaunchDarkly can distinguish them. They produce no individual evalu
 """
 
 import math
+import threading
 from typing import List, Optional, Union
 
 from ldclient.config import DataSourceBuilderConfig, OverrideSourceBuilder
@@ -128,12 +129,15 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
 
         :param seconds: the interval in seconds
         :raises TypeError: when the interval is not a number
-        :raises ValueError: when the interval is not a finite number
+        :raises ValueError: when the interval is not a finite number, or is longer than the
+            runtime can wait
         """
         if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
             raise TypeError("the poll interval must be a number of seconds")
         if not math.isfinite(seconds):
             raise ValueError("the poll interval must be a finite number of seconds")
+        if seconds > threading.TIMEOUT_MAX:
+            raise ValueError("the poll interval must not exceed %s seconds" % threading.TIMEOUT_MAX)
         self.__poll_interval = seconds
         return self
 
