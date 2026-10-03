@@ -584,8 +584,9 @@ class LDClient:
                             log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
             else:
                 # No data from LaunchDarkly is available. When the override layer holds entries,
-                # the state is built from them alone. Otherwise the state is unavailable, as it
-                # is without an override source.
+                # the state is read through the overlay, which returns the override entries and
+                # any data the store already holds. Otherwise the state is unavailable, as it is
+                # without an override source.
                 layer = self._data_system.override_layer
                 if layer is None or layer.is_empty:
                     log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
