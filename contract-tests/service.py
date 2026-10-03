@@ -86,6 +86,7 @@ def status():
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',
+            'flag-overrides',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
