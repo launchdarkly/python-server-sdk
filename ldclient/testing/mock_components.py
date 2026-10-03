@@ -69,15 +69,21 @@ class MockOverrideSource:
     on every later call to set_overrides, and records its lifecycle calls.
     """
 
-    def __init__(self, flags: Optional[Dict[str, Any]] = None, segments: Optional[Dict[str, Any]] = None):
+    def __init__(self, flags: Optional[Dict[str, Any]] = None, segments: Optional[Dict[str, Any]] = None, start_error: Optional[Exception] = None):
+        """
+        :param start_error: when given, start raises it instead of supplying the contents
+        """
         self._flags: Dict[str, Any] = dict(flags or {})
         self._segments: Dict[str, Any] = dict(segments or {})
+        self._start_error = start_error
         self._sink: Optional[OverrideSink] = None
         self.start_count = 0
         self.close_count = 0
 
     def start(self, sink: OverrideSink) -> None:
         self.start_count += 1
+        if self._start_error is not None:
+            raise self._start_error
         self._sink = sink
         sink.set_overrides(self._flags, self._segments)
 
