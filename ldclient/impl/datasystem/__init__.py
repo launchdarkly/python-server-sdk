@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ldclient.impl.aio.concurrency import AsyncEvent
+    from ldclient.impl.overrides.layer import OverrideLayer
 
 from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
@@ -160,12 +161,12 @@ class DataSystem(Protocol):
 
     @property
     @abstractmethod
-    def override_source_configured(self) -> bool:
+    def override_layer(self) -> Optional["OverrideLayer"]:
         """
-        Reports whether the data system was built with an override source. The value is
-        fixed at construction. When true, the store served by :attr:`store` overlays the
-        override layer, and the client serves an overridden flag before it has LaunchDarkly
-        data.
+        Returns the override layer when the data system was built with an override source,
+        and None otherwise. The store served by :attr:`store` overlays this layer. The client
+        consults the layer directly before it has LaunchDarkly data, so that a flag the layer
+        holds is served and a flag it does not hold gets the not-ready handling.
         """
         raise NotImplementedError
 
@@ -245,10 +246,10 @@ class AsyncDataSystem(Protocol):
 
     @property
     @abstractmethod
-    def override_source_configured(self) -> bool:
+    def override_layer(self) -> Optional["OverrideLayer"]:
         """
-        Reports whether the data system was built with an override source. The value is
-        fixed at construction.
+        Returns the override layer when the data system was built with an override source,
+        and None otherwise. See :attr:`DataSystem.override_layer`.
         """
         raise NotImplementedError
 

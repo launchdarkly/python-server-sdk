@@ -680,8 +680,8 @@ class FDv2(_FDv2Base, DataSystem):
         return self._store_view
 
     @property
-    def override_source_configured(self) -> bool:
-        return self._override_source is not None
+    def override_layer(self) -> Optional[OverrideLayer]:
+        return self._override_layer
 
 
 __all__ = [

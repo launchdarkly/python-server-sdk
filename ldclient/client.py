@@ -212,7 +212,13 @@ class LDClient:
         self.__register_plugins(environment_metadata)
 
         update_processor_ready = threading.Event()
-        self._data_system.start(update_processor_ready)
+        try:
+            self._data_system.start(update_processor_ready)
+        except BaseException:
+            # A data system that fails to start fails the constructor. The components that
+            # are already running stop here, so the failure leaves no threads behind.
+            self._close_components()
+            raise
 
         if not self._config.offline and not self._config.use_ldd:
             if start_wait > 60:
@@ -281,6 +287,15 @@ class LDClient:
         self._event_processor.stop()
         self._data_system.stop()
         self.__big_segment_store_manager.stop()
+
+    def _close_components(self):
+        """
+        Stops the SDK components after a failed start-up. The event processor is last because
+        it may still be sending events the other components generated.
+        """
+        self._data_system.stop()
+        self.__big_segment_store_manager.stop()
+        self._event_processor.stop()
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):
@@ -474,7 +489,7 @@ class LDClient:
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason), None
 
-        no_launchdarkly_data = False
+        flag: Any = None
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -483,29 +498,30 @@ class LDClient:
                         if not self._eval_cached_data_warned:
                             self._eval_cached_data_warned = True
                             log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key + ". This message is logged once.")
-            elif self._data_system.override_source_configured:
-                # No data from LaunchDarkly is available. The store read below still finds an
-                # entry that the override layer holds, and the SDK serves it. A miss returns the
-                # not-ready default.
-                no_launchdarkly_data = True
             else:
-                return not_ready()
+                # No data from LaunchDarkly is available. A flag that the override layer holds
+                # is served anyway. A flag the layer does not hold gets the not-ready default,
+                # as it does without an override source.
+                layer = self._data_system.override_layer
+                if layer is not None:
+                    flag = layer.get(FEATURES, key)
+                if flag is None:
+                    return not_ready()
 
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
-        try:
-            flag = self._data_system.store.get(FEATURES, key)
-        except Exception as e:
-            log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
-            log.debug(traceback.format_exc())
-            reason = error_reason('EXCEPTION')
-            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-            return EvaluationDetail(default, None, reason), None
+        if flag is None:
+            try:
+                flag = self._data_system.store.get(FEATURES, key)
+            except Exception as e:
+                log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
+                log.debug(traceback.format_exc())
+                reason = error_reason('EXCEPTION')
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+                return EvaluationDetail(default, None, reason), None
         if not flag:
-            if no_launchdarkly_data:
-                return not_ready()
             reason = error_reason('FLAG_NOT_FOUND')
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
             return EvaluationDetail(default, None, reason), None
@@ -566,13 +582,15 @@ class LDClient:
                         if not self._all_flags_cached_data_warned:
                             self._all_flags_cached_data_warned = True
                             log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
-            elif self._data_system.override_source_configured:
-                # No data from LaunchDarkly is available. The store read below returns only the
-                # entries that the override layer holds. The result decides the state.
-                overrides_only = True
             else:
-                log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
-                return FeatureFlagsState(False)
+                # No data from LaunchDarkly is available. When the override layer holds entries,
+                # the state is built from them alone. Otherwise the state is unavailable, as it
+                # is without an override source.
+                layer = self._data_system.override_layer
+                if layer is None or layer.is_empty:
+                    log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                    return FeatureFlagsState(False)
+                overrides_only = True
 
         if not context.valid:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
