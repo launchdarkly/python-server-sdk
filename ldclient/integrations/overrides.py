@@ -26,6 +26,7 @@ reports the marking. Marked evaluations appear in analytics summary events only,
 counters, so LaunchDarkly can distinguish them. They produce no individual evaluation events.
 """
 
+import math
 from typing import List, Optional, Union
 
 from ldclient.config import DataSourceBuilderConfig, OverrideSourceBuilder
@@ -126,7 +127,13 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
         :attr:`MINIMUM_POLL_INTERVAL` is raised to the minimum.
 
         :param seconds: the interval in seconds
+        :raises TypeError: when the interval is not a number
+        :raises ValueError: when the interval is not a finite number
         """
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+            raise TypeError("the poll interval must be a number of seconds")
+        if not math.isfinite(seconds):
+            raise ValueError("the poll interval must be a finite number of seconds")
         self.__poll_interval = seconds
         return self
 
