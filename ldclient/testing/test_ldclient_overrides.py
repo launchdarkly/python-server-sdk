@@ -464,7 +464,7 @@ def test_all_flags_state_turns_off_event_tracking_for_override_affected_flags():
         assert flags_state['overridden-flag']['version'] == 7
 
 
-def test_all_flags_state_keeps_details_of_override_affected_flags_when_details_only_for_tracked_flags():
+def test_all_flags_state_omits_details_of_override_affected_flags_when_details_only_for_tracked_flags():
     # With details only for tracked flags, an override-affected flag counts as untracked, so its
     # version and reason are omitted like any other untracked flag, and its value stays.
     overridden = FlagBuilder('overridden-flag').version(7).on(False).off_variation(0).variations(True).track_events(True).build().to_json_dict()
@@ -501,6 +501,44 @@ def test_wrong_type_result_of_overridden_flag_stays_marked():
         assert len(details) == 1
         assert details[0].value == 'off'
         assert details[0].reason == {'kind': 'ERROR', 'errorKind': 'WRONG_TYPE', 'overrideAffected': True}
+
+
+def raise_evaluation_failure(*args):
+    raise RuntimeError("evaluation failure")
+
+
+def test_failed_evaluation_is_marked_only_when_the_flag_came_from_the_override_layer(monkeypatch):
+    source = MockOverrideSource(flags={'overridden-flag': tracked_bool_flag('overridden-flag').on(True).build().to_json_dict()})
+    with make_initialized_client({'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict()}, source) as client:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+
+        # The failure of the override flag is marked. The failure of the ordinary flag is not.
+        detail = client.variation_detail('overridden-flag', user, 'default')
+        assert detail == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True})
+        detail = client.variation_detail('plain-flag', user, 'default')
+        assert detail == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
+
+        # The marked record produces no individual event. The ordinary record keeps its tracking.
+        records = evaluation_events_by_key(client)
+        assert records['overridden-flag'].override_affected is True
+        assert records['plain-flag'].override_affected is False
+        assert records['plain-flag'].track_events is True
+
+
+def test_all_flags_state_turns_off_event_tracking_for_an_override_flag_whose_evaluation_fails(monkeypatch):
+    source = MockOverrideSource(flags={'overridden-flag': tracked_bool_flag('overridden-flag').on(True).build().to_json_dict()})
+    with make_initialized_client({'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict()}, source) as client:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+        state = client.all_flags_state(user, with_reasons=True)
+
+        # The failed override flag stays in the state with a marked reason and no tracking
+        # fields. The failed ordinary flag keeps its tracking fields.
+        assert state.valid is True
+        flags_state = state.to_json_dict()['$flagsState']
+        assert flags_state['overridden-flag']['reason'] == {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True}
+        assert 'trackEvents' not in flags_state['overridden-flag']
+        assert flags_state['plain-flag']['reason'] == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+        assert flags_state['plain-flag']['trackEvents'] is True
 
 
 def test_override_affected_evaluations_appear_only_in_summary_output():

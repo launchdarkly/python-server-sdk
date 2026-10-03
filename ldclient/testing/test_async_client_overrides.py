@@ -3,6 +3,7 @@ Tests for flag overrides through the async client. These mirror the key scenario
 client tests.
 """
 import asyncio
+import json
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -14,11 +15,17 @@ from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
+from ldclient.hook import AsyncHook, EvaluationSeriesContext, Metadata
 from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.events.async_event_processor import (
+    DefaultAsyncEventProcessor
+)
 from ldclient.impl.events.types import EventInputEvaluation
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
 from ldclient.interfaces import AsyncFeatureStore, DataStoreMode
+from ldclient.migrations import Stage
 from ldclient.testing.builders import FlagBuilder
+from ldclient.testing.impl.events.test_async_event_processor import MockAioHttp
 from ldclient.testing.mock_async_components import MockAsyncEventProcessor
 from ldclient.testing.mock_components import (
     FailingOverrideSourceBuilder,
@@ -345,3 +352,189 @@ async def test_all_flags_state_turns_off_event_tracking_for_override_affected_fl
         assert state.get_flag_value('overridden-flag') is True
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_source_is_not_started_when_offline():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    config = AsyncConfig('SDK_KEY', datasystem_config=AsyncDataSystemConfig(override_source=source.builder), offline=True)
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        assert source.start_count == 0
+        assert await client.variation('overridden-flag', user, False) is False
+    finally:
+        await client.close()
+
+
+def test_override_update_after_the_client_and_its_loop_are_gone_is_dropped():
+    source = MockOverrideSource()
+
+    async def run_client() -> None:
+        client = await make_uninitialized_client(source)
+        client.flag_tracker.add_listener(lambda change: None)
+        await client.close()
+
+    asyncio.run(run_client())
+    # A reload that finishes after the client closed finds the event loop closed. The
+    # notification has nobody left to reach and is dropped.
+    source.set_overrides({'overridden-flag': single_value_flag('overridden-flag', True)}, {})
+
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+def tracked_bool_flag(key: str) -> FlagBuilder:
+    return FlagBuilder(key).version(100).variations(False, True).off_variation(0).fallthrough_variation(1).track_events(True)
+
+
+def evaluation_events_by_key(client: AsyncLDClient) -> Dict[str, EventInputEvaluation]:
+    """The evaluation records the client handed to the event processor, keyed by flag key."""
+    processor: Any = client._event_processor
+    return {event.key: event for event in processor.events if isinstance(event, EventInputEvaluation)}
+
+
+async def raise_evaluation_failure(*args):
+    raise RuntimeError("evaluation failure")
+
+
+@pytest.mark.asyncio
+async def test_overridden_prerequisite_marks_the_dependent_evaluation_records():
+    # top-flag (LaunchDarkly) --> mid-flag (LaunchDarkly) --> leaf-flag (overridden)
+    #                         --> plain-flag (LaunchDarkly)
+    # The LaunchDarkly copy of leaf-flag is off, so the chain passes only through the override.
+    ld_data = {
+        'top-flag': tracked_bool_flag('top-flag').on(True).prerequisite('mid-flag', 1).prerequisite('plain-flag', 1).build().to_json_dict(),
+        'mid-flag': tracked_bool_flag('mid-flag').on(True).prerequisite('leaf-flag', 1).build().to_json_dict(),
+        'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict(),
+        'leaf-flag': tracked_bool_flag('leaf-flag').on(False).build().to_json_dict(),
+    }
+    source = MockOverrideSource(flags={'leaf-flag': tracked_bool_flag('leaf-flag').on(True).build().to_json_dict()})
+    client = await make_initialized_client(ld_data, source)
+    try:
+        detail = await client.variation_detail('top-flag', user, False)
+        assert detail.value is True
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+
+        records = evaluation_events_by_key(client)
+        assert sorted(records.keys()) == ['leaf-flag', 'mid-flag', 'plain-flag', 'top-flag']
+        assert records['top-flag'].override_affected is True
+        assert records['mid-flag'].override_affected is True
+        assert records['leaf-flag'].override_affected is True
+        assert records['plain-flag'].override_affected is False
+        assert records['leaf-flag'].reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        assert records['plain-flag'].reason == {'kind': 'FALLTHROUGH'}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_wrong_type_result_of_overridden_flag_stays_marked():
+    details = []
+
+    class CapturingHook(AsyncHook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='capturing-hook')
+
+        async def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+            return data
+
+        async def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
+            details.append(detail)
+            return data
+
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', 'not-a-stage')})
+    datasystem = AsyncDataSystemConfig(synchronizers=[MockDataSourceBuilder(AsyncHangingSynchronizer())], override_source=source.builder)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor(), hooks=[CapturingHook()])
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        stage, _ = await client.migration_variation('overridden-flag', user, Stage.OFF)
+        assert stage == Stage.OFF
+        assert len(details) == 1
+        assert details[0].value == 'off'
+        assert details[0].reason == {'kind': 'ERROR', 'errorKind': 'WRONG_TYPE', 'overrideAffected': True}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_evaluation_is_marked_only_when_the_flag_came_from_the_override_layer(monkeypatch):
+    source = MockOverrideSource(flags={'overridden-flag': tracked_bool_flag('overridden-flag').on(True).build().to_json_dict()})
+    client = await make_initialized_client({'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict()}, source)
+    try:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+
+        # The failure of the override flag is marked. The failure of the ordinary flag is not.
+        detail = await client.variation_detail('overridden-flag', user, 'default')
+        assert detail == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True})
+        detail = await client.variation_detail('plain-flag', user, 'default')
+        assert detail == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
+
+        # The marked record produces no individual event. The ordinary record keeps its tracking.
+        records = evaluation_events_by_key(client)
+        assert records['overridden-flag'].override_affected is True
+        assert records['plain-flag'].override_affected is False
+        assert records['plain-flag'].track_events is True
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_turns_off_event_tracking_for_an_override_flag_whose_evaluation_fails(monkeypatch):
+    source = MockOverrideSource(flags={'overridden-flag': tracked_bool_flag('overridden-flag').on(True).build().to_json_dict()})
+    client = await make_initialized_client({'plain-flag': tracked_bool_flag('plain-flag').on(True).build().to_json_dict()}, source)
+    try:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+        state = await client.all_flags_state(user, with_reasons=True)
+
+        # The failed override flag stays in the state with a marked reason and no tracking
+        # fields. The failed ordinary flag keeps its tracking fields.
+        assert state.valid is True
+        flags_state = state.to_json_dict()['$flagsState']
+        assert flags_state['overridden-flag']['reason'] == {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True}
+        assert 'trackEvents' not in flags_state['overridden-flag']
+        assert flags_state['plain-flag']['reason'] == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+        assert flags_state['plain-flag']['trackEvents'] is True
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_affected_evaluations_appear_only_in_summary_output():
+    # End to end through the real event processor: the overridden flag requests individual
+    # feature events and debug events, and an ordinary flag requests feature events.
+    debug_until = int(time.time() * 1000) + 100000
+    overridden = FlagBuilder('flag-tracked-override').version(300).on(False).off_variation(0).variations('override-value').track_events(True).debug_events_until_date(debug_until).build().to_json_dict()
+    normal = FlagBuilder('flag-normal').version(100).on(False).off_variation(0).variations('normal-value').track_events(True).build().to_json_dict()
+    source = MockOverrideSource(flags={'flag-tracked-override': overridden})
+    mock_http = MockAioHttp()
+
+    initializer = AsyncStaticInitializer({'flag-normal': normal}, {})
+    datasystem = AsyncDataSystemConfig(initializers=[MockDataSourceBuilder(initializer)], override_source=source.builder)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, diagnostic_opt_out=True, event_processor_class=lambda config: DefaultAsyncEventProcessor(config, mock_http))
+    client = AsyncLDClient(config)
+    await client.start(start_wait=5)
+    try:
+        assert await client.is_initialized() is True
+        for _ in range(2):
+            assert await client.variation('flag-tracked-override', user, 'default1') == 'override-value'
+        assert await client.variation('flag-normal', user, 'default2') == 'normal-value'
+        assert await client._event_processor.flush_and_wait(5) is True
+    finally:
+        await client.close()
+
+    assert mock_http.request_data is not None
+    output = json.loads(mock_http.request_data)
+    kinds = sorted(e['kind'] for e in output)
+    assert kinds == ['feature', 'index', 'summary']
+    feature = [e for e in output if e['kind'] == 'feature'][0]
+    assert feature['key'] == 'flag-normal'
+    summary = [e for e in output if e['kind'] == 'summary'][0]
+    assert summary['features']['flag-tracked-override']['default'] == 'default1'
+    assert summary['features']['flag-tracked-override']['counters'] == [
+        {'count': 2, 'value': 'override-value', 'variation': 0, 'version': 300, 'overrideAffected': True}
+    ]
+    assert summary['features']['flag-normal']['counters'] == [{'count': 1, 'value': 'normal-value', 'variation': 0, 'version': 100}]
