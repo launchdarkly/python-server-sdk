@@ -1,8 +1,10 @@
+import logging
 import os
 import threading
 import time
 from queue import Empty, Queue
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
+from unittest import mock
 
 import pytest
 
@@ -11,6 +13,7 @@ try:
 except ImportError:  # pragma: no cover
     yaml = None  # type: ignore
 
+from ldclient.impl.integrations.files import filedata
 from ldclient.impl.integrations.files.filedata import (
     Document,
     DuplicateKeyError,
@@ -157,7 +160,7 @@ def test_read_file_json_and_errors(tmp_path):
 def test_abs_file_paths():
     paths = abs_file_paths(['relative/data.json', '/absolute/data.json'])
     assert paths[0] == os.path.abspath('relative/data.json')
-    assert paths[1] == '/absolute/data.json'
+    assert paths[1] == os.path.abspath('/absolute/data.json')
 
 
 def test_make_flag_with_value_is_on_and_serves_the_value_by_fallthrough():
@@ -440,12 +443,16 @@ def test_reloader_reports_identical_failure_only_once(make_fixture):
     f.require_quiet()
 
 
+def reloader_threads() -> Set[threading.Thread]:
+    return {t for t in threading.enumerate() if t.name == 'ldclient.filedata.reloader'}
+
+
 def test_reloader_unused_spawns_no_thread(make_fixture):
-    before = threading.active_count()
+    before = reloader_threads()
     f = make_fixture('{"flagValues": {"flag1": true}}')
-    assert threading.active_count() == before
+    assert reloader_threads() == before
     f.reloader.reload_now()
-    assert threading.active_count() == before + 1
+    assert len(reloader_threads() - before) == 1
     f.require_applied()
 
 
@@ -475,14 +482,16 @@ def test_reloader_close_does_not_wait_for_in_flight_reload(make_fixture):
 
 
 def test_reloader_worker_thread_exits_after_close(make_fixture):
+    before = reloader_threads()
     f = make_fixture('{"flagValues": {"flag1": true}}')
     f.reloader.reload_now()
     f.require_applied()
-    worker = [t for t in threading.enumerate() if t.name == 'ldclient.filedata.reloader']
-    assert len(worker) == 1
+    started = reloader_threads() - before
+    assert len(started) == 1
     f.reloader.close()
-    worker[0].join(TEST_TIMEOUT)
-    assert not worker[0].is_alive()
+    worker = started.pop()
+    worker.join(TEST_TIMEOUT)
+    assert not worker.is_alive()
 
 
 def test_reloader_retries_after_failure_without_further_triggers(make_fixture):
@@ -597,12 +606,13 @@ def test_reloader_serializes_reload_now_against_worker_reloads(make_fixture):
     # complete merged result, and the callback never runs on two threads at once.
     in_apply = threading.Lock()
     overlaps: List[bool] = []
+    applied_keys: List[List[str]] = []
 
     def apply(result: MergeResult) -> None:
         acquired = in_apply.acquire(blocking=False)
         overlaps.append(not acquired)
         try:
-            assert list(result.flags.keys()) == ['flag1']
+            applied_keys.append(list(result.flags.keys()))
             time.sleep(0.002)
         finally:
             if acquired:
@@ -618,20 +628,51 @@ def test_reloader_serializes_reload_now_against_worker_reloads(make_fixture):
         t.join(TEST_TIMEOUT)
     f.reloader.close()
     assert not any(overlaps)
+    assert len(applied_keys) > 0
+    assert all(keys == ['flag1'] for keys in applied_keys)
 
 
-def test_reloader_survives_an_apply_callback_that_raises(make_fixture):
+def test_reloader_reports_an_apply_failure_and_retries_it(make_fixture):
+    # The consumer rejects every result until it is released. Each call records whether the
+    # result was accepted.
+    accept = threading.Event()
     calls: Queue = Queue()
 
     def apply(result: MergeResult) -> None:
-        calls.put(result)
-        raise RuntimeError("consumer failure")
+        accepted = accept.is_set()
+        calls.put(accepted)
+        if not accepted:
+            raise RuntimeError("consumer failure")
 
-    f = make_fixture('{"flagValues": {"flag1": true}}', apply=apply)
-    f.reloader.trigger()
-    take(calls)
-    f.reloader.trigger()
-    take(calls)
+    f = make_fixture('{"flagValues": {"flag1": true}}', apply=apply, retry_delay=SHORT_DELAY, skip_unchanged=True)
+
+    # The synchronous load returns normally. The rejection is reported like a load failure.
+    f.reloader.reload_now()
+    assert take(calls) is False
+    assert isinstance(f.require_errored(), RuntimeError)
+
+    # The automatic retry offers the unchanged content again until the consumer accepts it.
+    accept.set()
+    while take(calls) is False:
+        pass
+
+    # Once the consumer has accepted the result, the retries stop.
+    with pytest.raises(Empty):
+        calls.get(timeout=QUIET_PERIOD)
+
+
+def test_reloader_retries_when_the_error_callback_raises(make_fixture):
+    def on_error(err: Exception) -> None:
+        raise RuntimeError("reporter failure")
+
+    f = make_fixture('{"flagValues"', on_error=on_error, retry_delay=SHORT_DELAY)
+
+    # The failing report does not escape the synchronous load.
+    f.reloader.reload_now()
+
+    # The automatic retry still runs and picks up the corrected file.
+    f.write('{"flagValues": {"flag1": true}}')
+    f.require_applied()
 
 
 # ---------------------------------------------------------------------------
@@ -884,7 +925,10 @@ def test_watcher_ignores_events_that_do_not_change_the_file(tmp_path, make_watch
     write_file(path, 'a')
     w = make_watcher([path])
     w.watcher._handle_event(watchdog.events.FileOpenedEvent(real_path))
-    w.watcher._handle_event(watchdog.events.FileClosedNoWriteEvent(real_path))
+    # Older watchdog versions report no event for a read-only close.
+    closed_no_write = getattr(watchdog.events, 'FileClosedNoWriteEvent', None)
+    if closed_no_write is not None:
+        w.watcher._handle_event(closed_no_write(real_path))
     w.require_no_change()
     w.watcher._handle_event(watchdog.events.FileClosedEvent(real_path))
     w.require_change()
@@ -923,6 +967,63 @@ def test_watcher_picks_up_directory_that_appears_later(tmp_path, make_watcher):
     w.drain()
     write_file(path, 'bb')
     w.require_change()
+
+
+@watchdog_required
+def test_watcher_watches_a_directory_again_after_it_is_deleted_and_recreated(tmp_path, make_watcher, monkeypatch):
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    directory = os.path.join(str(tmp_path), 'later')
+    path = os.path.join(directory, 'data.json')
+    os.mkdir(directory)
+    write_file(path, 'a')
+    w = make_watcher([path])
+
+    # The file and then its directory are removed.
+    os.remove(path)
+    os.rmdir(directory)
+    w.drain()
+
+    # The directory comes back with the file. The retry that watches it again signals a change.
+    os.mkdir(directory)
+    write_file(path, 'bb')
+    w.require_change()
+    w.drain()
+
+    # Notifications from the recreated directory are delivered.
+    write_file(path, 'ccc')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_retries_when_the_observer_cannot_start(tmp_path, make_watcher, monkeypatch, caplog):
+    import watchdog.observers
+
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, 'a')
+
+    # The observer cannot start while the watcher is constructed.
+    with caplog.at_level(logging.ERROR):
+        with mock.patch.object(watchdog.observers.Observer, 'start', side_effect=RuntimeError("cannot start thread")):
+            w = make_watcher([path])
+    assert len([r for r in caplog.records if r.levelno == logging.ERROR]) > 0
+
+    # Once the observer can start, the retry sets up the watch and signals a change, and later
+    # edits are detected.
+    w.require_change()
+    w.drain()
+    write_file(path, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_close_succeeds_when_the_observer_never_started(tmp_path):
+    import watchdog.observers
+
+    path = os.path.join(str(tmp_path), 'data.json')
+    with mock.patch.object(watchdog.observers.Observer, 'start', side_effect=RuntimeError("cannot start thread")):
+        watcher = Watcher([path], lambda: None)
+        watcher.close()
 
 
 @watchdog_required

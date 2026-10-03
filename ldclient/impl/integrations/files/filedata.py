@@ -62,6 +62,7 @@ _CHANGE_EVENT_TYPES = frozenset(["created", "modified", "moved", "deleted", "clo
 class DuplicateKeysHandling(str, Enum):
     """
     Determines what happens when the same flag or segment key appears in more than one file.
+    Flag overrides are currently experimental and subject to change.
     """
 
     FAIL = "fail"
@@ -324,9 +325,12 @@ class Reloader:
         :param paths: the files to load, in order. The order determines which file wins under
           the duplicate keys handling.
         :param duplicate_keys_handling: what to do when the same key appears in more than one file
-        :param apply: receives each successfully merged result. Calls are serialized.
+        :param apply: receives each successfully merged result. Calls are serialized. An
+          exception from it is reported like a load failure and retried, and the result it
+          rejected is not remembered as the last good one.
         :param on_error: receives each distinct failure. Repeats of an identical failure do not
-          call it again until a success re-arms it. Failures are also logged here.
+          call it again until a success re-arms it. Failures are also logged here. An exception
+          from it is logged and does not prevent the retry.
         :param skip_missing_paths: when true, a configured file that does not exist contributes
           no entries. When false, a missing file fails the load like any other read error.
         :param debounce_delay: how long to wait after a trigger for further triggers to settle
@@ -465,11 +469,18 @@ class Reloader:
             # the last success. The consumer heard about the failure and only an application
             # tells it that things are good again.
             recovering = self._last_error_message is not None
-            self._last_error_message = None
             if self._skip_unchanged and not recovering and digest == self._last_good_digest:
                 return True
+
+            # Nothing is remembered until the consumer has accepted the result. A result the
+            # consumer rejects must not become the baseline that skip-unchanged compares
+            # against, and must not count as a recovery.
+            try:
+                self._apply(merged)
+            except Exception as e:
+                return self._fail(e)
+            self._last_error_message = None
             self._last_good_digest = digest
-            self._apply(merged)
             return True
 
     def _fail(self, err: Exception) -> bool:
@@ -485,7 +496,11 @@ class Reloader:
         self._last_error_message = message
         log.error("Unable to load flag data: %s", err)
         if self._on_error is not None:
-            self._on_error(err)
+            try:
+                self._on_error(err)
+            except Exception as e:
+                # A consumer that raises while it reports a failure must not stop the retry.
+                log.error("Error while reporting a flag data load failure: %s", e)
         return False
 
 
@@ -545,12 +560,26 @@ class Poller:
             self._on_change()
 
 
+def _event_path(value: Any) -> Optional[str]:
+    """The path carried by a watchdog event as text, or None when the event has none."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if isinstance(value, str):
+        return value
+    return None
+
+
 class Watcher:
     """
     Detects changes to a set of files through file system change notifications, using the
     ``watchdog`` package. The directory of each file is watched, so a file that does not exist
-    yet is picked up when it appears. A directory that cannot be watched yet, for example
-    because it does not exist, is retried on an interval.
+    yet is picked up when it appears.
+
+    A directory that cannot be watched, for example because it does not exist yet or because
+    the notification mechanism cannot be started, is attempted again on an interval. A watched
+    directory that is deleted has its watch dropped and set up again once the directory exists.
+    When a retry sets up a watch, the callback runs once, so that changes made while the watch
+    was not in place are picked up.
 
     Notifications for the watched paths invoke the callback. The callback can run several times
     for one logical edit, so feed it into a :class:`Reloader`.
@@ -561,17 +590,12 @@ class Watcher:
             raise RuntimeError("the watchdog package is required to watch files for changes")
         self._on_change = on_change
         self._watched_paths: Set[str] = set()
-        self._lock = threading.Lock()
-        self._pending_directories: Set[str] = set()
-        self._retry_task: Optional[RepeatingTask] = None
-
-        directories: List[str] = []
+        self._directories: Set[str] = set()
         for path in paths:
             absolute = os.path.abspath(path)
             real_directory = os.path.realpath(os.path.dirname(absolute))
             self._watched_paths.add(os.path.join(real_directory, os.path.basename(absolute)))
-            if real_directory not in directories:
-                directories.append(real_directory)
+            self._directories.add(real_directory)
 
         watcher = self
 
@@ -581,58 +605,141 @@ class Watcher:
 
         self._handler = _Handler()
         self._observer = watchdog.observers.Observer()
-        for directory in directories:
-            if not self._schedule(directory):
-                self._pending_directories.add(directory)
-        try:
-            self._observer.start()
-        except Exception as e:
-            log.error("Unable to start watching files for changes: %s", e)
-        if len(self._pending_directories) > 0:
-            self._retry_task = RepeatingTask.at_interval("ldclient.filedata.watch-retry", _WATCH_RETRY_INTERVAL, _WATCH_RETRY_INTERVAL, self._retry_pending)
-            self._retry_task.start()
 
-    def _schedule(self, directory: str) -> bool:
+        # Guards the state below. It is never held while the observer is called, because the
+        # observer holds its own lock while it dispatches an event to the handler.
+        self._lock = threading.Lock()
+        self._closed = False
+        self._observer_running = False
+        # The watch on each directory that currently has one.
+        self._watches: Dict[str, Any] = {}
+        # The directories that have no watch yet. The retry schedule runs while this is not empty.
+        self._pending_directories: Set[str] = set(self._directories)
+        self._retry_task: Optional[RepeatingTask] = None
+        # Serializes the watch setup against close, so that a setup in progress cannot start
+        # anything after close has stopped the observer.
+        self._setup_lock = threading.Lock()
+
+        self._set_up_watches(is_retry=False)
+
+    def _set_up_watches(self, is_retry: bool) -> None:
+        """
+        Starts the observer when it is not running, then sets up a watch on each pending
+        directory. Whatever cannot be set up stays pending and is attempted again on the retry
+        schedule. When a retry sets up a watch, the callback runs once, because the files may
+        have changed while the watch was not in place.
+        """
+        with self._setup_lock:
+            with self._lock:
+                if self._closed:
+                    return
+                running = self._observer_running
+            if not running:
+                try:
+                    self._observer.start()
+                except Exception as e:
+                    log.error("Unable to start watching files for changes: %s", e)
+                    self._ensure_retry_scheduled()
+                    return
+                with self._lock:
+                    self._observer_running = True
+
+            with self._lock:
+                pending = sorted(self._pending_directories)
+            armed = False
+            for directory in pending:
+                watch = self._schedule(directory)
+                if watch is None:
+                    continue
+                with self._lock:
+                    self._pending_directories.discard(directory)
+                    self._watches[directory] = watch
+                armed = True
+
+            with self._lock:
+                if len(self._pending_directories) > 0:
+                    self._ensure_retry_scheduled_locked()
+        if is_retry and armed:
+            self._on_change()
+
+    def _schedule(self, directory: str) -> Optional[Any]:
+        """Sets up a watch on a directory. Returns the watch, or None when the directory cannot be watched yet."""
         # The observer accepts a watch on a directory that does not exist and fails later when
         # it starts the watch, so the check happens here first.
         if not os.path.isdir(directory):
             log.warning('Cannot watch directory "%s" for changes yet because it does not exist', directory)
-            return False
+            return None
         try:
-            self._observer.schedule(self._handler, directory, recursive=False)
-            return True
+            return self._observer.schedule(self._handler, directory, recursive=False)
         except Exception as e:
             log.warning('Cannot watch directory "%s" for changes yet: %s', directory, e)
-            return False
+            return None
+
+    def _ensure_retry_scheduled(self) -> None:
+        with self._lock:
+            self._ensure_retry_scheduled_locked()
+
+    def _ensure_retry_scheduled_locked(self) -> None:
+        if self._closed or self._retry_task is not None:
+            return
+        self._retry_task = RepeatingTask.at_interval("ldclient.filedata.watch-retry", _WATCH_RETRY_INTERVAL, _WATCH_RETRY_INTERVAL, self._retry_pending)
+        self._retry_task.start()
 
     def _retry_pending(self) -> None:
+        self._set_up_watches(is_retry=True)
         with self._lock:
-            pending = list(self._pending_directories)
-        for directory in pending:
-            if self._schedule(directory):
-                with self._lock:
-                    self._pending_directories.discard(directory)
-                # Files may have appeared in the directory before the watch was in place.
-                self._on_change()
-        with self._lock:
-            if len(self._pending_directories) == 0 and self._retry_task is not None:
+            # The schedule ends once everything is watched. It is set up again when a directory
+            # becomes pending later. The check and the stop happen under the lock, so a
+            # directory that becomes pending at the same time either keeps this schedule or
+            # starts a new one.
+            if len(self._pending_directories) == 0 and self._observer_running and self._retry_task is not None:
                 self._retry_task.stop()
+                self._retry_task = None
+
+    def _directory_lost(self, directory: str) -> None:
+        """
+        Drops the watch on a directory that no longer exists and arms the retry that sets it up
+        again once the directory exists.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            stale = self._watches.pop(directory, None)
+            self._pending_directories.add(directory)
+            self._ensure_retry_scheduled_locked()
+        log.warning('Directory "%s" no longer exists. It is watched again when it exists.', directory)
+        if stale is not None:
+            # The observer keeps a watch whose directory is gone, and a later watch on the same
+            # path would reuse it, so it is removed.
+            try:
+                self._observer.unschedule(stale)
+            except Exception as e:
+                log.debug('Unable to remove the watch on directory "%s": %s', directory, e)
 
     def _handle_event(self, event) -> None:
-        if getattr(event, "event_type", None) not in _CHANGE_EVENT_TYPES:
+        event_type = getattr(event, "event_type", None)
+        if event_type not in _CHANGE_EVENT_TYPES:
             return
-        candidates = [getattr(event, "src_path", None), getattr(event, "dest_path", None)]
-        for candidate in candidates:
-            if isinstance(candidate, bytes):
-                candidate = candidate.decode("utf-8", errors="replace")
+        src_path = _event_path(getattr(event, "src_path", None))
+        if event_type in ("deleted", "moved") and getattr(event, "is_directory", False) and src_path in self._directories:
+            self._directory_lost(src_path)
+            return
+        for candidate in (src_path, _event_path(getattr(event, "dest_path", None))):
             if candidate in self._watched_paths:
                 self._on_change()
                 return
 
     def close(self) -> None:
         """Stops watching and waits briefly for the observer thread to finish."""
-        with self._lock:
-            if self._retry_task is not None:
-                self._retry_task.stop()
-        self._observer.stop()
-        self._observer.join(timeout=5)
+        with self._setup_lock:
+            with self._lock:
+                self._closed = True
+                retry_task = self._retry_task
+                self._retry_task = None
+                running = self._observer_running
+            if retry_task is not None:
+                retry_task.stop()
+            self._observer.stop()
+            # A thread that never started cannot be joined.
+            if running:
+                self._observer.join(timeout=5)
