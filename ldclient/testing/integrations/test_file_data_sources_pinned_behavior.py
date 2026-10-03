@@ -406,12 +406,16 @@ def test_watcher_reloads_on_any_notification_for_the_file_path(tmp_path, make_wa
     handlers = handlers_of(watcher._observer)
     assert len(handlers) == 1
     handler = handlers[0]
-    handler.on_any_event(watchdog.events.FileModifiedEvent(path))
-    handler.on_any_event(watchdog.events.FileOpenedEvent(path))
-    handler.on_any_event(watchdog.events.FileClosedNoWriteEvent(path))
-    assert counter.count == 3
+    events = [watchdog.events.FileModifiedEvent(path), watchdog.events.FileOpenedEvent(path)]
+    # Older watchdog versions report no event for a read-only close.
+    closed_no_write = getattr(watchdog.events, 'FileClosedNoWriteEvent', None)
+    if closed_no_write is not None:
+        events.append(closed_no_write(path))
+    for event in events:
+        handler.on_any_event(event)
+    assert counter.count == len(events)
     handler.on_any_event(watchdog.events.FileModifiedEvent(os.path.join(os.path.dirname(path), 'other.json')))
-    assert counter.count == 3
+    assert counter.count == len(events)
 
 
 @watchdog_required
