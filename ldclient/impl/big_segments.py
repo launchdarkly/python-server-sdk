@@ -1,3 +1,4 @@
+from threading import Lock
 from typing import Callable, Optional, Tuple
 
 from expiringdict import ExpiringDict
@@ -63,6 +64,7 @@ class BigSegmentStoreManager:
         self.__stale_after_millis = config.stale_after * 1000
         self.__status_provider = BigSegmentStoreStatusProviderImpl(self.get_status)
         self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
+        self.__poll_lock = Lock()
         self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
@@ -94,18 +96,32 @@ class BigSegmentStoreManager:
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
                 return None, BigSegmentsStatus.STORE_ERROR
-        status = self.__last_status
-        if not status:
-            status = self.poll_store_and_update_status()
+        status = self.get_status()
         if not status.available:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
 
     def get_status(self) -> BigSegmentStoreStatus:
         status = self.__last_status
-        return status if status else self.poll_store_and_update_status()
+        if status is not None:
+            return status
+        # Check again under the lock: another caller may have polled while we waited.
+        with self.__poll_lock:
+            status = self.__last_status
+            if status is not None:
+                return status
+            new_status = self.__query_store_status()
+        self.__notify_status(new_status)
+        return new_status
 
     def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
+        with self.__poll_lock:
+            new_status = self.__query_store_status()
+        self.__notify_status(new_status)
+        return new_status
+
+    def __query_store_status(self) -> BigSegmentStoreStatus:
+        """Queries the store and caches the result. Callers must hold the poll lock."""
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
         if self.__store:
             try:
@@ -114,8 +130,12 @@ class BigSegmentStoreManager:
             except Exception as e:
                 log.exception("Big Segment store status query returned error: %s" % e)
         self.__last_status = new_status
-        self.__status_provider._update_status(new_status)
         return new_status
+
+    def __notify_status(self, new_status: BigSegmentStoreStatus):
+        """Tells the status provider about a new status, outside the poll lock so
+        that a listener calling back into the manager cannot deadlock."""
+        self.__status_provider._update_status(new_status)
 
     def is_stale(self, timestamp) -> bool:
         return is_stale(timestamp, self.__stale_after_millis)

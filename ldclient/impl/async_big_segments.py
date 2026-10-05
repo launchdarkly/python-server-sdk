@@ -1,3 +1,4 @@
+import asyncio
 from typing import Awaitable, Callable, Optional, Tuple
 
 from expiringdict import ExpiringDict
@@ -61,6 +62,7 @@ class AsyncBigSegmentStoreManager:
         self.__stale_after_millis = config.stale_after * 1000
         self.__status_provider = AsyncBigSegmentStoreStatusProviderImpl(self.get_status)
         self.__last_status = None  # type: Optional[BigSegmentStoreStatus]
+        self.__poll_lock = asyncio.Lock()
         self.__poll_task = None  # type: Optional[AsyncRepeatingTask]
 
         if self.__store:
@@ -97,10 +99,7 @@ class AsyncBigSegmentStoreManager:
             except Exception as e:
                 log.exception("Big Segment store membership query returned error: %s" % e)
                 return None, BigSegmentsStatus.STORE_ERROR
-        # First-call fallback: if the polling task hasn't run yet, poll inline now
-        status = self.__last_status
-        if status is None:
-            status = await self.poll_store_and_update_status()
+        status = await self.get_status()
         if not status.available:
             return membership, BigSegmentsStatus.STORE_ERROR
         return membership, BigSegmentsStatus.STALE if status.stale else BigSegmentsStatus.HEALTHY
@@ -108,15 +107,29 @@ class AsyncBigSegmentStoreManager:
     async def get_status(self) -> BigSegmentStoreStatus:
         """Return the most recently polled status.
 
-        When no status has been cached yet, poll the store inline and wait for the
-        result, so the status is accurate even if called immediately after start().
+        When no status has been cached yet, poll the store and wait for the result,
+        so the status is accurate even if called immediately after start().
         """
         status = self.__last_status
-        if status is None:
-            status = await self.poll_store_and_update_status()
-        return status
+        if status is not None:
+            return status
+        # Check again under the lock: another caller may have polled while we waited.
+        async with self.__poll_lock:
+            status = self.__last_status
+            if status is not None:
+                return status
+            new_status = await self.__query_store_status()
+        self.__notify_status(new_status)
+        return new_status
 
     async def poll_store_and_update_status(self) -> BigSegmentStoreStatus:
+        async with self.__poll_lock:
+            new_status = await self.__query_store_status()
+        self.__notify_status(new_status)
+        return new_status
+
+    async def __query_store_status(self) -> BigSegmentStoreStatus:
+        """Queries the store and caches the result. Callers must hold the poll lock."""
         new_status = BigSegmentStoreStatus(False, False)  # default to "unavailable" if we don't get a new status below
         if self.__store:
             try:
@@ -125,8 +138,12 @@ class AsyncBigSegmentStoreManager:
             except Exception as e:
                 log.exception("Big Segment store status query returned error: %s" % e)
         self.__last_status = new_status
-        self.__status_provider._update_status(new_status)
         return new_status
+
+    def __notify_status(self, new_status: BigSegmentStoreStatus):
+        """Tells the status provider about a new status, outside the poll lock so
+        that a listener calling back into the manager cannot deadlock."""
+        self.__status_provider._update_status(new_status)
 
     def is_stale(self, timestamp) -> bool:
         return is_stale(timestamp, self.__stale_after_millis)
