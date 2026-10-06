@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.18.1](https://github.com/launchdarkly/python-server-sdk/compare/9.18.0...9.18.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* Reuse an in-flight big segment status poll instead of always querying twice ([#535](https://github.com/launchdarkly/python-server-sdk/issues/535)) ([66013b5](https://github.com/launchdarkly/python-server-sdk/commit/66013b520f448cf6cda3d6377cde93d8bb31b19c))
+
 ## [9.18.0](https://github.com/launchdarkly/python-server-sdk/compare/9.17.0...9.18.0) (2026-09-25)
 
 
