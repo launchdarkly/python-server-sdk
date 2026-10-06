@@ -318,3 +318,12 @@ def test_no_event_for_existing_feature_with_invalid_context():
         bad_context = Context.create('')
         assert 'default' == client.variation('feature.key', bad_context, default='default')
         assert count_events(client) == 0
+
+
+def test_no_event_when_send_events_false():
+    feature = build_off_flag_with_value('feature.key', 'value').track_events(True).build()
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {feature.key: feature.to_json_dict()}})
+    with make_client(store) as client:
+        assert 'value' == client.variation(feature.key, context, default='default', send_events=False)
+        assert count_events(client) == 0
