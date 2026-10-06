@@ -26,9 +26,16 @@ class MockAsyncBigSegmentStore(AsyncBigSegmentStore):
 
     def __init__(self):
         self._membership_queries = []
+        self._metadata_queries = []
         self._memberships = {}
         self._metadata_fn = lambda: BigSegmentStoreMetadata(int(time.time() * 1000))
+        self._metadata_delay = 0.0
         self._stopped = False
+
+    def setup_metadata_delay(self, delay: float):
+        """Makes get_metadata await for the given number of seconds, so a test can
+        keep a metadata query in flight."""
+        self._metadata_delay = delay
 
     def setup_membership(self, user_hash: str, membership):
         self._memberships[user_hash] = membership
@@ -48,6 +55,9 @@ class MockAsyncBigSegmentStore(AsyncBigSegmentStore):
         self._metadata_fn = _raise
 
     async def get_metadata(self) -> BigSegmentStoreMetadata:
+        self._metadata_queries.append(True)
+        if self._metadata_delay:
+            await asyncio.sleep(self._metadata_delay)
         return self._metadata_fn()
 
     async def get_membership(self, context_hash: str):
@@ -60,6 +70,10 @@ class MockAsyncBigSegmentStore(AsyncBigSegmentStore):
     @property
     def membership_queries(self):
         return list(self._membership_queries)
+
+    @property
+    def metadata_queries(self):
+        return list(self._metadata_queries)
 
 
 async def make_started_manager(store, **kwargs):
@@ -348,3 +362,30 @@ async def test_get_status_with_no_store_configured():
         assert status.available is False
     finally:
         await manager.stop()
+
+
+@pytest.mark.asyncio
+async def test_status_query_reuses_a_poll_that_is_already_in_flight():
+    """
+    The polling task queries the store as soon as it starts. A status request that
+    arrives while that query is still in flight reuses it rather than sending a second
+    one, which is what the SDK does at startup.
+    """
+    store = MockAsyncBigSegmentStore()
+    store.setup_metadata_always_up_to_date()
+    store.setup_metadata_delay(0.25)
+
+    manager = await make_started_manager(store, status_poll_interval=10)
+    try:
+        # Let the polling task start its query, so this request arrives while that
+        # query is in flight and must wait for it instead of starting its own.
+        await asyncio.sleep(0)
+        assert store.metadata_queries, "polling task never queried the store"
+
+        status = await manager.get_status()
+        assert status.available is True
+        await asyncio.sleep(0.1)  # let a second query show up, if the fix is not working
+    finally:
+        await manager.stop()
+
+    assert len(store.metadata_queries) == 1
