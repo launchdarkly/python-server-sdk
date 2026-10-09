@@ -908,3 +908,28 @@ async def test_off_is_reported_before_teardown():
 
     assert DataSourceState.OFF in order
     assert order.index(DataSourceState.OFF) < order.index('closed')
+
+
+def test_stream_init_duration_unaffected_by_wall_clock_step(monkeypatch):
+    processor = object.__new__(AsyncStreamingUpdateProcessor)
+    recorded = []
+
+    class _Recorder:
+        def record_stream_init(self, timestamp, duration, failed):
+            recorded.append((timestamp, duration, failed))
+
+    processor._diagnostic_accumulator = _Recorder()
+    processor._connection_attempt_started_monotonic = time.monotonic()
+
+    real_time = time.time()
+    # A forward wall step between connect start and finish used to inflate the
+    # reported duration by the step size (a backward step was clamped to zero,
+    # silently losing the measurement).
+    monkeypatch.setattr(time, "time", lambda: real_time + 3600)
+    processor._record_stream_init(False)
+
+    assert len(recorded) == 1
+    _, duration, failed = recorded[0]
+    assert failed is False
+    assert duration >= 0
+    assert duration < 1000

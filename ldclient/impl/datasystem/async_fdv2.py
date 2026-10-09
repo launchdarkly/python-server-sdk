@@ -33,6 +33,7 @@ from ldclient.impl.datasystem.fdv2_common import (
     DataSourceStatusProviderImpl,
     DataStoreStatusProviderImpl,
     _FDv2Base,
+    _StateAgeTracker,
     fallback_condition,
     recovery_condition
 )
@@ -545,6 +546,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         :return: the ConditionDirective describing how to proceed
         """
         action_queue: AsyncQueue = AsyncQueue()
+        state_age = _StateAgeTracker()
         timer = AsyncRepeatingTask.at_interval(
             label="AsyncFDv2-sync-cond-timer",
             interval=10,
@@ -578,9 +580,10 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
                     if update == "check":
                         # Check condition periodically
                         current_status = self._data_source_status_provider.status
-                        if check_recovery and recovery_condition(current_status):
+                        seconds_in_state = state_age.seconds_in_state(current_status)
+                        if check_recovery and recovery_condition(current_status, seconds_in_state):
                             return ConditionDirective.RECOVER
-                        if fallback_condition(current_status):
+                        if fallback_condition(current_status, seconds_in_state):
                             return ConditionDirective.FALLBACK
                     continue
 
