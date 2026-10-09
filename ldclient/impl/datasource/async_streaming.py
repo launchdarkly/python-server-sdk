@@ -27,7 +27,7 @@ from ldclient.impl.retry import (
     classify_http_status,
     for_streaming
 )
-from ldclient.impl.util import http_error_description, log
+from ldclient.impl.util import http_error_description, log, monotonic_seconds
 from ldclient.interfaces import (
     AsyncUpdateProcessor,
     DataSourceErrorInfo,
@@ -61,7 +61,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         self._sse_factory = sse_factory
         self._owned_session = None
         self._sse: Any = None
-        self._connection_attempt_start_time: Optional[float] = None
+        self._connection_attempt_started_monotonic: Optional[float] = None
         self._runner = AsyncTaskRunner()
         self._started = False
         self._retry = retry_state or for_streaming(config.initial_reconnect_delay)
@@ -86,7 +86,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         self._running = True
         try:
             self._sse = self._sse_factory.create(self._uri, self._config.initial_reconnect_delay, sdk_managed_retry=True)
-            self._connection_attempt_start_time = time.time()
+            self._connection_attempt_started_monotonic = monotonic_seconds()
             async for action in self._sse.all:
                 if isinstance(action, Start):
                     # interrupt() is a no-op when the connection has already gone, so
@@ -94,9 +94,9 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
                     self._interrupted_by_sdk = False
 
                     # On reconnect after an error the timer was cleared; reset it here.
-                    # For the initial connect the pre-loop timestamp is already set.
-                    if self._connection_attempt_start_time is None:
-                        self._connection_attempt_start_time = time.time()
+                    # For the initial connect the pre-loop stamp is already set.
+                    if self._connection_attempt_started_monotonic is None:
+                        self._connection_attempt_started_monotonic = monotonic_seconds()
                 elif isinstance(action, Event):
                     message_ok = False
                     message_handled = False
@@ -121,7 +121,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
 
                     if message_ok:
                         self._record_stream_init(False)
-                        self._connection_attempt_start_time = None
+                        self._connection_attempt_started_monotonic = None
 
                         if self._data_source_update_sink is not None:
                             self._data_source_update_sink.update_status(DataSourceState.VALID, None)
@@ -160,10 +160,10 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             self._owned_session = None
 
     def _record_stream_init(self, failed: bool):
-        if self._diagnostic_accumulator and self._connection_attempt_start_time:
+        if self._diagnostic_accumulator and self._connection_attempt_started_monotonic is not None:
             current_time = int(time.time() * 1000)
-            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
-            self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
+            elapsed = int((monotonic_seconds() - self._connection_attempt_started_monotonic) * 1000)
+            self._diagnostic_accumulator.record_stream_init(current_time, elapsed, failed)
 
     async def stop(self):
         log.info("Stopping AsyncStreamingUpdateProcessor")
@@ -276,9 +276,9 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         if delay > 0:
             await asyncio.sleep(delay)
 
-        # Read after the wait, so a clock change during it cannot skew the
+        # Set after the wait, so the backoff delay is not counted in the
         # stream-init latency we report.
-        self._connection_attempt_start_time = time.time()
+        self._connection_attempt_started_monotonic = monotonic_seconds()
         return self._running
 
     # magic methods for "with" statement (used in testing)
