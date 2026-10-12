@@ -14,6 +14,14 @@ def current_time_millis() -> int:
     return int(time.time() * 1000)
 
 
+def monotonic_seconds() -> float:
+    """
+    Seconds on the monotonic clock. Use this for measuring intervals and
+    durations; use the wall clock for functionality tied to time outside the process.
+    """
+    return time.monotonic()
+
+
 def timedelta_millis(delta: timedelta) -> float:
     return delta / timedelta(milliseconds=1)
 
