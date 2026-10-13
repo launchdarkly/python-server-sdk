@@ -25,7 +25,7 @@ __LONG_SCALE__ = float(0xFFFFFFFFFFFFFFF)
 # prerequisite evaluations, and the cached state of any Big Segments query that we may have
 # ended up having to do for the context.
 class EvalResult:
-    __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership', 'original_flag_key', 'prereq_stack', 'segment_stack', 'depth', 'prerequisites']
+    __slots__ = ['detail', 'events', 'big_segments_status', 'big_segments_membership', 'original_flag_key', 'prereq_stack', 'segment_stack', 'depth', 'prerequisites', 'override_affected']
 
     def __init__(self):
         self.detail = None
@@ -37,6 +37,11 @@ class EvalResult:
         self.segment_stack = None  # type: Optional[List[str]]
         self.depth = 0
         self.prerequisites = []  # type: List[str]
+        # True when the evaluation in progress has read a flag or segment definition that carries
+        # the override marker. While a prerequisite is evaluated, this holds the marking of the
+        # prerequisite's own subtree. The evaluator merges it into the parent's marking afterward,
+        # so the marking propagates upward only.
+        self.override_affected = False
 
     def record_prerequisite(self, key: str):
         if self.depth == 0:
@@ -255,3 +260,12 @@ def check_targets(flag: FeatureFlag, context: Context) -> Optional[EvaluationDet
 
 def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}
+
+
+def mark_override_affected(detail: EvaluationDetail) -> None:
+    """
+    Sets the override-affected indicator on the evaluation reason. The indicator is present
+    only when true, so a reason that was not affected by an override is left untouched and
+    serializes exactly as before.
+    """
+    detail.reason['overrideAffected'] = True
