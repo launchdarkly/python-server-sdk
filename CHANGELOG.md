@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.18.2](https://github.com/launchdarkly/python-server-sdk/compare/9.18.1...9.18.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* Use monotonic clocks for stream-init durations and FDv2 state windows ([#537](https://github.com/launchdarkly/python-server-sdk/issues/537)) ([e8501c5](https://github.com/launchdarkly/python-server-sdk/commit/e8501c58e5ac8a28b591b6687073ac04aa86bfd7))
+
 ## [9.18.1](https://github.com/launchdarkly/python-server-sdk/compare/9.18.0...9.18.1) (2026-10-06)
 
 
