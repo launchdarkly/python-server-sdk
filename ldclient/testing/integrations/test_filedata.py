@@ -694,6 +694,24 @@ class PollerFixture:
     def require_no_change(self, duration: float = QUIET_PERIOD) -> None:
         require_quiet(self.changes, duration)
 
+    def drain(self, settle: float) -> None:
+        """Discards the change callbacks that arrive within the settle window.
+
+        A plain rewrite is not atomic: the truncation, the write, and the modification-time
+        update are separate steps, and a poll that lands between two of them legitimately
+        reports an extra change. A test that wants to assert silence waits for the write to
+        be fully observed first.
+        """
+        deadline = time.monotonic() + settle
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                self.changes.get(timeout=remaining)
+            except Empty:
+                return
+
 
 @pytest.fixture
 def make_poller():
@@ -742,12 +760,16 @@ def test_poller_detects_size_change_with_same_mtime(tmp_path, make_poller):
     p.require_change()
 
 
-def test_poller_fires_once_per_change(tmp_path, make_poller):
+def test_poller_stops_firing_when_file_is_stable(tmp_path, make_poller):
+    # The poller updates its baseline after a change, so it goes quiet once the file is stable.
+    # It does not promise one callback per logical change: a rewrite that it observes in more
+    # than one step is reported in more than one step, and the reloader absorbs the excess.
     path = os.path.join(str(tmp_path), 'data.json')
     write_file(path, 'a')
     p = make_poller([path])
     write_file(path, 'bb')
     p.require_change()
+    p.drain(POLL_INTERVAL * 10)
     p.require_no_change()
 
 
