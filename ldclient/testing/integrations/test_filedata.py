@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from queue import Empty, Queue
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 from unittest import mock
 
 import pytest
@@ -319,6 +319,19 @@ class ReloaderFixture:
                 pytest.fail("unexpected on_error call")
             time.sleep(0.01)
 
+    def drain(self, duration: float = QUIET_PERIOD) -> Tuple[List[MergeResult], List[Exception]]:
+        """Collects every apply and on_error call that arrives within the duration."""
+        applied: List[MergeResult] = []
+        errored: List[Exception] = []
+        deadline = time.time() + duration
+        while time.time() < deadline:
+            while not self.applied.empty():
+                applied.append(self.applied.get_nowait())
+            while not self.errored.empty():
+                errored.append(self.errored.get_nowait())
+            time.sleep(0.01)
+        return applied, errored
+
     def close(self) -> None:
         self.reloader.close()
 
@@ -437,9 +450,16 @@ def test_reloader_reports_identical_failure_only_once(make_fixture):
     # The automatic retries keep failing in the same way. They do not report again.
     f.require_quiet()
 
-    # A different failure is reported.
+    # A different failure is reported. The write is ordinary, not atomic, and a retry that runs
+    # while the file is being rewritten reads it empty or half written. An empty document is
+    # valid, so such a retry succeeds and ends the retries; a half-written file is a failure of
+    # its own. The final content is therefore loaded on demand, and everything that was reported
+    # is inspected as a whole: the new failure is among the reports, and once it is the current
+    # failure, the retries that repeat it stay silent.
     f.write('{"flags": {"flag1": "not an object"}}')
-    f.require_errored()
+    f.reloader.reload_now()
+    _, errored = f.drain()
+    assert any('must be an object' in str(e) for e in errored), errored
     f.require_quiet()
 
 
