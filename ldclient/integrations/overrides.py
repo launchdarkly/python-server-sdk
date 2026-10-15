@@ -157,7 +157,14 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
             log.warning("Poll interval %s is below the minimum for the file-based override source; using %s", poll_interval, self.MINIMUM_POLL_INTERVAL)
             poll_interval = self.MINIMUM_POLL_INTERVAL
 
-        return _FileOverrideSource(abs_file_paths(self.__paths), self.__duplicate_keys_handling, self.__change_detection, poll_interval)
+        # A path listed more than once would make every entry of that file a duplicate of itself,
+        # so the repeats are dropped and the first occurrence keeps its place in the order.
+        all_paths = abs_file_paths(self.__paths)
+        paths = list(dict.fromkeys(all_paths))
+        if len(paths) != len(all_paths):
+            log.warning("The file-based override source lists the same file more than once; the repeats are ignored")
+
+        return _FileOverrideSource(paths, self.__duplicate_keys_handling, self.__change_detection, poll_interval)
 
 
 __all__ = ['ChangeDetection', 'DuplicateKeysHandling', 'FileOverrideSourceBuilder']
