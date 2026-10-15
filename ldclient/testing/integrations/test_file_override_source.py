@@ -125,6 +125,16 @@ def test_builder_resolves_relative_paths():
     assert source._paths == [os.path.abspath('relative/overrides.json')]
 
 
+def test_builder_drops_a_repeated_path_and_warns(caplog):
+    # Under the default fail handling the same file listed twice would make every one of its keys
+    # a duplicate of itself. The repeat is ignored and the first occurrence keeps its place.
+    with caplog.at_level(logging.WARNING):
+        source = FileOverrideSourceBuilder(['/a.json', '/b.json', '/a.json']).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [os.path.abspath('/a.json'), os.path.abspath('/b.json')]
+    assert any('more than once' in r.getMessage() for r in caplog.records)
+
+
 def test_builder_polls_by_default(tmp_path):
     path = os.path.join(str(tmp_path), 'overrides.json')
     source = FileOverrideSourceBuilder([path]).build(SDKConfig('SDK_KEY'))
