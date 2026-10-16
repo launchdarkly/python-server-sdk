@@ -14,6 +14,7 @@ from ldclient.evaluation import EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasystem.fdv1 import FDv1
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
+from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import (
     DataSourceState,
     DataStoreMode,
@@ -336,6 +337,25 @@ def test_flag_tracker_is_notified_of_override_changes():
 
         source.set_overrides({}, {})
         assert changes.get(timeout=5).key == 'overridden-flag'
+
+
+def test_launchdarkly_change_to_a_prerequisite_notifies_the_override_flag_that_depends_on_it():
+    td = TestDataV2.data_source()
+    td.update(td.flag('ld-flag').on(True))
+    override_flag = FlagBuilder('override-flag').version(1).on(True).variations(True, False).fallthrough_variation(0).prerequisite('ld-flag', 0).build().to_json_dict()
+    source = MockOverrideSource({'override-flag': override_flag}, {})
+    datasystem = custom().synchronizers(td.builder).overrides(source.builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+    with LDClient(config, start_wait=5) as client:
+        assert client.is_initialized() is True
+        changes: Queue = Queue()
+        client.flag_tracker.add_listener(lambda change: changes.put(change))
+
+        td.update(td.flag('ld-flag').on(False))
+        keys = {changes.get(timeout=5).key, changes.get(timeout=5).key}
+        assert keys == {'ld-flag', 'override-flag'}
+        with pytest.raises(Empty):
+            changes.get(timeout=0.3)
 
 
 def test_flag_value_change_listener_sees_override_value_changes():

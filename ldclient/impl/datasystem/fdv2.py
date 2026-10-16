@@ -277,6 +277,10 @@ class FDv2(_FDv2Base, DataSystem):
             self._override_source = data_system_config.override_source.build(config)
             self._override_layer = OverrideLayer()
             self._overlay = OverrideStoreView(self._store_view, self._override_layer)
+            # A LaunchDarkly change to a flag or segment that an override entry depends on
+            # must notify that entry's flag as well. The store reaches those entries through
+            # the layer's dependency graph.
+            self._store.set_external_dependencies(self._override_layer)
 
     def _create_store(self, flag_change_listeners: Listeners, change_set_listeners: Listeners) -> Store:
         return Store(flag_change_listeners, change_set_listeners)
