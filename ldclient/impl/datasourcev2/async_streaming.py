@@ -4,7 +4,7 @@ with any required supporting classes and protocols.
 """
 
 import json
-from time import time
+import time
 from typing import AsyncGenerator, Callable, Optional, Tuple
 from urllib import parse
 
@@ -24,7 +24,13 @@ from ldclient.impl.datasourcev2.streaming_common import (
     with_fallback_signal
 )
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    current_time_millis,
+    log,
+    monotonic_seconds
+)
 from ldclient.interfaces import (
     AsyncSynchronizer,
     ChangeSetBuilder,
@@ -117,7 +123,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         self._owned_session: Optional[aiohttp.ClientSession] = None
         self._running = False
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
-        self._connection_attempt_start_time: Optional[float] = None
+        self._connection_attempt_started_monotonic: Optional[float] = None
 
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
         self._diagnostic_accumulator = diagnostic_accumulator
@@ -150,7 +156,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
         change_set_builder = ChangeSetBuilder()
         self._running = True
-        self._connection_attempt_start_time = time()
+        self._connection_attempt_started_monotonic = monotonic_seconds()
 
         envid = None
         # A Start action with the X-LD-FD-Fallback: true header sets fallback_requested.
@@ -167,6 +173,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                     # emit a fault with no-error. We can ignore this since we want
                     # the connection to continue.
                     if action.error is None:
+                        self._connection_attempt_started_monotonic = None
                         continue
 
                     if action.headers is not None:
@@ -183,10 +190,12 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                         break
                     continue
 
-                if isinstance(action, Start) and action.headers is not None:
-                    envid = action.headers.get(_LD_ENVID_HEADER, envid)
-                    if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
-                        fallback_requested = True
+                if isinstance(action, Start):
+                    self._connection_attempt_started_monotonic = monotonic_seconds()
+                    if action.headers is not None:
+                        envid = action.headers.get(_LD_ENVID_HEADER, envid)
+                        if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                            fallback_requested = True
 
                 if not isinstance(action, Event):
                     continue
@@ -195,7 +204,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                     update = process_message(action, change_set_builder, envid)
                     if update is not None:
                         self._record_stream_init(False)
-                        self._connection_attempt_start_time = None
+                        self._connection_attempt_started_monotonic = None
                         if fallback_requested:
                             # The completed update is the natural moment to honor
                             # the latched directive: yield once with the signal,
@@ -219,11 +228,12 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                         "Error while handling stream event; will restart stream: %s", e
                     )
                     await self._sse.interrupt()
+                    self._connection_attempt_started_monotonic = None
 
                     yield with_fallback_signal(Update(
                         state=DataSourceState.INTERRUPTED,
                         error=DataSourceErrorInfo(
-                            DataSourceErrorKind.UNKNOWN, 0, time(), str(e)
+                            DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e)
                         ),
                         fallback_to_fdv1=False,
                         environment_id=envid,
@@ -253,10 +263,12 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
             self._owned_session = None
 
     def _record_stream_init(self, failed: bool):
-        if self._diagnostic_accumulator and self._connection_attempt_start_time:
-            current_time = int(time() * 1000)
-            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
-            self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
+        if self._diagnostic_accumulator and self._connection_attempt_started_monotonic is not None:
+            # The reported timestamp is a wall-clock value; the duration comes from
+            # the monotonic clock so a wall-clock step cannot distort it.
+            current_time = current_time_millis()
+            elapsed = int((monotonic_seconds() - self._connection_attempt_started_monotonic) * 1000)
+            self._diagnostic_accumulator.record_stream_init(current_time, elapsed, failed)
 
     async def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
         """
@@ -273,11 +285,9 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         if not self._running:
             return (None, False)  # don't retry if we've been deliberately stopped
 
-        decision = classify_stream_error(
-            error, self._sse.next_retry_delay, envid  # type: ignore
-        )
+        decision = classify_stream_error(error, envid)
         self._record_stream_init(True)
-        self._connection_attempt_start_time = decision.next_attempt_start
+        self._connection_attempt_started_monotonic = None
         if decision.should_stop:
             await self.stop()
 

@@ -3,6 +3,7 @@
 
 import json
 from abc import abstractmethod
+from types import SimpleNamespace
 from typing import Iterable, List, Optional
 
 import pytest
@@ -805,3 +806,76 @@ def test_envid_missing_when_no_headers():
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].environment_id is None
+
+
+def test_stream_init_duration_measured_from_start_not_run_start(monkeypatch):
+    # Regression for the projected-baseline bug (finding #41): the stream-init
+    # duration must be measured from the real connection moment (the Start
+    # action), not from run() start and not from a projection in _handle_error.
+    from ldclient.impl.datasourcev2 import streaming as streaming_module
+
+    server_intent = ServerIntent(
+        payload=Payload(
+            id="id",
+            target=300,
+            code=IntentCode.TRANSFER_NONE,
+            reason="up-to-date",
+        )
+    )
+    intent_event = Event(
+        event=EventName.SERVER_INTENT,
+        data=json.dumps(server_intent.to_dict()),
+    )
+
+    # monotonic_seconds is read at: run() start, each Start action, and
+    # _record_stream_init. Script the three reads so the Start stamp (105.0) is
+    # distinct from run-start (100.0). The recorded duration must come out as
+    # 105.5 - 105.0 = 0.5s; a run-start baseline would give 5.5s.
+    reads = iter([100.0, 105.0, 105.5])
+    last = [105.5]
+
+    def fake_monotonic():
+        try:
+            last[0] = next(reads)
+        except StopIteration:
+            pass
+        return last[0]
+
+    monkeypatch.setattr(streaming_module, "monotonic_seconds", fake_monotonic)
+
+    recorded = []
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = list_sse_client([Start(), intent_event])
+    synchronizer.set_diagnostic_accumulator(
+        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
+    )
+
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert recorded == [(500, False)]
+
+
+def test_clean_close_mid_init_does_not_leave_a_stale_baseline():
+    # Regression for the stale-baseline bug (#1): a connection that gets a Start
+    # but no completing payload, then is cleanly closed, must not leave its
+    # baseline set -- otherwise a later failed reconnect would record a duration
+    # spanning the closed connection plus the backoff sleep. Here the mid-init
+    # clean close + reconnect failure records nothing, rather than a stale value.
+    server_intent = ServerIntent(
+        payload=Payload(id="id", target=300, code=IntentCode.TRANSFER_FULL, reason="cant-catchup"),
+    )
+    intent_event = Event(event=EventName.SERVER_INTENT, data=json.dumps(server_intent.to_dict()))
+
+    recorded = []
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = list_sse_client([
+        Start(), intent_event, Fault(None), Fault(HTTPStatusError(503)),
+    ])
+    synchronizer.set_diagnostic_accumulator(
+        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
+    )
+
+    list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert recorded == []
