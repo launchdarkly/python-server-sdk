@@ -287,6 +287,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             self._override_source = data_system_config.override_source.build(config)
             self._override_layer = OverrideLayer()
             self._overlay = AsyncOverrideStoreView(self._store_view, self._override_layer)
+            self._store.set_external_dependencies(self._override_layer)
 
         # Concurrency
         self._stop_event = AsyncEvent()

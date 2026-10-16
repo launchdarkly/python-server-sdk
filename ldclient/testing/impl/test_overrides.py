@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from ldclient.impl.datasystem.store import InMemoryFeatureStore
+from ldclient.impl.dependency_tracker import KindAndKey
 from ldclient.impl.overrides import (
     AsyncOverrideStoreView,
     OverrideLayer,
@@ -152,6 +153,38 @@ def test_layer_all_returns_entries_of_a_kind():
 # ---------------------------------------------------------------------------
 # Overlay
 # ---------------------------------------------------------------------------
+
+def test_layer_add_affected_items_reaches_the_entries_that_depend_on_an_item():
+    top = FlagBuilder('top').version(1).on(True).variations(True, False).fallthrough_variation(0).prerequisite('mid', 0).build()
+    mid = FlagBuilder('mid').version(1).on(True).variations(True, False).fallthrough_variation(1).rules(
+        FlagRuleBuilder().id('r').variation(0).clauses(make_clause_matching_segment_key('seg')).build()
+    ).build()
+    layer = OverrideLayer()
+    layer.set_all({'top': top, 'mid': mid, 'other': flag('other')}, {})
+
+    # The segment is not an override entry; the chain still starts from it.
+    affected = set()
+    layer.add_affected_items(affected, KindAndKey(kind=SEGMENTS, key='seg'))
+    assert affected == {KindAndKey(SEGMENTS, 'seg'), KindAndKey(FEATURES, 'mid'), KindAndKey(FEATURES, 'top')}
+
+    affected = set()
+    layer.add_affected_items(affected, KindAndKey(kind=FEATURES, key='other'))
+    assert affected == {KindAndKey(FEATURES, 'other')}
+
+
+def test_layer_dependency_graph_follows_each_replacement():
+    top = FlagBuilder('top').version(1).on(True).variations(True, False).fallthrough_variation(0).prerequisite('leaf', 0).build()
+    layer = OverrideLayer()
+    layer.set_all({'top': top}, {})
+    affected = set()
+    layer.add_affected_items(affected, KindAndKey(kind=FEATURES, key='leaf'))
+    assert affected == {KindAndKey(FEATURES, 'leaf'), KindAndKey(FEATURES, 'top')}
+
+    layer.set_all({}, {})
+    affected = set()
+    layer.add_affected_items(affected, KindAndKey(kind=FEATURES, key='leaf'))
+    assert affected == {KindAndKey(FEATURES, 'leaf')}
+
 
 def test_overlay_get_precedence():
     base = FakeBaseStore(flags={'both': flag('both', 1), 'base-only': flag('base-only', 1)})
