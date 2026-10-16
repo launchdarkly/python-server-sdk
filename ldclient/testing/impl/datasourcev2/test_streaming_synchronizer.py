@@ -295,6 +295,44 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
 
 
+def test_ignores_objects_with_unknown_kinds(events):  # pylint: disable=redefined-outer-name
+    unknown_put_event = Event(
+        event=EventName.PUT_OBJECT,
+        data=json.dumps({"version": 1, "kind": "some-future-kind", "key": "unknown-key", "object": {"foo": 1}}),
+    )
+    unknown_delete_event = Event(
+        event=EventName.DELETE_OBJECT,
+        data=json.dumps({"version": 2, "kind": "some-future-kind", "key": "unknown-key"}),
+    )
+    builder = list_sse_client(
+        [
+            events[EventName.SERVER_INTENT],
+            unknown_put_event,
+            events[EventName.PUT_OBJECT],
+            unknown_delete_event,
+            events[EventName.DELETE_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    # Stream a payload that mixes unknown kinds with known flag changes.
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    # The payload completes with only the known changes and no error.
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.VALID
+    assert updates[0].error is None
+
+    assert updates[0].change_set is not None
+    assert [(c.action, c.kind, c.key) for c in updates[0].change_set.changes] == [
+        (ChangeType.PUT, ObjectKind.FLAG, "flag-key"),
+        (ChangeType.DELETE, ObjectKind.FLAG, "flag-key"),
+    ]
+    assert updates[0].change_set.selector.state == "p:SOMETHING:300"
+
+
 def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
     builder = list_sse_client(
         [
