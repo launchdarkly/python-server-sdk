@@ -511,8 +511,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
     def datasystem_config(self) -> Optional[AsyncDataSystemConfig]:
         """
         Configuration for the data system, which controls how the SDK gets
-        flag and segment data. When set, it overrides ``feature_store``,
-        ``update_processor_class``, ``stream``, and ``use_ldd``.
+        flag and segment data.
         """
         return self._datasystem_config
 
