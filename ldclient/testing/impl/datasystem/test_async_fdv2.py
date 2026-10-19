@@ -369,6 +369,7 @@ class ListAsyncSynchronizer:
         self._name = name
         self._updates = updates
         self.sync_called = False
+        self.sync_started = asyncio.Event()
 
     @property
     def name(self) -> str:
@@ -376,6 +377,7 @@ class ListAsyncSynchronizer:
 
     async def sync(self, ss: SelectorStore) -> AsyncGenerator[Update, None]:
         self.sync_called = True
+        self.sync_started.set()
         for update in self._updates:
             yield update
 
@@ -471,16 +473,26 @@ async def test_async_fdv2_initializer_header_fallback_engages_fdv1():
     await fdv2.stop()
 
 
-@pytest.mark.asyncio
-async def test_async_fdv2_initializer_header_fallback_without_fdv1_transitions_to_off():
-    """An initializer signals FDv1 fallback but no FDv1 synchronizer is
-    configured -> the data source transitions to OFF."""
-    init = RecordingAsyncInitializer(
-        "hdr-fallback-no-fdv1",
-        _Fail(error="boom", exception=None, headers={_LD_FD_FALLBACK_HEADER: 'true'}),
-    )
+class SequenceAsyncSynchronizerBuilder(DataSourceBuilder):
+    """Builds each of the given synchronizers in turn."""
 
-    fdv2_sync = ListAsyncSynchronizer("fdv2-should-not-run", [])
+    def __init__(self, synchronizers: List[Any]):
+        self._synchronizers = list(synchronizers)
+
+    def build(self, config: DataSourceBuilderConfig):
+        return self._synchronizers.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_async_fdv2_initializer_fallback_without_fdv1_recovers_after_ttl():
+    """An initializer signals FDv1 fallback but no FDv1 synchronizer is
+    configured -> the SDK becomes ready and starts FDv2 after the TTL."""
+    basis = _make_valid_basis()
+    basis = Basis(change_set=basis.change_set, persist=False, fallback_to_fdv1=True, fallback_ttl=0.05)
+
+    init = RecordingAsyncInitializer("fallback-no-fdv1", _Success(value=basis))
+
+    fdv2_sync = ListAsyncSynchronizer("fdv2", [])
 
     data_system_config = DataSystemConfig(
         initializers=[MockAsyncInitializerBuilder(init)],  # type: ignore[arg-type]
@@ -493,10 +505,59 @@ async def test_async_fdv2_initializer_header_fallback_without_fdv1_transitions_t
     fdv2.start(ready_event)
 
     await asyncio.wait_for(ready_event.wait(), timeout=2)
-    await _status_reaches(fdv2, DataSourceState.OFF)
+    await asyncio.wait_for(fdv2_sync.sync_started.wait(), timeout=2)
 
-    assert fdv2.data_source_status_provider.status.state == DataSourceState.OFF
-    assert fdv2_sync.sync_called is False
+    await fdv2.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_fdv2_synchronizer_fallback_without_fdv1_recovers_after_ttl():
+    """A synchronizer signals FDv1 fallback with no FDv1 synchronizer
+    configured -> FDv2 is retried once the TTL expires."""
+    fallback_update = Update(state=DataSourceState.INTERRUPTED, fallback_to_fdv1=True, fallback_ttl=0.05)
+    first = ListAsyncSynchronizer("first", [fallback_update])
+
+    second = ListAsyncSynchronizer("second", [])
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        synchronizers=[SequenceAsyncSynchronizerBuilder([first, second])],  # type: ignore[list-item]
+        fdv1_fallback_synchronizer=None,
+    )
+
+    ready_event = asyncio.Event()
+    fdv2 = AsyncFDv2(AsyncConfig(sdk_key="dummy"), data_system_config)
+    fdv2.start(ready_event)
+
+    await asyncio.wait_for(ready_event.wait(), timeout=2)
+    await asyncio.wait_for(second.sync_started.wait(), timeout=2)
+
+    await fdv2.stop()
+
+
+@pytest.mark.asyncio
+async def test_async_fdv2_returns_to_fdv2_after_fallback_ttl():
+    """FDv1 serves data during the fallback, then FDv2 runs again after the TTL."""
+    td_fdv1 = TestDataV2.data_source()
+    td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
+
+    fallback_update = Update(state=DataSourceState.INTERRUPTED, fallback_to_fdv1=True, fallback_ttl=0.05)
+    first = ListAsyncSynchronizer("first", [fallback_update])
+
+    second = ListAsyncSynchronizer("second", [])
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        synchronizers=[SequenceAsyncSynchronizerBuilder([first, second])],  # type: ignore[list-item]
+        fdv1_fallback_synchronizer=td_fdv1.async_builder,
+    )
+
+    ready_event = asyncio.Event()
+    fdv2 = AsyncFDv2(AsyncConfig(sdk_key="dummy"), data_system_config)
+    fdv2.start(ready_event)
+
+    await asyncio.wait_for(second.sync_started.wait(), timeout=2)
+    assert await fdv2.store.get(FEATURES, "fdv1-flag") is not None
 
     await fdv2.stop()
 

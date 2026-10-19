@@ -4,7 +4,7 @@ import logging
 import os
 import tempfile
 from threading import Event
-from typing import List
+from typing import List, Optional
 
 from mock import Mock
 
@@ -439,24 +439,26 @@ def test_fdv2_no_fallback_without_header():
     mock_secondary.sync.assert_called()
 
 
-def test_fdv2_stays_on_fdv1_after_fallback():
+def test_fdv2_returns_to_fdv2_after_fallback_ttl():
     """
-    Test that once FDv2 falls back to FDv1, it stays on FDv1 and doesn't
-    attempt to recover to FDv2.
+    After an FDv1 fallback, FDv2 is stopped but retained: once the
+    server-supplied TTL expires, the FDv2 synchronizer runs again.
     """
-    # Create mock primary that signals fallback
+    fallback_update = Update(state=DataSourceState.INTERRUPTED, fallback_to_fdv1=True, fallback_ttl=0.05)
+
+    fdv2_restarted = Event()
+
+    def fdv2_sync(ss):  # pylint: disable=unused-argument
+        if mock_primary.sync.call_count == 1:
+            return iter([fallback_update])
+        fdv2_restarted.set()
+        return iter([])
+
     mock_primary: Synchronizer = Mock()
     mock_primary.name = "mock-primary"
     mock_primary.stop = Mock()
+    mock_primary.sync.side_effect = fdv2_sync
 
-    mock_primary.sync.return_value = iter([
-        Update(
-            state=DataSourceState.OFF,
-            fallback_to_fdv1=True
-        )
-    ])
-
-    # Create FDv1 fallback
     td_fdv1 = TestDataV2.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
@@ -466,23 +468,57 @@ def test_fdv2_stays_on_fdv1_after_fallback():
         fdv1_fallback_synchronizer=td_fdv1.builder,
     )
 
+    fdv1_flag_seen = Event()
+
+    def listener(flag_change: FlagChange):
+        if flag_change.key == "fdv1-flag":
+            fdv1_flag_seen.set()
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+    fdv2.flag_change_listeners.add(listener)
+    fdv2.start(set_on_ready)
+
+    assert fdv1_flag_seen.wait(1), "FDv1 fallback synchronizer did not run"
+    assert fdv2_restarted.wait(1), "FDv2 synchronizer was not restarted after the TTL"
+
+    fdv2.stop()
+
+
+def test_fdv2_synchronizer_fallback_without_fdv1_configured_recovers_after_ttl():
+    """
+    When a synchronizer signals FDv1 fallback and no FDv1 Fallback
+    Synchronizer is configured, FDv2 is still retried once the TTL expires.
+    """
+    fallback_update = Update(state=DataSourceState.INTERRUPTED, fallback_to_fdv1=True, fallback_ttl=0.05)
+
+    fdv2_restarted = Event()
+
+    def fdv2_sync(ss):  # pylint: disable=unused-argument
+        if mock_primary.sync.call_count == 1:
+            return iter([fallback_update])
+        fdv2_restarted.set()
+        return iter([])
+
+    mock_primary: Synchronizer = Mock()
+    mock_primary.name = "mock-primary"
+    mock_primary.stop = Mock()
+    mock_primary.sync.side_effect = fdv2_sync
+
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        synchronizers=[MockDataSourceBuilder(mock_primary)],
+        fdv1_fallback_synchronizer=None,
+    )
+
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
+    assert fdv2_restarted.wait(1), "FDv2 synchronizer was not restarted after the TTL"
 
-    # Give it time to settle
-    import time
-    time.sleep(0.5)
-
-    # Primary should only be called once (not retried after fallback)
-    assert mock_primary.sync.call_count == 1
-
-    # Verify FDv1 is serving data
-    store = fdv2.store
-    flag = store.get(FEATURES, "fdv1-flag", lambda x: x)
-    assert flag is not None
+    fdv2.stop()
 
 
 def test_fdv2_initializer_should_run_until_success():
@@ -595,7 +631,7 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
         os.remove(path)
 
 
-def _basis_with_one_flag(flag_key: str, fallback_to_fdv1: bool) -> Basis:
+def _basis_with_one_flag(flag_key: str, fallback_to_fdv1: bool, fallback_ttl: Optional[float] = None) -> Basis:
     """Builds a Basis containing a single flag, optionally carrying the FDv1 fallback signal."""
     builder = ChangeSetBuilder()
     builder.start(IntentCode.TRANSFER_FULL)
@@ -611,6 +647,7 @@ def _basis_with_one_flag(flag_key: str, fallback_to_fdv1: bool) -> Basis:
         persist=True,
         environment_id=None,
         fallback_to_fdv1=fallback_to_fdv1,
+        fallback_ttl=fallback_ttl,
     )
 
 
@@ -664,26 +701,27 @@ def test_fdv2_initializer_fallback_with_payload_engages_fdv1_synchronizer():
     assert fdv1_flag_seen.wait(1), "FDv1 fallback synchronizer did not run after directive"
 
 
-def test_fdv2_initializer_fallback_without_fdv1_configured_transitions_to_off():
+def test_fdv2_initializer_fallback_without_fdv1_configured_recovers_after_ttl():
     """
     When an initializer signals FDv1 fallback but no FDv1 Fallback Synchronizer
-    is configured, the data source status must transition to OFF rather than
-    silently dropping the directive or stalling at INITIALIZING.
+    is configured, the SDK becomes ready and starts the FDv2 synchronizers
+    once the TTL expires, rather than transitioning to OFF.
     """
     init = _StaticInitializer(
         "fallback-initializer-no-fdv1",
-        _Fail(
-            error="boom",
-            exception=None,
-            headers={_LD_FD_FALLBACK_HEADER: 'true'},
-        ),
+        _Success(value=_basis_with_one_flag("init-flag", fallback_to_fdv1=True, fallback_ttl=0.05)),
     )
 
-    # An FDv2 synchronizer that would otherwise be tried -- it must not run.
+    fdv2_started = Event()
+
+    def fdv2_sync(ss):  # pylint: disable=unused-argument
+        fdv2_started.set()
+        return iter([Update(state=DataSourceState.VALID)])
+
     fdv2_sync_mock: Synchronizer = Mock()
-    fdv2_sync_mock.name = "fdv2-sync-should-not-run"
+    fdv2_sync_mock.name = "fdv2-sync"
     fdv2_sync_mock.stop = Mock()
-    fdv2_sync_mock.sync.return_value = iter([])
+    fdv2_sync_mock.sync.side_effect = fdv2_sync
 
     data_system_config = DataSystemConfig(
         initializers=[_InitializerBuilder(init)],
@@ -691,20 +729,14 @@ def test_fdv2_initializer_fallback_without_fdv1_configured_transitions_to_off():
         fdv1_fallback_synchronizer=None,
     )
 
-    off = Event()
-
-    def listener(status: DataSourceStatus):
-        if status.state == DataSourceState.OFF:
-            off.set()
-
     set_on_ready = Event()
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
-    fdv2.data_source_status_provider.add_listener(listener)
     fdv2.start(set_on_ready)
 
     assert set_on_ready.wait(1), "Data system did not become ready in time"
-    assert off.wait(1), "Data source did not transition to OFF after directive without fallback"
-    fdv2_sync_mock.sync.assert_not_called()
+    assert fdv2_started.wait(1), "FDv2 synchronizer did not start after the TTL"
+
+    fdv2.stop()
 
 
 def test_fdv2_synchronizer_fallback_on_success_with_payload():

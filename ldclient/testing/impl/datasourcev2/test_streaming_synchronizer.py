@@ -23,7 +23,11 @@ from ldclient.impl.datasystem.protocolv2 import (
     Goodbye,
     PutObject
 )
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    _LD_FD_FALLBACK_TTL_HEADER
+)
 from ldclient.interfaces import (
     ChangeType,
     DataSourceErrorKind,
@@ -805,3 +809,63 @@ def test_envid_missing_when_no_headers():
     assert len(updates) == 1
     assert updates[0].state == DataSourceState.VALID
     assert updates[0].environment_id is None
+
+
+def test_fallback_header_ttl_is_carried_on_update(events):  # pylint: disable=redefined-outer-name
+    start_action = Start(headers={_LD_FD_FALLBACK_HEADER: 'true', _LD_FD_FALLBACK_TTL_HEADER: '120'})
+
+    builder = list_sse_client(
+        [
+            start_action,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].fallback_ttl == 120
+
+
+def test_goodbye_with_fallback_ttl_halts_with_signal(events):  # pylint: disable=redefined-outer-name
+    goodbye = Goodbye(reason="fall back", protocol_fallback_ttl=30)
+    goodbye_event = Event(event=EventName.GOODBYE, data=json.dumps(goodbye.to_dict()))
+
+    builder = list_sse_client(
+        [
+            Start(headers={_LD_ENVID_HEADER: 'test-env'}),
+            goodbye_event,
+            events[EventName.SERVER_INTENT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].fallback_ttl == 30
+    assert updates[0].environment_id == 'test-env'
+    assert updates[0].change_set is None
+
+
+def test_goodbye_with_invalid_fallback_ttl_uses_default():
+    goodbye = Goodbye(reason="fall back", protocol_fallback_ttl=0)
+    goodbye_event = Event(event=EventName.GOODBYE, data=json.dumps(goodbye.to_dict()))
+
+    builder = list_sse_client([goodbye_event])
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    assert 1800 <= updates[0].fallback_ttl <= 3600  # type: ignore[operator]

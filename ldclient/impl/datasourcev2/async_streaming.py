@@ -24,7 +24,11 @@ from ldclient.impl.datasourcev2.streaming_common import (
     with_fallback_signal
 )
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    fdv1_fallback_ttl_from_headers,
+    log
+)
 from ldclient.interfaces import (
     AsyncSynchronizer,
     ChangeSetBuilder,
@@ -153,12 +157,12 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         self._connection_attempt_start_time = time()
 
         envid = None
-        # A Start action with the X-LD-FD-Fallback: true header sets fallback_requested.
+        # A Start action with the X-LD-FD-Fallback: true header sets fallback_ttl.
         # We apply the current payload before halting, so consumers can serve that data
-        # while FDv1 takes over. Once set, the flag stays set: every later payload event
+        # while FDv1 takes over. Once set, it stays set: every later payload event
         # or error re-emits the signal and halts the stream, even when that event has no
         # directive header of its own.
-        fallback_requested = False
+        fallback_ttl: Optional[float] = None
 
         try:
             async for action in self._sse.all:
@@ -174,19 +178,18 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
                     (update, should_continue) = await self._handle_error(action.error, envid)
                     if update is not None:
-                        yield with_fallback_signal(update, fallback_requested)
+                        yield with_fallback_signal(update, fallback_ttl)
 
-                    # The FDv1 Fallback Directive is one-way and terminal: if it
-                    # was latched on a prior Start, we must not keep retrying the
+                    # Once the FDv1 Fallback Directive was latched on a prior
+                    # Start, we must not keep retrying the
                     # FDv2 endpoint even when the failure itself looks recoverable.
-                    if fallback_requested or not should_continue:
+                    if fallback_ttl is not None or not should_continue:
                         break
                     continue
 
                 if isinstance(action, Start) and action.headers is not None:
                     envid = action.headers.get(_LD_ENVID_HEADER, envid)
-                    if action.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
-                        fallback_requested = True
+                    fallback_ttl = fdv1_fallback_ttl_from_headers(action.headers) or fallback_ttl
 
                 if not isinstance(action, Event):
                     continue
@@ -196,13 +199,12 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                     if update is not None:
                         self._record_stream_init(False)
                         self._connection_attempt_start_time = None
-                        if fallback_requested:
-                            # The completed update is the natural moment to honor
-                            # the latched directive: yield once with the signal,
-                            # then halt — the consumer will switch to FDv1.
-                            yield with_fallback_signal(update, fallback_requested)
-                            break
+                        update = with_fallback_signal(update, fallback_ttl)
                         yield update
+                        # Honor a latched or in-band directive once the update is out:
+                        # halt, and the consumer will switch to FDv1.
+                        if update.fallback_to_fdv1:
+                            break
                 except json.decoder.JSONDecodeError as e:
                     log.info(
                         "Error while handling stream event; will restart stream: %s", e
@@ -211,8 +213,8 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
                     (update, should_continue) = await self._handle_error(e, envid)
                     if update is not None:
-                        yield with_fallback_signal(update, fallback_requested)
-                    if fallback_requested or not should_continue:
+                        yield with_fallback_signal(update, fallback_ttl)
+                    if fallback_ttl is not None or not should_continue:
                         break
                 except Exception as e:  # pylint: disable=broad-except
                     log.info(
@@ -227,8 +229,8 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                         ),
                         fallback_to_fdv1=False,
                         environment_id=envid,
-                    ), fallback_requested)
-                    if fallback_requested:
+                    ), fallback_ttl)
+                    if fallback_ttl is not None:
                         break
         finally:
             await self._sse.close()

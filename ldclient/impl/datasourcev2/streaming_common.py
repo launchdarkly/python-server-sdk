@@ -20,7 +20,8 @@ from ldclient.impl.datasystem.protocolv2 import (
 )
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
-    _LD_FD_FALLBACK_HEADER,
+    fdv1_fallback_ttl,
+    fdv1_fallback_ttl_from_headers,
     http_error_message,
     is_http_error_recoverable,
     log
@@ -78,7 +79,15 @@ def process_message(
         goodbye = Goodbye.from_dict(json.loads(msg.data))
         log.info("SSE server sent goodbye: %s", goodbye.reason)
 
-        return None
+        if goodbye.protocol_fallback_ttl is None:
+            return None
+
+        return Update(
+            state=DataSourceState.INTERRUPTED,
+            fallback_to_fdv1=True,
+            fallback_ttl=fdv1_fallback_ttl(goodbye.protocol_fallback_ttl),
+            environment_id=envid,
+        )
 
     if msg.event == EventName.ERROR:
         error = Error.from_dict(json.loads(msg.data))
@@ -108,13 +117,13 @@ def process_message(
     return None
 
 
-def with_fallback_signal(update: Update, fallback_requested: bool) -> Update:
+def with_fallback_signal(update: Update, fallback_ttl: Optional[float]) -> Update:
     """
-    Return ``update`` marked with ``fallback_to_fdv1=True`` when the FDv1
-    fallback directive has been latched. Returns the update unchanged when the
-    directive is not set or the update already carries it.
+    Return ``update`` marked with the FDv1 fallback directive when one has
+    been latched with the given TTL. Returns the update unchanged when no
+    directive is latched or the update already carries its own.
     """
-    if not fallback_requested or update.fallback_to_fdv1:
+    if fallback_ttl is None or update.fallback_to_fdv1:
         return update
     return Update(
         state=update.state,
@@ -122,6 +131,7 @@ def with_fallback_signal(update: Update, fallback_requested: bool) -> Update:
         error=update.error,
         fallback_to_fdv1=True,
         environment_id=update.environment_id,
+        fallback_ttl=fallback_ttl,
     )
 
 
@@ -183,12 +193,14 @@ def classify_stream_error(
         if envid is None and error.headers is not None:
             envid = error.headers.get(_LD_ENVID_HEADER)
 
-        if error.headers is not None and error.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+        fallback_ttl = fdv1_fallback_ttl_from_headers(error.headers)
+        if fallback_ttl is not None:
             update = Update(
                 state=DataSourceState.OFF,
                 error=error_info,
                 fallback_to_fdv1=True,
                 environment_id=envid,
+                fallback_ttl=fallback_ttl,
             )
             return StreamErrorDecision(
                 update=update,

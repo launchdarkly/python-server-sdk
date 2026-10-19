@@ -4,7 +4,13 @@ from ldclient.impl.datasourcev2.polling import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )
-from ldclient.impl.util import _Fail, _Success
+from ldclient.impl.datasourcev2.polling_common import with_goodbye_fallback
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _Fail,
+    _Success,
+    fdv1_fallback_ttl_from_headers
+)
 from ldclient.interfaces import ChangeType, IntentCode, ObjectKind
 
 
@@ -359,3 +365,36 @@ def test_fdv1_payload_only_segments_no_flags_key():
     change_set = result.value
     assert len(change_set.changes) == 1
     assert change_set.changes[0].key == "test-segment"
+
+
+def test_payload_with_only_goodbye_has_no_changes():
+    data = {"events": [{"event": "goodbye", "data": {"reason": "fall back", "protocolFallbackTTL": 30}}]}
+
+    result = polling_payload_to_changeset(data)
+
+    assert isinstance(result, _Success)
+    assert result.value.intent_code == IntentCode.TRANSFER_NONE
+
+
+def test_goodbye_fallback_ttl_is_added_to_headers():
+    data = {"events": [{"event": "goodbye", "data": {"reason": "fall back", "protocolFallbackTTL": 30}}]}
+
+    headers = with_goodbye_fallback({_LD_ENVID_HEADER: 'test-env'}, data)
+
+    assert fdv1_fallback_ttl_from_headers(headers) == 30
+    assert headers.get(_LD_ENVID_HEADER.lower()) == 'test-env'
+
+
+def test_goodbye_with_invalid_fallback_ttl_uses_default():
+    data = {"events": [{"event": "goodbye", "data": {"reason": "fall back", "protocolFallbackTTL": 7200}}]}
+
+    headers = with_goodbye_fallback({}, data)
+
+    assert 1800 <= fdv1_fallback_ttl_from_headers(headers) <= 3600  # type: ignore[operator]
+
+
+def test_goodbye_without_fallback_ttl_leaves_headers_unchanged():
+    data = {"events": [{"event": "goodbye", "data": {"reason": "bye"}}]}
+    headers = {_LD_ENVID_HEADER: 'test-env'}
+
+    assert with_goodbye_fallback(headers, data) is headers

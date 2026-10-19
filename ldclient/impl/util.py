@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 import sys
 import time
@@ -44,6 +45,35 @@ _VALID_CHARACTERS_REGEX = re.compile(r"[^a-zA-Z0-9._-]")
 
 _LD_ENVID_HEADER = 'X-LD-EnvID'
 _LD_FD_FALLBACK_HEADER = 'X-LD-FD-Fallback'
+_LD_FD_FALLBACK_TTL_HEADER = 'X-LD-FD-Fallback-TTL'
+
+_FDV1_FALLBACK_DEFAULT_TTL = 3600.0
+
+
+def fdv1_fallback_ttl(ttl: Any = None) -> float:
+    """
+    Returns how many seconds the SDK stays off FDv2 after an FDv1 fallback directive.
+
+    ``ttl`` is the service-supplied TTL in seconds, from the X-LD-FD-Fallback-TTL header or
+    a goodbye's protocolFallbackTTL. A TTL in (0, 1 hour] is used as given. Anything else,
+    including a missing or malformed TTL, gives the 1 hour default minus a random jitter of
+    up to 30 minutes, so that SDKs which fell back together do not all retry at once.
+    """
+    if isinstance(ttl, str) and re.fullmatch('[0-9]+', ttl):
+        ttl = int(ttl)
+    if isinstance(ttl, (int, float)) and not isinstance(ttl, bool) and 0 < ttl <= _FDV1_FALLBACK_DEFAULT_TTL:
+        return float(ttl)
+    return _FDV1_FALLBACK_DEFAULT_TTL - random.uniform(0, _FDV1_FALLBACK_DEFAULT_TTL / 2)
+
+
+def fdv1_fallback_ttl_from_headers(headers: Any) -> Optional[float]:
+    """
+    Returns the FDv1 fallback TTL directed by a response's X-LD-FD-Fallback and
+    X-LD-FD-Fallback-TTL headers, or None when the headers carry no directive.
+    """
+    if headers is None or headers.get(_LD_FD_FALLBACK_HEADER) != 'true':
+        return None
+    return fdv1_fallback_ttl(headers.get(_LD_FD_FALLBACK_TTL_HEADER))
 
 
 def validate_application_info(application: dict, logger: logging.Logger) -> dict:

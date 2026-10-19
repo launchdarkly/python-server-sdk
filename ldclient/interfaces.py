@@ -1837,7 +1837,13 @@ class Basis:
     Indicates that the LaunchDarkly server has directed the SDK to fall
     back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
     response header). When True, callers must apply ``change_set`` first
-    and then terminally switch to the FDv1 Fallback Synchronizer.
+    and then switch to the FDv1 Fallback Synchronizer until
+    ``fallback_ttl`` expires.
+    """
+    fallback_ttl: Optional[float] = None
+    """
+    How many seconds to stay off FDv2 when ``fallback_to_fdv1`` is True.
+    When None, the SDK uses its default.
     """
 
 
@@ -2088,11 +2094,17 @@ class Update:
     """
     Indicates that the LaunchDarkly server has directed the SDK to fall
     back to the FDv1 Fallback Synchronizer (via the X-LD-FD-Fallback
-    response header). When True, callers must apply any accompanying
-    ``change_set`` first and then terminally switch to the FDv1 Fallback
-    Synchronizer. The flag may ride along on Valid or Off updates.
+    response header or a goodbye event). When True, callers must apply any
+    accompanying ``change_set`` first and then switch to the FDv1 Fallback
+    Synchronizer until ``fallback_ttl`` expires. The flag may ride along on
+    Valid, Interrupted, or Off updates.
     """
     environment_id: Optional[str] = None
+    fallback_ttl: Optional[float] = None
+    """
+    How many seconds to stay off FDv2 when ``fallback_to_fdv1`` is True.
+    When None, the SDK uses its default.
+    """
 
 
 class Synchronizer(Protocol):  # pylint: disable=too-few-public-methods

@@ -1,7 +1,7 @@
 import time
 from queue import Queue
-from threading import Event, Thread
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from threading import Event, Thread, Timer
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.feature_store import _FeatureStoreDataSetSorter
@@ -19,7 +19,12 @@ from ldclient.impl.datasystem.store import Store, _decode
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
+from ldclient.impl.util import (
+    _Fail,
+    fdv1_fallback_ttl,
+    fdv1_fallback_ttl_from_headers,
+    log
+)
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
@@ -327,30 +332,12 @@ class FDv2(_FDv2Base, DataSystem):
                 DataSourceState.INITIALIZING, None
             )
 
-            # Run initializers first
-            fallback_requested = self._run_initializers(set_on_ready)
-
-            # If an initializer asked the SDK to fall back to FDv1, halt the
-            # configured FDv2 chain and switch terminally to the FDv1 Fallback
-            # Synchronizer (or transition to OFF if none is configured).
-            if fallback_requested:
-                if self._fdv1_fallback_synchronizer_builder is not None:
-                    log.warning("Falling back to FDv1 protocol")
-                    self._synchronizers = [self._fdv1_fallback_synchronizer_builder]
-                else:
-                    log.warning(
-                        "Initializer requested FDv1 fallback but none configured"
-                    )
-                    self._synchronizers = []
-                    self._data_source_status_provider.update_status(
-                        DataSourceState.OFF,
-                        self._data_source_status_provider.status.error,
-                    )
-                    set_on_ready.set()
-                    return
+            # Run initializers first. If one directs the SDK to fall back to
+            # FDv1, the synchronizer loop starts in FDv1 fallback.
+            fallback_ttl = self._run_initializers(set_on_ready)
 
             # Run synchronizers
-            self._run_synchronizers(set_on_ready)
+            self._run_synchronizers(set_on_ready, fallback_ttl)
 
         except Exception as e:
             log.error("Error in FDv2 main loop: %s", e)
@@ -358,22 +345,22 @@ class FDv2(_FDv2Base, DataSystem):
             if not set_on_ready.is_set():
                 set_on_ready.set()
 
-    def _run_initializers(self, set_on_ready: Event) -> bool:
+    def _run_initializers(self, set_on_ready: Event) -> Optional[float]:
         """
         Run initializers to get initial data.
 
-        Returns True when an initializer requested the FDv1 Fallback Directive
-        (via the X-LD-FD-Fallback response header). When that happens, any
-        accompanying payload is applied first so evaluations can serve the
-        server-provided data while the FDv1 synchronizer spins up; the caller
-        is then responsible for switching to the FDv1 Fallback Synchronizer.
+        Returns the FDv1 fallback TTL, in seconds, when an initializer
+        requested the FDv1 Fallback Directive, or None otherwise. When that
+        happens, any accompanying payload is applied first so evaluations can
+        serve the server-provided data while the FDv1 synchronizer spins up;
+        the caller is then responsible for falling back to FDv1 for the TTL.
         """
         if self._data_system_config.initializers is None:
-            return False
+            return None
 
         for initializer_builder in self._data_system_config.initializers:
             if self._stop_event.is_set():
-                return False
+                return None
 
             try:
                 initializer = initializer_builder.build(self._config)
@@ -384,8 +371,8 @@ class FDv2(_FDv2Base, DataSystem):
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
                     # An error response can still carry the FDv1 fallback directive.
-                    if basis_result.headers is not None and \
-                            basis_result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true':
+                    fallback_ttl = fdv1_fallback_ttl_from_headers(basis_result.headers)
+                    if fallback_ttl is not None:
                         log.warning(
                             "Initializer %s requested fallback to FDv1 protocol",
                             initializer.name,
@@ -401,7 +388,7 @@ class FDv2(_FDv2Base, DataSystem):
                                 message=basis_result.error,
                             ),
                         )
-                        return True
+                        return fallback_ttl
                     continue
 
                 basis = basis_result.value
@@ -422,30 +409,49 @@ class FDv2(_FDv2Base, DataSystem):
                         "Initializer %s requested fallback to FDv1 protocol",
                         initializer.name,
                     )
-                    return True
+                    return basis.fallback_ttl if basis.fallback_ttl is not None else fdv1_fallback_ttl()
 
                 if selector_defined:
-                    return False
+                    return None
             except Exception as e:
                 log.error("Initializer failed with exception: %s", e)
-        return False
+        return None
 
-    def _run_synchronizers(self, set_on_ready: Event):
-        """Run synchronizers to keep data up-to-date."""
+    def _run_synchronizers(self, set_on_ready: Event, fallback_ttl: Optional[float] = None):
+        """
+        Run synchronizers to keep data up-to-date.
+
+        :param fallback_ttl: when set, start in FDv1 fallback for this many seconds
+        """
         # If no synchronizers configured, just set ready and return
-        if len(self._synchronizers) == 0:
+        if len(self._synchronizers) == 0 and fallback_ttl is None:
             set_on_ready.set()
             return
 
-        def synchronizer_loop(self: 'FDv2'):
+        def synchronizer_loop(self: 'FDv2', fallback_ttl: Optional[float]):
             try:
-                # Make a working copy of the synchronizers list
+                # Make a working copy of the synchronizers list. self._synchronizers
+                # stays untouched so FDv2 can be restored after an FDv1 fallback.
                 synchronizers_list = list(self._synchronizers)
                 current_index = 0
 
                 # Always ensure ready event is set when we exit
-                while not self._stop_event.is_set() and len(synchronizers_list) > 0:
+                while not self._stop_event.is_set():
                     try:
+                        if fallback_ttl is not None:
+                            self._run_fdv1_fallback(set_on_ready, fallback_ttl)
+                            fallback_ttl = None
+
+                            if self._stop_event.is_set():
+                                break
+                            log.info("FDv1 fallback TTL expired; returning to FDv2")
+                            synchronizers_list = list(self._synchronizers)
+                            current_index = 0
+                            continue
+
+                        if len(synchronizers_list) == 0:
+                            break
+
                         with self._lock.write():
                             synchronizer: Synchronizer = synchronizers_list[current_index].build(self._config)
                             self._active_synchronizer = synchronizer
@@ -454,24 +460,13 @@ class FDv2(_FDv2Base, DataSystem):
 
                         log.info("Synchronizer %s (index %d) is starting", synchronizer.name, current_index)
 
-                        directive = self._consume_synchronizer_results(
+                        (directive, fallback_ttl) = self._consume_synchronizer_results(
                             synchronizer, set_on_ready, current_index != 0
                         )
 
                         if directive == ConditionDirective.FDV1:
-                            # Abandon all synchronizers and use only fdv1 fallback
-                            log.warning("Falling back to FDv1 protocol")
-                            if self._fdv1_fallback_synchronizer_builder is not None:
-                                synchronizers_list = [self._fdv1_fallback_synchronizer_builder]
-                                current_index = 0
-                            else:
-                                log.warning("Synchronizer requested FDv1 fallback but none configured")
-                                synchronizers_list = []
-                                self._data_source_status_provider.update_status(
-                                    DataSourceState.OFF,
-                                    self._data_source_status_provider.status.error
-                                )
-                                break
+                            # The synchronizer has already been stopped; fall
+                            # back to FDv1 on the next iteration.
                             continue
                         elif directive == ConditionDirective.REMOVE:
                             # Permanent failure - remove synchronizer from list
@@ -519,22 +514,77 @@ class FDv2(_FDv2Base, DataSystem):
         sync_thread = Thread(
             target=synchronizer_loop,
             name="FDv2-synchronizers",
-            args=(self,),
+            args=(self, fallback_ttl),
             daemon=True
         )
         sync_thread.start()
         self._threads.append(sync_thread)
+
+    def _run_fdv1_fallback(self, set_on_ready: Event, ttl: float):
+        """
+        Serve data from the FDv1 Fallback Synchronizer, if one is configured,
+        for ``ttl`` seconds or until the data system is stopped. Without one,
+        just wait out the TTL. The caller then returns to FDv2.
+
+        Synchronizers run one at a time on the calling thread, and each is
+        stopped before the next starts, so FDv1 and FDv2 never write to the
+        store concurrently.
+        """
+        log.warning("Falling back to FDv1 protocol; will retry FDv2 in %.0f seconds", ttl)
+        deadline = time.monotonic() + ttl
+
+        if self._fdv1_fallback_synchronizer_builder is None:
+            log.warning("FDv1 fallback requested but no FDv1 fallback synchronizer is configured")
+            self._data_source_status_provider.update_status(
+                DataSourceState.INTERRUPTED,
+                self._data_source_status_provider.status.error or DataSourceErrorInfo(
+                    kind=DataSourceErrorKind.UNKNOWN,
+                    status_code=0,
+                    time=time.time(),
+                    message="FDv1 fallback directive received; no FDv1 fallback configured",
+                ),
+            )
+            set_on_ready.set()
+            self._stop_event.wait(ttl)
+            return
+
+        while not self._stop_event.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+
+            with self._lock.write():
+                synchronizer: Synchronizer = self._fdv1_fallback_synchronizer_builder.build(self._config)
+                self._active_synchronizer = synchronizer
+                if isinstance(synchronizer, DiagnosticSource) and self._diagnostic_accumulator is not None:
+                    synchronizer.set_diagnostic_accumulator(self._diagnostic_accumulator)
+
+            log.info("FDv1 fallback synchronizer %s is starting", synchronizer.name)
+
+            (directive, _) = self._consume_synchronizer_results(
+                synchronizer, set_on_ready, False, remaining
+            )
+
+            if directive == ConditionDirective.RECOVER:
+                return
+            if directive == ConditionDirective.REMOVE:
+                # FDv1 failed permanently; FDv2 is still off until the TTL expires.
+                self._stop_event.wait(max(0.0, deadline - time.monotonic()))
+                return
 
     def _consume_synchronizer_results(
         self,
         synchronizer: Synchronizer,
         set_on_ready: Event,
         check_recovery: bool,
-    ) -> ConditionDirective:
+        fdv2_recovery_ttl: Optional[float] = None,
+    ) -> Tuple[ConditionDirective, Optional[float]]:
         """
         Consume results from a synchronizer until a condition is met or it fails.
 
-        :return: the ConditionDirective describing how to proceed
+        :param fdv2_recovery_ttl: when set, return RECOVER after this many seconds
+        :return: the ConditionDirective describing how to proceed, plus the
+            FDv1 fallback TTL in seconds when the directive is FDV1
         """
         action_queue: Queue = Queue()
         state_age = _StateAgeTracker()
@@ -544,6 +594,10 @@ class FDv2(_FDv2Base, DataSystem):
             initial_delay=10,
             callable=lambda: action_queue.put("check")
         )
+        recovery_timer: Optional[Timer] = None
+        if fdv2_recovery_ttl is not None:
+            recovery_timer = Timer(fdv2_recovery_ttl, lambda: action_queue.put("recover"))
+            recovery_timer.daemon = True
 
         def reader(self: 'FDv2'):
             try:
@@ -561,6 +615,8 @@ class FDv2(_FDv2Base, DataSystem):
 
         try:
             timer.start()
+            if recovery_timer is not None:
+                recovery_timer.start()
             sync_reader.start()
 
             while True:
@@ -569,19 +625,22 @@ class FDv2(_FDv2Base, DataSystem):
                     if update == "quit":
                         break
 
+                    if update == "recover":
+                        return (ConditionDirective.RECOVER, None)
+
                     if update == "check":
                         # Check condition periodically
                         current_status = self._data_source_status_provider.status
                         seconds_in_state = state_age.seconds_in_state(current_status)
                         if check_recovery and recovery_condition(current_status, seconds_in_state):
-                            return ConditionDirective.RECOVER
+                            return (ConditionDirective.RECOVER, None)
                         if fallback_condition(current_status, seconds_in_state):
-                            return ConditionDirective.FALLBACK
+                            return (ConditionDirective.FALLBACK, None)
                     continue
 
                 log.info("Synchronizer %s update: %s", synchronizer.name, update.state)
                 if self._stop_event.is_set():
-                    return ConditionDirective.FALLBACK
+                    return (ConditionDirective.FALLBACK, None)
 
                 if update.state == DataSourceState.VALID:
                     self._record_environment_id(update.environment_id)
@@ -602,24 +661,27 @@ class FDv2(_FDv2Base, DataSystem):
                 # response), in which case the ChangeSet has already been applied
                 # above before we hand off.
                 if update.fallback_to_fdv1:
-                    return ConditionDirective.FDV1
+                    fallback_ttl = update.fallback_ttl if update.fallback_ttl is not None else fdv1_fallback_ttl()
+                    return (ConditionDirective.FDV1, fallback_ttl)
 
                 # Check for OFF state indicating permanent failure
                 if update.state == DataSourceState.OFF:
-                    return ConditionDirective.REMOVE
+                    return (ConditionDirective.REMOVE, None)
         except Exception as e:
             log.error("Error consuming synchronizer results: %s", e)
-            return ConditionDirective.REMOVE
+            return (ConditionDirective.REMOVE, None)
         finally:
             synchronizer.stop()
             timer.stop()
+            if recovery_timer is not None:
+                recovery_timer.cancel()
 
             sync_reader.join(0.5)
 
         # If we reach here, the synchronizer's iterator completed normally (no more updates)
         # For continuous synchronizers (streaming/polling), this is unexpected and indicates
         # the synchronizer can't provide more updates, so we should remove it and fall back
-        return ConditionDirective.REMOVE
+        return (ConditionDirective.REMOVE, None)
 
     def _record_environment_id(self, environment_id: Optional[str]):
         if not isinstance(environment_id, str) or environment_id == '':

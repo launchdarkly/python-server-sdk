@@ -1,6 +1,16 @@
 import logging
 
-from ldclient.impl.util import validate_sdk_key_format
+import pytest
+from mock import patch
+
+from ldclient.impl import util
+from ldclient.impl.util import (
+    _LD_FD_FALLBACK_HEADER,
+    _LD_FD_FALLBACK_TTL_HEADER,
+    fdv1_fallback_ttl,
+    fdv1_fallback_ttl_from_headers,
+    validate_sdk_key_format
+)
 
 
 def test_validate_sdk_key_format_valid():
@@ -63,3 +73,35 @@ def test_validate_sdk_key_format_max_length():
     invalid_key = "a" * 8193
     result = validate_sdk_key_format(invalid_key, logger)
     assert result == ''  # Should return empty string for keys that are too long
+
+
+@pytest.mark.parametrize("ttl, expected", [
+    (1, 1.0),
+    (0.5, 0.5),
+    (3600, 3600.0),
+    ("1", 1.0),
+    ("3600", 3600.0),
+])
+def test_fdv1_fallback_ttl_uses_valid_ttl_as_is(ttl, expected):
+    assert fdv1_fallback_ttl(ttl) == expected
+
+
+@pytest.mark.parametrize("ttl", [None, 0, -1, 3601, "0", "-1", "3601", "", "abc", "1.5", True, {}])
+def test_fdv1_fallback_ttl_jitters_default_for_invalid_ttl(ttl):
+    assert 1800 <= fdv1_fallback_ttl(ttl) <= 3600
+
+
+@pytest.mark.parametrize("jitter, expected", [(0, 3600.0), (1800, 1800.0)])
+def test_fdv1_fallback_ttl_default_subtracts_up_to_half_an_hour(jitter, expected):
+    with patch.object(util.random, "uniform", return_value=jitter) as uniform:
+        assert fdv1_fallback_ttl(None) == expected
+
+    uniform.assert_called_once_with(0, 1800)
+
+
+def test_fdv1_fallback_ttl_from_headers():
+    assert fdv1_fallback_ttl_from_headers({_LD_FD_FALLBACK_HEADER: 'true', _LD_FD_FALLBACK_TTL_HEADER: '30'}) == 30
+    assert 1800 <= fdv1_fallback_ttl_from_headers({_LD_FD_FALLBACK_HEADER: 'true'}) <= 3600  # type: ignore[operator]
+    assert fdv1_fallback_ttl_from_headers({_LD_FD_FALLBACK_TTL_HEADER: '30'}) is None
+    assert fdv1_fallback_ttl_from_headers({}) is None
+    assert fdv1_fallback_ttl_from_headers(None) is None
