@@ -1,4 +1,17 @@
+import pytest
+
 from ldclient.impl.lru_cache import SimpleLRUCache
+
+
+@pytest.mark.parametrize("capacity", [0, -1])
+def test_non_positive_capacity_does_not_retain_values(capacity):
+    lru = SimpleLRUCache(capacity)
+    assert lru.put("a", True) is False
+    assert lru.get("a") is None
+    assert lru.put("a", True) is False
+    assert lru.put("b", True) is False
+    assert lru.get("a") is None
+    assert lru.get("b") is None
 
 
 def test_retains_values_up_to_capacity():

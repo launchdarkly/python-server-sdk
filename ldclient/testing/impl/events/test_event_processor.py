@@ -384,6 +384,30 @@ def test_two_events_for_same_context_only_produce_one_index_event():
         check_summary_event(output[3])
 
 
+@pytest.mark.parametrize(
+    "event,expected_kinds",
+    [
+        pytest.param(EventInputIdentify(timestamp, context), ['identify', 'identify'], id='identify'),
+        pytest.param(EventInputCustom(timestamp, context, 'eventkey', {'thing': 'stuff'}, 1.5), ['index', 'custom', 'index', 'custom'], id='custom'),
+        pytest.param(
+            EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True),
+            ['index', 'feature', 'index', 'feature', 'summary'],
+            id='feature',
+        ),
+    ],
+)
+def test_events_are_delivered_with_zero_context_keys_capacity(event, expected_kinds):
+    with DefaultTestProcessor(context_keys_capacity=0) as ep:
+        ep.send_event(event)
+        ep.send_event(event)
+
+        output = flush_and_get_events(ep)
+        assert [item['kind'] for item in output] == expected_kinds
+        for item in output:
+            if item['kind'] != 'summary':
+                assert item['context'] == context.to_dict()
+
+
 def test_new_index_event_is_added_if_context_cache_has_been_cleared():
     with DefaultTestProcessor(context_keys_flush_interval=0.1) as ep:
         e0 = EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value1', None, 'default', None, True)
