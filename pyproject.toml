@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "certifi>=2018.4.16",
+    "certifi>=2026.10.19",
     "expiringdict>=1.1.4",
     "pyRFC3339>=1.0",
     "semver>=2.10.2",
