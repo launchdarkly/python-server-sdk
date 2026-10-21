@@ -6,20 +6,25 @@ ChangeSets. Used by both the sync and async polling requesters.
 from dataclasses import dataclass
 from enum import Enum
 from time import time
-from typing import Mapping, Tuple
+from typing import Mapping, Optional, Tuple
+
+from urllib3._collections import HTTPHeaderDict
 
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
+    Goodbye,
     PutObject
 )
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
+    _LD_FD_FALLBACK_TTL_HEADER,
     UnsuccessfulResponseException,
     _Fail,
     _Result,
     _Success,
+    fdv1_fallback_ttl_from_headers,
     http_error_message,
     is_http_error_recoverable,
     log
@@ -40,6 +45,31 @@ from ldclient.interfaces import (
 )
 
 
+def with_goodbye_fallback(headers: Mapping, data: dict) -> Mapping:
+    """
+    Return ``headers`` with the FDv1 fallback directive added when the polling
+    payload contains a goodbye event carrying protocolFallbackTTL, so the
+    in-band directive is handled like the X-LD-FD-Fallback header.
+    """
+    events = data.get("events")
+    if not isinstance(events, list):
+        return headers
+
+    for event in events:
+        if not isinstance(event, dict) or event.get("event") != EventName.GOODBYE:
+            continue
+        ttl = event.get("data", {}).get("protocolFallbackTTL") if isinstance(event.get("data"), dict) else None
+        if ttl is None:
+            continue
+
+        merged = HTTPHeaderDict(headers)
+        merged[_LD_FD_FALLBACK_HEADER] = 'true'
+        merged[_LD_FD_FALLBACK_TTL_HEADER] = str(ttl) if isinstance(ttl, int) and not isinstance(ttl, bool) else ''
+        return merged
+
+    return headers
+
+
 # pylint: disable=too-many-branches,too-many-return-statements
 def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
     """
@@ -49,6 +79,7 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
         return _Fail(error="Invalid payload: 'events' key is missing or not a list")
 
     builder = ChangeSetBuilder()
+    goodbye_received = False
 
     for event in data["events"]:
         if not isinstance(event, dict):
@@ -83,6 +114,14 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
             builder.add_delete(
                 delete_object.kind, delete_object.key, delete_object.version
             )
+        elif event["event"] == EventName.GOODBYE:
+            try:
+                goodbye = Goodbye.from_dict(event["data"])
+            except ValueError as err:
+                return _Fail(error="Invalid JSON in goodbye", exception=err)
+
+            log.info("Polling response contained goodbye: %s", goodbye.reason)
+            goodbye_received = True
         elif event["event"] == EventName.PAYLOAD_TRANSFERRED:
             try:
                 selector = Selector.from_dict(event["data"])
@@ -93,6 +132,9 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
                 return _Fail(
                     error="Invalid JSON in payload transferred object", exception=err
                 )
+
+    if goodbye_received:
+        return _Success(ChangeSetBuilder.no_changes())
 
     return _Fail(error="didn't receive any known protocol events in polling payload")
 
@@ -170,11 +212,13 @@ def polling_result_to_basis(
     if not isinstance(env_id, str):
         env_id = None
 
+    fallback_ttl = fdv1_fallback_ttl_from_headers(headers)
     basis = Basis(
         change_set=change_set,
         persist=change_set.selector.is_defined(),
         environment_id=env_id,
-        fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true',
+        fallback_to_fdv1=fallback_ttl is not None,
+        fallback_ttl=fallback_ttl,
     )
 
     return _Success(value=basis)
@@ -212,11 +256,10 @@ def map_polling_result(
     polling synchronizers.
     """
     if isinstance(result, _Fail):
-        fallback = None
+        fallback_ttl = fdv1_fallback_ttl_from_headers(result.headers)
         envid = None
 
         if result.headers is not None:
-            fallback = result.headers.get(_LD_FD_FALLBACK_HEADER) == 'true'
             envid = result.headers.get(_LD_ENVID_HEADER)
 
         if isinstance(result.exception, UnsuccessfulResponseException):
@@ -229,13 +272,14 @@ def map_polling_result(
                 ),
             )
 
-            if fallback:
+            if fallback_ttl is not None:
                 return PollDecision(
                     Update(
                         state=DataSourceState.OFF,
                         error=error_info,
                         fallback_to_fdv1=True,
                         environment_id=envid,
+                        fallback_ttl=fallback_ttl,
                     ),
                     PollAction.BREAK,
                 )
@@ -269,13 +313,14 @@ def map_polling_result(
 
         # Even a non-HTTP error (e.g. malformed JSON) can carry the fallback
         # header. If so, halt rather than retrying the FDv2 endpoint.
-        if fallback:
+        if fallback_ttl is not None:
             return PollDecision(
                 Update(
                     state=DataSourceState.OFF,
                     error=error_info,
                     fallback_to_fdv1=True,
                     environment_id=envid,
+                    fallback_ttl=fallback_ttl,
                 ),
                 PollAction.BREAK,
             )
@@ -290,12 +335,14 @@ def map_polling_result(
         )
 
     (change_set, headers) = result.value
+    fallback_ttl = fdv1_fallback_ttl_from_headers(headers)
     return PollDecision(
         Update(
             state=DataSourceState.VALID,
             change_set=change_set,
             environment_id=headers.get(_LD_ENVID_HEADER),
-            fallback_to_fdv1=headers.get(_LD_FD_FALLBACK_HEADER) == 'true',
+            fallback_to_fdv1=fallback_ttl is not None,
+            fallback_ttl=fallback_ttl,
         ),
         PollAction.WAIT_BREAK_IF_SET,
     )

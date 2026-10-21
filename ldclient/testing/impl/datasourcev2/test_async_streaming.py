@@ -23,7 +23,11 @@ from ldclient.impl.datasystem.protocolv2 import (
     Goodbye,
     PutObject
 )
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    _LD_FD_FALLBACK_TTL_HEADER
+)
 from ldclient.interfaces import (
     ChangeType,
     DataSourceErrorKind,
@@ -549,3 +553,38 @@ async def test_envid_preserved_across_headerless_reconnect_start():
     assert len(updates) == 2
     assert updates[0].environment_id == 'my-env'
     assert updates[1].environment_id == 'my-env'
+
+
+@pytest.mark.asyncio
+async def test_goodbye_with_fallback_ttl_halts_with_signal():
+    src = make_streaming_data_source()
+
+    goodbye = Goodbye(reason="fall back", protocol_fallback_ttl=30)
+    actions = [
+        Event(event=EventName.GOODBYE, data=json.dumps(goodbye.to_dict())),
+        # Should never be reached: the goodbye halts the stream.
+        server_intent_event(IntentCode.TRANSFER_FULL),
+        payload_transferred_event(),
+    ]
+
+    updates = await collect_updates(src, actions)
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].fallback_ttl == 30
+
+
+@pytest.mark.asyncio
+async def test_fallback_header_ttl_is_carried_on_update():
+    src = make_streaming_data_source()
+
+    actions = [
+        Start(headers={_LD_FD_FALLBACK_HEADER: 'true', _LD_FD_FALLBACK_TTL_HEADER: '120'}),
+        server_intent_event(IntentCode.TRANSFER_FULL),
+        payload_transferred_event(),
+    ]
+
+    updates = await collect_updates(src, actions)
+    assert len(updates) == 1
+    assert updates[0].fallback_to_fdv1 is True
+    assert updates[0].fallback_ttl == 120

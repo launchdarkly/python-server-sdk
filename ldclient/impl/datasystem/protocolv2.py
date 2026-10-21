@@ -4,6 +4,7 @@ LaunchDarkly data system version 2 (FDv2).
 """
 
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from ldclient.interfaces import EventName, ObjectKind
 
@@ -102,14 +103,22 @@ class Goodbye:
     """
 
     reason: str
+    protocol_fallback_ttl: Optional[Any] = None
+    """
+    The raw protocolFallbackTTL value, in seconds. When present, the server is
+    directing the SDK to fall back to FDv1.
+    """
 
     def to_dict(self) -> dict:
         """
         Serializes the Goodbye to a JSON-compatible dictionary.
         """
-        return {
+        data: Dict[str, Any] = {
             "reason": self.reason,
         }
+        if self.protocol_fallback_ttl is not None:
+            data["protocolFallbackTTL"] = self.protocol_fallback_ttl
+        return data
 
     @staticmethod
     def from_dict(data: dict) -> "Goodbye":
@@ -121,7 +130,7 @@ class Goodbye:
         if reason is None:
             raise ValueError("Missing required fields in Goodbye JSON.")
 
-        return Goodbye(reason=reason)
+        return Goodbye(reason=reason, protocol_fallback_ttl=data.get("protocolFallbackTTL"))
 
 
 @dataclass(frozen=True)

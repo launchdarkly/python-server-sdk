@@ -15,6 +15,7 @@ from ldclient.impl.datasystem.protocolv2 import (
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
     _LD_FD_FALLBACK_HEADER,
+    _LD_FD_FALLBACK_TTL_HEADER,
     UnsuccessfulResponseException,
     _Fail,
     _Success
@@ -502,3 +503,35 @@ def test_synchronizer_generic_error_with_fallback_header_halts():
     assert updates[0].environment_id == 'test-env-generic'
     assert updates[0].error is not None
     assert updates[0].error.kind == DataSourceErrorKind.NETWORK_ERROR
+
+
+def test_fallback_header_ttl_is_carried_on_update():
+    headers = {_LD_FD_FALLBACK_HEADER: 'true', _LD_FD_FALLBACK_TTL_HEADER: '45'}
+    polling_result: PollingResult = _Success(value=(ChangeSetBuilder.no_changes(), headers))
+
+    synchronizer = PollingDataSource(
+        poll_interval=0.01, requester=ListBasedRequester(results=iter([polling_result]))
+    )
+
+    valid = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert valid.fallback_to_fdv1 is True
+    assert valid.fallback_ttl == 45
+
+
+def test_error_fallback_header_ttl_is_carried_on_update():
+    headers = {_LD_FD_FALLBACK_HEADER: 'true', _LD_FD_FALLBACK_TTL_HEADER: '45'}
+    failure = _Fail(
+        error="error for test",
+        exception=UnsuccessfulResponseException(status=500),
+        headers=headers,
+    )
+
+    synchronizer = PollingDataSource(
+        poll_interval=0.01, requester=ListBasedRequester(results=iter([failure]))
+    )
+
+    update = next(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert update.fallback_to_fdv1 is True
+    assert update.fallback_ttl == 45

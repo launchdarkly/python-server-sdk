@@ -23,7 +23,8 @@ from ldclient.impl.datasourcev2.polling_common import (
     fdv1_polling_payload_to_changeset,
     map_polling_result,
     polling_payload_to_changeset,
-    polling_result_to_basis
+    polling_result_to_basis,
+    with_goodbye_fallback
 )
 from ldclient.impl.http import HTTPFactory, _base_headers
 from ldclient.impl.util import (
@@ -212,6 +213,7 @@ class Urllib3PollingRequester(Requester):
             etag,
         )
 
+        headers = with_goodbye_fallback(headers, data)
         changeset_result = polling_payload_to_changeset(data)
         if isinstance(changeset_result, _Success):
             return _Success(value=(changeset_result.value, headers))
