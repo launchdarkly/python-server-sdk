@@ -856,12 +856,80 @@ def test_stream_init_duration_measured_from_start_not_run_start(monkeypatch):
     assert recorded == [(500, False)]
 
 
-def test_clean_close_mid_init_does_not_leave_a_stale_baseline():
-    # Regression for the stale-baseline bug (#1): a connection that gets a Start
-    # but no completing payload, then is cleanly closed, must not leave its
-    # baseline set -- otherwise a later failed reconnect would record a duration
-    # spanning the closed connection plus the backoff sleep. Here the mid-init
-    # clean close + reconnect failure records nothing, rather than a stale value.
+def _transfer_none_intent() -> Event:
+    return Event(
+        event=EventName.SERVER_INTENT,
+        data=json.dumps(ServerIntent(payload=Payload(
+            id="id", target=300, code=IntentCode.TRANSFER_NONE, reason="up-to-date",
+        )).to_dict()),
+    )
+
+
+def test_failed_init_recorded_for_every_connect_attempt():
+    # DIAG requires one stream-init entry per connection attempt. Three
+    # consecutive connect failures must produce three failed records -- the
+    # baseline is re-stamped after each failure so the next attempt is counted.
+    recorded = []
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = list_sse_client([
+        Fault(HTTPStatusError(503)),
+        Fault(HTTPStatusError(503)),
+        Fault(HTTPStatusError(503)),
+    ])
+    synchronizer.set_diagnostic_accumulator(
+        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
+    )
+
+    list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(recorded) == 3
+    assert all(failed for _, failed in recorded)
+    assert all(dur >= 0 for dur, _ in recorded)
+
+
+def test_healthy_connection_drop_is_not_recorded_as_failed_init():
+    # After a successful init, a mid-stream drop must NOT be recorded as a
+    # failed init -- the init already succeeded, so only the success is logged.
+    recorded = []
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = list_sse_client([
+        Start(), _transfer_none_intent(), Fault(HTTPStatusError(503)),
+    ])
+    synchronizer.set_diagnostic_accumulator(
+        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
+    )
+
+    list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(recorded) == 1
+    assert recorded[0][1] is False
+
+
+def test_reconnect_failure_after_clean_close_is_counted_without_stale_duration(monkeypatch):
+    # A connection that gets a Start but no completing payload, then is cleanly
+    # closed, re-stamps rather than leaving a stale baseline. A later failed
+    # reconnect is still counted, and its duration is measured from the clean
+    # close -- never a stale value spanning the closed connection and backoff.
+    #
+    # The monotonic clock is scripted so the Start, the clean close, and the
+    # reconnect fault land at known times: baseline is re-stamped at the clean
+    # close (t=500.0) and the failure is recorded 0.3s later, so the duration is
+    # exactly 300ms. A stale baseline (left at the Start, t=200.0) would instead
+    # report 300300ms -- the exact-value assert is what gives this test teeth.
+    from ldclient.impl.datasourcev2 import streaming as streaming_module
+
+    reads = iter([100.0, 200.0, 500.0, 500.3])
+    last = [500.3]
+
+    def fake_monotonic():
+        try:
+            last[0] = next(reads)
+        except StopIteration:
+            pass
+        return last[0]
+
+    monkeypatch.setattr(streaming_module, "monotonic_seconds", fake_monotonic)
+
     server_intent = ServerIntent(
         payload=Payload(id="id", target=300, code=IntentCode.TRANSFER_FULL, reason="cant-catchup"),
     )
@@ -878,4 +946,4 @@ def test_clean_close_mid_init_does_not_leave_a_stale_baseline():
 
     list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
 
-    assert recorded == []
+    assert recorded == [(300, True)]

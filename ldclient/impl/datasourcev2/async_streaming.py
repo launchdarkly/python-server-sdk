@@ -173,7 +173,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                     # emit a fault with no-error. We can ignore this since we want
                     # the connection to continue.
                     if action.error is None:
-                        self._connection_attempt_started_monotonic = None
+                        self._connection_attempt_started_monotonic = monotonic_seconds()
                         continue
 
                     if action.headers is not None:
@@ -228,7 +228,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
                         "Error while handling stream event; will restart stream: %s", e
                     )
                     await self._sse.interrupt()
-                    self._connection_attempt_started_monotonic = None
+                    self._connection_attempt_started_monotonic = monotonic_seconds()
 
                     yield with_fallback_signal(Update(
                         state=DataSourceState.INTERRUPTED,
@@ -287,7 +287,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
         decision = classify_stream_error(error, envid)
         self._record_stream_init(True)
-        self._connection_attempt_started_monotonic = None
+        self._connection_attempt_started_monotonic = monotonic_seconds()
         if decision.should_stop:
             await self.stop()
 

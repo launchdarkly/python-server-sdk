@@ -5,9 +5,8 @@ Tests for the monotonic stream-init timing in the FDv2 streaming synchronizers.
 import asyncio
 import time
 
-from ldclient.impl.datasourcev2 import (
+from ldclient.impl.datasourcev2 import \
     async_streaming as async_streaming_module
-)
 from ldclient.impl.datasourcev2 import streaming as streaming_module
 from ldclient.impl.datasourcev2.async_streaming import AsyncStreamingDataSource
 from ldclient.impl.datasourcev2.streaming import StreamingDataSource
@@ -77,10 +76,10 @@ def test_backward_wall_step_does_not_zero_the_measurement(monkeypatch):
         assert duration == 500
 
 
-def test_error_handling_clears_the_baseline():
-    # The projection was removed: _handle_error no longer fabricates the next
-    # attempt's start (the library owns the reconnect sleep, so its real start
-    # is not visible here). It clears the baseline; the next Start re-stamps it.
+def test_error_handling_restamps_the_baseline():
+    # _handle_error records the failed init, then re-stamps the baseline to now
+    # so the next (library-owned) reconnect attempt is still counted. It is not
+    # a projection and not cleared to None.
     proc = object.__new__(StreamingDataSource)
     proc._running = True
     proc._diagnostic_accumulator = None
@@ -90,10 +89,11 @@ def test_error_handling_clears_the_baseline():
 
     assert should_continue is True
     assert update is not None
-    assert proc._connection_attempt_started_monotonic is None
+    assert proc._connection_attempt_started_monotonic is not None
+    assert proc._connection_attempt_started_monotonic != 1234.0
 
 
-def test_async_error_handling_clears_the_baseline():
+def test_async_error_handling_restamps_the_baseline():
     proc = object.__new__(AsyncStreamingDataSource)
     proc._running = True
     proc._diagnostic_accumulator = None
@@ -103,7 +103,8 @@ def test_async_error_handling_clears_the_baseline():
 
     assert should_continue is True
     assert update is not None
-    assert proc._connection_attempt_started_monotonic is None
+    assert proc._connection_attempt_started_monotonic is not None
+    assert proc._connection_attempt_started_monotonic != 1234.0
 
 
 def test_diagnostic_accumulator_clamps_negative_durations():
