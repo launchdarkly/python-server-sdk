@@ -132,7 +132,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         self._sse: Optional[SSEClient] = None
         self._running = False
         self._diagnostic_accumulator: Optional[DiagnosticAccumulator] = None
-        # Monotonic-clock baseline for the current stream-init duration.
         self._connection_attempt_start_time: Optional[float] = None
 
     def set_diagnostic_accumulator(self, diagnostic_accumulator: DiagnosticAccumulator):
@@ -260,8 +259,6 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
     def _record_stream_init(self, failed: bool):
         if self._diagnostic_accumulator and self._connection_attempt_start_time is not None:
-            # The reported timestamp stays on the wall clock; the duration is
-            # measured on the monotonic clock so a wall-clock step cannot distort it.
             current_time = current_time_millis()
             elapsed = int(monotonic_seconds() * 1000) - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
