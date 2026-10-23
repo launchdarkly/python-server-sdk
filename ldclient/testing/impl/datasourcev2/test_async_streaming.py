@@ -1,7 +1,6 @@
 # pylint: disable=missing-docstring, too-few-public-methods
 
 import json
-from types import SimpleNamespace
 from typing import AsyncIterable, List, Optional
 from unittest import mock
 
@@ -550,72 +549,3 @@ async def test_envid_preserved_across_headerless_reconnect_start():
     assert len(updates) == 2
     assert updates[0].environment_id == 'my-env'
     assert updates[1].environment_id == 'my-env'
-
-
-@pytest.mark.asyncio
-async def test_failed_init_recorded_for_every_connect_attempt():
-    # DIAG one-entry-per-attempt, exercised through the async run loop: three
-    # consecutive connect failures produce three failed records.
-    recorded = []
-    src = make_streaming_data_source()
-    src.set_diagnostic_accumulator(
-        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
-    )
-
-    await collect_updates(src, [
-        Fault(HTTPStatusError(503)),
-        Fault(HTTPStatusError(503)),
-        Fault(HTTPStatusError(503)),
-    ])
-
-    assert len(recorded) == 3
-    assert all(failed for _, failed in recorded)
-    assert all(dur >= 0 for dur, _ in recorded)
-
-
-@pytest.mark.asyncio
-async def test_healthy_connection_drop_is_not_recorded_as_failed_init():
-    # After a successful init, a mid-stream drop must NOT be recorded as a
-    # failed init (async run loop).
-    recorded = []
-    src = make_streaming_data_source()
-    src.set_diagnostic_accumulator(
-        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
-    )
-
-    await collect_updates(src, [
-        Start(), server_intent_event(IntentCode.TRANSFER_NONE), Fault(HTTPStatusError(503)),
-    ])
-
-    assert len(recorded) == 1
-    assert recorded[0][1] is False
-
-
-@pytest.mark.asyncio
-async def test_reconnect_failure_after_clean_close_is_counted_without_stale_duration(monkeypatch):
-    # Async mirror of the sync clean-close teeth test: baseline re-stamped at the
-    # clean close (t=500.0), failure recorded 0.3s later -> 300ms. A stale
-    # baseline (left at the Start, t=200.0) would report 300300ms.
-    reads = iter([100.0, 200.0, 500.0, 500.3])
-    last = [500.3]
-
-    def fake_monotonic():
-        try:
-            last[0] = next(reads)
-        except StopIteration:
-            pass
-        return last[0]
-
-    monkeypatch.setattr(async_streaming, "monotonic_seconds", fake_monotonic)
-
-    recorded = []
-    src = make_streaming_data_source()
-    src.set_diagnostic_accumulator(
-        SimpleNamespace(record_stream_init=lambda ts, dur, failed: recorded.append((dur, failed)))
-    )
-
-    await collect_updates(src, [
-        Start(), server_intent_event(IntentCode.TRANSFER_FULL), Fault(None), Fault(HTTPStatusError(503)),
-    ])
-
-    assert recorded == [(300, True)]

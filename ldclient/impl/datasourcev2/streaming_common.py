@@ -23,7 +23,8 @@ from ldclient.impl.util import (
     _LD_FD_FALLBACK_HEADER,
     http_error_message,
     is_http_error_recoverable,
-    log
+    log,
+    monotonic_seconds
 )
 from ldclient.interfaces import (
     ChangeSetBuilder,
@@ -132,23 +133,26 @@ class StreamErrorDecision:
 
     The values are computed without any I/O so both the sync and async
     synchronizers share one decision, then apply the side effects themselves:
-    they record a failed stream init, stop the synchronizer when ``should_stop``
-    is set, and retry the connection when ``should_continue`` is set.
+    they record a failed stream init, set the connection attempt start time to
+    ``next_attempt_start``, stop the synchronizer when ``should_stop`` is set,
+    and retry the connection when ``should_continue`` is set.
     """
     update: Update
     should_continue: bool
     should_stop: bool
+    next_attempt_start: Optional[float]
 
 
 def classify_stream_error(
-    error: Exception, envid: Optional[str]
+    error: Exception, next_retry_delay: float, envid: Optional[str]
 ) -> StreamErrorDecision:
     """
     Decide how to react to a streaming connection error.
 
     The caller must first check that the synchronizer is still running; this
-    function assumes it is. It returns a decision the caller applies, recording
-    a failed stream init before doing so.
+    function assumes it is. It returns a decision the caller applies. The caller
+    always records a failed stream init before it sets the connection attempt
+    start time to the returned ``next_attempt_start``.
     """
     if isinstance(error, json.decoder.JSONDecodeError):
         log.error("Unexpected error on stream connection: %s, will retry", error)
@@ -164,9 +168,12 @@ def classify_stream_error(
             update=update,
             should_continue=True,
             should_stop=False,
+            next_attempt_start=monotonic_seconds() + next_retry_delay,
         )
 
     if isinstance(error, HTTPStatusError):
+        next_attempt_start: Optional[float] = monotonic_seconds() + next_retry_delay
+
         error_info = DataSourceErrorInfo(
             DataSourceErrorKind.ERROR_RESPONSE,
             error.status,
@@ -188,6 +195,7 @@ def classify_stream_error(
                 update=update,
                 should_continue=False,
                 should_stop=True,
+                next_attempt_start=next_attempt_start,
             )
 
         http_error_message_result = http_error_message(
@@ -211,6 +219,7 @@ def classify_stream_error(
                 update=update,
                 should_continue=False,
                 should_stop=True,
+                next_attempt_start=None,
             )
 
         log.warning(http_error_message_result)
@@ -218,6 +227,7 @@ def classify_stream_error(
             update=update,
             should_continue=True,
             should_stop=False,
+            next_attempt_start=next_attempt_start,
         )
 
     log.warning("Unexpected error on stream connection: %s, will retry", error)
@@ -235,4 +245,5 @@ def classify_stream_error(
         update=update,
         should_continue=True,
         should_stop=False,
+        next_attempt_start=monotonic_seconds() + next_retry_delay,
     )

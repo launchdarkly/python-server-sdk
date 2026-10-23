@@ -16,7 +16,6 @@ class _DiagnosticAccumulator:
         self._stream_inits = []
 
     def record_stream_init(self, timestamp, duration, failed):
-        duration = max(0, duration)
         with self._state_lock:
             self._stream_inits.append({'timestamp': timestamp, 'durationMillis': duration, 'failed': failed})
 

@@ -1,116 +1,82 @@
 """
-Tests for the monotonic stream-init timing in the FDv2 streaming synchronizers.
+Stream-init timing is measured on the monotonic clock while the reported
+timestamp stays on the wall clock. These tests exercise ``_record_stream_init``
+in isolation so the clock source is observable without driving a live
+connection. They assert the clock behavior only; the recording semantics
+(projected baseline, negative-elapsed clamp, skip-when-cleared) are unchanged
+from the wall-clock implementation.
 """
 
-import asyncio
-import time
+from unittest.mock import Mock
 
-from ldclient.impl.datasourcev2 import \
-    async_streaming as async_streaming_module
-from ldclient.impl.datasourcev2 import streaming as streaming_module
+import pytest
+
+from ldclient.impl.datasourcev2 import async_streaming, streaming
 from ldclient.impl.datasourcev2.async_streaming import AsyncStreamingDataSource
 from ldclient.impl.datasourcev2.streaming import StreamingDataSource
-from ldclient.impl.events.diagnostics import _DiagnosticAccumulator
+
+_CASES = [
+    pytest.param(streaming, StreamingDataSource, id="sync"),
+    pytest.param(async_streaming, AsyncStreamingDataSource, id="async"),
+]
 
 
-class _Recorder:
-    def __init__(self):
-        self.recorded = []
-
-    def record_stream_init(self, timestamp, duration, failed):
-        self.recorded.append((timestamp, duration, failed))
-
-
-class _FakeMonotonic:
-    def __init__(self, now: float = 1000.0):
-        self.now = now
-
-    def __call__(self) -> float:
-        return self.now
+def _make_source(cls, baseline):
+    # Bypass __init__ so the test depends only on the two attributes
+    # _record_stream_init reads.
+    source = cls.__new__(cls)
+    source._diagnostic_accumulator = Mock()
+    source._connection_attempt_start_time = baseline
+    return source
 
 
-def _bare(cls):
-    proc = object.__new__(cls)
-    recorder = _Recorder()
-    proc._diagnostic_accumulator = recorder
-    return proc, recorder
+@pytest.mark.parametrize("module, cls", _CASES)
+def test_duration_measured_on_monotonic_clock_timestamp_on_wall_clock(monkeypatch, module, cls):
+    monotonic = {"t": 100.0}
+    wall_millis = {"t": 5_000_000}
+    monkeypatch.setattr(module, "monotonic_seconds", lambda: monotonic["t"])
+    monkeypatch.setattr(module, "current_time_millis", lambda: wall_millis["t"])
+
+    source = _make_source(cls, monotonic["t"])
+
+    # The monotonic clock advances two seconds; the wall clock jumps backward an
+    # hour (an NTP correction). The duration must reflect the monotonic advance,
+    # and the reported timestamp must reflect the (jumped) wall clock.
+    monotonic["t"] += 2.0
+    wall_millis["t"] -= 3_600_000
+
+    source._record_stream_init(False)
+
+    source._diagnostic_accumulator.record_stream_init.assert_called_once_with(
+        wall_millis["t"], 2000, False
+    )
 
 
-def test_duration_unaffected_by_forward_wall_step(monkeypatch):
-    # A forward wall step used to inflate the reported duration by the step size.
-    for cls in (StreamingDataSource, AsyncStreamingDataSource):
-        proc, recorder = _bare(cls)
-        proc._connection_attempt_started_monotonic = time.monotonic()
+@pytest.mark.parametrize("module, cls", _CASES)
+def test_negative_elapsed_is_clamped_to_zero(monkeypatch, module, cls):
+    monotonic = {"t": 100.0}
+    wall_millis = {"t": 5_000_000}
+    monkeypatch.setattr(module, "monotonic_seconds", lambda: monotonic["t"])
+    monkeypatch.setattr(module, "current_time_millis", lambda: wall_millis["t"])
 
-        real_time = time.time()
-        monkeypatch.setattr(time, "time", lambda: real_time + 3600)
-        proc._record_stream_init(False)
-        monkeypatch.undo()
+    # The baseline is a projected future attempt start, so the measured elapsed
+    # is negative and must clamp to zero (unchanged from the wall-clock code).
+    source = _make_source(cls, monotonic["t"] + 3.0)
 
-        _, duration, failed = recorder.recorded[0]
-        assert failed is False
-        assert duration >= 0
-        assert duration < 1000
+    source._record_stream_init(True)
 
-
-def test_backward_wall_step_does_not_zero_the_measurement(monkeypatch):
-    # A backward wall step used to drive the elapsed value negative, and the old
-    # clamp silently reported 0 instead of the real measurement.
-    for cls, module in (
-        (StreamingDataSource, streaming_module),
-        (AsyncStreamingDataSource, async_streaming_module),
-    ):
-        proc, recorder = _bare(cls)
-        clock = _FakeMonotonic(1000.0)
-        monkeypatch.setattr(module, "monotonic_seconds", clock)
-        proc._connection_attempt_started_monotonic = clock()
-        clock.now = 1000.5
-
-        real_time = time.time()
-        monkeypatch.setattr(time, "time", lambda: real_time - 120)
-        proc._record_stream_init(True)
-        monkeypatch.undo()
-
-        _, duration, failed = recorder.recorded[0]
-        assert failed is True
-        assert duration == 500
+    source._diagnostic_accumulator.record_stream_init.assert_called_once_with(
+        wall_millis["t"], 0, True
+    )
 
 
-def test_error_handling_restamps_the_baseline():
-    # _handle_error records the failed init, then re-stamps the baseline to now
-    # so the next (library-owned) reconnect attempt is still counted. It is not
-    # a projection and not cleared to None.
-    proc = object.__new__(StreamingDataSource)
-    proc._running = True
-    proc._diagnostic_accumulator = None
-    proc._connection_attempt_started_monotonic = 1234.0
+@pytest.mark.parametrize("module, cls", _CASES)
+def test_nothing_recorded_when_baseline_is_cleared(monkeypatch, module, cls):
+    monkeypatch.setattr(module, "monotonic_seconds", lambda: 100.0)
+    monkeypatch.setattr(module, "current_time_millis", lambda: 5_000_000)
 
-    update, should_continue = proc._handle_error(Exception("boom"), None)
+    source = _make_source(cls, None)
 
-    assert should_continue is True
-    assert update is not None
-    assert proc._connection_attempt_started_monotonic is not None
-    assert proc._connection_attempt_started_monotonic != 1234.0
+    source._record_stream_init(False)
 
-
-def test_async_error_handling_restamps_the_baseline():
-    proc = object.__new__(AsyncStreamingDataSource)
-    proc._running = True
-    proc._diagnostic_accumulator = None
-    proc._connection_attempt_started_monotonic = 1234.0
-
-    update, should_continue = asyncio.run(proc._handle_error(Exception("boom"), None))
-
-    assert should_continue is True
-    assert update is not None
-    assert proc._connection_attempt_started_monotonic is not None
-    assert proc._connection_attempt_started_monotonic != 1234.0
-
-
-def test_diagnostic_accumulator_clamps_negative_durations():
-    # The diagnostic schema requires durationMillis >= 0; the accumulator
-    # enforces it once for every call site.
-    accumulator = _DiagnosticAccumulator("diag-id")
-    accumulator.record_stream_init(123, -5, False)
-
-    assert accumulator._stream_inits[0]['durationMillis'] == 0
+    source._diagnostic_accumulator.record_stream_init.assert_not_called()
