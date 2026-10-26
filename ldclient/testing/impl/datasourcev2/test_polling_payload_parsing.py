@@ -110,6 +110,31 @@ def test_processes_delete_object():
     assert change_set.selector.version == 461
 
 
+def test_ignores_objects_with_unknown_kinds():
+    data = {
+        "events": [
+            {"event": "server-intent", "data": {"payloads": [{"id": "p", "target": 1, "intentCode": "xfer-full", "reason": "payload-missing"}]}},
+            {"event": "put-object", "data": {"version": 1, "kind": "some-future-kind", "key": "unknown-key", "object": {"foo": 1}}},
+            {"event": "put-object", "data": {"version": 1, "kind": "flag", "key": "flag-key", "object": {"key": "flag-key", "version": 1}}},
+            {"event": "delete-object", "data": {"version": 2, "kind": "some-future-kind", "key": "unknown-key"}},
+            {"event": "delete-object", "data": {"version": 3, "kind": "segment", "key": "segment-key"}},
+            {"event": "payload-transferred", "data": {"state": "(p:p:1)", "version": 1}},
+        ]
+    }
+    # Parse a payload that mixes unknown kinds with known flag and segment changes.
+    result = polling_payload_to_changeset(data)
+
+    # The payload completes with only the known changes.
+    assert isinstance(result, _Success)
+
+    change_set = result.value
+    assert [(c.action, c.kind, c.key) for c in change_set.changes] == [
+        (ChangeType.PUT, ObjectKind.FLAG, "flag-key"),
+        (ChangeType.DELETE, ObjectKind.SEGMENT, "segment-key"),
+    ]
+    assert change_set.selector.state == "(p:p:1)"
+
+
 def test_handles_invalid_put_object():
     payload_str = '{"events":[ {"event":"server-intent","data":{"payloads":[ {"id":"5A46PZ79FQ9D08YYKT79DECDNV","target":461,"intentCode":"xfer-full","reason":"payload-missing"}]}},{"event": "put-object","data": {}},{"event":"payload-transferred","data":{"state":"(p:5A46PZ79FQ9D08YYKT79DECDNV:461)","id":"5A46PZ79FQ9D08YYKT79DECDNV","version":461}}]}'
     result = polling_payload_to_changeset(json.loads(payload_str))

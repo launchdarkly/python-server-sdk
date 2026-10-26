@@ -7,6 +7,18 @@ from dataclasses import dataclass
 
 from ldclient.interfaces import EventName, ObjectKind
 
+_SUPPORTED_KINDS = tuple(kind.value for kind in ObjectKind)
+
+
+def has_unsupported_kind(data: dict) -> bool:
+    """
+    Returns True if a put-object or delete-object payload names a kind this
+    SDK does not support. Such objects should be ignored so that new kinds can
+    be added to the protocol without breaking older SDKs.
+    """
+    kind = data.get("kind")
+    return kind is not None and kind not in _SUPPORTED_KINDS
+
 
 @dataclass(frozen=True)
 class DeleteObject:

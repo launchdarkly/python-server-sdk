@@ -11,7 +11,8 @@ from typing import Mapping, Tuple
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     EventName,
-    PutObject
+    PutObject,
+    has_unsupported_kind
 )
 from ldclient.impl.util import (
     _LD_ENVID_HEADER,
@@ -68,6 +69,10 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
 
             builder.start(server_intent.payload.code)
         elif event["event"] == EventName.PUT_OBJECT:
+            if has_unsupported_kind(event["data"]):
+                log.debug("Ignoring put-object with unsupported kind: %s", event["data"].get("kind"))
+                continue
+
             try:
                 put = PutObject.from_dict(event["data"])
             except ValueError as err:
@@ -75,6 +80,10 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
 
             builder.add_put(put.kind, put.key, put.version, put.object)
         elif event["event"] == EventName.DELETE_OBJECT:
+            if has_unsupported_kind(event["data"]):
+                log.debug("Ignoring delete-object with unsupported kind: %s", event["data"].get("kind"))
+                continue
+
             try:
                 delete_object = DeleteObject.from_dict(event["data"])
             except ValueError as err:
