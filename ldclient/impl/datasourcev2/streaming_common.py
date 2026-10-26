@@ -23,7 +23,8 @@ from ldclient.impl.util import (
     _LD_FD_FALLBACK_HEADER,
     http_error_message,
     is_http_error_recoverable,
-    log
+    log,
+    monotonic_seconds
 )
 from ldclient.interfaces import (
     ChangeSetBuilder,
@@ -167,11 +168,11 @@ def classify_stream_error(
             update=update,
             should_continue=True,
             should_stop=False,
-            next_attempt_start=time() + next_retry_delay,
+            next_attempt_start=monotonic_seconds() + next_retry_delay,
         )
 
     if isinstance(error, HTTPStatusError):
-        next_attempt_start: Optional[float] = time() + next_retry_delay
+        next_attempt_start: Optional[float] = monotonic_seconds() + next_retry_delay
 
         error_info = DataSourceErrorInfo(
             DataSourceErrorKind.ERROR_RESPONSE,
@@ -244,5 +245,5 @@ def classify_stream_error(
         update=update,
         should_continue=True,
         should_stop=False,
-        next_attempt_start=time() + next_retry_delay,
+        next_attempt_start=monotonic_seconds() + next_retry_delay,
     )

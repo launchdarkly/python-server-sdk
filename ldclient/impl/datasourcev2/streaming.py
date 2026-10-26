@@ -28,7 +28,13 @@ from ldclient.impl.datasourcev2.streaming_common import (
 )
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
 from ldclient.impl.http import HTTPFactory, _base_headers
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    current_time_millis,
+    log,
+    monotonic_seconds
+)
 from ldclient.interfaces import (
     ChangeSetBuilder,
     DataSourceErrorInfo,
@@ -158,7 +164,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
 
         change_set_builder = ChangeSetBuilder()
         self._running = True
-        self._connection_attempt_start_time = time()
+        self._connection_attempt_start_time = monotonic_seconds()
 
         envid = None
         # fallback_requested is set when a Start action carries
@@ -252,9 +258,9 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
             self._sse.close()
 
     def _record_stream_init(self, failed: bool):
-        if self._diagnostic_accumulator and self._connection_attempt_start_time:
-            current_time = int(time() * 1000)
-            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
+        if self._diagnostic_accumulator and self._connection_attempt_start_time is not None:
+            current_time = current_time_millis()
+            elapsed = int(monotonic_seconds() * 1000) - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
     def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:
