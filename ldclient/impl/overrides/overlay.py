@@ -12,10 +12,8 @@ from ldclient.interfaces import AsyncReadOnlyStore, ReadOnlyStore
 from ldclient.versioned_data_kind import VersionedDataKind
 
 
-def _merge_all(base_items: Optional[Dict[str, Any]], override_items: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_all(base_items: Dict[str, Any], override_items: Dict[str, Any]) -> Dict[str, Any]:
     """The union of the base items and the override items. The override entry wins for a key present in both."""
-    if base_items is None:
-        return dict(override_items)
     if len(override_items) == 0:
         return base_items
     merged = dict(base_items)
@@ -30,9 +28,8 @@ class OverrideStoreView(ReadOnlyStore):
     A per-key read serves an override entry whatever the state of the base store, so an
     uninitialized base still serves overrides. An enumeration is the union of the base items
     and the layer's items, and the override entry wins for a key present in both, including a
-    key the base holds as a deleted item. When the base enumeration fails and the layer holds
-    entries, the layer's entries alone are returned. When the layer is empty, the failure is
-    raised as before.
+    key the base holds as a deleted item. A failure of the base enumeration propagates, as it
+    does without the overlay: the layer's entries alone would look like a complete result.
     """
 
     def __init__(self, base: ReadOnlyStore, layer: OverrideLayer):
@@ -46,14 +43,12 @@ class OverrideStoreView(ReadOnlyStore):
         return self._base.get(kind, key, callback)
 
     def all(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
-        override_items = self._layer.all(kind)
-        try:
-            base_items = self._base.all(kind, lambda x: x)
-        except Exception:
-            if len(override_items) == 0:
-                raise
-            base_items = None
-        return callback(_merge_all(base_items, override_items))
+        base_items = self._base.all(kind, lambda x: x)
+        if base_items is None:
+            # A store returns no result when it cannot read. That stays a failure rather than
+            # becoming the layer's entries alone.
+            return callback(None)
+        return callback(_merge_all(base_items, self._layer.all(kind)))
 
     @property
     def initialized(self) -> bool:
@@ -75,11 +70,4 @@ class AsyncOverrideStoreView(AsyncReadOnlyStore):
         return await self._base.get(kind, key)
 
     async def all(self, kind: VersionedDataKind) -> Dict[str, Any]:
-        override_items = self._layer.all(kind)
-        try:
-            base_items: Optional[Dict[str, Any]] = await self._base.all(kind)
-        except Exception:
-            if len(override_items) == 0:
-                raise
-            base_items = None
-        return _merge_all(base_items, override_items)
+        return _merge_all(await self._base.all(kind), self._layer.all(kind))

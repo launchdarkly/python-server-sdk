@@ -2183,6 +2183,11 @@ class OverrideSource(Protocol):
         :meth:`close` is called. A failed load leaves the previously supplied layer untouched by
         not calling the sink.
 
+        An exception raised from this method does not prevent the client from starting: the SDK
+        logs it, closes the source, removes any snapshot the source supplied, and the client runs
+        without overrides. A source that cannot load its data should log that and retry rather
+        than raise, as the SDK's file-based source does.
+
         :param sink: the sink that receives each snapshot
         """
         raise NotImplementedError
@@ -2190,7 +2195,9 @@ class OverrideSource(Protocol):
     @abstractmethod
     def close(self) -> None:
         """
-        Stops the source and releases any resources it holds.
+        Stops the source and releases any resources it holds. An exception raised from this
+        method is logged and does not stop the client from shutting down. A snapshot that the
+        source supplies after the client begins to close it is ignored.
         """
         raise NotImplementedError
 

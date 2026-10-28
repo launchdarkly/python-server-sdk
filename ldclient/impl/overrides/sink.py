@@ -44,21 +44,47 @@ class OverrideSinkImpl(OverrideSink):
         self._notify = notify
         self._has_listeners = has_listeners
         self._lock = threading.Lock()
+        self._closed = False  # guarded by _lock
 
     def set_overrides(self, flags: Dict[str, Any], segments: Dict[str, Any]) -> None:  # type: ignore[override]
         with self._lock:
-            if not self._has_listeners():
-                self._layer.set_all(flags, segments)
+            if self._closed:
+                log.debug("Ignoring an override snapshot supplied after the override source was closed")
                 return
+            self._apply(flags, segments)
 
-            previous, current = self._layer.set_all(flags, segments)
-            old_merged = snapshot_merged_view(self._base, previous)
-            new_merged = snapshot_merged_view(self._base, current)
-            affected = compute_affected_flags(previous, current, old_merged, new_merged)
-            if len(affected) > 0:
-                log.debug("Override update affected %d flag(s)", len(affected))
-            for key in sorted(affected):
-                self._notify(key)
+    def close(self) -> None:
+        """
+        Stops accepting snapshots. Used when the client is closed: a snapshot that the source
+        supplies while it shuts down is ignored. The layer keeps its contents.
+        """
+        with self._lock:
+            self._closed = True
+
+    def close_and_clear(self) -> None:
+        """
+        Stops accepting snapshots and clears the layer. Used when the source failed to start: a
+        snapshot the source supplied before failing is removed, so the client runs without
+        overrides, and a late snapshot from the closed source is ignored.
+        """
+        with self._lock:
+            self._closed = True
+            self._apply({}, {})
+
+    def _apply(self, flags: Dict[str, Any], segments: Dict[str, Any]) -> None:
+        # Called with _lock held.
+        if not self._has_listeners():
+            self._layer.set_all(flags, segments)
+            return
+
+        previous, current = self._layer.set_all(flags, segments)
+        old_merged = snapshot_merged_view(self._base, previous)
+        new_merged = snapshot_merged_view(self._base, current)
+        affected = compute_affected_flags(previous, current, old_merged, new_merged)
+        if len(affected) > 0:
+            log.debug("Override update affected %d flag(s)", len(affected))
+        for key in sorted(affected):
+            self._notify(key)
 
 
 def snapshot_merged_view(base: ReadOnlyStore, overrides: LayerContents) -> MergedView:

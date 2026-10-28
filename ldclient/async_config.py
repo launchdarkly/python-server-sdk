@@ -133,6 +133,9 @@ class AsyncDataSystemConfig:
     An optional override source. Its flag and segment definitions take precedence over
     LaunchDarkly data at evaluation time. Flag overrides are currently experimental and subject
     to change.
+
+    When the client is offline, the source is not built or started: no overrides are served, and
+    a configuration error in the source is not reported. The SDK logs a warning instead.
     """
 
 

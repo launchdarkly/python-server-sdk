@@ -272,6 +272,7 @@ class FDv2(_FDv2Base, DataSystem):
         # invalid component configuration.
         self._override_source: Optional[OverrideSource] = None
         self._override_layer: Optional[OverrideLayer] = None
+        self._override_sink: Optional[OverrideSinkImpl] = None
         self._overlay: Optional[OverrideStoreView] = None
         if data_system_config.override_source is not None and not self._disabled:
             self._override_source = data_system_config.override_source.build(config)
@@ -281,6 +282,8 @@ class FDv2(_FDv2Base, DataSystem):
             # must notify that entry's flag as well. The store reaches those entries through
             # the layer's dependency graph.
             self._store.set_external_dependencies(self._override_layer)
+        elif data_system_config.override_source is not None:
+            log.warning("Offline mode is enabled; the override source is not started and no overrides are served")
 
     def _create_store(self, flag_change_listeners: Listeners, change_set_listeners: Listeners) -> Store:
         return Store(flag_change_listeners, change_set_listeners)
@@ -316,13 +319,24 @@ class FDv2(_FDv2Base, DataSystem):
         if self._override_source is not None and self._override_layer is not None:
             # The source starts before the main thread, so a source that loads synchronously
             # has its overrides in place before the client begins evaluating.
-            sink = OverrideSinkImpl(
+            self._override_sink = OverrideSinkImpl(
                 self._override_layer,
                 self._store_view,
                 lambda key: self._flag_change_listeners.notify(FlagChange(key)),
                 self._flag_change_listeners.has_listeners,
             )
-            self._override_source.start(sink)
+            try:
+                self._override_source.start(self._override_sink)
+            except Exception as e:
+                # The SDK's own file-based source does not raise from start; it logs a failed
+                # load and retries it. A custom source could, and a client in an incident is
+                # better served by running without its overrides than by not starting.
+                log.error("Unable to start the override source; the client runs without overrides: %s", e)
+                self._close_override_source("Unable to close the override source after it failed to start")
+                # The source may have supplied a snapshot before it failed. Clearing the layer
+                # removes it, so the client runs without overrides as logged, and a late
+                # snapshot from the closed source is ignored.
+                self._override_sink.close_and_clear()
 
         # Start the main coordination thread
         main_thread = Thread(
@@ -337,10 +351,11 @@ class FDv2(_FDv2Base, DataSystem):
     def stop(self):
         """Stop the FDv2 data system and all associated threads."""
         if self._override_source is not None:
-            try:
-                self._override_source.close()
-            except Exception as e:
-                log.error("Error closing the override source: %s", e)
+            # The sink stops accepting snapshots first, so a snapshot that the source supplies
+            # while it shuts down cannot update the layer or notify listeners.
+            if self._override_sink is not None:
+                self._override_sink.close()
+            self._close_override_source("Unable to close the override source")
 
         self._stop_event.set()
 
@@ -666,6 +681,18 @@ class FDv2(_FDv2Base, DataSystem):
 
         with self._lock.write():
             self._environment_id = environment_id
+
+    def _close_override_source(self, failure_message: str) -> None:
+        # A custom source can raise from close. That is logged and not raised, so the rest of
+        # the client still stops, or still starts after a failed start.
+        source = self._override_source
+        self._override_source = None
+        if source is None:
+            return
+        try:
+            source.close()
+        except Exception as e:
+            log.error("%s: %s", failure_message, e)
 
     @property
     def environment_id(self) -> Optional[str]:

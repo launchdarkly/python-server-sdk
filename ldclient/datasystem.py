@@ -99,6 +99,9 @@ class ConfigBuilder:  # pylint: disable=too-few-public-methods
         initialization status or data source status. Configuring it changes nothing until the
         source actually supplies an override. At most one override source is accepted.
 
+        When the client is offline, the source is not built or started: no overrides are served,
+        and a configuration error in the source is not reported. The SDK logs a warning instead.
+
         Example, with the file-based source and the SDK's default data sources:
         ::
 

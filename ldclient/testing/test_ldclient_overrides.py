@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import pytest
 
 from ldclient.client import Config, Context, LDClient
-from ldclient.datasystem import custom
+from ldclient.datasystem import custom, daemon
 from ldclient.evaluation import EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasystem.fdv1 import FDv1
@@ -106,6 +106,21 @@ def uninitialized_store_holding(key: str) -> UninitializedStore:
     return store
 
 
+class StoreThatCannotListItems(InMemoryFeatureStore):
+    """An initialized persistent store whose enumeration fails."""
+
+    @property
+    def initialized(self) -> bool:
+        return True
+
+    def all(self, kind, callback=lambda x: x):
+        raise RuntimeError("store cannot list items")
+
+
+def errors_containing(caplog, text: str):
+    return [r for r in caplog.records if r.levelno == logging.ERROR and text in r.getMessage()]
+
+
 def test_override_is_served_when_client_is_not_initialized():
     source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
     with make_uninitialized_client(source) as client:
@@ -175,6 +190,37 @@ def test_all_flags_state_is_invalid_when_the_store_is_uninitialized_and_the_laye
         assert state.to_values_map() == {}
 
 
+def test_all_flags_state_is_invalid_when_the_store_is_uninitialized_and_the_layer_holds_no_flags():
+    # A layer that holds only segments has no flags to report, so the LaunchDarkly data in the
+    # store stays out, as it does without an override source.
+    source = MockOverrideSource(segments={'segment1': SegmentBuilder('segment1').version(1).build().to_json_dict()})
+    with make_uninitialized_client(source, store=uninitialized_store_holding('ld-flag')) as client:
+        state = client.all_flags_state(user)
+        assert state.valid is False
+        assert state.to_values_map() == {}
+
+
+def test_all_flags_state_before_initialization_excludes_launchdarkly_data_from_an_uninitialized_store():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    with make_uninitialized_client(source, store=uninitialized_store_holding('ld-flag')) as client:
+        state = client.all_flags_state(user)
+        assert state.valid is True
+        assert state.to_values_map() == {'overridden-flag': True}
+
+
+def test_all_flags_state_is_invalid_when_the_store_fails_even_with_overrides(caplog):
+    # A daemon-mode client whose store cannot list its flags reports an invalid state and logs
+    # the failure, as it does without a source, rather than a valid state of the overrides alone.
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    datasystem = daemon(StoreThatCannotListItems()).overrides(source.builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+    with LDClient(config, start_wait=0) as client:
+        state = client.all_flags_state(user)
+        assert state.valid is False
+        assert state.to_values_map() == {}
+        assert errors_containing(caplog, 'Unable to read flags for all_flag_state') != []
+
+
 def test_override_source_is_started_before_the_constructor_returns():
     source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
     client = make_uninitialized_client(source)
@@ -200,30 +246,52 @@ def test_invalid_override_source_configuration_fails_construction():
         LDClient(config, start_wait=0)
 
 
-def test_override_source_start_failure_fails_construction_and_stops_the_started_components():
-    stopped = []
-
-    class RecordingEventProcessor(MockEventProcessor):
-        def stop(self):
-            stopped.append(True)
-
+def test_override_source_start_failure_is_logged_and_the_client_runs_without_overrides(caplog):
+    # The SDK's own source never raises from start. A custom source could, and that must not
+    # keep the client from starting: the failure is logged, the source is closed, and the
+    # client behaves as it does without overrides.
     source = MockOverrideSource(start_error=RuntimeError("cannot start"))
-    datasystem = custom().synchronizers(HangingSynchronizer().builder).overrides(source.builder).build()
-    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=RecordingEventProcessor)
-    with pytest.raises(RuntimeError):
-        LDClient(config, start_wait=0)
-    # The source and the event processor that were set up before the failure are closed.
+    with make_uninitialized_client(source) as client:
+        assert source.close_count == 1
+        assert errors_containing(caplog, 'Unable to start the override source; the client runs without overrides: cannot start') != []
+        detail = client.variation_detail('any-flag', user, False)
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'})
+    # Closing the client does not close the failed source again.
     assert source.close_count == 1
-    assert stopped == [True]
 
 
-def test_override_source_is_not_started_when_offline():
+def test_override_source_that_supplies_a_snapshot_and_then_fails_to_start_leaves_no_overrides():
+    # The snapshot the source supplied before it failed is removed, so the client runs without
+    # overrides, as the log says, and a later snapshot from the closed source is ignored.
+    flags = {'overridden-flag': single_value_flag('overridden-flag', True)}
+    source = MockOverrideSource(flags=flags, start_error=RuntimeError("cannot start"), supply_before_start_error=True)
+    with make_uninitialized_client(source) as client:
+        detail = client.variation_detail('overridden-flag', user, False)
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'})
+        assert client.all_flags_state(user).valid is False
+
+        source.set_overrides(flags)
+        assert client.variation('overridden-flag', user, False) is False
+
+
+def test_snapshot_supplied_after_the_client_is_closed_is_ignored():
+    source = MockOverrideSource()
+    client = make_uninitialized_client(source)
+    client.close()
+
+    source.set_overrides({'late-flag': single_value_flag('late-flag', True)})
+
+    assert client._data_system.override_layer.get(FEATURES, 'late-flag') is None
+
+
+def test_override_source_is_not_started_when_offline(caplog):
     source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
     datasystem = custom().overrides(source.builder).build()
     config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, offline=True)
     with LDClient(config, start_wait=0) as client:
         assert source.start_count == 0
         assert client.variation('overridden-flag', user, False) is False
+        assert warnings_containing(caplog, 'Offline mode is enabled; the override source is not started and no overrides are served') != []
 
 
 def test_data_system_without_override_source_has_no_override_layer():
