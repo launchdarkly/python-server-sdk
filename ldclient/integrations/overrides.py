@@ -27,6 +27,7 @@ counters, so LaunchDarkly can distinguish them. They produce no individual evalu
 """
 
 import math
+import os
 import threading
 from typing import List, Optional, Union
 
@@ -158,9 +159,17 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
             poll_interval = self.MINIMUM_POLL_INTERVAL
 
         # A path listed more than once would make every entry of that file a duplicate of itself,
-        # so the repeats are dropped and the first occurrence keeps its place in the order.
+        # so the repeats are dropped and the first occurrence keeps its place in the order. Paths
+        # are compared the way the platform compares file names: without regard to case on
+        # Windows, exactly elsewhere.
         all_paths = abs_file_paths(self.__paths)
-        paths = list(dict.fromkeys(all_paths))
+        paths: List[str] = []
+        seen = set()
+        for path in all_paths:
+            key = os.path.normcase(path)
+            if key not in seen:
+                seen.add(key)
+                paths.append(path)
         if len(paths) != len(all_paths):
             log.warning("The file-based override source lists the same file more than once; the repeats are ignored")
 
