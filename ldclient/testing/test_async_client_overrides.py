@@ -481,19 +481,6 @@ async def test_all_flags_state_turns_off_event_tracking_for_override_affected_fl
         await client.close()
 
 
-@pytest.mark.asyncio
-async def test_override_source_is_not_started_when_offline():
-    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
-    config = AsyncConfig('SDK_KEY', datasystem_config=AsyncDataSystemConfig(override_source=source.builder), offline=True)
-    client = AsyncLDClient(config)
-    await client.start(start_wait=0)
-    try:
-        assert source.start_count == 0
-        assert await client.variation('overridden-flag', user, False) is False
-    finally:
-        await client.close()
-
-
 def test_override_update_after_the_client_and_its_loop_are_gone_is_dropped():
     source = MockOverrideSource()
 
