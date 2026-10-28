@@ -282,12 +282,15 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         # source configuration a construction error.
         self._override_source: Optional[OverrideSource] = None
         self._override_layer: Optional[OverrideLayer] = None
+        self._override_sink: Optional[OverrideSinkImpl] = None
         self._overlay: Optional[AsyncOverrideStoreView] = None
         if data_system_config.override_source is not None and not self._disabled:
             self._override_source = data_system_config.override_source.build(config)
             self._override_layer = OverrideLayer()
             self._overlay = AsyncOverrideStoreView(self._store_view, self._override_layer)
             self._store.set_external_dependencies(self._override_layer)
+        elif data_system_config.override_source is not None:
+            log.warning("Offline mode is enabled; the override source is not started and no overrides are served")
 
         # Concurrency
         self._stop_event = AsyncEvent()
@@ -346,8 +349,19 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             def notify(key: str) -> None:
                 loop.call_soon_threadsafe(listeners.notify, FlagChange(key))
 
-            sink = OverrideSinkImpl(self._override_layer, self._store._memory_store, notify, listeners.has_listeners)
-            self._override_source.start(sink)
+            self._override_sink = OverrideSinkImpl(self._override_layer, self._store._memory_store, notify, listeners.has_listeners)
+            try:
+                self._override_source.start(self._override_sink)
+            except Exception as e:
+                # The SDK's own file-based source does not raise from start; it logs a failed
+                # load and retries it. A custom source could, and a client in an incident is
+                # better served by running without its overrides than by not starting.
+                log.error("Unable to start the override source; the client runs without overrides: %s", e)
+                self._close_override_source("Unable to close the override source after it failed to start")
+                # The source may have supplied a snapshot before it failed. Clearing the layer
+                # removes it, so the client runs without overrides as logged, and a late
+                # snapshot from the closed source is ignored.
+                self._override_sink.close_and_clear()
 
         # Start the main coordination loop
         self._runner.spawn("AsyncFDv2-main", lambda: self._run_main_loop(set_on_ready))
@@ -355,10 +369,11 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
     async def stop(self):
         """Stop the AsyncFDv2 data system and all the work it is coordinating."""
         if self._override_source is not None:
-            try:
-                self._override_source.close()
-            except Exception as e:
-                log.error("Error closing the override source: %s", e)
+            # The sink stops accepting snapshots first, so a snapshot that the source supplies
+            # while it shuts down cannot update the layer or notify listeners.
+            if self._override_sink is not None:
+                self._override_sink.close()
+            self._close_override_source("Unable to close the override source")
 
         self._stop_event.set()
 
@@ -374,6 +389,18 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
         # Close the store
         await self._store.close()
+
+    def _close_override_source(self, failure_message: str) -> None:
+        # A custom source can raise from close. That is logged and not raised, so the rest of
+        # the client still stops, or still starts after a failed start.
+        source = self._override_source
+        self._override_source = None
+        if source is None:
+            return
+        try:
+            source.close()
+        except Exception as e:
+            log.error("%s: %s", failure_message, e)
 
     async def _run_main_loop(self, set_on_ready: AsyncEvent):
         """Main coordination loop that manages initializers and synchronizers."""

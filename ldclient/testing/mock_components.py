@@ -69,13 +69,24 @@ class MockOverrideSource:
     on every later call to set_overrides, and records its lifecycle calls.
     """
 
-    def __init__(self, flags: Optional[Dict[str, Any]] = None, segments: Optional[Dict[str, Any]] = None, start_error: Optional[Exception] = None):
+    def __init__(
+        self,
+        flags: Optional[Dict[str, Any]] = None,
+        segments: Optional[Dict[str, Any]] = None,
+        start_error: Optional[Exception] = None,
+        supply_before_start_error: bool = False,
+        close_error: Optional[Exception] = None,
+    ):
         """
         :param start_error: when given, start raises it instead of supplying the contents
+        :param supply_before_start_error: with start_error, start supplies the contents and then raises
+        :param close_error: when given, close raises it after recording the call
         """
         self._flags: Dict[str, Any] = dict(flags or {})
         self._segments: Dict[str, Any] = dict(segments or {})
         self._start_error = start_error
+        self._supply_before_start_error = supply_before_start_error
+        self._close_error = close_error
         self._sink: Optional[OverrideSink] = None
         self.start_count = 0
         self.close_count = 0
@@ -83,12 +94,17 @@ class MockOverrideSource:
     def start(self, sink: OverrideSink) -> None:
         self.start_count += 1
         if self._start_error is not None:
+            if self._supply_before_start_error:
+                self._sink = sink
+                sink.set_overrides(self._flags, self._segments)
             raise self._start_error
         self._sink = sink
         sink.set_overrides(self._flags, self._segments)
 
     def close(self) -> None:
         self.close_count += 1
+        if self._close_error is not None:
+            raise self._close_error
 
     def set_overrides(self, flags: Optional[Dict[str, Any]] = None, segments: Optional[Dict[str, Any]] = None) -> None:
         """Replaces the source's contents and, once started, pushes them to the sink."""

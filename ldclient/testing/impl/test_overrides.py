@@ -249,15 +249,30 @@ def test_overlay_get_all_with_empty_layer_is_passthrough():
         overlay.all(FEATURES)
 
 
-def test_overlay_get_all_serves_overrides_when_base_fails():
+def test_overlay_get_all_propagates_a_base_failure_when_the_layer_holds_entries():
+    # The layer's entries alone would look like a complete result to a caller such as the
+    # all-flags state, so the failure propagates as it does without the overlay. A per-key read
+    # still serves the override.
     base = FakeBaseStore()
     base.fail_all = True
     layer = OverrideLayer()
-    layer.set_all({'override-1': flag('override-1', 1), 'override-2': flag('override-2', 2)}, {})
+    layer.set_all({'override-1': flag('override-1', 1)}, {})
     overlay = OverrideStoreView(base, layer)
-    items = overlay.all(FEATURES)
-    assert sorted(items.keys()) == ['override-1', 'override-2']
-    assert all(item.is_override for item in items.values())
+    with pytest.raises(RuntimeError):
+        overlay.all(FEATURES)
+    assert overlay.get(FEATURES, 'override-1').is_override is True
+
+
+def test_overlay_get_all_keeps_a_missing_base_result_missing():
+    # A store returns no result when it cannot read. The overlay does not turn that into the
+    # layer's entries alone.
+    class NoResultStore(FakeBaseStore):
+        def all(self, kind, callback=lambda x: x):
+            return callback(None)
+
+    layer = OverrideLayer()
+    layer.set_all({'override-1': flag('override-1', 1)}, {})
+    assert OverrideStoreView(NoResultStore(), layer).all(FEATURES) is None
 
 
 def test_overlay_initialized_follows_the_base():
@@ -295,9 +310,11 @@ async def test_async_overlay_all_when_base_fails():
     overlay = AsyncOverrideStoreView(FakeAsyncBaseStore(base), layer)
     with pytest.raises(RuntimeError):
         await overlay.all(FEATURES)
+    # The failure propagates whatever the layer holds.
     layer.set_all({'override-1': flag('override-1')}, {})
-    items = await overlay.all(FEATURES)
-    assert list(items.keys()) == ['override-1']
+    with pytest.raises(RuntimeError):
+        await overlay.all(FEATURES)
+    assert (await overlay.get(FEATURES, 'override-1')).is_override is True
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +405,38 @@ def test_sink_skips_change_computation_when_nothing_listens():
     f.sink.set_overrides({'flag1': flag('flag1', 2)}, {})
     assert f.take_notified() == []
     assert f.layer.get(FEATURES, 'flag1').version == 2
+
+
+def test_sink_close_keeps_the_layer_and_ignores_later_snapshots():
+    f = SinkFixture(FakeBaseStore())
+    f.sink.set_overrides({'flag1': flag('flag1')}, {})
+    assert f.take_notified() == ['flag1']
+
+    f.sink.close()
+    assert f.layer.get(FEATURES, 'flag1') is not None
+    assert f.take_notified() == []
+
+    # A snapshot after closing changes nothing.
+    f.sink.set_overrides({'flag2': flag('flag2')}, {})
+    assert f.layer.get(FEATURES, 'flag1') is not None
+    assert f.layer.get(FEATURES, 'flag2') is None
+    assert f.take_notified() == []
+
+
+def test_sink_close_and_clear_clears_the_layer_and_ignores_later_snapshots():
+    f = SinkFixture(FakeBaseStore())
+    f.sink.set_overrides({'flag1': flag('flag1')}, {})
+    assert f.take_notified() == ['flag1']
+
+    # Clearing removes what the source supplied, and the removal is a change.
+    f.sink.close_and_clear()
+    assert f.layer.is_empty is True
+    assert f.take_notified() == ['flag1']
+
+    # A snapshot after closing changes nothing.
+    f.sink.set_overrides({'flag1': flag('flag1')}, {})
+    assert f.layer.is_empty is True
+    assert f.take_notified() == []
 
 
 def test_sink_notifies_directly_changed_keys_when_base_read_fails():
