@@ -2183,10 +2183,11 @@ class OverrideSource(Protocol):
         :meth:`close` is called. A failed load leaves the previously supplied layer untouched by
         not calling the sink.
 
-        An exception raised from this method does not prevent the client from starting: the SDK
-        logs it, closes the source, removes any snapshot the source supplied, and the client runs
-        without overrides. A source that cannot load its data should log that and retry rather
-        than raise, as the SDK's file-based source does.
+        This method is not intended to fail. A source that cannot load its data logs the failure
+        and keeps retrying, as the SDK's file-based source does. A configuration error belongs in
+        the builder's ``build``, where it is raised when the client is created. If this method does
+        raise, the client still starts: the SDK logs the exception, closes the source, removes any
+        snapshot the source supplied, and the client runs without overrides.
 
         :param sink: the sink that receives each snapshot
         """
