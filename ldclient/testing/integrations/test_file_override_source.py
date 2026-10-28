@@ -3,6 +3,7 @@ Tests for the file-based override source: its builder, initial load, multi-file 
 absent files, change detection in both modes, failure retention, and its Info log.
 """
 import logging
+import ntpath
 import os
 import threading
 import time
@@ -133,6 +134,24 @@ def test_builder_drops_a_repeated_path_and_warns(caplog):
     assert isinstance(source, _FileOverrideSource)
     assert source._paths == [os.path.abspath('/a.json'), os.path.abspath('/b.json')]
     assert any('more than once' in r.getMessage() for r in caplog.records)
+
+
+def test_builder_treats_a_path_repeated_in_different_case_as_a_repeat_only_where_file_names_ignore_case():
+    source = FileOverrideSourceBuilder(['/a.json', '/A.json']).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    if os.name == 'nt':
+        assert source._paths == [os.path.abspath('/a.json')]
+    else:
+        assert source._paths == [os.path.abspath('/a.json'), os.path.abspath('/A.json')]
+
+
+def test_builder_drops_a_path_repeated_in_different_case_on_windows(monkeypatch):
+    # Windows file names ignore case, so two spellings of one path name the same file. The path
+    # comparison of Windows is used here on any platform.
+    monkeypatch.setattr(os.path, 'normcase', ntpath.normcase)
+    source = FileOverrideSourceBuilder(['/a.json', '/b.json', '/A.json']).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [os.path.abspath('/a.json'), os.path.abspath('/b.json')]
 
 
 def test_builder_polls_by_default(tmp_path):
