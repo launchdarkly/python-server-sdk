@@ -537,3 +537,22 @@ def test_file_overrides_end_to_end(tmp_path):
         # The override is removed. The not-initialized short-circuit returns.
         write_file(path, '{}')
         eventually(lambda: client.variation_detail('overridden-flag', user, False).reason.get('errorKind') == 'CLIENT_NOT_READY', "the removed override was not picked up")
+
+
+def test_client_side_all_flags_state_includes_a_full_definition_with_client_side_but_not_a_value_entry(tmp_path):
+    # A flagValues entry is not available to client-side SDKs. A full definition that sets
+    # clientSide is, so that is how an operator overrides a flag that client-side SDKs use.
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{"flagValues": {"value-flag": true}, '
+                     '"flags": {"full-flag": {"key": "full-flag", "version": 1, "on": true, "variations": [true], '
+                     '"fallthrough": {"variation": 0}, "clientSide": true}}}')
+    source = FileOverrideSourceBuilder([path])
+    datasystem = custom().synchronizers(HangingSynchronizer().builder).overrides(source).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+
+    with LDClient(config, start_wait=0) as client:
+        user = Context.create('user-key')
+        assert set(client.all_flags_state(user).to_values_map().keys()) == {'value-flag', 'full-flag'}
+        state = client.all_flags_state(user, client_side_only=True)
+        assert state.valid
+        assert state.to_values_map() == {'full-flag': True}

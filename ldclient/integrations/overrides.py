@@ -54,7 +54,11 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     as the files change. The files use the same document format as the file data source:
     each file is a JSON or YAML document with optional ``flags``, ``flagValues``, and
     ``segments`` members. ``flagValues`` entries are expanded into full flag definitions that
-    return the given value for every context. YAML requires the ``pyyaml`` package.
+    return the given value for every context. A ``flagValues`` entry is not available to
+    client-side SDKs, so :meth:`ldclient.client.LDClient.all_flags_state` with
+    ``client_side_only=True`` leaves it out, even when the flag it overrides is available to them.
+    To override such a flag, define it in ``flags`` with ``"clientSide": true``. YAML requires the
+    ``pyyaml`` package.
 
     When multiple files are configured, their entries are combined in the configured order.
     The order determines which file wins under the duplicate keys handling. A reload replaces
