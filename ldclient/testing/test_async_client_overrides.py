@@ -252,10 +252,28 @@ async def test_all_flags_state_before_initialization_excludes_launchdarkly_data_
 
 
 @pytest.mark.asyncio
-async def test_all_flags_state_is_invalid_when_the_store_fails_even_with_overrides(caplog):
-    # A daemon-mode client whose store cannot list its flags reports an invalid state and logs
-    # the failure, as it does without a source, rather than a valid state of the overrides alone.
+async def test_all_flags_state_holds_the_overrides_and_is_invalid_when_the_store_fails(caplog):
+    # A daemon-mode client whose store cannot list its flags logs the failure, as it does without
+    # a source. Overrides only add to the state, so it holds the override flags, and it stays
+    # invalid because the store's flags are missing.
     source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    datasystem = AsyncDataSystemConfig(override_source=source.builder, data_store=AsyncStoreThatCannotListItems(), data_store_mode=DataStoreMode.READ_ONLY)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        state = await client.all_flags_state(user, with_reasons=True)
+        assert state.valid is False
+        assert state.to_values_map() == {'overridden-flag': True}
+        assert state.get_flag_reason('overridden-flag') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        assert records_containing(caplog, logging.ERROR, 'Unable to read flags for all_flag_state') != []
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_is_invalid_and_empty_when_the_store_fails_and_the_layer_holds_no_flags(caplog):
+    source = MockOverrideSource()
     datasystem = AsyncDataSystemConfig(override_source=source.builder, data_store=AsyncStoreThatCannotListItems(), data_store_mode=DataStoreMode.READ_ONLY)
     config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
     client = AsyncLDClient(config)
