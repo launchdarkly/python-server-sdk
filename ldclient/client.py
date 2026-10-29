@@ -28,6 +28,7 @@ from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.datasystem import DataAvailability, DataSystem
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
+from ldclient.impl.evaluator_common import is_override_definition
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
     create_diagnostic_id
@@ -539,6 +540,10 @@ class LDClient:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
@@ -638,7 +643,11 @@ class LDClient:
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
-                reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+                reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
 

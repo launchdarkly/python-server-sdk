@@ -28,7 +28,7 @@ from ldclient.impl.client_common import (
 )
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasystem import AsyncDataSystem, DataAvailability
-from ldclient.impl.evaluator_common import error_reason
+from ldclient.impl.evaluator_common import error_reason, is_override_definition
 from ldclient.impl.events.async_event_processor import (
     DefaultAsyncEventProcessor
 )
@@ -553,6 +553,10 @@ class AsyncLDClient:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
@@ -646,7 +650,11 @@ class AsyncLDClient:
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
-                reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+                reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
