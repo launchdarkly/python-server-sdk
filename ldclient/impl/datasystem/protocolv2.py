@@ -15,9 +15,10 @@ def has_unsupported_kind(data: dict) -> bool:
     Returns True if a put-object or delete-object payload names a kind this
     SDK does not support. Such objects should be ignored so that new kinds can
     be added to the protocol without breaking older SDKs.
+
+    The caller must first check that the payload's kind is a string.
     """
-    kind = data.get("kind")
-    return kind is not None and kind not in _SUPPORTED_KINDS
+    return data["kind"] not in _SUPPORTED_KINDS
 
 
 @dataclass(frozen=True)

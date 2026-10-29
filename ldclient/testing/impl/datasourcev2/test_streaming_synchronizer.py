@@ -333,6 +333,40 @@ def test_ignores_objects_with_unknown_kinds(events):  # pylint: disable=redefine
     assert updates[0].change_set.selector.state == "p:SOMETHING:300"
 
 
+@pytest.mark.parametrize("event_name", [EventName.PUT_OBJECT, EventName.DELETE_OBJECT])
+@pytest.mark.parametrize(
+    "data, problem",
+    [
+        ('"x"', "data must be an object"),
+        ("[1]", "data must be an object"),
+        ("null", "data must be an object"),
+        ("5", "data must be an object"),
+        ('{"version": 1, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": null, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": 5, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": ["flag"], "key": "flag-key", "object": {}}', "kind must be a string"),
+    ],
+)
+def test_rejects_malformed_objects(events, event_name, data, problem):  # pylint: disable=redefined-outer-name
+    builder = list_sse_client(
+        [
+            events[EventName.SERVER_INTENT],
+            Event(event=event_name, data=data),
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].change_set is None
+    assert updates[0].error is not None
+    assert updates[0].error.kind == DataSourceErrorKind.UNKNOWN
+    assert updates[0].error.message == f"{event_name.value} {problem}"
+
+
 def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
     builder = list_sse_client(
         [

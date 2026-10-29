@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from ldclient.impl.datasourcev2.polling import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
@@ -136,17 +138,41 @@ def test_ignores_objects_with_unknown_kinds():
 
 
 def test_handles_invalid_put_object():
-    payload_str = '{"events":[ {"event":"server-intent","data":{"payloads":[ {"id":"5A46PZ79FQ9D08YYKT79DECDNV","target":461,"intentCode":"xfer-full","reason":"payload-missing"}]}},{"event": "put-object","data": {}},{"event":"payload-transferred","data":{"state":"(p:5A46PZ79FQ9D08YYKT79DECDNV:461)","id":"5A46PZ79FQ9D08YYKT79DECDNV","version":461}}]}'
+    payload_str = '{"events":[ {"event":"server-intent","data":{"payloads":[ {"id":"5A46PZ79FQ9D08YYKT79DECDNV","target":461,"intentCode":"xfer-full","reason":"payload-missing"}]}},{"event": "put-object","data": {"kind": "flag"}},{"event":"payload-transferred","data":{"state":"(p:5A46PZ79FQ9D08YYKT79DECDNV:461)","id":"5A46PZ79FQ9D08YYKT79DECDNV","version":461}}]}'
     result = polling_payload_to_changeset(json.loads(payload_str))
     assert isinstance(result, _Fail)
     assert result.error == "Invalid JSON in put object"
 
 
 def test_handles_invalid_delete_object():
-    payload_str = '{"events":[ {"event":"server-intent","data":{"payloads":[ {"id":"5A46PZ79FQ9D08YYKT79DECDNV","target":461,"intentCode":"xfer-full","reason":"payload-missing"}]}},{"event": "delete-object","data": {}},{"event":"payload-transferred","data":{"state":"(p:5A46PZ79FQ9D08YYKT79DECDNV:461)","id":"5A46PZ79FQ9D08YYKT79DECDNV","version":461}}]}'
+    payload_str = '{"events":[ {"event":"server-intent","data":{"payloads":[ {"id":"5A46PZ79FQ9D08YYKT79DECDNV","target":461,"intentCode":"xfer-full","reason":"payload-missing"}]}},{"event": "delete-object","data": {"kind": "flag"}},{"event":"payload-transferred","data":{"state":"(p:5A46PZ79FQ9D08YYKT79DECDNV:461)","id":"5A46PZ79FQ9D08YYKT79DECDNV","version":461}}]}'
     result = polling_payload_to_changeset(json.loads(payload_str))
     assert isinstance(result, _Fail)
     assert result.error == "Invalid JSON in delete object"
+
+
+_SERVER_INTENT = {"event": "server-intent", "data": {"payloads": [{"id": "p", "target": 1, "intentCode": "xfer-full", "reason": "payload-missing"}]}}
+_PAYLOAD_TRANSFERRED = {"event": "payload-transferred", "data": {"state": "(p:p:1)", "version": 1}}
+
+
+@pytest.mark.parametrize("event_name", ["put-object", "delete-object"])
+@pytest.mark.parametrize("data_field", [{}, {"data": None}, {"data": "x"}, {"data": [1]}, {"data": 5}])
+def test_handles_objects_whose_data_is_not_an_object(event_name, data_field):
+    data = {"events": [_SERVER_INTENT, {"event": event_name, **data_field}, _PAYLOAD_TRANSFERRED]}
+    result = polling_payload_to_changeset(data)
+    assert isinstance(result, _Fail)
+    assert result.error == f"Invalid payload: '{event_name}' data must be an object"
+
+
+@pytest.mark.parametrize("event_name", ["put-object", "delete-object"])
+@pytest.mark.parametrize("kind_field", [{}, {"kind": None}, {"kind": 5}, {"kind": ["flag"]}])
+def test_handles_objects_whose_kind_is_not_a_string(event_name, kind_field):
+    object_field = {"object": {}} if event_name == "put-object" else {}
+    event_data = {"version": 1, "key": "flag-key", **object_field, **kind_field}
+    data = {"events": [_SERVER_INTENT, {"event": event_name, "data": event_data}, _PAYLOAD_TRANSFERRED]}
+    result = polling_payload_to_changeset(data)
+    assert isinstance(result, _Fail)
+    assert result.error == f"Invalid payload: '{event_name}' kind must be a string"
 
 
 def test_handles_invalid_payload_transferred():

@@ -67,8 +67,13 @@ def process_message(
 
     if msg.event == EventName.PUT_OBJECT:
         data = json.loads(msg.data)
+        if not isinstance(data, dict):
+            raise ValueError("put-object data must be an object")
+        if not isinstance(data.get("kind"), str):
+            raise ValueError("put-object kind must be a string")
+
         if has_unsupported_kind(data):
-            log.debug("Ignoring put-object with unsupported kind: %s", data.get("kind"))
+            log.debug("Ignoring put-object with unsupported kind: %s", data["kind"])
             return None
 
         put = PutObject.from_dict(data)
@@ -77,8 +82,13 @@ def process_message(
 
     if msg.event == EventName.DELETE_OBJECT:
         data = json.loads(msg.data)
+        if not isinstance(data, dict):
+            raise ValueError("delete-object data must be an object")
+        if not isinstance(data.get("kind"), str):
+            raise ValueError("delete-object kind must be a string")
+
         if has_unsupported_kind(data):
-            log.debug("Ignoring delete-object with unsupported kind: %s", data.get("kind"))
+            log.debug("Ignoring delete-object with unsupported kind: %s", data["kind"])
             return None
 
         delete = DeleteObject.from_dict(data)

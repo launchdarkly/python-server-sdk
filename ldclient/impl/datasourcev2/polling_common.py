@@ -69,23 +69,35 @@ def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:
 
             builder.start(server_intent.payload.code)
         elif event["event"] == EventName.PUT_OBJECT:
-            if has_unsupported_kind(event["data"]):
-                log.debug("Ignoring put-object with unsupported kind: %s", event["data"].get("kind"))
+            event_data = event.get("data")
+            if not isinstance(event_data, dict):
+                return _Fail(error="Invalid payload: 'put-object' data must be an object")
+            if not isinstance(event_data.get("kind"), str):
+                return _Fail(error="Invalid payload: 'put-object' kind must be a string")
+
+            if has_unsupported_kind(event_data):
+                log.debug("Ignoring put-object with unsupported kind: %s", event_data["kind"])
                 continue
 
             try:
-                put = PutObject.from_dict(event["data"])
+                put = PutObject.from_dict(event_data)
             except ValueError as err:
                 return _Fail(error="Invalid JSON in put object", exception=err)
 
             builder.add_put(put.kind, put.key, put.version, put.object)
         elif event["event"] == EventName.DELETE_OBJECT:
-            if has_unsupported_kind(event["data"]):
-                log.debug("Ignoring delete-object with unsupported kind: %s", event["data"].get("kind"))
+            event_data = event.get("data")
+            if not isinstance(event_data, dict):
+                return _Fail(error="Invalid payload: 'delete-object' data must be an object")
+            if not isinstance(event_data.get("kind"), str):
+                return _Fail(error="Invalid payload: 'delete-object' kind must be a string")
+
+            if has_unsupported_kind(event_data):
+                log.debug("Ignoring delete-object with unsupported kind: %s", event_data["kind"])
                 continue
 
             try:
-                delete_object = DeleteObject.from_dict(event["data"])
+                delete_object = DeleteObject.from_dict(event_data)
             except ValueError as err:
                 return _Fail(error="Invalid JSON in delete object", exception=err)
 
