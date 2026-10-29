@@ -208,10 +208,23 @@ def test_all_flags_state_before_initialization_excludes_launchdarkly_data_from_a
         assert state.to_values_map() == {'overridden-flag': True}
 
 
-def test_all_flags_state_is_invalid_when_the_store_fails_even_with_overrides(caplog):
-    # A daemon-mode client whose store cannot list its flags reports an invalid state and logs
-    # the failure, as it does without a source, rather than a valid state of the overrides alone.
+def test_all_flags_state_holds_the_overrides_and_is_invalid_when_the_store_fails(caplog):
+    # A daemon-mode client whose store cannot list its flags logs the failure, as it does without
+    # a source. Overrides only add to the state, so it holds the override flags, and it stays
+    # invalid because the store's flags are missing.
     source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    datasystem = daemon(StoreThatCannotListItems()).overrides(source.builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+    with LDClient(config, start_wait=0) as client:
+        state = client.all_flags_state(user, with_reasons=True)
+        assert state.valid is False
+        assert state.to_values_map() == {'overridden-flag': True}
+        assert state.get_flag_reason('overridden-flag') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        assert errors_containing(caplog, 'Unable to read flags for all_flag_state') != []
+
+
+def test_all_flags_state_is_invalid_and_empty_when_the_store_fails_and_the_layer_holds_no_flags(caplog):
+    source = MockOverrideSource()
     datasystem = daemon(StoreThatCannotListItems()).overrides(source.builder).build()
     config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
     with LDClient(config, start_wait=0) as client:

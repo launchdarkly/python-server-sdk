@@ -608,7 +608,7 @@ class AsyncLDClient:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
             return FeatureFlagsState(False)
 
-        state = FeatureFlagsState(True)
+        valid = True
         client_only = kwargs.get('client_side_only', False)
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
@@ -624,8 +624,18 @@ class AsyncLDClient:
                     raise ValueError("feature store error")
             except Exception as e:
                 log.error("Unable to read flags for all_flag_state: %s" % repr(e))
-                return FeatureFlagsState(False)
+                # Overrides only add to the state. Without them the state is invalid and empty
+                # here, so it holds the override layer's flags and stays invalid. A client-side
+                # SDK bootstrapped from the state uses its flags whatever $valid says (the
+                # JavaScript client SDKs 3.x and 4.x only warn), so the overridden values still
+                # reach it.
+                layer = self._data_system.override_layer
+                flags_map = layer.all(FEATURES) if layer is not None else {}
+                if len(flags_map) == 0:
+                    return FeatureFlagsState(False)
+                valid = False
 
+        state = FeatureFlagsState(valid)
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
