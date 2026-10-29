@@ -462,3 +462,23 @@ def test_data_source_status_is_unaffected_by_overrides():
     with make_uninitialized_client(source) as client:
         assert client.is_initialized() is False
         assert client.data_source_status_provider.status.state == DataSourceState.INITIALIZING
+
+
+def raise_evaluation_failure(*args):
+    raise RuntimeError("evaluation failure")
+
+
+def test_failed_evaluation_reason_is_marked_only_when_the_flag_came_from_the_override_layer(monkeypatch):
+    # The evaluation read the flag definition before it failed, so the failure of the override
+    # flag is marked and the failure of the ordinary flag is not, in a single evaluation and in
+    # the all-flags state.
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    with make_initialized_client({'plain-flag': single_value_flag('plain-flag', True)}, source) as client:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+
+        assert client.variation_detail('overridden-flag', user, 'default') == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True})
+        assert client.variation_detail('plain-flag', user, 'default') == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
+
+        state = client.all_flags_state(user, with_reasons=True)
+        assert state.get_flag_reason('overridden-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True}
+        assert state.get_flag_reason('plain-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
