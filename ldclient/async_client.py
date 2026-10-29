@@ -4,7 +4,7 @@ Async client for the LaunchDarkly Server-Side Python SDK.
 
 import asyncio
 import traceback
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from ldclient.async_config import AsyncConfig
@@ -28,7 +28,7 @@ from ldclient.impl.client_common import (
 )
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
 from ldclient.impl.datasystem import AsyncDataSystem, DataAvailability
-from ldclient.impl.evaluator_common import error_reason
+from ldclient.impl.evaluator_common import error_reason, is_override_definition
 from ldclient.impl.events.async_event_processor import (
     DefaultAsyncEventProcessor
 )
@@ -95,6 +95,7 @@ class AsyncLDClient:
         # these flags, so plain booleans are safe.
         self._eval_cached_data_warned = False
         self._all_flags_cached_data_warned = False
+        self._all_flags_overrides_only_warned = False
 
         # Build the object graph here (loop-free). start() supplies the loop-bound
         # resources: the HTTP session (created lazily), the data source, the
@@ -498,6 +499,13 @@ class AsyncLDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
+        def not_ready() -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+            log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
+            reason = error_reason('CLIENT_NOT_READY')
+            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+            return EvaluationDetail(default, None, reason), None
+
+        flag: Any = None
         availability = await self._data_system.data_availability()
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -505,23 +513,28 @@ class AsyncLDClient:
                     self._eval_cached_data_warned = True
                     log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key + ". This message is logged once.")
             else:
-                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
-                reason = error_reason('CLIENT_NOT_READY')
-                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-                return EvaluationDetail(default, None, reason), None
+                # No data from LaunchDarkly is available. A flag that the override layer holds
+                # is served anyway. A flag the layer does not hold gets the not-ready default,
+                # as it does without an override source.
+                layer = self._data_system.override_layer
+                if layer is not None:
+                    flag = layer.get(FEATURES, key)
+                if flag is None:
+                    return not_ready()
 
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
-        try:
-            flag = await self._data_system.store.get(FEATURES, key)
-        except Exception as e:
-            log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
-            log.debug(traceback.format_exc())
-            reason = error_reason('EXCEPTION')
-            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-            return EvaluationDetail(default, None, reason), None
+        if flag is None:
+            try:
+                flag = await self._data_system.store.get(FEATURES, key)
+            except Exception as e:
+                log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
+                log.debug(traceback.format_exc())
+                reason = error_reason('EXCEPTION')
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+                return EvaluationDetail(default, None, reason), None
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
@@ -540,6 +553,10 @@ class AsyncLDClient:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 self._send_event(event_factory.new_default_event(flag, context, default, reason))
                 return EvaluationDetail(default, None, reason), flag
 
@@ -572,6 +589,7 @@ class AsyncLDClient:
             log.warning("all_flags_state() called, but client is in offline mode. Returning empty state")
             return FeatureFlagsState(False)
 
+        override_flags: Optional[Dict[str, Any]] = None
         availability = await self._data_system.data_availability()
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -579,25 +597,49 @@ class AsyncLDClient:
                     self._all_flags_cached_data_warned = True
                     log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
             else:
-                log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
-                return FeatureFlagsState(False)
+                # No data from LaunchDarkly is available. When the override layer holds flags,
+                # the state contains only those, read from the layer itself: a store that is not
+                # initialized can still hold LaunchDarkly data, which the state must not include.
+                # Without override flags the state is unavailable, as it is without an override
+                # source.
+                layer = self._data_system.override_layer
+                override_flags = layer.all(FEATURES) if layer is not None else {}
+                if len(override_flags) == 0:
+                    log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                    return FeatureFlagsState(False)
 
         if not context.valid:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
             return FeatureFlagsState(False)
 
-        state = FeatureFlagsState(True)
+        valid = True
         client_only = kwargs.get('client_side_only', False)
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
-        try:
-            flags_map = await self._data_system.store.all(FEATURES)
-            if flags_map is None:
-                raise ValueError("feature store error")
-        except Exception as e:
-            log.error("Unable to read flags for all_flag_state: %s" % repr(e))
-            return FeatureFlagsState(False)
+        if override_flags is not None:
+            if not self._all_flags_overrides_only_warned:
+                self._all_flags_overrides_only_warned = True
+                log.warning("all_flags_state() called before client has finished initializing! Returning only flags from the override layer. This message is logged once.")
+            flags_map = override_flags
+        else:
+            try:
+                flags_map = await self._data_system.store.all(FEATURES)
+                if flags_map is None:
+                    raise ValueError("feature store error")
+            except Exception as e:
+                log.error("Unable to read flags for all_flag_state: %s" % repr(e))
+                # Overrides only add to the state. Without them the state is invalid and empty
+                # here, so it holds the override layer's flags and stays invalid. A client-side
+                # SDK bootstrapped from the state uses its flags whatever $valid says (the
+                # JavaScript client SDKs 3.x and 4.x only warn), so the overridden values still
+                # reach it.
+                layer = self._data_system.override_layer
+                flags_map = layer.all(FEATURES) if layer is not None else {}
+                if len(flags_map) == 0:
+                    return FeatureFlagsState(False)
+                valid = False
 
+        state = FeatureFlagsState(valid)
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
@@ -608,7 +650,11 @@ class AsyncLDClient:
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
-                reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+                reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                if is_override_definition(flag):
+                    reason['overrideAffected'] = True
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)

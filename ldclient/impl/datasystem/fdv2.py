@@ -16,6 +16,11 @@ from ldclient.impl.datasystem.fdv2_common import (
 )
 from ldclient.impl.datasystem.store import Store, _decode
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.overrides import (
+    OverrideLayer,
+    OverrideSinkImpl,
+    OverrideStoreView
+)
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.rwlock import ReadWriteLock
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
@@ -26,6 +31,8 @@ from ldclient.interfaces import (
     DataStoreMode,
     DataStoreStatus,
     FeatureStore,
+    FlagChange,
+    OverrideSource,
     ReadOnlyStore,
     Synchronizer
 )
@@ -257,6 +264,27 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._store_view = _ReadOnlyStoreView(self._store)
 
+        # The following are set only when an override source is configured. The layer holds the
+        # override entries. The overlay serves them in preference to the store's data at the
+        # store read boundary. The source populates the layer at runtime. The override system
+        # has no effect on initialization status or data availability. Building the source
+        # here makes an invalid source configuration a construction error, like any other
+        # invalid component configuration.
+        self._override_source: Optional[OverrideSource] = None
+        self._override_layer: Optional[OverrideLayer] = None
+        self._override_sink: Optional[OverrideSinkImpl] = None
+        self._overlay: Optional[OverrideStoreView] = None
+        if data_system_config.override_source is not None and not self._disabled:
+            self._override_source = data_system_config.override_source.build(config)
+            self._override_layer = OverrideLayer()
+            self._overlay = OverrideStoreView(self._store_view, self._override_layer)
+            # A LaunchDarkly change to a flag or segment that an override entry depends on
+            # must notify that entry's flag as well. The store reaches those entries through
+            # the layer's dependency graph.
+            self._store.set_external_dependencies(self._override_layer)
+        elif data_system_config.override_source is not None:
+            log.warning("Offline mode is enabled; the override source is not started and no overrides are served")
+
     def _create_store(self, flag_change_listeners: Listeners, change_set_listeners: Listeners) -> Store:
         return Store(flag_change_listeners, change_set_listeners)
 
@@ -288,6 +316,28 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._stop_event.clear()
 
+        if self._override_source is not None and self._override_layer is not None:
+            # The source starts before the main thread, so a source that loads synchronously
+            # has its overrides in place before the client begins evaluating.
+            self._override_sink = OverrideSinkImpl(
+                self._override_layer,
+                self._store_view,
+                lambda key: self._flag_change_listeners.notify(FlagChange(key)),
+                self._flag_change_listeners.has_listeners,
+            )
+            try:
+                self._override_source.start(self._override_sink)
+            except Exception as e:
+                # The SDK's own file-based source does not raise from start; it logs a failed
+                # load and retries it. A custom source could, and a client in an incident is
+                # better served by running without its overrides than by not starting.
+                log.error("Unable to start the override source; the client runs without overrides: %s", e)
+                self._close_override_source("Unable to close the override source after it failed to start")
+                # The source may have supplied a snapshot before it failed. Clearing the layer
+                # removes it, so the client runs without overrides as logged, and a late
+                # snapshot from the closed source is ignored.
+                self._override_sink.close_and_clear()
+
         # Start the main coordination thread
         main_thread = Thread(
             target=self._run_main_loop,
@@ -300,6 +350,13 @@ class FDv2(_FDv2Base, DataSystem):
 
     def stop(self):
         """Stop the FDv2 data system and all associated threads."""
+        if self._override_source is not None:
+            # The sink stops accepting snapshots first, so a snapshot that the source supplies
+            # while it shuts down cannot update the layer or notify listeners.
+            if self._override_sink is not None:
+                self._override_sink.close()
+            self._close_override_source("Unable to close the override source")
+
         self._stop_event.set()
 
         with self._lock.write():
@@ -625,6 +682,18 @@ class FDv2(_FDv2Base, DataSystem):
         with self._lock.write():
             self._environment_id = environment_id
 
+    def _close_override_source(self, failure_message: str) -> None:
+        # A custom source can raise from close. That is logged and not raised, so the rest of
+        # the client still stops, or still starts after a failed start.
+        source = self._override_source
+        self._override_source = None
+        if source is None:
+            return
+        try:
+            source.close()
+        except Exception as e:
+            log.error("%s: %s", failure_message, e)
+
     @property
     def environment_id(self) -> Optional[str]:
         """Get the environment ID reported by LaunchDarkly, if known."""
@@ -633,8 +702,17 @@ class FDv2(_FDv2Base, DataSystem):
 
     @property
     def store(self) -> ReadOnlyStore:
-        """Get the underlying store for flag evaluation."""
+        """
+        Get the store for flag evaluation. When an override source is configured, this is the
+        overlay that serves override entries in preference to LaunchDarkly data.
+        """
+        if self._overlay is not None:
+            return self._overlay
         return self._store_view
+
+    @property
+    def override_layer(self) -> Optional[OverrideLayer]:
+        return self._override_layer
 
 
 __all__ = [

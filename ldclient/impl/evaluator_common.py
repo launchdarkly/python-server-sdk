@@ -262,6 +262,16 @@ def error_reason(error_kind: str) -> dict:
     return {'kind': 'ERROR', 'errorKind': error_kind}
 
 
+def is_override_definition(item: Any) -> bool:
+    """
+    Reports whether a flag or segment read from the store came from the override layer. The
+    data systems decode the dicts a store holds into model objects before the client reads
+    them, but an error path reads the marker this way so that an unexpected item cannot make
+    it fail too.
+    """
+    return getattr(item, 'is_override', False) is True
+
+
 def mark_override_affected(detail: EvaluationDetail) -> None:
     """
     Sets the override-affected indicator on the evaluation reason. The indicator is present

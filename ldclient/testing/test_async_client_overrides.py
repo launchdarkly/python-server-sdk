@@ -1,0 +1,441 @@
+"""
+Tests for flag overrides through the async client. These mirror the key scenarios of the sync
+client tests.
+"""
+import asyncio
+import logging
+import threading
+from typing import Any, Dict, List, Optional
+
+import pytest
+
+from ldclient.async_client import AsyncLDClient
+from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
+from ldclient.async_feature_store import AsyncInMemoryFeatureStore
+from ldclient.context import Context
+from ldclient.evaluation import EvaluationDetail
+from ldclient.impl.aio.concurrency import AsyncEvent
+from ldclient.impl.integrations.files.filedata import make_flag_with_value
+from ldclient.interfaces import AsyncFeatureStore, DataStoreMode
+from ldclient.testing.builders import FlagBuilder
+from ldclient.testing.mock_async_components import MockAsyncEventProcessor
+from ldclient.testing.mock_components import (
+    FailingOverrideSourceBuilder,
+    MockDataSourceBuilder,
+    MockOverrideSource,
+    StaticInitializer
+)
+from ldclient.versioned_data_kind import FEATURES
+
+user = Context.create('user-key')
+
+# A context whose key is empty is invalid.
+invalid_context = Context.create('')
+
+
+class AsyncHangingSynchronizer:
+    """An async synchronizer that connects but never yields data."""
+
+    def __init__(self):
+        self._stop = AsyncEvent()
+
+    @property
+    def name(self) -> str:
+        return "AsyncHangingSynchronizer"
+
+    async def sync(self, ss):
+        await self._stop.wait()
+        return
+        yield
+
+    async def stop(self) -> None:
+        self._stop.set()
+
+
+class AsyncStaticInitializer(StaticInitializer):
+    async def fetch(self, ss):  # type: ignore[override]
+        return super().fetch(ss)
+
+
+class UnavailableAsyncStore(AsyncInMemoryFeatureStore):
+    """A persistent store whose every read fails, as during a store outage."""
+
+    async def is_initialized(self) -> bool:
+        raise RuntimeError("store unreachable")
+
+    async def get(self, kind, key):
+        raise RuntimeError("store unreachable")
+
+    async def all(self, kind):
+        raise RuntimeError("store unreachable")
+
+
+class UninitializedAsyncStore(AsyncInMemoryFeatureStore):
+    """A persistent store that holds data but was never initialized by an SDK."""
+
+    @property
+    def initialized(self) -> bool:
+        return False
+
+    async def is_initialized(self) -> bool:
+        return False
+
+
+class AsyncStoreThatCannotListItems(AsyncInMemoryFeatureStore):
+    """An initialized persistent store whose enumeration fails."""
+
+    @property
+    def initialized(self) -> bool:
+        return True
+
+    async def is_initialized(self) -> bool:
+        return True
+
+    async def all(self, kind):
+        raise RuntimeError("store cannot list items")
+
+
+def records_containing(caplog, level: int, text: str):
+    return [r for r in caplog.records if r.levelno == level and text in r.getMessage()]
+
+
+async def uninitialized_store_holding(key: str) -> UninitializedAsyncStore:
+    store = UninitializedAsyncStore()
+    await store.upsert(FEATURES, FlagBuilder(key).version(1).on(False).off_variation(0).variations('ld-value').build().to_json_dict())
+    return store
+
+
+def single_value_flag(key: str, value: Any) -> dict:
+    return make_flag_with_value(key, value).to_json_dict()
+
+
+def recorded_keys(client: AsyncLDClient) -> List[str]:
+    """The flag keys of the evaluations the client handed to the event processor."""
+    processor: Any = client._event_processor
+    return [event.key for event in processor.events]
+
+
+async def make_uninitialized_client(source: MockOverrideSource, store: Optional[AsyncFeatureStore] = None) -> AsyncLDClient:
+    """
+    A client whose data system can never obtain LaunchDarkly data, with the given override
+    source and, when given, a read-only persistent store.
+    """
+    datasystem = AsyncDataSystemConfig(synchronizers=[MockDataSourceBuilder(AsyncHangingSynchronizer())], override_source=source.builder, data_store=store, data_store_mode=DataStoreMode.READ_ONLY)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    return client
+
+
+async def make_initialized_client(flags: Dict[str, dict], source: MockOverrideSource, segments: Optional[Dict[str, dict]] = None) -> AsyncLDClient:
+    initializer = AsyncStaticInitializer(flags, segments or {})
+    datasystem = AsyncDataSystemConfig(initializers=[MockDataSourceBuilder(initializer)], override_source=source.builder)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    client = AsyncLDClient(config)
+    await client.start(start_wait=5)
+    assert await client.is_initialized() is True
+    return client
+
+
+@pytest.mark.asyncio
+async def test_override_is_served_when_client_is_not_initialized():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        assert await client.is_initialized() is False
+        detail = await client.variation_detail('overridden-flag', user, False)
+        assert detail.value is True
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+    finally:
+        await client.close()
+    assert source.close_count == 1
+
+
+@pytest.mark.asyncio
+async def test_non_overridden_flag_still_short_circuits_when_client_is_not_initialized():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        detail = await client.variation_detail('other-flag', user, False)
+        assert detail.value is False
+        assert detail.reason == {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_removal_restores_short_circuit():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        assert await client.variation('overridden-flag', user, False) is True
+        source.set_overrides({}, {})
+        detail = await client.variation_detail('overridden-flag', user, False)
+        assert detail.reason == {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('overrides', [{}, {'other-flag': single_value_flag('other-flag', True)}], ids=['empty-layer', 'layer-without-the-key'])
+async def test_not_initialized_client_returns_not_ready_for_an_invalid_context_when_the_layer_lacks_the_key(overrides):
+    client = await make_uninitialized_client(MockOverrideSource(flags=overrides))
+    try:
+        detail = await client.variation_detail('requested-flag', invalid_context, False)
+        # The not-ready handling runs before the context check, as it does without overrides,
+        # and records the evaluation of the unknown flag.
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'})
+        assert recorded_keys(client) == ['requested-flag']
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_not_initialized_client_checks_the_context_before_serving_an_override():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        detail = await client.variation_detail('overridden-flag', invalid_context, False)
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'USER_NOT_SPECIFIED'})
+        assert recorded_keys(client) == []
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('store_outage', [True, False], ids=['store-outage', 'uninitialized-store'])
+async def test_not_initialized_client_returns_not_ready_when_the_store_has_no_launchdarkly_data_and_the_layer_lacks_the_key(store_outage):
+    store: AsyncFeatureStore = UnavailableAsyncStore() if store_outage else await uninitialized_store_holding('requested-flag')
+    source = MockOverrideSource(flags={'other-flag': single_value_flag('other-flag', True)})
+    client = await make_uninitialized_client(source, store=store)
+    try:
+        detail = await client.variation_detail('requested-flag', user, False)
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'})
+        assert recorded_keys(client) == ['requested-flag']
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_is_served_during_a_persistent_store_outage():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source, store=UnavailableAsyncStore())
+    try:
+        detail = await client.variation_detail('overridden-flag', user, False)
+        assert detail.value is True
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_is_invalid_when_the_store_is_uninitialized_and_the_layer_is_empty():
+    client = await make_uninitialized_client(MockOverrideSource(), store=await uninitialized_store_holding('ld-flag'))
+    try:
+        state = await client.all_flags_state(user)
+        assert state.valid is False
+        assert state.to_values_map() == {}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_before_initialization_excludes_launchdarkly_data_from_an_uninitialized_store():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source, store=await uninitialized_store_holding('ld-flag'))
+    try:
+        state = await client.all_flags_state(user)
+        assert state.valid is True
+        assert state.to_values_map() == {'overridden-flag': True}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_holds_the_overrides_and_is_invalid_when_the_store_fails(caplog):
+    # A daemon-mode client whose store cannot list its flags logs the failure, as it does without
+    # a source. Overrides only add to the state, so it holds the override flags, and it stays
+    # invalid because the store's flags are missing.
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    datasystem = AsyncDataSystemConfig(override_source=source.builder, data_store=AsyncStoreThatCannotListItems(), data_store_mode=DataStoreMode.READ_ONLY)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        state = await client.all_flags_state(user, with_reasons=True)
+        assert state.valid is False
+        assert state.to_values_map() == {'overridden-flag': True}
+        assert state.get_flag_reason('overridden-flag') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        assert records_containing(caplog, logging.ERROR, 'Unable to read flags for all_flag_state') != []
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_is_invalid_and_empty_when_the_store_fails_and_the_layer_holds_no_flags(caplog):
+    source = MockOverrideSource()
+    datasystem = AsyncDataSystemConfig(override_source=source.builder, data_store=AsyncStoreThatCannotListItems(), data_store_mode=DataStoreMode.READ_ONLY)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        state = await client.all_flags_state(user)
+        assert state.valid is False
+        assert state.to_values_map() == {}
+        assert records_containing(caplog, logging.ERROR, 'Unable to read flags for all_flag_state') != []
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_override_source_start_failure_is_logged_and_the_client_runs_without_overrides(caplog):
+    # The SDK's own source never raises from start. A custom source could, and that must not
+    # keep the client from starting: the failure is logged, the source is closed, the snapshot
+    # it supplied before failing is removed, and a later snapshot is ignored.
+    flags = {'overridden-flag': single_value_flag('overridden-flag', True)}
+    source = MockOverrideSource(flags=flags, start_error=RuntimeError("cannot start"), supply_before_start_error=True)
+    client = await make_uninitialized_client(source)
+    try:
+        assert source.close_count == 1
+        assert records_containing(caplog, logging.ERROR, 'Unable to start the override source; the client runs without overrides: cannot start') != []
+        detail = await client.variation_detail('overridden-flag', user, False)
+        assert detail == EvaluationDetail(False, None, {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'})
+
+        source.set_overrides(flags)
+        assert await client.variation('overridden-flag', user, False) is False
+    finally:
+        await client.close()
+    assert source.close_count == 1
+
+
+@pytest.mark.asyncio
+async def test_snapshot_supplied_after_the_client_is_closed_is_ignored():
+    source = MockOverrideSource()
+    client = await make_uninitialized_client(source)
+    await client.close()
+
+    source.set_overrides({'late-flag': single_value_flag('late-flag', True)})
+
+    assert client._data_system.override_layer.get(FEATURES, 'late-flag') is None
+
+
+@pytest.mark.asyncio
+async def test_override_source_is_not_started_when_offline(caplog):
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    datasystem = AsyncDataSystemConfig(override_source=source.builder)
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, offline=True)
+    client = AsyncLDClient(config)
+    await client.start(start_wait=0)
+    try:
+        assert source.start_count == 0
+        assert await client.variation('overridden-flag', user, False) is False
+        assert records_containing(caplog, logging.WARNING, 'Offline mode is enabled; the override source is not started and no overrides are served') != []
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_invalid_override_source_configuration_fails_construction():
+    datasystem = AsyncDataSystemConfig(synchronizers=[MockDataSourceBuilder(AsyncHangingSynchronizer())], override_source=FailingOverrideSourceBuilder())
+    config = AsyncConfig('SDK_KEY', datasystem_config=datasystem, event_processor_class=lambda config: MockAsyncEventProcessor())
+    with pytest.raises(ValueError):
+        AsyncLDClient(config)
+
+
+@pytest.mark.asyncio
+async def test_override_takes_precedence_over_launchdarkly_data_and_all_flags_reflects_it():
+    ld_flag = FlagBuilder('flag-precedence').version(100).on(False).off_variation(0).variations('ld-value').build().to_json_dict()
+    normal = FlagBuilder('flag-normal').version(100).on(False).off_variation(0).variations('normal-value').build().to_json_dict()
+    source = MockOverrideSource(flags={'flag-precedence': single_value_flag('flag-precedence', 'override-value')})
+    client = await make_initialized_client({'flag-precedence': ld_flag, 'flag-normal': normal}, source)
+    try:
+        detail = await client.variation_detail('flag-precedence', user, 'default')
+        assert detail.value == 'override-value'
+        assert detail.reason == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+        detail = await client.variation_detail('flag-normal', user, 'default')
+        assert detail.reason == {'kind': 'OFF'}
+
+        state = await client.all_flags_state(user, with_reasons=True)
+        assert state.to_values_map() == {'flag-precedence': 'override-value', 'flag-normal': 'normal-value'}
+        assert state.get_flag_reason('flag-precedence') == {'kind': 'FALLTHROUGH', 'overrideAffected': True}
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_all_flags_state_contains_only_overrides_when_client_is_not_initialized():
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_uninitialized_client(source)
+    try:
+        state = await client.all_flags_state(user)
+        assert state.valid is True
+        assert state.to_values_map() == {'overridden-flag': True}
+        source.set_overrides({}, {})
+        assert (await client.all_flags_state(user)).valid is False
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_flag_tracker_is_notified_of_override_changes_on_the_event_loop():
+    source = MockOverrideSource()
+    client = await make_uninitialized_client(source)
+    try:
+        changes: asyncio.Queue = asyncio.Queue()
+        loop_thread = threading.current_thread()
+        listener_threads = []
+
+        def listener(change):
+            listener_threads.append(threading.current_thread())
+            changes.put_nowait(change)
+
+        client.flag_tracker.add_listener(listener)
+
+        # The source pushes from a worker thread, as the file source does. The notification
+        # is delivered on the event loop's thread.
+        await asyncio.to_thread(source.set_overrides, {'overridden-flag': single_value_flag('overridden-flag', True)}, {})
+        change = await asyncio.wait_for(changes.get(), 5)
+        assert change.key == 'overridden-flag'
+        assert listener_threads[0] is loop_thread
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_flag_value_change_listener_sees_override_value_changes():
+    ld_flag = FlagBuilder('flag').version(100).on(False).off_variation(0).variations('ld-value').build().to_json_dict()
+    source = MockOverrideSource()
+    client = await make_initialized_client({'flag': ld_flag}, source)
+    try:
+        changes: asyncio.Queue = asyncio.Queue()
+        await client.flag_tracker.add_flag_value_change_listener('flag', user, changes.put_nowait)
+        await asyncio.to_thread(source.set_overrides, {'flag': single_value_flag('flag', 'override-value')}, {})
+        change = await asyncio.wait_for(changes.get(), 5)
+        assert change.old_value == 'ld-value'
+        assert change.new_value == 'override-value'
+    finally:
+        await client.close()
+
+
+async def raise_evaluation_failure(*args):
+    raise RuntimeError("evaluation failure")
+
+
+@pytest.mark.asyncio
+async def test_failed_evaluation_reason_is_marked_only_when_the_flag_came_from_the_override_layer(monkeypatch):
+    # The evaluation read the flag definition before it failed, so the failure of the override
+    # flag is marked and the failure of the ordinary flag is not, in a single evaluation and in
+    # the all-flags state.
+    source = MockOverrideSource(flags={'overridden-flag': single_value_flag('overridden-flag', True)})
+    client = await make_initialized_client({'plain-flag': single_value_flag('plain-flag', True)}, source)
+    try:
+        monkeypatch.setattr(client._evaluator, 'evaluate', raise_evaluation_failure)
+
+        assert await client.variation_detail('overridden-flag', user, 'default') == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True})
+        assert await client.variation_detail('plain-flag', user, 'default') == EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
+
+        state = await client.all_flags_state(user, with_reasons=True)
+        assert state.get_flag_reason('overridden-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True}
+        assert state.get_flag_reason('plain-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+    finally:
+        await client.close()

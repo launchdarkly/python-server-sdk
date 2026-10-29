@@ -38,6 +38,11 @@ from ldclient.impl.datasystem.fdv2_common import (
 )
 from ldclient.impl.datasystem.store import _decode
 from ldclient.impl.listeners import Listeners
+from ldclient.impl.overrides import (
+    AsyncOverrideStoreView,
+    OverrideLayer,
+    OverrideSinkImpl
+)
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, log
 from ldclient.interfaces import (
     AsyncFeatureStore,
@@ -47,7 +52,9 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState,
     DataStoreMode,
-    DataStoreStatus
+    DataStoreStatus,
+    FlagChange,
+    OverrideSource
 )
 from ldclient.versioned_data_kind import VersionedDataKind
 
@@ -270,6 +277,21 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
         self._store_view = _AsyncReadOnlyStoreView(self._store)
 
+        # Set only when an override source is configured. See the sync FDv2 for the roles of
+        # the layer, the overlay, and the source. Building the source here makes an invalid
+        # source configuration a construction error.
+        self._override_source: Optional[OverrideSource] = None
+        self._override_layer: Optional[OverrideLayer] = None
+        self._override_sink: Optional[OverrideSinkImpl] = None
+        self._overlay: Optional[AsyncOverrideStoreView] = None
+        if data_system_config.override_source is not None and not self._disabled:
+            self._override_source = data_system_config.override_source.build(config)
+            self._override_layer = OverrideLayer()
+            self._overlay = AsyncOverrideStoreView(self._store_view, self._override_layer)
+            self._store.set_external_dependencies(self._override_layer)
+        elif data_system_config.override_source is not None:
+            log.warning("Offline mode is enabled; the override source is not started and no overrides are served")
+
         # Concurrency
         self._stop_event = AsyncEvent()
         self._lock = AsyncLock()
@@ -314,11 +336,45 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
         self._stop_event.clear()
 
+        if self._override_source is not None and self._override_layer is not None:
+            # The source runs on its own threads. Flag change notifications are delivered on
+            # the event loop, like every other change notification of the async client. The
+            # merged view for the change computation reads the in-memory store, which is the
+            # only store that can be read synchronously. While a persistent store is the
+            # active store, the dependency fan-out is limited to the in-memory data, and the
+            # directly changed keys are still notified.
+            loop = asyncio.get_running_loop()
+            listeners = self._flag_change_listeners
+
+            def notify(key: str) -> None:
+                loop.call_soon_threadsafe(listeners.notify, FlagChange(key))
+
+            self._override_sink = OverrideSinkImpl(self._override_layer, self._store._memory_store, notify, listeners.has_listeners)
+            try:
+                self._override_source.start(self._override_sink)
+            except Exception as e:
+                # The SDK's own file-based source does not raise from start; it logs a failed
+                # load and retries it. A custom source could, and a client in an incident is
+                # better served by running without its overrides than by not starting.
+                log.error("Unable to start the override source; the client runs without overrides: %s", e)
+                self._close_override_source("Unable to close the override source after it failed to start")
+                # The source may have supplied a snapshot before it failed. Clearing the layer
+                # removes it, so the client runs without overrides as logged, and a late
+                # snapshot from the closed source is ignored.
+                self._override_sink.close_and_clear()
+
         # Start the main coordination loop
         self._runner.spawn("AsyncFDv2-main", lambda: self._run_main_loop(set_on_ready))
 
     async def stop(self):
         """Stop the AsyncFDv2 data system and all the work it is coordinating."""
+        if self._override_source is not None:
+            # The sink stops accepting snapshots first, so a snapshot that the source supplies
+            # while it shuts down cannot update the layer or notify listeners.
+            if self._override_sink is not None:
+                self._override_sink.close()
+            self._close_override_source("Unable to close the override source")
+
         self._stop_event.set()
 
         async with self._lock:
@@ -333,6 +389,18 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
         # Close the store
         await self._store.close()
+
+    def _close_override_source(self, failure_message: str) -> None:
+        # A custom source can raise from close. That is logged and not raised, so the rest of
+        # the client still stops, or still starts after a failed start.
+        source = self._override_source
+        self._override_source = None
+        if source is None:
+            return
+        try:
+            source.close()
+        except Exception as e:
+            log.error("%s: %s", failure_message, e)
 
     async def _run_main_loop(self, set_on_ready: AsyncEvent):
         """Main coordination loop that manages initializers and synchronizers."""
@@ -628,8 +696,17 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
     @property
     def store(self) -> AsyncReadOnlyStore:
-        """Get the underlying store for flag evaluation."""
+        """
+        Get the store for flag evaluation. When an override source is configured, this is the
+        overlay that serves override entries in preference to LaunchDarkly data.
+        """
+        if self._overlay is not None:
+            return self._overlay
         return self._store_view
+
+    @property
+    def override_layer(self) -> Optional[OverrideLayer]:
+        return self._override_layer
 
     async def data_availability(self) -> DataAvailability:  # type: ignore[override]
         """Reports what form of data is currently available, awaiting the store's
