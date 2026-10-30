@@ -1,199 +1,209 @@
 """
-Tests for AsyncHook dispatch in the evaluation pipeline.
-
-The _evaluate_with_hooks helper defined here mirrors the dispatch pattern that
-AsyncLDClient uses: async hooks are awaited, running in list order for
-before_evaluation and reverse order for after_evaluation.
-
-Each hook receives its own isolated data dict (matching the sync SDK pattern in
-client.py:__execute_before_evaluation). A failing hook logs an error and returns
-{} rather than aborting the evaluation (matching __try_execute_stage).
+Tests for hook and plugin dispatch in AsyncLDClient.
 """
-import logging
+import asyncio
+import contextvars
+from typing import List
 
 import pytest
 
+from ldclient.async_client import AsyncLDClient
+from ldclient.async_config import AsyncConfig
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.hook import AsyncHook, EvaluationSeriesContext, Metadata
-
-log = logging.getLogger('ldclient')
-
-
-async def _try_execute_stage_async(method, hook_name, coro_or_fn):
-    """Execute a single hook stage the way AsyncLDClient does, catching and logging any exceptions."""
-    try:
-        return await coro_or_fn()
-    except BaseException as e:
-        log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
-        return {}
-
-
-async def _evaluate_with_hooks(hooks, series_context, eval_fn):
-    """Dispatch before/after hooks around an async evaluation function.
-
-    Each hook gets a fresh empty dict for before_evaluation (matching the sync
-    SDK's __execute_before_evaluation pattern). The per-hook data returned is
-    stored and passed back to the corresponding hook in after_evaluation.
-    A hook that raises an exception is caught and logged; it does not abort
-    the evaluation or affect other hooks.
-    """
-    # before_evaluation: each hook gets its own isolated {}
-    hook_data = []
-    for hook in hooks:
-        data = await _try_execute_stage_async(
-            "beforeEvaluation", hook.metadata.name,
-            lambda h=hook: h.before_evaluation(series_context, {})
-        )
-        hook_data.append(data)
-
-    detail = await eval_fn()
-
-    # after_evaluation: reversed order, each hook receives its own before data
-    for hook, data in reversed(list(zip(hooks, hook_data))):
-        await _try_execute_stage_async(
-            "afterEvaluation", hook.metadata.name,
-            lambda h=hook, d=data: h.after_evaluation(series_context, d, detail)
-        )
-
-    return detail
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
+from ldclient.plugin import (
+    AsyncPlugin,
+    EnvironmentMetadata,
+    Plugin,
+    PluginMetadata
+)
+from ldclient.testing.mock_async_components import (
+    MockAsyncFeatureStore,
+    MockAsyncUpdateProcessor
+)
+from ldclient.versioned_data_kind import FEATURES
 
 
-class RecordingAsyncHook(AsyncHook):
-    """Async hook that records calls and threads a counter through data."""
+def _offline_config(**kwargs) -> AsyncConfig:
+    return AsyncConfig("test-sdk-key", offline=True, **kwargs)
 
-    def __init__(self, name: str):
+
+def _make_flag(key: str, value) -> dict:
+    return {
+        'key': key,
+        'version': 1,
+        'on': False,
+        'offVariation': 0,
+        'variations': [value],
+        'targets': [],
+        'contextTargets': [],
+        'rules': [],
+        'prerequisites': [],
+        'salt': '',
+    }
+
+
+class RecordingHook(Hook):
+    def __init__(self, name: str, log: List[str]):
         self._name = name
-        self.before_calls: list = []
-        self.after_calls: list = []
+        self._log = log
 
     @property
     def metadata(self) -> Metadata:
         return Metadata(name=self._name)
 
-    async def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
-        self.before_calls.append(series_context.key)
-        return {**data, self._name + '_before': True}
+    def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+        self._log.append(f"{self._name}:before:{series_context.key}")
+        return {**data, 'from_before': self._name}
 
-    async def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict,
-                               detail: EvaluationDetail) -> dict:
-        self.after_calls.append(series_context.key)
-        return {**data, self._name + '_after': True}
+    def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
+        self._log.append(f"{self._name}:after:{series_context.key}:{data.get('from_before')}:{detail.value}")
+        return data
 
 
-@pytest.fixture
-def series_context():
-    return EvaluationSeriesContext(
-        key='test-flag',
-        context=Context.create('user-1'),
-        default_value=False,
-        method='variation',
+@pytest.mark.asyncio
+async def test_hooks_from_config_run_in_order():
+    log: List[str] = []
+    config = _offline_config(hooks=[RecordingHook('first', log), RecordingHook('second', log)])
+
+    async with AsyncLDClient(config) as client:
+        await client.variation('flag', Context.create('user'), 'default')
+
+    assert log == [
+        'first:before:flag',
+        'second:before:flag',
+        'second:after:flag:second:default',
+        'first:after:flag:first:default',
+    ]
+
+
+@pytest.mark.asyncio
+async def test_hook_error_does_not_stop_evaluation():
+    log: List[str] = []
+
+    class FailingHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='failing')
+
+        def before_evaluation(self, series_context, data):
+            raise RuntimeError('before failed')
+
+        def after_evaluation(self, series_context, data, detail):
+            log.append(f"after:{data}")
+            return data
+
+    async with AsyncLDClient(_offline_config(hooks=[FailingHook()])) as client:
+        result = await client.variation('flag', Context.create('user'), 'default')
+
+    assert result == 'default'
+    assert log == ['after:{}']
+
+
+class _YieldingStore(MockAsyncFeatureStore):
+    """Yields to the event loop on each read, so concurrent evaluations interleave."""
+
+    def __init__(self, seen: List[str], var: contextvars.ContextVar):
+        super().__init__()
+        self._seen = seen
+        self._var = var
+
+    async def get(self, kind, key):
+        self._seen.append(self._var.get())
+        await asyncio.sleep(0)
+        return await super().get(kind, key)
+
+
+@pytest.mark.asyncio
+async def test_context_variable_set_in_before_stage_is_kept_per_evaluation():
+    # A tracing hook makes a span current in the before stage and restores the
+    # previous context in the after stage. Concurrent evaluations must each see
+    # only their own value, and the restore must not fail.
+    current = contextvars.ContextVar('current', default='none')
+    seen_in_store: List[str] = []
+    seen_in_after: List[str] = []
+    errors: List[BaseException] = []
+
+    class ContextVarHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='context-var')
+
+        def before_evaluation(self, series_context, data):
+            return {'token': current.set(series_context.context.key)}
+
+        def after_evaluation(self, series_context, data, detail):
+            seen_in_after.append(f"{series_context.context.key}={current.get()}")
+            try:
+                current.reset(data['token'])
+            except BaseException as e:
+                errors.append(e)
+            return data
+
+    store = _YieldingStore(seen_in_store, current)
+    await store.force_set(FEATURES, _make_flag('flag', 'on'))
+    store._initialized = True
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=MockAsyncUpdateProcessor,
+        send_events=False,
+        hooks=[ContextVarHook()],
     )
 
+    async with AsyncLDClient(config) as client:
+        keys = ['a', 'b', 'c']
+        results = await asyncio.gather(*(client.variation('flag', Context.create(k), 'off') for k in keys))
 
-@pytest.fixture
-def mock_detail():
-    return EvaluationDetail(True, 0, {'kind': 'OFF'})
-
-
-@pytest.fixture
-def eval_fn(mock_detail):
-    async def _fn():
-        return mock_detail
-    return _fn
+    assert results == ['on', 'on', 'on']
+    assert errors == []
+    assert sorted(seen_in_store) == keys
+    assert sorted(seen_in_after) == ['a=a', 'b=b', 'c=c']
+    assert current.get() == 'none'
 
 
 @pytest.mark.asyncio
-async def test_async_hook_before_and_after_awaited(series_context, eval_fn):
-    hook = RecordingAsyncHook('async1')
-    await _evaluate_with_hooks([hook], series_context, eval_fn)
+async def test_async_plugin_hooks_run_and_register_is_awaited():
+    log: List[str] = []
+    registered: List[AsyncLDClient] = []
 
-    assert hook.before_calls == ['test-flag']
-    assert hook.after_calls == ['test-flag']
-
-
-@pytest.mark.asyncio
-async def test_hooks_called_in_order(series_context, eval_fn):
-    """before_evaluation runs in list order; after_evaluation runs in reverse."""
-    call_log = []
-
-    class OrderAsyncHook(AsyncHook):
-        def __init__(self, name):
-            self._name = name
-
+    class RecordingPlugin(AsyncPlugin):
         @property
-        def metadata(self):
-            return Metadata(name=self._name)
+        def metadata(self) -> PluginMetadata:
+            return PluginMetadata(name='recording-plugin')
 
-        async def before_evaluation(self, sc, data):
-            call_log.append(self._name + '_before')
-            return data
+        async def register(self, client, metadata: EnvironmentMetadata) -> None:
+            await asyncio.sleep(0)
+            registered.append(client)
 
-        async def after_evaluation(self, sc, data, detail):
-            call_log.append(self._name + '_after')
-            return data
+        def get_hooks(self, metadata: EnvironmentMetadata) -> List[Hook]:
+            return [RecordingHook('plugin-hook', log)]
 
-    hooks = [OrderAsyncHook('first'), OrderAsyncHook('second')]
-    await _evaluate_with_hooks(hooks, series_context, eval_fn)
+    client = AsyncLDClient(_offline_config(plugins=[RecordingPlugin()]))
+    async with client:
+        await client.variation('flag', Context.create('user'), 'default')
 
-    # before: list order (first, second)
-    # after: reversed (second, first)
-    assert call_log == ['first_before', 'second_before', 'second_after', 'first_after']
-
-
-@pytest.mark.asyncio
-async def test_hooks_each_called_with_series_context(series_context, eval_fn):
-    """Each async hook is invoked with the correct series context."""
-    hook_a = RecordingAsyncHook('a')
-    hook_b = RecordingAsyncHook('b')
-
-    hooks = [hook_a, hook_b]
-    await _evaluate_with_hooks(hooks, series_context, eval_fn)
-
-    assert hook_a.before_calls == ['test-flag']
-    assert hook_b.before_calls == ['test-flag']
+    assert registered == [client]
+    assert log == ['plugin-hook:before:flag', 'plugin-hook:after:flag:plugin-hook:default']
 
 
-@pytest.mark.asyncio
-async def test_returns_evaluation_detail(series_context, mock_detail, eval_fn):
-    hook = RecordingAsyncHook('a')
-    result = await _evaluate_with_hooks([hook], series_context, eval_fn)
-    assert result is mock_detail
+def test_config_rejects_non_hook():
+    with pytest.raises(TypeError):
+        _offline_config(hooks=[object()])  # type: ignore[list-item]
 
 
-@pytest.mark.asyncio
-async def test_no_hooks_returns_detail(series_context, mock_detail, eval_fn):
-    result = await _evaluate_with_hooks([], series_context, eval_fn)
-    assert result is mock_detail
-
-
-@pytest.mark.asyncio
-async def test_data_isolated_per_hook(series_context, eval_fn):
-    """Each hook receives its own fresh {} for before_evaluation (matching sync SDK pattern).
-
-    Data is not threaded across hooks — each hook's before_evaluation starts
-    with an empty dict and the result is passed only to that hook's own
-    after_evaluation. This matches client.py:__execute_before_evaluation.
-    """
-    before_data_received = {}
-
-    class CaptureAsyncHook(AsyncHook):
-        def __init__(self, name):
-            self._name = name
-
+def test_config_rejects_sync_plugin():
+    class SyncPlugin(Plugin):
         @property
-        def metadata(self):
-            return Metadata(name=self._name)
+        def metadata(self) -> PluginMetadata:
+            return PluginMetadata(name='sync-plugin')
 
-        async def before_evaluation(self, sc, data):
-            before_data_received[self._name] = dict(data)
-            return {**data, self._name + '_key': 1}
+        def register(self, client, metadata):
+            pass
 
-        async def after_evaluation(self, sc, data, detail):
-            return data
+        def get_hooks(self, metadata):
+            return []
 
-    await _evaluate_with_hooks([CaptureAsyncHook('one'), CaptureAsyncHook('two')], series_context, eval_fn)
-
-    # Each hook should have received a fresh empty dict, not the other hook's output
-    assert before_data_received['one'] == {}
-    assert before_data_received['two'] == {}
+    with pytest.raises(TypeError):
+        _offline_config(plugins=[SyncPlugin()])  # type: ignore[list-item]
