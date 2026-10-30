@@ -88,6 +88,13 @@ def status():
             'fdv1-fallback',
             'retry-conformance-fdv1-streaming',
             'retry-conformance-fdv1-polling',
+            'service-endpoints',
+            'wrapper',
+            'tls:custom-ca',
+            'tls:skip-verify-peer',
+            'tls:verify-peer',
+            'http-proxy',
+            'filtering-strict',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}
