@@ -169,9 +169,9 @@ async def test_migration_variation_returns_default_stage():
 @pytest.mark.asyncio
 async def test_hooks_are_invoked_during_variation():
     """Hooks added via add_hook() have before/after called during variation()."""
-    from ldclient.hook import AsyncHook, Metadata
+    from ldclient.hook import Hook, Metadata
 
-    class RecordingHook(AsyncHook):
+    class RecordingHook(Hook):
         def __init__(self):
             self.before_calls = []
             self.after_calls = []
@@ -180,11 +180,11 @@ async def test_hooks_are_invoked_during_variation():
         def metadata(self):
             return Metadata(name='recording-hook')
 
-        async def before_evaluation(self, series_context, data):
+        def before_evaluation(self, series_context, data):
             self.before_calls.append(series_context)
             return data
 
-        async def after_evaluation(self, series_context, data, detail):
+        def after_evaluation(self, series_context, data, detail):
             self.after_calls.append((series_context, detail))
             return data
 
@@ -204,24 +204,11 @@ async def test_hooks_are_invoked_during_variation():
 
 
 @pytest.mark.asyncio
-async def test_add_hook_rejects_sync_hook():
-    """add_hook() raises TypeError when given a synchronous Hook."""
-    from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
-
-    class SyncHook(Hook):
-        @property
-        def metadata(self):
-            return Metadata(name='sync-hook')
-
-        def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
-            return data
-
-        def after_evaluation(self, series_context, data, detail):
-            return data
-
+async def test_add_hook_rejects_non_hook():
+    """add_hook() raises TypeError when given an object that is not a Hook."""
     client = AsyncLDClient(_offline_config())
     with pytest.raises(TypeError):
-        client.add_hook(SyncHook())
+        client.add_hook(object())  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -323,11 +310,11 @@ async def test_is_offline_reflects_config():
 @pytest.mark.asyncio
 async def test_hooks_data_isolation():
     """Each hook's before_evaluation receives its own isolated {} — not data from a prior hook."""
-    from ldclient.hook import AsyncHook, Metadata
+    from ldclient.hook import Hook, Metadata
 
     received_data_by_hook = {}
 
-    class IsolationHook(AsyncHook):
+    class IsolationHook(Hook):
         def __init__(self, name, inject_key=None, inject_val=None):
             self._name = name
             self._inject_key = inject_key
@@ -337,14 +324,14 @@ async def test_hooks_data_isolation():
         def metadata(self):
             return Metadata(name=self._name)
 
-        async def before_evaluation(self, series_context, data):
+        def before_evaluation(self, series_context, data):
             # Record a copy of what we received
             received_data_by_hook[self._name] = dict(data)
             if self._inject_key:
                 data[self._inject_key] = self._inject_val
             return data
 
-        async def after_evaluation(self, series_context, data, detail):
+        def after_evaluation(self, series_context, data, detail):
             return data
 
     hook_a = IsolationHook('hook-a', inject_key='hook_a', inject_val=True)

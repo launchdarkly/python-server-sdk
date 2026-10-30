@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
-from ldclient.hook import AsyncHook, Hook
+from ldclient.hook import Hook
 from ldclient.impl import AnyNum
 from ldclient.impl.evaluator import error_reason
 from ldclient.interfaces import (
@@ -156,15 +156,16 @@ class AsyncPlugin(ABC):
         """
         pass
 
-    def get_hooks(self, metadata: EnvironmentMetadata) -> List[AsyncHook]:
+    def get_hooks(self, metadata: EnvironmentMetadata) -> List[Hook]:
         """
         Get a list of hooks that this plugin provides.
 
         This method is called before register() to collect all hooks from
         plugins. The hooks returned will be added to the SDK's hook configuration.
-        Async plugins provide async :class:`AsyncHook` instances only.
+        The async client uses the same :class:`ldclient.hook.Hook` type as the
+        sync client.
 
-        This method is synchronous (returns a list immediately — no I/O).
+        This method is synchronous and must not do I/O.
 
         :param metadata: Metadata about the environment in which the SDK is running
         :return: A list of hooks to be registered with the SDK
