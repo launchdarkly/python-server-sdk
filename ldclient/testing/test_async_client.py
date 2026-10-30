@@ -204,11 +204,12 @@ async def test_hooks_are_invoked_during_variation():
 
 
 @pytest.mark.asyncio
-async def test_add_hook_rejects_non_hook():
-    """add_hook() raises TypeError when given an object that is not a Hook."""
+async def test_add_hook_ignores_non_hook():
+    """add_hook() ignores an object that is not a Hook."""
     client = AsyncLDClient(_offline_config())
-    with pytest.raises(TypeError):
-        client.add_hook(object())  # type: ignore[arg-type]
+    client.add_hook(object())  # type: ignore[arg-type]
+    async with client:
+        assert await client.variation('flag', Context.create('user'), 'default') == 'default'
 
 
 @pytest.mark.asyncio

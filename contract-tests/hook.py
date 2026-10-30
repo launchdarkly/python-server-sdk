@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import requests
@@ -47,24 +46,6 @@ class PostingHook(Hook):
                 'reason': detail.reason,
             }
 
-        self._send(self.__callback, payload)
+        requests.post(self.__callback, json=payload)
 
         return {**data, **self.__data.get(stage, {})}
-
-    def _send(self, callback: str, payload: dict):
-        requests.post(callback, json=payload)
-
-
-class QueuedPostingHook(PostingHook):
-    """PostingHook for the async client.
-
-    The async client runs hook stages on the event loop, so the hook must not
-    block. The posts go to a single worker thread, which sends them in order.
-    """
-
-    def __init__(self, name: str, callback: str, data: dict, errors: dict, executor: ThreadPoolExecutor):
-        super().__init__(name, callback, data, errors)
-        self.__executor = executor
-
-    def _send(self, callback: str, payload: dict):
-        self.__executor.submit(requests.post, callback, json=payload)

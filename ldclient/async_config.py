@@ -130,15 +130,6 @@ class AsyncDataSystemConfig:
     """An optional fallback synchronizer that will read from FDv1"""
 
 
-def _require_instances(items: Optional[list], kind: type, name: str) -> list:
-    if not items:
-        return []
-    for item in items:
-        if not isinstance(item, kind):
-            raise TypeError(f"AsyncConfig {name} must be {kind.__name__} instances; got {type(item).__name__}")
-    return list(items)
-
-
 class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
     """Advanced configuration options for the async SDK client.
 
@@ -252,11 +243,8 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         :param http: Optional properties for customizing the client's HTTP/HTTPS behavior. See
           :class:`ldclient.config.HTTPConfig`.
         :param application: Optional properties for setting application metadata. See :py:attr:`~application`
-        :param hooks: Hooks provide entrypoints which allow for observation of SDK functions. The hook
-          stages run synchronously on the event loop and must not block. See :py:attr:`~hooks`.
+        :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
         :param plugins: A list of plugins to be used with the SDK. Plugin support is currently experimental and subject to change.
-        :raises TypeError: if an item in ``hooks`` is not a :class:`ldclient.hook.Hook`, or an item in
-          ``plugins`` is not an :class:`ldclient.plugin.AsyncPlugin`.
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload. Payload filtering is not supported with the FDv2 data system, so this has no effect on FDv2 requests.
@@ -293,8 +281,8 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__http = http
         self.__big_segments = AsyncBigSegmentsConfig() if not big_segments else big_segments
         self.__application = validate_application_info(application or {}, log)
-        self.__hooks = _require_instances(hooks, Hook, 'hooks')
-        self.__plugins = _require_instances(plugins, AsyncPlugin, 'plugins')
+        self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
+        self.__plugins = [plugin for plugin in plugins if isinstance(plugin, AsyncPlugin)] if plugins else []
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self.__payload_filter_key = payload_filter_key
@@ -446,12 +434,6 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         Initial set of hooks for the client.
 
         Hooks provide entrypoints which allow for observation of SDK functions.
-
-        The async client uses the same :class:`ldclient.hook.Hook` type as the
-        sync client. The hook stages run synchronously on the event loop,
-        between the start and the end of each evaluation. They must not block.
-        A hook that must do I/O should put the work on a queue and do it in the
-        background.
 
         LaunchDarkly provides integration packages, and most applications will
         not need to implement their own hooks.

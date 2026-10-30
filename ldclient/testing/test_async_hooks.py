@@ -188,12 +188,13 @@ async def test_async_plugin_hooks_run_and_register_is_awaited():
     assert log == ['plugin-hook:before:flag', 'plugin-hook:after:flag:plugin-hook:default']
 
 
-def test_config_rejects_non_hook():
-    with pytest.raises(TypeError):
-        _offline_config(hooks=[object()])  # type: ignore[list-item]
+def test_config_ignores_non_hook():
+    log: List[str] = []
+    config = _offline_config(hooks=[object(), RecordingHook('kept', log)])  # type: ignore[list-item]
+    assert [hook.metadata.name for hook in config.hooks] == ['kept']
 
 
-def test_config_rejects_sync_plugin():
+def test_config_ignores_sync_plugin():
     class SyncPlugin(Plugin):
         @property
         def metadata(self) -> PluginMetadata:
@@ -205,5 +206,4 @@ def test_config_rejects_sync_plugin():
         def get_hooks(self, metadata):
             return []
 
-    with pytest.raises(TypeError):
-        _offline_config(plugins=[SyncPlugin()])  # type: ignore[list-item]
+    assert _offline_config(plugins=[SyncPlugin()]).plugins == []  # type: ignore[list-item]
