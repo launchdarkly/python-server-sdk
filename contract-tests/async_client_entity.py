@@ -2,13 +2,12 @@ import asyncio
 import json
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Optional
 
 import requests
 from async_big_segment_store_fixture import AsyncBigSegmentStoreFixture
 from async_flag_change_listener import AsyncListenerRegistry
-from hook import QueuedPostingHook
+from hook import PostingHook
 
 from ldclient import Context
 from ldclient.async_client import AsyncLDClient
@@ -41,7 +40,6 @@ class AsyncClientEntity:
         self.log = logging.getLogger(tag)
         self._client: Optional[AsyncLDClient] = None
         self._listeners: Optional[AsyncListenerRegistry] = None
-        self._hook_executor: Optional[ThreadPoolExecutor] = None
         self._config_params = config_params
         self._tag = tag
 
@@ -94,10 +92,8 @@ class AsyncClientEntity:
             opts["send_events"] = False
 
         if config_params.get("hooks") is not None:
-            # One worker keeps the posts from all hooks of this client in order.
-            self._hook_executor = ThreadPoolExecutor(max_workers=1)
             opts["hooks"] = [
-                QueuedPostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}), self._hook_executor)
+                PostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}))
                 for h in config_params["hooks"]["hooks"]
             ]
 
@@ -278,8 +274,6 @@ class AsyncClientEntity:
             await self._listeners.close_all()
         if self._client is not None:
             await self._client.close()
-        if self._hook_executor is not None:
-            self._hook_executor.shutdown(wait=False)
         self.log.info('Test ended')
 
 

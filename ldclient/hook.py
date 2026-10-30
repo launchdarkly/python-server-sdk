@@ -38,12 +38,6 @@ class Hook(ABC):
     This class includes default implementations for all hook handlers. This
     allows LaunchDarkly to expand the list of hook handlers without breaking
     customer integrations.
-
-    Both :class:`ldclient.client.LDClient` and
-    :class:`ldclient.async_client.AsyncLDClient` use this class. The async
-    client calls the handlers synchronously on the event loop, so a handler
-    must not block. A hook that must do I/O should put the work on a queue and
-    do it in the background.
     """
 
     @property

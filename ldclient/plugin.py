@@ -162,10 +162,6 @@ class AsyncPlugin(ABC):
 
         This method is called before register() to collect all hooks from
         plugins. The hooks returned will be added to the SDK's hook configuration.
-        The async client uses the same :class:`ldclient.hook.Hook` type as the
-        sync client.
-
-        This method is synchronous and must not do I/O.
 
         :param metadata: Metadata about the environment in which the SDK is running
         :return: A list of hooks to be registered with the SDK

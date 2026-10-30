@@ -646,15 +646,10 @@ class AsyncLDClient:
 
         Hooks provide entrypoints which allow for observation of SDK functions.
 
-        The hook stages run synchronously on the event loop, between the
-        start and the end of each evaluation. They must not block. A hook that
-        must do I/O should put the work on a queue and do it in the background.
-
         :param hook:
-        :raises TypeError: if ``hook`` is not a :class:`ldclient.hook.Hook`
         """
         if not isinstance(hook, Hook):
-            raise TypeError(f"AsyncLDClient requires a Hook; got {type(hook).__name__}")
+            return
 
         self.__hooks.append(hook)
 
@@ -675,9 +670,6 @@ class AsyncLDClient:
         if not hooks:
             return await block()
 
-        # The stages run in the caller's task, not in a new task or thread. A hook
-        # can then change context variables in the before stage (for example, to
-        # make an OpenTelemetry span current) and restore them in the after stage.
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
         hook_data = self.__execute_before_evaluation(hooks, series_context)
         evaluation_result = await block()
