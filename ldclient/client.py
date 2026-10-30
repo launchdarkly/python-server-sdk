@@ -432,6 +432,138 @@ class LDClient:
 
         return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method="variation_detail", block=evaluate).evaluation_detail
 
+    @staticmethod
+    def _accepts_bool(value: Any) -> bool:
+        return isinstance(value, bool)
+
+    @staticmethod
+    def _accepts_int(value: Any) -> bool:
+        # bool is an int subclass in Python; a flag value of `true` is not an int result
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    @staticmethod
+    def _accepts_float(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    @staticmethod
+    def _accepts_string(value: Any) -> bool:
+        return isinstance(value, str)
+
+    def __typed_evaluate(self, key: str, context: Context, default: Any, accept, method: str) -> EvaluationDetail:
+        def evaluate():
+            detail, _ = self._evaluate_internal(key, context, default, self._event_factory_with_reasons)
+            reason = detail.reason if isinstance(detail.reason, dict) else {}
+            if reason.get('kind') != 'ERROR' and not accept(detail.value):
+                detail = EvaluationDetail(default, None, error_reason('WRONG_TYPE'))
+            return _EvaluationWithHookResult(evaluation_detail=detail)
+
+        return self.__evaluate_with_hooks(key=key, context=context, default_value=default, method=method, block=evaluate).evaluation_detail
+
+    def bool_variation(self, key: str, context: Context, default: bool) -> bool:
+        """Calculates the boolean value of a feature flag for a given context.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly or is not of the requested type
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
+        """
+        return self.bool_variation_detail(key, context, default).value
+
+    def bool_variation_detail(self, key: str, context: Context, default: bool) -> EvaluationDetail:
+        """Calculates the boolean value of a feature flag for a given context, and returns an object
+        that describes the way the value was determined.
+
+        If the flag value exists but is not a boolean, the detail carries the ``default`` value with
+        an evaluation reason of ``{"kind": "ERROR", "errorKind": "WRONG_TYPE"}``, mirroring the
+        typed receiving metrics of the other LaunchDarkly server SDKs.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly or is not of the requested type
+        :return: an :class:`ldclient.evaluation.EvaluationDetail` object that includes the feature
+          flag value and evaluation reason
+        """
+        return self.__typed_evaluate(key, context, default, self._accepts_bool, "bool_variation_detail")
+
+    def string_variation(self, key: str, context: Context, default: str) -> str:
+        """Calculates the string value of a feature flag for a given context.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly or is not of the requested type
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
+        """
+        return self.string_variation_detail(key, context, default).value
+
+    def string_variation_detail(self, key: str, context: Context, default: str) -> EvaluationDetail:
+        """ Calculates the string value of a feature flag for a given context, and returns an object
+        that describes the way the value was determined.
+
+        If the flag value exists but is not a string, the detail carries the ``default`` value with
+        an evaluation reason of ``{"kind": "ERROR", "errorKind": "WRONG_TYPE"}``.
+        """
+        return self.__typed_evaluate(key, context, default, self._accepts_string, "string_variation_detail")
+
+    def int_variation(self, key: str, context: Context, default: int) -> int:
+        """Calculates the integer value of a feature flag for a given context.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly or is not of the requested type
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
+        """
+        return self.int_variation_detail(key, context, default).value
+
+    def int_variation_detail(self, key: str, context: Context, default: int) -> EvaluationDetail:
+        """Calculates the integer value of a feature flag for a given context, and returns an object
+        that describes the way the value was determined.
+
+        If the flag value exists but is not an integer (or a float with an integral value, which is
+        converted), the detail carries the ``default`` value with an evaluation reason of
+        ``{"kind": "ERROR", "errorKind": "WRONG_TYPE"}``.
+        """
+        # the float-with-integral-value response shape belongs to float_variation; an int caller
+        # accepts integral amounts from double-valued flags only through that explicit change
+        return self.__typed_evaluate(key, context, default, self._accepts_int, "int_variation_detail")
+
+    def float_variation(self, key: str, context: Context, default: float) -> float:
+        """Calculates the floating-point value of a feature flag for a given context.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly or is not of the requested type
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
+        """
+        return self.float_variation_detail(key, context, default).value
+
+    def float_variation_detail(self, key: str, context: Context, default: float) -> EvaluationDetail:
+        """Calculates the floating-point value of a feature flag for a given context, and returns an
+        object that describes the way the value was determined.
+
+        If the flag value exists but is not numeric, the detail carries the ``default`` value with an
+        evaluation reason of ``{"kind": "ERROR", "errorKind": "WRONG_TYPE"}``.
+        """
+        detail = self.__typed_evaluate(key, context, default, self._accepts_float, "float_variation_detail")
+        if isinstance(detail.value, int):
+            detail = EvaluationDetail(float(detail.value), detail.variation_index, detail.reason)
+        return detail
+
+    def json_variation(self, key: str, context: Context, default: Any) -> Any:
+        """Calculates the value of a feature flag for a given context, for JSON-valued flags.
+
+        :param key: the unique key for the feature flag
+        :param context: the evaluation context
+        :param default: the default value of the flag, to be used if the flag value is not
+          available from LaunchDarkly
+        :return: the variation for the given context, or the ``default`` value if the flag cannot be evaluated
+        """
+        return self.variation(key, context, default)
+
     def migration_variation(self, key: str, context: Context, default_stage: Stage) -> Tuple[Stage, OpTracker]:
         """
         This method returns the migration stage of the migration feature flag
