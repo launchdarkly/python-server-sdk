@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional
 import requests
 from async_big_segment_store_fixture import AsyncBigSegmentStoreFixture
 from async_flag_change_listener import AsyncListenerRegistry
-from hook import AsyncPostingHook
+from hook import PostingHook
 
 from ldclient import Context
 from ldclient.async_client import AsyncLDClient
@@ -91,10 +91,9 @@ class AsyncClientEntity:
         else:
             opts["send_events"] = False
 
-        hooks = []
         if config_params.get("hooks") is not None:
-            hooks = [
-                AsyncPostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}))
+            opts["hooks"] = [
+                PostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}))
                 for h in config_params["hooks"]["hooks"]
             ]
 
@@ -115,10 +114,6 @@ class AsyncClientEntity:
         sdk_config = AsyncConfig(**opts)
 
         self._client = AsyncLDClient(sdk_config)
-        # The async client accepts AsyncHook instances only; register the
-        # harness's async posting hooks via add_hook() before start().
-        for hook in hooks:
-            self._client.add_hook(hook)
         await self._client.start(start_wait / 1000.0)
         self._listeners = AsyncListenerRegistry(self._client.flag_tracker)
 
