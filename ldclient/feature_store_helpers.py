@@ -58,7 +58,6 @@ class _CachingStoreWrapperBase:
 
     _cache: Any
     _inited: bool
-    _has_available_method: bool
 
     def __init__(self, cache_config: CacheConfig):
         """Sets up the cache from the caching parameters.
@@ -72,7 +71,8 @@ class _CachingStoreWrapperBase:
         self._inited = False
 
     def is_monitoring_enabled(self) -> bool:
-        return self._has_available_method
+        """Returns True. The wrapper reports status monitoring as enabled for all cores."""
+        return True
 
     def disable_cache(self) -> None:
         """Replace the in-memory cache with a no-op so further operations don't populate it.
@@ -201,12 +201,11 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
         :param cache_config: the caching parameters
         """
         self._core = core
-        self._has_available_method = callable(getattr(core, 'is_available', None))
         super().__init__(cache_config)
 
     def is_available(self) -> bool:
-        # We know is_available exists since we are checking _has_available_method
-        return self._core.is_available() if self._has_available_method else False  # type: ignore
+        """Returns the result of the availability check of the core."""
+        return self._core.is_available()
 
     def init(self, all_encoded_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         """ """
@@ -258,10 +257,9 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
         return result
 
     def close(self) -> None:
-        """Release the cache and close the underlying core if it supports it."""
+        """Releases the cache and closes the core."""
         self.disable_cache()
-        if hasattr(self._core, "close"):
-            self._core.close()  # type: ignore
+        self._core.close()
 
     def describe_configuration(self, config):
         describe = getattr(self._core, 'describe_configuration', None)

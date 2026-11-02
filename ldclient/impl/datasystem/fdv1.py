@@ -115,35 +115,23 @@ class _FeatureStoreClientWrapper(FeatureStore):
             log.error("Unexpected error from data store status function: %s", e)
 
     def is_monitoring_enabled(self) -> bool:
-        """
-        This methods determines whether the wrapped store can support enabling monitoring.
+        """Returns the monitoring setting of the wrapped store."""
+        return self.store.is_monitoring_enabled()
 
-        The wrapped store must provide a monitoring_enabled method, which must
-        be true. But this alone is not sufficient.
+    def is_available(self) -> bool:
+        """Returns the result of the availability check of the wrapped store."""
+        return self.store.is_available()
 
-        Because this class wraps all interactions with a provided store, it can
-        technically "monitor" any store. However, monitoring also requires that
-        we notify listeners when the store is available again.
+    def close(self) -> None:
+        """Stops the availability poller and closes the wrapped store."""
+        with self.__lock.write():
+            poller_to_stop = self.__poller
+            self.__poller = None
 
-        We determine this by checking the store's `available?` method, so this
-        is also a requirement for monitoring support.
+        if poller_to_stop is not None:
+            poller_to_stop.stop()
 
-        These extra checks won't be necessary once `available` becomes a part
-        of the core interface requirements and this class no longer wraps every
-        feature store.
-        """
-
-        if not hasattr(self.store, 'is_monitoring_enabled'):
-            return False
-
-        if not hasattr(self.store, 'is_available'):
-            return False
-
-        monitoring_enabled = getattr(self.store, 'is_monitoring_enabled')
-        if not callable(monitoring_enabled):
-            return False
-
-        return monitoring_enabled()
+        self.store.close()
 
 
 class _ReadOnlyFeatureStoreView(ReadOnlyStore):

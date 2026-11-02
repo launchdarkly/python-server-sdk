@@ -36,6 +36,10 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         except BaseException:
             return False
 
+    def close(self) -> None:
+        """Disconnects all connections in the connection pool."""
+        self._pool.disconnect()
+
     def _items_key(self, kind):
         return "{0}:{1}".format(self._prefix, kind.namespace)
 

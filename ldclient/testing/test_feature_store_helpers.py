@@ -1,10 +1,10 @@
 from time import sleep
-from unittest.mock import Mock
 
 import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
+from ldclient.interfaces import FeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 THINGS = VersionedDataKind(namespace="things", request_api_path="", stream_api_path="")
@@ -15,12 +15,20 @@ def make_wrapper(core, cached):
     return CachingStoreWrapper(core, CacheConfig(expiration=30) if cached else CacheConfig.disabled())
 
 
-class MockCore:
+class MockCore(FeatureStoreCore):
     def __init__(self):
         self.data = {}
         self.inited = False
         self.inited_query_count = 0
         self.error = None
+        self.available = True
+        self.closed = False
+
+    def is_available(self):
+        return self.available
+
+    def close(self):
+        self.closed = True
 
     def init_internal(self, all_data):
         self._maybe_throw()
@@ -77,20 +85,37 @@ class CustomError(Exception):
 
 
 class TestCachingStoreWrapper:
-    @pytest.mark.parametrize("available", [False, True])
-    def test_monitoring_enabled_if_available_is_defined(self, available: bool):
-        core = Mock()
-        core.is_available = lambda: available
-
-        wrapper = make_wrapper(core, False)
-
-        assert wrapper.is_monitoring_enabled() is True
-        assert wrapper.is_available() is available
-
-    @pytest.mark.parametrize("available", [False, True])
-    def test_monitoring_not_enabled_if_available_is_not_defined(self, available: bool):
+    def test_monitoring_is_enabled(self):
         wrapper = make_wrapper(MockCore(), False)
-        assert wrapper.is_monitoring_enabled() is False
+        assert wrapper.is_monitoring_enabled()
+
+    @pytest.mark.parametrize("available", [False, True])
+    def test_is_available_delegates_to_core(self, available: bool):
+        core = MockCore()
+        core.available = available
+        wrapper = make_wrapper(core, False)
+        assert wrapper.is_available() == available
+
+    def test_close_closes_core(self):
+        core = MockCore()
+        wrapper = make_wrapper(core, False)
+        wrapper.close()
+        assert core.closed
+
+    @pytest.mark.parametrize("missing", ["is_available", "close"])
+    def test_core_without_required_method_cannot_be_instantiated(self, missing: str):
+        methods = {name: getattr(MockCore, name) for name in ("is_available", "close")}
+        del methods[missing]
+        core_class = type("IncompleteCore", (FeatureStoreCore,), {
+            "get_internal": MockCore.get_internal,
+            "get_all_internal": MockCore.get_all_internal,
+            "init_internal": MockCore.init_internal,
+            "upsert_internal": MockCore.upsert_internal,
+            "initialized_internal": MockCore.initialized_internal,
+            **methods,
+        })
+        with pytest.raises(TypeError):
+            core_class()
 
     @pytest.mark.parametrize("cached", [False, True])
     def test_get_item(self, cached):

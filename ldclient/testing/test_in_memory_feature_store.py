@@ -11,8 +11,8 @@ from ldclient.testing.feature_store_test_base import (
 def test_in_memory_status_checks():
     store = InMemoryFeatureStore()
 
-    assert store.is_monitoring_enabled() is False
-    assert store.is_available() is True
+    assert not store.is_monitoring_enabled()
+    assert store.is_available()
 
 
 class InMemoryFeatureStoreTester(FeatureStoreTester):

@@ -38,6 +38,15 @@ class ErroringFeatureStore(FeatureStore):
     def initialized(self):
         return True
 
+    def is_monitoring_enabled(self):
+        return False
+
+    def is_available(self):
+        return True
+
+    def close(self):
+        pass
+
 
 def get_log_lines(caplog, level):
     loglines = caplog.records
@@ -214,6 +223,15 @@ class RawDictFeatureStore(FeatureStore):
     @property
     def initialized(self):
         return True
+
+    def is_monitoring_enabled(self):
+        return False
+
+    def is_available(self):
+        return True
+
+    def close(self):
+        pass
 
 
 def test_all_flags_state_decodes_dicts_from_custom_store():

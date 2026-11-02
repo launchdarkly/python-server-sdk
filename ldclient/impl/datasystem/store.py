@@ -526,11 +526,7 @@ class Store(_StoreBase):
         with self._lock:
             if self._persistent_store is not None:
                 try:
-                    # Most FeatureStore implementations don't have close methods
-                    # but we'll try to call it if it exists
-                    close = getattr(self._persistent_store, "close", None)
-                    if callable(close):
-                        close()
+                    self._persistent_store.close()
                 except Exception as e:
                     log.warning("Error closing the persistent store: %s", e)
 

@@ -97,10 +97,8 @@ class DataStoreStatusProviderImpl(DataStoreStatusProvider):
     def is_monitoring_enabled(self) -> bool:
         if self.__store is None:
             return False
-        if hasattr(self.__store, "is_monitoring_enabled") is False:
-            return False
 
-        return self.__store.is_monitoring_enabled()  # type: ignore
+        return self.__store.is_monitoring_enabled()
 
     def add_listener(self, listener: Callable[[DataStoreStatus], None]):
         self.__listeners.add(listener)

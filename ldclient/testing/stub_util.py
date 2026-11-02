@@ -203,6 +203,15 @@ class CapturingFeatureStore(FeatureStore):
     def initialized(self):
         return True
 
+    def is_monitoring_enabled(self):
+        return False
+
+    def is_available(self):
+        return True
+
+    def close(self):
+        pass
+
     @property
     def received_data(self):
         return self.data
