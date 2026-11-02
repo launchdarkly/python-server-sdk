@@ -230,16 +230,19 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
         encoded_items = self._core.get_all_internal(kind)
         return callback(self._cache_put_all(kind, encoded_items))
 
-    def delete(self, kind, key, version):
+    def delete(self, kind, key, version) -> bool:
         """ """
         deleted_item = {"key": key, "version": version, "deleted": True}
-        self.upsert(kind, deleted_item)
+        return self.upsert(kind, deleted_item)
 
-    def upsert(self, kind, encoded_item):
+    def upsert(self, kind, encoded_item) -> bool:
         """ """
         encoded_item = _ensure_encoded(kind, encoded_item)
         new_state = self._core.upsert_internal(kind, encoded_item)
         self._cache_put_upsert(kind, new_state)
+        # The core returns the item that we passed in if it applied the write. It returns the
+        # existing item if the version check rejected the write. Identity thus shows the result.
+        return new_state is encoded_item
 
     @property
     def initialized(self) -> bool:

@@ -26,10 +26,10 @@ class ErroringFeatureStore(FeatureStore):
         raise NotImplementedError()
 
     def upsert(self, kind, item):
-        pass
+        return False
 
-    def delete(self, key, version):
-        pass
+    def delete(self, kind, key, version):
+        return False
 
     def init(self, data):
         pass
@@ -203,10 +203,10 @@ class RawDictFeatureStore(FeatureStore):
         return callback(dict(self._flags) if kind == FEATURES else {})
 
     def upsert(self, kind, item):
-        pass
+        return False
 
     def delete(self, kind, key, version):
-        pass
+        return False
 
     def init(self, data):
         pass

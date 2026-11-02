@@ -96,35 +96,35 @@ class FeatureStoreTestBase:
     def test_upsert_with_newer_version(self, tester):
         with self.inited_store(tester) as store:
             new_ver = self.make_feature('foo', 11)
-            store.upsert(FEATURES, new_ver)
+            assert store.upsert(FEATURES, new_ver) is True
             assert store.get(FEATURES, 'foo', lambda x: x) == new_ver
 
     def test_upsert_with_older_version(self, tester):
         with self.inited_store(tester) as store:
             new_ver = self.make_feature('foo', 9)
             expected = self.make_feature('foo', 10)
-            store.upsert(FEATURES, new_ver)
+            assert store.upsert(FEATURES, new_ver) is False
             assert store.get(FEATURES, 'foo', lambda x: x) == expected
 
     def test_upsert_with_new_feature(self, tester):
         with self.inited_store(tester) as store:
             new_ver = self.make_feature('biz', 1)
-            store.upsert(FEATURES, new_ver)
+            assert store.upsert(FEATURES, new_ver) is True
             assert store.get(FEATURES, 'biz', lambda x: x) == new_ver
 
     def test_delete_with_newer_version(self, tester):
         with self.inited_store(tester) as store:
-            store.delete(FEATURES, 'foo', 11)
+            assert store.delete(FEATURES, 'foo', 11) is True
             assert store.get(FEATURES, 'foo', lambda x: x) is None
 
     def test_delete_unknown_feature(self, tester):
         with self.inited_store(tester) as store:
-            store.delete(FEATURES, 'biz', 11)
+            assert store.delete(FEATURES, 'biz', 11) is True
             assert store.get(FEATURES, 'biz', lambda x: x) is None
 
     def test_delete_with_older_version(self, tester):
         with self.inited_store(tester) as store:
-            store.delete(FEATURES, 'foo', 9)
+            assert store.delete(FEATURES, 'foo', 9) is False
             expected = self.make_feature('foo', 10)
             assert store.get(FEATURES, 'foo', lambda x: x) == expected
 
@@ -132,5 +132,5 @@ class FeatureStoreTestBase:
         with self.inited_store(tester) as store:
             store.delete(FEATURES, 'foo', 11)
             old_ver = self.make_feature('foo', 9)
-            store.upsert(FEATURES, old_ver)
+            assert store.upsert(FEATURES, old_ver) is False
             assert store.get(FEATURES, 'foo', lambda x: x) is None
