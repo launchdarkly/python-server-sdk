@@ -68,9 +68,6 @@ class MockEventProcessor(EventProcessor):
     def start(self):
         self._running = True
 
-    def is_alive(self):
-        return self._running
-
     def send_event(self, event):
         self._events.append(event)
 
@@ -175,9 +172,6 @@ class MockUpdateProcessor(UpdateProcessor):
 
     def stop(self):
         pass
-
-    def is_alive(self):
-        return True
 
     def initialized(self):
         return True
