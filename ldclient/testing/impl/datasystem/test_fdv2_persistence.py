@@ -834,7 +834,7 @@ def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start
         detail = client.variation_detail("flag-key", context, default="default-value")
         assert detail.value == "default-value"
         assert detail.reason == {"kind": "ERROR", "errorKind": "CLIENT_NOT_READY"}
-        assert detail.is_default_value() is True
+        assert detail.is_default_value
 
         assert client.all_flags_state(context).valid is False
     finally:

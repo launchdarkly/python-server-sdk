@@ -128,7 +128,7 @@ def test_variation_detail_for_flag_that_evaluates_to_none():
     expected = EvaluationDetail('default', None, {'kind': 'OFF'})
     actual = client.variation_detail('feature.key', user, default='default')
     assert expected == actual
-    assert actual.is_default_value() is True
+    assert actual.is_default_value
 
 
 def test_variation_when_feature_store_throws_error(caplog):
@@ -145,7 +145,7 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
     actual = client.variation_detail('feature.key', Context.from_dict({"key": "user", "kind": "user"}), default='default')
     assert expected == actual
-    assert actual.is_default_value() is True
+    assert actual.is_default_value
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == ['Unexpected error while retrieving feature flag "feature.key": NotImplementedError()']
 

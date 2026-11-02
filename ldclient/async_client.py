@@ -532,7 +532,7 @@ class AsyncLDClient:
                 for event in result.events or []:
                     self._send_event(event)
                 detail = result.detail
-                if detail.is_default_value():
+                if detail.is_default_value:
                     detail = EvaluationDetail(default, None, detail.reason)
                 self._send_event(event_factory.new_eval_event(flag, context, detail, default))
                 return detail, flag
