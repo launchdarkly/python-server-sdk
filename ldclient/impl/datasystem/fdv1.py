@@ -51,6 +51,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__lock = ReadWriteLock()
         self.__last_available = True
         self.__poller: Optional[RepeatingTask] = None
+        self.__closed = False
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
@@ -81,7 +82,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
 
     def __update_availability(self, available: bool):
         with self.__lock.write():
-            if available == self.__last_available:
+            if self.__closed or available == self.__last_available:
                 return
             self.__last_available = available
 
@@ -104,6 +105,9 @@ class _FeatureStoreClientWrapper(FeatureStore):
         task = RepeatingTask.at_interval("ldclient.check-availability", 0.5, 0, self.__check_availability)
 
         with self.__lock.write():
+            # Do not start a poller after close() has run.
+            if self.__closed:
+                return
             self.__poller = task
             self.__poller.start()
 
@@ -125,6 +129,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def close(self) -> None:
         """Stops the availability poller and closes the wrapped store."""
         with self.__lock.write():
+            self.__closed = True
             poller_to_stop = self.__poller
             self.__poller = None
 
@@ -216,6 +221,7 @@ class FDv1(DataSystem):
     def stop(self):
         if self._update_processor is not None:
             self._update_processor.stop()
+        self._store_wrapper.close()
 
     @property
     def store(self) -> ReadOnlyStore:

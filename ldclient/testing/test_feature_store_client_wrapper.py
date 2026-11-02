@@ -103,3 +103,30 @@ def test_sink_will_be_notified_when_store_is_back_online():
     assert len(statuses) == 2
     assert statuses[0].available is False
     assert statuses[1].available is True
+
+
+def test_store_failure_after_close_does_not_report_or_poll():
+    store = Mock()
+    store.is_monitoring_enabled = lambda: True
+    store.is_available = Mock(return_value=False)
+    store.init = raise_an_error
+
+    listener = RecordStatusListener()
+    listeners = Listeners()
+    listeners.add(listener)
+    sink = DataStoreUpdateSinkImpl(listeners)
+
+    wrapper = _FeatureStoreClientWrapper(store, sink)
+    wrapper.close()
+    try:
+        wrapper.init({})
+        raise Exception("init should have raised an exception")
+    except BaseException:
+        pass
+
+    # The poller checks every 0.5 seconds, so this wait covers one check.
+    Event().wait(0.7)
+
+    assert len(listener.statuses) == 0
+    store.is_available.assert_not_called()
+    store.close.assert_called_once()
