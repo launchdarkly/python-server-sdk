@@ -35,7 +35,9 @@ from ldclient.config import DataSourceBuilderConfig, OverrideSourceBuilder
 from ldclient.impl.integrations.files.filedata import (
     DuplicateKeysHandling,
     abs_file_paths,
-    have_watchdog
+    have_watchdog,
+    have_yaml,
+    is_yaml_path
 )
 from ldclient.impl.integrations.overrides.file_override_source import (
     ChangeDetection,
@@ -57,8 +59,13 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     return the given value for every context. A ``flagValues`` entry is not available to
     client-side SDKs, so :meth:`ldclient.client.LDClient.all_flags_state` with
     ``client_side_only=True`` leaves it out, even when the flag it overrides is available to them.
-    To override such a flag, define it in ``flags`` with ``"clientSide": true``. YAML requires the
-    ``pyyaml`` package.
+    To override such a flag, define it in ``flags`` with ``"clientSide": true``.
+
+    The file name extension decides the format of each file: a file whose name ends in
+    ``.yaml`` or ``.yml``, in any case, is YAML, and any other file is JSON. YAML requires the
+    ``pyyaml`` package. Whether a file with no content is valid depends on its format: a JSON file
+    with no content, or only white space, is not a JSON document and fails to load, and a YAML
+    file with no content is a document with no entries.
 
     When multiple files are configured, their entries are combined in the configured order.
     The order determines which file wins under the duplicate keys handling. A reload replaces
@@ -68,6 +75,18 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     or parsed makes that whole reload fail. The previously loaded overrides stay in effect, the
     source logs the failure, retries after a short delay, and recovers on its own once the file
     is readable again.
+
+    A file can be rewritten in place. To remove a file's overrides, delete it or write a document
+    with no entries, such as ``{}``. A JSON file with no content is not a valid document: it fails
+    to load, and the overrides in effect stay. A file whose content is in effect and that is found
+    empty, or with only a YAML comment or document marker, may be in the middle of a rewrite. The
+    source then keeps the overrides in effect, and changes to the other files wait too, since a
+    reload applies all files or none, until the file has stayed so without being written for
+    about a second, and for at most about five seconds while files keep being rewritten. After
+    that, a YAML file is applied with no entries, and an empty JSON file fails to load and keeps
+    the overrides in effect. YAML that is cut off between two entries can still parse, so for a
+    YAML file, replacing its entire contents in one operation, such as renaming a fully written
+    temporary file over it, avoids briefly applying only a part of it.
 
     Whenever the set of overrides in effect changes, including at startup, the source logs the
     overrides in effect and what each configured file supplied, at Info level.
@@ -149,13 +168,18 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     def build(self, config: DataSourceBuilderConfig) -> OverrideSource:  # pylint: disable=unused-argument
         """
         Builds the override source. This is called internally by the SDK. It raises
-        ``ValueError`` when no file paths were specified or when watching mode was selected
-        without the ``watchdog`` package.
+        ``ValueError`` when no file paths were specified, when watching mode was selected
+        without the ``watchdog`` package, or when a YAML file was specified without the
+        ``pyyaml`` package.
         """
         if len(self.__paths) == 0:
             raise ValueError("no file paths were specified for the file-based override source")
         if self.__change_detection == ChangeDetection.WATCHING and not have_watchdog:
             raise ValueError("the file-based override source cannot watch files for changes because the watchdog package is not installed; install it or use polling")
+        if not have_yaml:
+            for path in self.__paths:
+                if is_yaml_path(path):
+                    raise ValueError("the file-based override source cannot read the YAML file %s because the pyyaml package is not installed; install it or use JSON" % path)
 
         poll_interval = self.__poll_interval
         if self.__change_detection == ChangeDetection.POLLING and poll_interval < self.MINIMUM_POLL_INTERVAL:

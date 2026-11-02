@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from queue import Empty, Queue
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from unittest import mock
 
 import pytest
@@ -27,6 +27,7 @@ from ldclient.impl.integrations.files.filedata import (
     abs_file_paths,
     have_watchdog,
     have_yaml,
+    is_yaml_path,
     load_files,
     make_flag_with_value,
     merge,
@@ -34,6 +35,7 @@ from ldclient.impl.integrations.files.filedata import (
     read_file
 )
 from ldclient.impl.model import FeatureFlag, Segment
+from ldclient.testing.file_util import rewrite_in_place, truncate
 
 TEST_TIMEOUT = 5.0
 
@@ -41,6 +43,9 @@ TEST_TIMEOUT = 5.0
 # delays so the tests stay deterministic on a loaded machine.
 SHORT_DELAY = 0.05
 QUIET_PERIOD = 0.3
+
+# The pause of the fixture's in-place rewrites, between truncating the file and writing it.
+REWRITE_PAUSE = 0.03
 
 
 def write_file(path: str, content: str) -> None:
@@ -78,30 +83,67 @@ def test_parse_json_document():
     assert document.segments['seg1'].included == {'user1'}
 
 
-def test_parse_chooses_the_parser_the_way_the_file_data_source_does():
-    # The parser depends only on whether pyyaml is installed, never on the content. A tab inside
-    # a string is invalid JSON but valid YAML, so with pyyaml this document parses, and a parser
-    # chosen from the leading brace would reject it.
-    if not have_yaml:
-        pytest.skip("pyyaml is not installed")
-    document = parse_document(b'  \n {"flagValues": {"flag1": "a\tb"}}')
-    assert document.flag_values == {'flag1': 'a\tb'}
+@pytest.mark.parametrize('path', ['/data.yaml', '/data.yml', '/data.YAML', '/data.Yml', 'relative/data.yaml'])
+def test_a_yaml_extension_selects_yaml(path):
+    assert is_yaml_path(path)
 
 
+@pytest.mark.parametrize('path', ['/data.json', '/data', '/data.txt', '/data.yaml.json', '/yaml', '/data.yaml/file', '/data.yamlx'])
+def test_any_other_file_is_json(path):
+    assert not is_yaml_path(path)
+
+
+def test_parse_chooses_the_parser_by_the_extension_not_the_content():
+    # A tab inside a string is valid YAML but not valid JSON. Installing pyyaml does not make a
+    # JSON file YAML: the extension decides, whatever the content looks like.
+    content = b'  \n {"flagValues": {"flag1": "a\tb"}}'
+    with pytest.raises(ValueError):
+        parse_document(content)
+    with pytest.raises(ValueError):
+        parse_document(b'flagValues:\n  flag1: true\n')
+    if have_yaml:
+        assert parse_document(content, is_yaml=True).flag_values == {'flag1': 'a\tb'}
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
 def test_parse_yaml_document():
-    if not have_yaml:
-        pytest.skip("pyyaml is not installed")
-    document = parse_document(b'---\nflags:\n  flag1:\n    key: flag1\n    "on": true\nflagValues:\n  flag2: value2\nsegments:\n  seg1:\n    key: seg1\n')
+    document = parse_document(b'---\nflags:\n  flag1:\n    key: flag1\n    "on": true\nflagValues:\n  flag2: value2\nsegments:\n  seg1:\n    key: seg1\n', is_yaml=True)
     assert document.flags['flag1'].on is True
     assert document.flag_values == {'flag2': 'value2'}
     assert list(document.segments.keys()) == ['seg1']
 
 
-def test_parse_empty_document_has_no_entries():
-    document = parse_document(b'')
-    assert document == Document()
-    document = parse_document(b'{}')
-    assert document == Document()
+def test_parse_yaml_without_pyyaml_fails(monkeypatch):
+    monkeypatch.setattr(filedata, 'have_yaml', False)
+    with pytest.raises(ValueError) as excinfo:
+        parse_document(b'flagValues:\n  flag1: true\n', is_yaml=True)
+    assert 'pyyaml' in str(excinfo.value)
+
+
+@pytest.mark.parametrize('content', [b'', b'  \n\t\r\n', b'\xef\xbb\xbf', b'\xef\xbb\xbf \n'], ids=['empty', 'white-space', 'byte-order-mark', 'byte-order-mark-and-white-space'])
+def test_parse_empty_json_is_not_a_document(content):
+    # A file that is rewritten in place is empty for a moment. As JSON it is invalid, so the load
+    # fails and the last good data stays.
+    with pytest.raises(ValueError) as excinfo:
+        parse_document(content)
+    assert str(excinfo.value) == 'the file has no content, which is not a JSON document'
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+@pytest.mark.parametrize('content', [b'', b'  \n\n', b'---\n', b'# no entries yet\n', b'\xef\xbb\xbf'], ids=['empty', 'white-space', 'document-start', 'comment', 'byte-order-mark'])
+def test_parse_empty_yaml_has_no_entries(content):
+    assert parse_document(content, is_yaml=True) == Document()
+
+
+def test_parse_json_object_with_no_members_has_no_entries():
+    assert parse_document(b'{}') == Document()
+    assert parse_document(b' {} \n') == Document()
+
+
+def test_parse_ignores_a_byte_order_mark():
+    assert parse_document(b'\xef\xbb\xbf{"flagValues": {"flag1": true}}').flag_values == {'flag1': True}
+    if have_yaml:
+        assert parse_document(b'\xef\xbb\xbfflagValues:\n  flag1: true\n', is_yaml=True).flag_values == {'flag1': True}
 
 
 def test_parse_fills_in_missing_key_and_version():
@@ -115,7 +157,9 @@ def test_parse_fills_in_missing_key_and_version():
 def test_parse_rejects_documents_that_are_not_objects():
     if have_yaml:
         with pytest.raises(ValueError):
-            parse_document(b'- a\n- b\n')
+            parse_document(b'- a\n- b\n', is_yaml=True)
+    with pytest.raises(ValueError):
+        parse_document(b'["a", "b"]')
     with pytest.raises(ValueError):
         parse_document(b'{"flags": ["not", "an", "object"]}')
     with pytest.raises(ValueError):
@@ -127,10 +171,14 @@ def test_parse_rejects_documents_that_are_not_objects():
 
 
 def test_parse_rejects_malformed_json():
-    # With pyyaml the YAML parser reports the error, as in the file data sources.
-    expected = (ValueError, yaml.YAMLError) if have_yaml else (ValueError,)
-    with pytest.raises(expected):
+    with pytest.raises(ValueError):
         parse_document(b'{"flagValues"')
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+def test_parse_rejects_malformed_yaml():
+    with pytest.raises(yaml.YAMLError):
+        parse_document(b'flagValues: [', is_yaml=True)
 
 
 def test_parse_validates_definition_property_types():
@@ -155,6 +203,20 @@ def test_read_file_json_and_errors(tmp_path):
         read_file(path)
     assert 'error parsing file' in str(excinfo.value)
     assert path in str(excinfo.value)
+
+    write_file(path, '')
+    with pytest.raises(FileReadError) as excinfo:
+        read_file(path)
+    assert 'no content' in str(excinfo.value)
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+def test_read_file_yaml(tmp_path):
+    path = os.path.join(str(tmp_path), 'data.yaml')
+    write_file(path, 'flagValues:\n  flag1: true\n')
+    assert read_file(path).flag_values == {'flag1': True}
+    write_file(path, '')
+    assert read_file(path) == Document()
 
 
 def test_abs_file_paths():
@@ -269,6 +331,39 @@ def test_load_files_reports_parse_error_with_path(tmp_path):
     assert excinfo.value.path == path
 
 
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+def test_load_files_parses_each_file_in_the_format_of_its_extension(tmp_path):
+    json_path = os.path.join(str(tmp_path), 'first.json')
+    yaml_path = os.path.join(str(tmp_path), 'second.YML')
+    write_file(json_path, '{"flagValues": {"flag1": "json"}}')
+    write_file(yaml_path, 'flagValues:\n  flag2: yaml\n')
+    result = load_files([json_path, yaml_path], DuplicateKeysHandling.FAIL)
+    assert {key: flag.variations for key, flag in result.flags.items()} == {'flag1': ['json'], 'flag2': ['yaml']}
+
+    # The same YAML content in a file without a YAML extension is not JSON.
+    write_file(json_path, 'flagValues:\n  flag1: json\n')
+    with pytest.raises(FileReadError) as excinfo:
+        load_files([json_path, yaml_path], DuplicateKeysHandling.FAIL)
+    assert excinfo.value.path == json_path
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+def test_load_files_reads_an_empty_yaml_file_as_no_entries_and_fails_on_an_empty_json_file(tmp_path):
+    json_path = os.path.join(str(tmp_path), 'data.json')
+    yaml_path = os.path.join(str(tmp_path), 'data.yaml')
+    write_file(json_path, '{"flagValues": {"flag1": true}}')
+    write_file(yaml_path, '')
+    result = load_files([json_path, yaml_path], DuplicateKeysHandling.FAIL)
+    assert list(result.flags.keys()) == ['flag1']
+    assert result.files[1] == FileSummary(path=yaml_path, present=True)
+
+    write_file(json_path, '')
+    with pytest.raises(FileReadError) as excinfo:
+        load_files([json_path, yaml_path], DuplicateKeysHandling.FAIL)
+    assert excinfo.value.path == json_path
+    assert 'no content' in str(excinfo.value)
+
+
 def test_load_files_reports_duplicate_keys(tmp_path):
     first = os.path.join(str(tmp_path), 'first.json')
     second = os.path.join(str(tmp_path), 'second.json')
@@ -287,8 +382,8 @@ def test_load_files_reports_duplicate_keys(tmp_path):
 # ---------------------------------------------------------------------------
 
 class ReloaderFixture:
-    def __init__(self, tmp_path, initial_content: str, **kwargs):
-        self.path = os.path.join(str(tmp_path), 'data.json')
+    def __init__(self, tmp_path, initial_content: str, name: str = 'data.json', **kwargs):
+        self.path = os.path.join(str(tmp_path), name)
         self.applied: Queue = Queue()
         self.errored: Queue = Queue()
         write_file(self.path, initial_content)
@@ -302,13 +397,16 @@ class ReloaderFixture:
         self.reloader = Reloader(**options)
 
     def write(self, content: str) -> None:
-        write_file(self.path, content)
+        # Applications rewrite data files in place, which is not atomic. The fixture does too,
+        # deliberately slowly: the file is truncated and written a little later, so a load can
+        # find it empty, as it would with an application's writes, instead of only by chance.
+        rewrite_in_place(self.path, content, REWRITE_PAUSE)
 
-    def require_applied(self) -> MergeResult:
-        return take(self.applied)
+    def require_applied(self, timeout: float = TEST_TIMEOUT) -> MergeResult:
+        return take(self.applied, timeout)
 
-    def require_errored(self) -> Exception:
-        return take(self.errored)
+    def require_errored(self, timeout: float = TEST_TIMEOUT) -> Exception:
+        return take(self.errored, timeout)
 
     def require_quiet(self, duration: float = QUIET_PERIOD) -> None:
         deadline = time.time() + duration
@@ -450,16 +548,17 @@ def test_reloader_reports_identical_failure_only_once(make_fixture):
     # The automatic retries keep failing in the same way. They do not report again.
     f.require_quiet()
 
-    # A different failure is reported. The write is ordinary, not atomic, and a retry that runs
-    # while the file is being rewritten reads it empty or half written. An empty document is
-    # valid, so such a retry succeeds and ends the retries; a half-written file is a failure of
-    # its own. The final content is therefore loaded on demand, and everything that was reported
-    # is inspected as a whole: the new failure is among the reports, and once it is the current
-    # failure, the retries that repeat it stay silent.
+    # A different failure is reported. The write is in place, so a retry can run while the file
+    # is empty. That retry reads the file again instead of reporting it, and a retry that finds
+    # it still empty reports that it has no content. The final content is loaded on demand, and
+    # every report is checked: each one is the new failure or the empty file, the new failure is
+    # among them, and once it is the current failure, the retries that repeat it stay silent.
     f.write('{"flags": {"flag1": "not an object"}}')
     f.reloader.reload_now()
-    _, errored = f.drain()
+    applied, errored = f.drain()
+    assert applied == []
     assert any('must be an object' in str(e) for e in errored), errored
+    assert all('must be an object' in str(e) or 'no content' in str(e) for e in errored), errored
     f.require_quiet()
 
 
@@ -693,6 +792,655 @@ def test_reloader_retries_when_the_error_callback_raises(make_fixture):
     # The automatic retry still runs and picks up the corrected file.
     f.write('{"flagValues": {"flag1": true}}')
     f.require_applied()
+
+
+# ---------------------------------------------------------------------------
+# Reloader: files that are found empty
+# ---------------------------------------------------------------------------
+
+yaml_required = pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+
+# The retry delay of the tests of a file that is found empty. The retry comes long enough after a
+# trigger for a test to finish rewriting the file before it, even on a slow machine.
+EMPTY_FILE_RETRY_DELAY = 1.5
+
+# Shorter than EMPTY_FILE_RETRY_DELAY, so a load that happens within it after a trigger is not
+# the retry.
+BEFORE_THE_RETRY = 1.0
+
+DEFERRAL_LOG = 'waiting for it to be written'
+
+YAML_FLAG1 = 'flagValues:\n  flag1: true\n'
+YAML_FLAG2 = 'flagValues:\n  flag2: true\n'
+
+
+def flag_keys(result: MergeResult) -> List[str]:
+    return list(result.flags.keys())
+
+
+def deferrals_logged(caplog) -> int:
+    return len([r for r in caplog.records if r.levelno == logging.DEBUG and DEFERRAL_LOG in r.getMessage()])
+
+
+def wait_for_deferrals(caplog, count: int) -> None:
+    deadline = time.monotonic() + TEST_TIMEOUT
+    while deferrals_logged(caplog) < count:
+        assert time.monotonic() < deadline, "the empty file was not held back"
+        time.sleep(0.01)
+
+
+def change_modification_time(path: str) -> None:
+    """
+    Makes sure that the file's modification time differs from what it was, as a rewrite changes
+    it, even on a file system whose timestamps are too coarse to tell two quick writes apart.
+    """
+    modified = os.stat(path).st_mtime_ns + 1000000
+    os.utime(path, ns=(modified, modified))
+
+
+class FakeClock:
+    """A monotonic clock that only moves when a test advances it."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+# The retry delay of the tests that time a hold on a fake clock. The timers use the real clock,
+# so no retry fires during such a test, and each load is started with reload_now.
+HOUR = 3600.0
+
+
+def make_held_fixture(make_fixture, content: str, name: str = 'data.yaml', **kwargs) -> Tuple[ReloaderFixture, FakeClock]:
+    clock = FakeClock()
+    f = make_fixture(content, name=name, retry_delay=HOUR, clock=clock, **kwargs)
+    f.reloader.reload_now()
+    f.require_applied()
+    return f, clock
+
+
+def make_two_file_fixture(make_fixture, tmp_path, first: str, second: str, **kwargs) -> Tuple[ReloaderFixture, FakeClock, str]:
+    clock = FakeClock()
+    other = os.path.join(str(tmp_path), 'other.yaml')
+    write_file(other, second)
+    f = make_fixture(first, name='data.yaml')
+    f.reloader = Reloader([f.path, other], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock, **kwargs)
+    f.reloader.reload_now()
+    f.require_applied()
+    return f, clock, other
+
+
+def load(f: ReloaderFixture) -> Optional[MergeResult]:
+    """Loads the files at once, and returns what was applied, or None when nothing was."""
+    f.reloader.reload_now()
+    try:
+        return f.applied.get_nowait()
+    except Empty:
+        return None
+
+
+def require_held_back(f: ReloaderFixture) -> None:
+    assert load(f) is None, "the load applied the file instead of holding it back"
+    assert f.errored.empty(), "the load reported %r" % f.errored.get_nowait()
+
+
+@yaml_required
+def test_reloader_holds_back_a_file_until_it_has_stayed_empty_for_exactly_the_retry_delay(make_fixture, caplog):
+    # A writer that rewrites the file in place truncates it and then writes the new content. A
+    # load that finds the file empty while its content is in effect keeps the data. In YAML an
+    # empty file is valid, so applying it would briefly remove every entry.
+    caplog.set_level(logging.DEBUG)
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    assert deferrals_logged(caplog) == 1
+
+    clock.advance(0.95 * HOUR)
+    require_held_back(f)
+
+    clock.advance(0.05 * HOUR)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+@yaml_required
+def test_reloader_restarts_the_delay_when_the_held_back_file_is_written(make_fixture):
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+
+    # Rewritten and truncated again between two loads: its state changed, so it is a new rewrite.
+    clock.advance(0.6 * HOUR)
+    write_file(f.path, YAML_FLAG2)
+    truncate(f.path)
+    change_modification_time(f.path)
+    require_held_back(f)
+
+    clock.advance(0.6 * HOUR)
+    require_held_back(f)
+
+    clock.advance(0.4 * HOUR)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+@yaml_required
+def test_reloader_observes_a_held_back_file_through_a_symbolic_link(make_fixture, tmp_path):
+    # The configured path is a link to the file that is rewritten, as with a mounted ConfigMap.
+    # Writing the file changes its state as seen through the link, so the delay starts over.
+    target = os.path.join(str(tmp_path), 'target.yaml')
+    link = os.path.join(str(tmp_path), 'link.yaml')
+    write_file(target, YAML_FLAG1)
+    try:
+        os.symlink(target, link)
+    except (OSError, NotImplementedError):
+        pytest.skip("symbolic links are not available")
+    clock = FakeClock()
+    f = make_fixture(YAML_FLAG1, name='unused.yaml')
+    f.reloader = Reloader([link], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(target)
+    require_held_back(f)
+    clock.advance(0.6 * HOUR)
+    write_file(target, YAML_FLAG2)
+    truncate(target)
+    change_modification_time(target)
+    require_held_back(f)
+    clock.advance(0.6 * HOUR)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_forgets_an_emptying_once_the_file_is_read_with_content(make_fixture):
+    # A file that was held back, then applied with content, and emptied again much later starts a
+    # new delay, even if it ends up with the same modification time as at the first emptying, as
+    # when a tool restores the times of the files it writes.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    first = os.stat(f.path)
+    require_held_back(f)
+    write_file(f.path, YAML_FLAG2)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+    clock.advance(10 * HOUR)
+    truncate(f.path)
+    os.utime(f.path, ns=(first.st_atime_ns, first.st_mtime_ns))
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_applies_the_written_content_of_a_held_back_file_at_once(make_fixture):
+    # Two quick rewrites in place: the second truncation follows the first write before any load
+    # reads the new content, as when both fall in one debounce window. The file is empty at every
+    # load, and its emptiness is not applied; the content that is finally written is.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, YAML_FLAG2)
+    truncate(f.path)
+    change_modification_time(f.path)
+    clock.advance(0.2 * HOUR)
+    require_held_back(f)
+
+    write_file(f.path, 'flagValues:\n  flag3: true\n')
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag3']
+
+
+@yaml_required
+@pytest.mark.parametrize('content', ['  \n\n', '# no entries yet\n', '---\n', 'null\n'], ids=['white-space', 'comment', 'document-marker', 'null'])
+def test_reloader_holds_back_a_yaml_file_that_has_no_entries(make_fixture, content):
+    # A read can see only the start of a YAML file that is being written: white space, a comment
+    # or a document marker, which the parser reads as nothing.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    write_file(f.path, content)
+    require_held_back(f)
+    write_file(f.path, YAML_FLAG2)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_applies_a_yaml_object_with_no_members_at_once(make_fixture, caplog):
+    # {} is a document with no entries, written on purpose to remove them, not part of a file.
+    caplog.set_level(logging.DEBUG)
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    write_file(f.path, '{}\n')
+    result = load(f)
+    assert result is not None and result.flags == {}
+    assert deferrals_logged(caplog) == 0
+
+
+@yaml_required
+def test_reloader_holds_back_files_emptied_together_for_one_retry_delay(make_fixture, tmp_path, caplog):
+    # Every file is read and classified before any is held back, so two files that are emptied
+    # together start their delays in the same load and are applied together.
+    caplog.set_level(logging.DEBUG)
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    truncate(other)
+    require_held_back(f)
+    assert deferrals_logged(caplog) == 2
+
+    clock.advance(HOUR)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+@yaml_required
+def test_reloader_holds_back_an_emptied_file_while_another_file_changes(make_fixture, tmp_path):
+    # A change to one file starts a load while another is in the middle of a rewrite. The load
+    # applies all files or none, so the change waits too.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    require_held_back(f)
+
+    write_file(other, 'flagValues:\n  flag2: false\n')
+    clock.advance(0.3 * HOUR)
+    require_held_back(f)
+
+    write_file(f.path, YAML_FLAG1)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag1', 'flag2']
+    assert result.flags['flag2'].variations == [False]
+
+
+def test_reloader_fails_on_a_file_that_cannot_be_parsed_while_another_is_held_back(make_fixture, tmp_path):
+    clock = FakeClock()
+    other = os.path.join(str(tmp_path), 'other.json')
+    write_file(other, '{"flagValues": {"flag2": true}}')
+    f = make_fixture('{"flagValues": {"flag1": true}}')
+    f.reloader = Reloader([f.path, other], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    # One file is mid-rewrite and the other is broken. The broken file is reported at once.
+    truncate(f.path)
+    write_file(other, '{"flagValues"')
+    assert load(f) is None
+    err = f.errored.get_nowait()
+    assert isinstance(err, FileReadError)
+    assert err.path == other
+
+
+@yaml_required
+def test_reloader_stops_holding_back_a_file_that_keeps_being_emptied_after_five_retry_delays(make_fixture):
+    # Every load finds the file empty with a new modification time, so its delay keeps starting
+    # over. The run of loads that hold it back ends after five retry delays.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    for _ in range(9):
+        clock.advance(0.5 * HOUR)
+        change_modification_time(f.path)
+        require_held_back(f)
+
+    clock.advance(0.5 * HOUR)
+    change_modification_time(f.path)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+@yaml_required
+def test_reloader_stops_holding_back_files_rewritten_in_turn_after_five_retry_delays(make_fixture, tmp_path):
+    # Two files are rewritten in turn, so every load finds one of them empty, and each is read
+    # with content in between. The run of loads that hold files back still ends after five retry
+    # delays.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    paths = [f.path, other]
+    contents = [YAML_FLAG1, YAML_FLAG2]
+    truncate(f.path)
+    require_held_back(f)
+    for i in range(1, 10):
+        clock.advance(0.5 * HOUR)
+        write_file(paths[(i - 1) % 2], contents[(i - 1) % 2])
+        truncate(paths[i % 2])
+        require_held_back(f)
+
+    clock.advance(0.5 * HOUR)
+    write_file(paths[1], contents[1])
+    truncate(paths[0])
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_holds_back_a_file_that_is_emptied_again_after_its_content_was_applied(make_fixture):
+    # A load that holds no file back ends the run, so a later rewrite is held back on its own.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, YAML_FLAG2)
+    clock.advance(0.5 * HOUR)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+    clock.advance(10 * HOUR)
+    truncate(f.path)
+    require_held_back(f)
+    clock.advance(HOUR)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+def test_reloader_holds_back_a_json_file_that_was_empty_for_long_when_it_is_rewritten(make_fixture, caplog):
+    # A JSON file that stays empty fails to load once the delay is over, and keeps failing. The
+    # failures end the run of holds, so when the file is rewritten in place much later, the new
+    # truncation is held back like any other, without another report.
+    caplog.set_level(logging.DEBUG)
+    f, clock = make_held_fixture(make_fixture, '{"flagValues": {"flag1": true}}', name='data.json')
+    truncate(f.path)
+    require_held_back(f)
+
+    clock.advance(HOUR)
+    assert load(f) is None
+    assert 'no content' in str(f.errored.get_nowait())
+    clock.advance(HOUR)
+    assert load(f) is None
+    assert f.errored.empty()
+
+    clock.advance(10 * HOUR)
+    held_before = deferrals_logged(caplog)
+    truncate(f.path)
+    change_modification_time(f.path)
+    require_held_back(f)
+    assert deferrals_logged(caplog) == held_before + 1
+
+    write_file(f.path, '{"flagValues": {"flag1": false}}')
+    result = load(f)
+    assert result is not None and result.flags['flag1'].variations == [False]
+
+
+@yaml_required
+def test_reloader_does_not_hold_back_a_file_that_is_empty_from_the_start(make_fixture, tmp_path, caplog):
+    # An empty YAML file next to the data, such as a placeholder for later entries, has never had
+    # content. It does not hold back the changes of the other file.
+    caplog.set_level(logging.DEBUG)
+    clock = FakeClock()
+    placeholder = os.path.join(str(tmp_path), 'placeholder.yaml')
+    write_file(placeholder, '')
+    f = make_fixture('{"flagValues": {"flag1": true}}')
+    f.reloader = Reloader([f.path, placeholder], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    assert flag_keys(f.require_applied()) == ['flag1']
+
+    write_file(f.path, '{"flagValues": {"flag1": false}}')
+    result = load(f)
+    assert result is not None and result.flags['flag1'].variations == [False]
+    assert deferrals_logged(caplog) == 0
+
+
+@yaml_required
+def test_reloader_applies_a_file_that_is_deleted_and_then_created_empty_at_once(make_fixture):
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1, skip_missing_paths=True)
+
+    # Deleting a file that had content removes its data at once.
+    os.remove(f.path)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+    # A missing file contributed no content, so the empty file that replaces it is applied at once.
+    write_file(f.path, '')
+    result = load(f)
+    assert result is not None and result.flags == {}
+    assert result.files == [FileSummary(path=f.path, present=True)]
+
+
+@yaml_required
+def test_reloader_does_not_hold_back_a_file_whose_content_moved_away(make_fixture, tmp_path):
+    # The content moves from one file to the other. The digest of the files' bytes does not say
+    # which file holds them, so it is the same as before and the load is skipped as unchanged.
+    # The file that no longer exists contributes no content, so when it is created empty, that
+    # is applied at once.
+    clock = FakeClock()
+    other = os.path.join(str(tmp_path), 'other.yaml')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, other], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, skip_missing_paths=True, retry_delay=HOUR, skip_unchanged=True, clock=clock)
+    f.reloader.reload_now()
+    assert flag_keys(f.require_applied()) == ['flag1']
+
+    write_file(other, YAML_FLAG1)
+    os.remove(f.path)
+    assert load(f) is None
+
+    write_file(f.path, '')
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag1']
+    assert result.files == [FileSummary(path=f.path, present=True), FileSummary(path=other, present=True, flags=1)]
+
+
+@yaml_required
+def test_reloader_holds_back_a_file_whose_content_was_moved_to_it_from_another(make_fixture, tmp_path):
+    # The file is renamed to the other configured path (mv data.yaml other.yaml), so the bytes are
+    # the same as before and the load is skipped as unchanged. The other path's content is in
+    # effect now, so an in-place rewrite of it is held back.
+    clock = FakeClock()
+    other = os.path.join(str(tmp_path), 'other.yaml')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, other], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, skip_missing_paths=True, retry_delay=HOUR, skip_unchanged=True, clock=clock)
+    f.reloader.reload_now()
+    assert flag_keys(f.require_applied()) == ['flag1']
+
+    os.replace(f.path, other)
+    assert load(f) is None
+
+    truncate(other)
+    require_held_back(f)
+    write_file(other, YAML_FLAG2)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_applies_an_emptied_file_at_once_when_retries_are_off(make_fixture, caplog):
+    # Nothing would load the file later, so the empty file is parsed as it is.
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    result = load(f)
+    assert result is not None and result.flags == {}
+    assert deferrals_logged(caplog) == 0
+
+
+def test_reloader_reports_an_emptied_json_file_at_once_when_retries_are_off(make_fixture):
+    f = make_fixture('{"flagValues": {"flag1": true}}')
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    assert load(f) is None
+    assert 'no content' in str(f.errored.get_nowait())
+
+
+def test_reloader_hold_is_not_a_failure(make_fixture, caplog):
+    # A rewrite in place that writes the same content again changes nothing. The load that finds
+    # the file empty reports nothing, and is not a failure that a later load recovers from, so
+    # the unchanged content is not applied again.
+    caplog.set_level(logging.DEBUG)
+    content = '{"flagValues": {"flag1": true}}'
+    f, clock = make_held_fixture(make_fixture, content, name='data.json', skip_unchanged=True)
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, content)
+    assert load(f) is None
+    assert f.errored.empty()
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records), [r.getMessage() for r in caplog.records]
+
+
+@yaml_required
+def test_reloader_initial_load_reads_an_empty_yaml_file_as_no_entries(make_fixture):
+    f = make_fixture('', name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    result = f.require_applied()
+    assert result.flags == {}
+    assert result.files == [FileSummary(path=f.path, present=True)]
+
+
+def test_reloader_initial_load_fails_on_an_empty_json_file(make_fixture):
+    f = make_fixture('', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    assert 'no content' in str(f.require_errored())
+    f.require_quiet(0.1)
+
+
+# Real-clock tests: the retries that holds arm do fire.
+
+@yaml_required
+def test_reloader_holds_back_an_emptied_file_until_its_write_triggers_a_load(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY, skip_unchanged=True)
+    f.reloader.reload_now()
+    assert flag_keys(f.require_applied()) == ['flag1']
+
+    truncate(f.path)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+    f.require_quiet(0.1)
+
+    # The write triggers a load that applies the new content. Nothing was applied in between.
+    write_file(f.path, YAML_FLAG2)
+    f.reloader.trigger()
+    assert flag_keys(f.require_applied(BEFORE_THE_RETRY)) == ['flag2']
+    f.require_quiet(0.1)
+
+
+@yaml_required
+def test_reloader_applies_an_emptied_yaml_file_that_stays_empty_at_the_retry(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    started = time.monotonic()
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+
+    # The retry that the hold armed comes when the file has stayed empty and unmodified for the
+    # retry delay, so that first retry applies it as a document with no entries.
+    assert f.require_applied().flags == {}
+    elapsed = time.monotonic() - started
+    assert EMPTY_FILE_RETRY_DELAY <= elapsed < 1.5 * EMPTY_FILE_RETRY_DELAY
+    assert deferrals_logged(caplog) == 1
+
+
+@yaml_required
+def test_reloader_a_further_hold_does_not_put_off_the_retry(make_fixture, caplog):
+    # A load that holds the file back again arms the retry for the time that is left of the
+    # delay, so the file is still applied one retry delay after it was found empty.
+    caplog.set_level(logging.DEBUG)
+    retry_delay = 3.0
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=retry_delay)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    started = time.monotonic()
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+    time.sleep(1.0)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 2)
+
+    assert f.require_applied().flags == {}
+    elapsed = time.monotonic() - started
+    assert retry_delay <= elapsed < retry_delay + 0.65
+
+
+def test_reloader_reports_an_emptied_json_file_only_at_the_retry_and_keeps_the_data(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture('{"flagValues": {"flag1": true}}', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    # The load that the trigger starts holds the file back instead of reporting it. The retry
+    # finds it still empty and unmodified, and an empty file is not a JSON document.
+    truncate(f.path)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+    f.require_quiet(0.1)
+    err = f.require_errored()
+    assert isinstance(err, FileReadError)
+    assert 'no content' in str(err)
+    f.require_quiet(0.1)
+
+
+@yaml_required
+def test_reloader_holds_back_a_second_rewrite_that_the_retry_of_the_first_finds_empty(make_fixture, caplog):
+    # The first rewrite is held back. Its content is written and the file is truncated again by
+    # a second rewrite before any load reads that content, as when a polled file is rewritten
+    # about a second apart and the poll sees only the second truncation. The retry that the
+    # first rewrite armed finds the file empty again, and must not apply it.
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+
+    # No trigger: only the retry reads the file.
+    write_file(f.path, YAML_FLAG2)
+    truncate(f.path)
+    change_modification_time(f.path)
+    wait_for_deferrals(caplog, 2)
+    f.require_quiet(0.2)
+
+    write_file(f.path, 'flagValues:\n  flag3: true\n')
+    f.reloader.trigger()
+    assert flag_keys(f.require_applied(BEFORE_THE_RETRY)) == ['flag3']
+
+
+@yaml_required
+def test_reloader_retry_that_finds_a_file_emptied_holds_it_back(make_fixture, caplog):
+    # A retry left over from a failure can run while the file is being rewritten in place. It
+    # holds the file back too, rather than applying it empty.
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY)
+    f.reloader.reload_now()
+    f.require_applied()
+    write_file(f.path, 'flagValues: [')
+    f.reloader.trigger()
+    f.require_errored()
+
+    # No trigger: only the retry reads the file.
+    truncate(f.path)
+    wait_for_deferrals(caplog, 1)
+    write_file(f.path, YAML_FLAG2)
+    assert flag_keys(f.require_applied()) == ['flag2']
+    f.require_quiet(0.1)
+
+
+@yaml_required
+def test_reloader_retry_left_over_from_a_hold_applies_nothing_after_a_load_on_demand(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture(YAML_FLAG1, name='data.yaml', retry_delay=EMPTY_FILE_RETRY_DELAY, skip_unchanged=True)
+    f.reloader.reload_now()
+    f.require_applied()
+    truncate(f.path)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+
+    # A load on demand reads the rewritten file before the retry does.
+    write_file(f.path, YAML_FLAG2)
+    f.reloader.reload_now()
+    assert flag_keys(f.require_applied()) == ['flag2']
+
+    # The retry still runs. It finds the content that was just applied, so it applies and
+    # reports nothing.
+    f.require_quiet(EMPTY_FILE_RETRY_DELAY + 0.5)
 
 
 # ---------------------------------------------------------------------------

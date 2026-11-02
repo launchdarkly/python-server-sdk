@@ -16,6 +16,7 @@ from ldclient.client import Config, Context, LDClient
 from ldclient.config import Config as SDKConfig
 from ldclient.datasystem import custom
 from ldclient.impl.integrations.files import filedata
+from ldclient.impl.integrations.overrides import file_override_source
 from ldclient.impl.integrations.overrides.file_override_source import (
     _FileOverrideSource
 )
@@ -24,6 +25,7 @@ from ldclient.integrations.overrides import (
     DuplicateKeysHandling,
     FileOverrideSourceBuilder
 )
+from ldclient.testing.file_util import rewrite_in_place, truncate
 from ldclient.testing.mock_components import HangingSynchronizer
 from ldclient.testing.stub_util import MockEventProcessor
 
@@ -220,6 +222,25 @@ def test_builder_rejects_watching_without_watchdog(monkeypatch):
     assert 'watchdog' in str(excinfo.value)
 
 
+@pytest.mark.parametrize('name', ['overrides.yaml', 'overrides.YML'])
+def test_builder_rejects_a_yaml_file_without_pyyaml(monkeypatch, name):
+    # A YAML file can never load without a YAML parser, so it is a configuration error rather
+    # than a failure that every reload would report.
+    import ldclient.integrations.overrides as module
+    monkeypatch.setattr(module, 'have_yaml', False)
+    with pytest.raises(ValueError) as excinfo:
+        FileOverrideSourceBuilder(['/overrides.json', '/' + name]).build(SDKConfig('SDK_KEY'))
+    assert 'pyyaml' in str(excinfo.value)
+    assert name in str(excinfo.value)
+
+
+def test_builder_accepts_json_files_without_pyyaml(monkeypatch):
+    import ldclient.integrations.overrides as module
+    monkeypatch.setattr(module, 'have_yaml', False)
+    source = FileOverrideSourceBuilder(['/overrides.json', '/overrides']).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+
+
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
@@ -336,6 +357,48 @@ def test_source_logs_a_present_file_with_no_entries(tmp_path, sources, caplog):
         require_info_line(caplog, "Flag overrides: none in effect (%s: no entries)" % path)
 
 
+def wait_for_log(caplog, text: str) -> None:
+    deadline = time.time() + TEST_TIMEOUT
+    while not any(text in r.getMessage() for r in caplog.records):
+        assert time.time() < deadline, "timed out waiting for a log line containing %r" % text
+        time.sleep(0.01)
+
+
+def test_source_keeps_the_overrides_when_a_json_file_is_emptied(tmp_path, sources, caplog):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{"flagValues": {"flag1": true}}')
+    with caplog.at_level(logging.ERROR):
+        _, sink = build_source(sources, [path], lambda b: b.poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
+        assert flag_values(sink.require_snapshot()) == {'flag1': True}
+
+        # An empty JSON file is not a document. The overrides stay in effect and, once the file
+        # has been read again, the failure is logged.
+        truncate(path)
+        wait_for_log(caplog, 'no content')
+        sink.require_no_snapshot()
+
+        # A document with no entries removes the overrides.
+        write_file(path, '{}')
+        assert sink.require_snapshot() == ({}, {})
+
+
+@yaml_required
+@watchdog_required
+def test_source_removes_the_overrides_of_an_emptied_yaml_file_after_the_retry_delay(tmp_path, sources):
+    path = os.path.join(str(tmp_path), 'overrides.yaml')
+    write_file(path, 'flagValues:\n  flag1: true\n')
+    _, sink = build_source(sources, [path], lambda b: b.change_detection(ChangeDetection.WATCHING))
+    assert flag_values(sink.require_snapshot()) == {'flag1': True}
+
+    # An empty YAML file is a document with no entries. The watch notices the truncation at
+    # once, and the file is read again after the retry delay before it is applied, in case it
+    # is in the middle of an in-place rewrite.
+    emptied = time.monotonic()
+    truncate(path)
+    assert sink.require_snapshot() == ({}, {})
+    assert time.monotonic() - emptied >= filedata.DEFAULT_RETRY_DELAY
+
+
 # ---------------------------------------------------------------------------
 # Change detection
 # ---------------------------------------------------------------------------
@@ -435,6 +498,117 @@ def test_source_detects_an_edit_made_during_the_initial_load(tmp_path, sources, 
     # without any further change to the file.
     assert flag_values(sink.require_snapshot()) == {'flag1': 'initial'}
     assert flag_values(sink.require_snapshot()) == {'flag1': 'edited-after-the-first-read'}
+
+
+# ---------------------------------------------------------------------------
+# In-place rewrites
+# ---------------------------------------------------------------------------
+
+IN_PLACE_REWRITE_CASES = [
+    pytest.param('json', ChangeDetection.POLLING, id='json-polling'),
+    pytest.param('yaml', ChangeDetection.POLLING, marks=yaml_required, id='yaml-polling'),
+    pytest.param('json', ChangeDetection.WATCHING, marks=watchdog_required, id='json-watching'),
+    pytest.param('yaml', ChangeDetection.WATCHING, marks=[watchdog_required, yaml_required], id='yaml-watching'),
+]
+
+
+def override_document(file_format: str, value: str) -> str:
+    if file_format == 'json':
+        return '{"flagValues": {"flag1": "%s"}}' % value
+    return 'flagValues:\n  flag1: "%s"\n' % value
+
+
+def configure_rewrite_timing(monkeypatch, mode: ChangeDetection) -> float:
+    """
+    Returns the pause of a slow in-place rewrite and sets a retry delay longer than it, so that
+    the rewrite completes before the retry, even on a slow machine. A watch notices the
+    truncation at once. A poll notices it at the next examination, so in polling mode the pause
+    is longer than the poll interval, which makes a poll find the file empty.
+    """
+    if mode == ChangeDetection.WATCHING:
+        pause, retry_delay = 0.3, 1.5
+    else:
+        pause, retry_delay = FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL + 0.6, 3.0
+    monkeypatch.setattr(file_override_source, 'DEFAULT_RETRY_DELAY', retry_delay)
+    return pause
+
+
+@pytest.mark.parametrize('file_format, mode', IN_PLACE_REWRITE_CASES)
+def test_source_never_supplies_a_snapshot_without_the_override_during_an_in_place_rewrite(tmp_path, sources, monkeypatch, file_format, mode):
+    pause = configure_rewrite_timing(monkeypatch, mode)
+    path = os.path.join(str(tmp_path), 'overrides.' + file_format)
+    write_file(path, override_document(file_format, 'a'))
+    _, sink = build_source(sources, [path], lambda b: b.change_detection(mode).poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
+    assert flag_values(sink.require_snapshot()) == {'flag1': 'a'}
+
+    # The file is empty for the whole pause, and a load finds it empty. The next snapshot holds
+    # the rewritten override, and the retry that the empty file armed supplies nothing more.
+    rewrite_in_place(path, override_document(file_format, 'b'), pause)
+    assert flag_values(sink.require_snapshot()) == {'flag1': 'b'}
+    sink.require_no_snapshot(file_override_source.DEFAULT_RETRY_DELAY)
+
+
+@pytest.mark.parametrize('file_format, mode', IN_PLACE_REWRITE_CASES)
+def test_source_never_supplies_a_snapshot_without_the_override_during_successive_in_place_rewrites(tmp_path, sources, file_format, mode):
+    # The source's own timing: the default retry delay and a one-second poll interval. An
+    # operator rewrites the file several times in a row, in place. A watch sees each write and
+    # the next truncation together; a poll can see a truncation without the content written
+    # before it. No snapshot may lack the override.
+    path = os.path.join(str(tmp_path), 'overrides.' + file_format)
+    write_file(path, override_document(file_format, 'a'))
+    _, sink = build_source(sources, [path], lambda b: b.change_detection(mode).poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
+    assert flag_values(sink.require_snapshot()) == {'flag1': 'a'}
+
+    values = ['b', 'c', 'd', 'e']
+    for value in values:
+        rewrite_in_place(path, override_document(file_format, value), 0.3)
+        if mode == ChangeDetection.POLLING:
+            # The rewrites start about a second apart.
+            time.sleep(0.7)
+
+    supplied: List[Dict[str, Any]] = []
+    while len(supplied) == 0 or supplied[-1] != {'flag1': values[-1]}:
+        supplied.append(flag_values(sink.require_snapshot()))
+    assert all(list(snapshot.keys()) == ['flag1'] for snapshot in supplied), supplied
+    sink.require_no_snapshot(filedata.DEFAULT_RETRY_DELAY + 0.5)
+
+
+@pytest.mark.parametrize('file_format, mode', IN_PLACE_REWRITE_CASES)
+def test_client_serves_the_override_throughout_an_in_place_rewrite(tmp_path, monkeypatch, file_format, mode):
+    # An operator changes an override by rewriting its file in place. A client that evaluates the
+    # flag throughout serves the old value and then the new one, never the default.
+    pause = configure_rewrite_timing(monkeypatch, mode)
+    path = os.path.join(str(tmp_path), 'overrides.' + file_format)
+    write_file(path, override_document(file_format, 'a'))
+    source = FileOverrideSourceBuilder([path]).change_detection(mode).poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL)
+    datasystem = custom().synchronizers(HangingSynchronizer().builder).overrides(source).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+    user = Context.create('user-key')
+
+    with LDClient(config, start_wait=0) as client:
+        served: List[Any] = []
+        stop = threading.Event()
+
+        def sample() -> None:
+            while not stop.is_set():
+                value = client.variation('flag1', user, 'default')
+                if len(served) == 0 or served[-1] != value:
+                    served.append(value)
+                time.sleep(0.001)
+
+        sampler = threading.Thread(target=sample, daemon=True)
+        sampler.start()
+        try:
+            rewrite_in_place(path, override_document(file_format, 'b'), pause)
+            deadline = time.time() + TEST_TIMEOUT
+            while served[-1] != 'b':
+                assert time.time() < deadline, "the rewritten override was not served; served %r" % served
+                time.sleep(0.01)
+            time.sleep(0.5)
+        finally:
+            stop.set()
+            sampler.join(TEST_TIMEOUT)
+        assert served == ['a', 'b']
 
 
 def reloader_threads() -> Set[threading.Thread]:
