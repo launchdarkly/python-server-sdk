@@ -207,3 +207,55 @@ def test_config_ignores_sync_plugin():
             return []
 
     assert _offline_config(plugins=[SyncPlugin()]).plugins == []  # type: ignore[list-item]
+
+
+@pytest.mark.asyncio
+async def test_after_stage_runs_when_evaluation_is_cancelled():
+    current = contextvars.ContextVar('current', default='none')
+    after_details: List[EvaluationDetail] = []
+    store_entered = asyncio.Event()
+
+    class ContextVarHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='context-var')
+
+        def before_evaluation(self, series_context, data):
+            return {'token': current.set('span')}
+
+        def after_evaluation(self, series_context, data, detail):
+            after_details.append(detail)
+            current.reset(data['token'])
+            return data
+
+    class BlockingStore(MockAsyncFeatureStore):
+        async def get(self, kind, key):
+            store_entered.set()
+            await asyncio.Event().wait()
+
+    store = BlockingStore()
+    store._initialized = True
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=MockAsyncUpdateProcessor,
+        send_events=False,
+        hooks=[ContextVarHook()],
+    )
+
+    async with AsyncLDClient(config) as client:
+        async def evaluate():
+            try:
+                await client.variation('flag', Context.create('user'), 'off')
+            finally:
+                assert current.get() == 'none'
+
+        task = asyncio.create_task(evaluate())
+        await store_entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert len(after_details) == 1
+    assert after_details[0].value == 'off'
+    assert after_details[0].reason == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}

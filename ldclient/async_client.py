@@ -672,7 +672,15 @@ class AsyncLDClient:
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
         hook_data = self.__execute_before_evaluation(hooks, series_context)
-        evaluation_result = await block()
+        try:
+            evaluation_result = await block()
+        except BaseException:
+            # The after stages let hooks release what the before stages set up, for
+            # example an attached tracing context. They do not await, so they do not
+            # delay a cancellation.
+            error_detail = EvaluationDetail(default_value, None, error_reason('EXCEPTION'))
+            self.__execute_after_evaluation(hooks, series_context, hook_data, error_detail)
+            raise
         self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
 
         return evaluation_result
