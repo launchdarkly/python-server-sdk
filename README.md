@@ -14,7 +14,7 @@
 
 ## Supported Python versions
 
-This version of the LaunchDarkly SDK is compatible with Python 3.10+.
+This version of the LaunchDarkly SDK is compatible with Python 3.11+.
 
 ## Getting started
 
