@@ -22,9 +22,6 @@ from ldclient.impl.client_common import (
     get_plugin_hooks
 )
 from ldclient.impl.client_common import secure_mode_hash as _secure_mode_hash
-from ldclient.impl.datasource.feature_requester import FeatureRequesterImpl
-from ldclient.impl.datasource.polling import PollingUpdateProcessor
-from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.datasystem import DataAvailability, DataSystem
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
@@ -37,7 +34,7 @@ from ldclient.impl.events.types import EventFactory
 from ldclient.impl.flag_tracker import FlagTrackerImpl
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.stubs import NullEventProcessor, NullUpdateProcessor
+from ldclient.impl.stubs import NullEventProcessor
 from ldclient.impl.util import check_uwsgi, log
 from ldclient.interfaces import (
     BigSegmentStoreStatusProvider,
@@ -244,27 +241,6 @@ class LDClient:
             return diagnostic_accumulator
         self._event_processor = config.event_processor_class(config)
         return None
-
-    def _make_update_processor(self, config, store, ready, diagnostic_accumulator):
-        if config.update_processor_class:
-            log.info("Using user-specified update processor: " + str(config.update_processor_class))
-            return config.update_processor_class(config, store, ready)
-
-        if config.offline or config.use_ldd:
-            return NullUpdateProcessor(config, store, ready)
-
-        if config.stream:
-            return StreamingUpdateProcessor(config, store, ready, diagnostic_accumulator)
-
-        log.info("Disabling streaming API")
-        log.warning("You should only disable the streaming API if instructed to do so by LaunchDarkly support")
-
-        if config.feature_requester_class:
-            feature_requester = config.feature_requester_class(config)
-        else:
-            feature_requester = FeatureRequesterImpl(config)  # type: FeatureRequester
-
-        return PollingUpdateProcessor(config, feature_requester, store, ready)
 
     def get_sdk_key(self) -> Optional[str]:
         """Returns the configured SDK key."""

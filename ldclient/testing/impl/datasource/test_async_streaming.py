@@ -33,7 +33,10 @@ from ldclient.impl.retry import (
 )
 from ldclient.interfaces import DataSourceErrorKind, DataSourceState
 from ldclient.testing.builders import FlagBuilder, SegmentBuilder
-from ldclient.testing.mock_async_components import MockAsyncFeatureStore
+from ldclient.testing.mock_async_components import (
+    MockAsyncFeatureStore,
+    with_async_update_sink
+)
 from ldclient.testing.test_util import (
     no_retry_jitter,
     record_healthy_windows,
@@ -188,7 +191,7 @@ def _make_processor(actions, config=None, store=None, ready_event=None, diag=Non
     store = store or MockAsyncFeatureStore()
     ready_event = ready_event or asyncio.Event()
     factory = _MockSSEFactory(actions)
-    proc = AsyncStreamingUpdateProcessor(config, store, ready_event, diag, factory, retry_state=retry_state)
+    proc = AsyncStreamingUpdateProcessor(with_async_update_sink(config, store), store, ready_event, diag, factory, retry_state=retry_state)
     return proc, store, ready_event, factory
 
 
@@ -782,7 +785,7 @@ async def test_default_construction_builds_configured_session():
         async_streaming, "AsyncSSEFactory"
     ) as factory_cls:
         factory_cls.return_value.create.return_value = _MockSSE([])  # empty stream -> _run blocks
-        proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
+        proc = AsyncStreamingUpdateProcessor(with_async_update_sink(config, store), store, ready, None)
 
         # Deferred: nothing is created until the task runs.
         assert proc._owned_session is None
@@ -809,7 +812,7 @@ async def test_default_construction_session_closed_on_stop():
         async_streaming, "make_client_session", return_value=fake_session
     ), mock.patch.object(async_streaming, "AsyncSSEFactory") as factory_cls:
         factory_cls.return_value.create.return_value = _MockSSE([])
-        proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
+        proc = AsyncStreamingUpdateProcessor(with_async_update_sink(config, store), store, ready, None)
         proc.start()
         await _wait_until(lambda: proc._owned_session is not None)
 
@@ -832,7 +835,7 @@ async def test_default_construction_session_closed_when_run_fails():
         async_streaming, "make_client_session", return_value=fake_session
     ), mock.patch.object(async_streaming, "AsyncSSEFactory") as factory_cls:
         factory_cls.return_value.create.side_effect = RuntimeError("boom")
-        proc = AsyncStreamingUpdateProcessor(config, store, ready, None)
+        proc = AsyncStreamingUpdateProcessor(with_async_update_sink(config, store), store, ready, None)
         proc.start()
 
         # _run builds the session, then create() raises. The finally must still
@@ -933,3 +936,8 @@ def test_stream_init_duration_unaffected_by_wall_clock_step(monkeypatch):
     assert failed is False
     assert duration >= 0
     assert duration < 1000
+
+
+def test_constructor_raises_without_update_sink():
+    with pytest.raises(ValueError, match="data_source_update_sink"):
+        AsyncStreamingUpdateProcessor(_make_config(), MockAsyncFeatureStore(), asyncio.Event(), None)

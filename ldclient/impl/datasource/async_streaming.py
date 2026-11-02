@@ -18,8 +18,8 @@ from ldclient.impl.aio.transport import AsyncSSEFactory, make_client_session
 from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
     StreamClosedError,
-    async_sink_or_store,
-    parse_path
+    parse_path,
+    require_update_sink
 )
 from ldclient.impl.retry import (
     FailureKind,
@@ -29,6 +29,7 @@ from ldclient.impl.retry import (
 )
 from ldclient.impl.util import http_error_description, log, monotonic_seconds
 from ldclient.interfaces import (
+    AsyncDataSourceUpdateSink,
     AsyncUpdateProcessor,
     DataSourceErrorInfo,
     DataSourceErrorKind,
@@ -49,7 +50,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         if config.payload_filter_key is not None:
             self._uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
         self._config = config
-        self._data_source_update_sink = config.data_source_update_sink
+        self._data_source_update_sink: AsyncDataSourceUpdateSink = require_update_sink(config.data_source_update_sink)
         self._store = store
         self._running = False
         self._ready = ready
@@ -123,8 +124,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
                         self._record_stream_init(False)
                         self._connection_attempt_started_monotonic = None
 
-                        if self._data_source_update_sink is not None:
-                            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+                        self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
                         if not self._ready.is_set():
                             log.info("AsyncStreamingUpdateProcessor initialized ok.")
@@ -172,8 +172,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         # OFF means an explicit shutdown. No stream failure produces it. It is
         # reported before teardown, so a slow close cannot hold back the status
         # that tells a waiter to give up. The sink drops anything after OFF.
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
         # Cancel the run task before tearing down the rest, preventing _run from
         # starting a fresh SSE connection against the session we are closing.
@@ -196,7 +195,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
     # Returns True if we initialized the feature store
     async def _process_message(self, msg: Event) -> bool:
         """Process a single SSE event.  Returns True on a successful ``put``."""
-        target = async_sink_or_store(self._data_source_update_sink, self._store)
+        target = self._data_source_update_sink
         if msg.event == 'put':
             all_data = json.loads(msg.data)
             init_data: Mapping[VersionedDataKind, Mapping[str, dict]] = {FEATURES: all_data['data']['flags'], SEGMENTS: all_data['data']['segments']}
@@ -270,8 +269,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
         delay = self._retry.next_delay
         level("%s - will retry in %.1fs" % (description, delay))
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
         if delay > 0:
             await asyncio.sleep(delay)

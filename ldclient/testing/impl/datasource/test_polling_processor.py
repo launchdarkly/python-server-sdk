@@ -24,6 +24,7 @@ from ldclient.interfaces import (
     DataSourceStatus
 )
 from ldclient.testing.builders import *
+from ldclient.testing.mock_components import with_update_sink
 from ldclient.testing.stub_util import MockFeatureRequester, MockResponse
 from ldclient.testing.sync_util import wait_until
 from ldclient.testing.test_util import SpyListener, no_retry_jitter
@@ -65,7 +66,7 @@ def fast_retry_state(delay=0.05):
 
 def setup_processor(config, retry_state=None):
     global pp
-    pp = PollingUpdateProcessor(config, mock_requester, store, ready, retry_state=retry_state)
+    pp = PollingUpdateProcessor(with_update_sink(config, store), mock_requester, store, ready, retry_state=retry_state)
     pp.start()
 
 
@@ -175,7 +176,7 @@ def test_the_first_success_after_an_outage_polls_at_the_cadence():
     # elapsed time.
     with no_retry_jitter():
         retry = for_polling(30)
-        processor = PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready, retry_state=retry)
+        processor = PollingUpdateProcessor(with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=retry)
 
         mock_requester.exception = UnsuccessfulResponseException(401)
         processor._poll()
@@ -205,7 +206,7 @@ def test_transport_failures_poll_again_at_the_cadence(error):
     """No transport failure reaches the extended regime, a bad certificate
     included. Only an HTTP status can do that."""
     retry = for_polling(30)
-    processor = PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready, retry_state=retry)
+    processor = PollingUpdateProcessor(with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=retry)
 
     mock_requester.exception = error
     processor._poll()
@@ -258,7 +259,7 @@ def test_the_log_reports_the_growing_retry_delay(caplog):
 
     with no_retry_jitter():
         retry = for_polling(30)
-        processor = PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready, retry_state=retry)
+        processor = PollingUpdateProcessor(with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=retry)
         mock_requester.exception = UnsuccessfulResponseException(401)
         processor._poll()
         processor._poll()
@@ -277,7 +278,7 @@ def test_a_normal_failure_logs_the_poll_interval_at_warning_level(caplog):
 
     with no_retry_jitter():
         retry = for_polling(30)
-        processor = PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready, retry_state=retry)
+        processor = PollingUpdateProcessor(with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=retry)
         mock_requester.exception = UnsuccessfulResponseException(503)
         processor._poll()
 
@@ -291,7 +292,7 @@ def test_a_transport_error_reports_a_delay_and_keeps_its_stacktrace(caplog):
 
     with no_retry_jitter():
         retry = for_polling(30)
-        processor = PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready, retry_state=retry)
+        processor = PollingUpdateProcessor(with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=retry)
         mock_requester.exception = ConnectionResetError(104, "reset by peer")
         processor._poll()
 
@@ -357,7 +358,7 @@ def test_stop_twice_and_stop_before_start_are_safe():
     including while an hour-long wait is pending."""
     mock_requester.exception = UnsuccessfulResponseException(401)
     processor = PollingUpdateProcessor(
-        Config("SDK_KEY"), mock_requester, store, ready, retry_state=fast_retry_state(ONE_HOUR)
+        with_update_sink(Config("SDK_KEY"), store), mock_requester, store, ready, retry_state=fast_retry_state(ONE_HOUR)
     )
 
     processor.stop()
@@ -391,7 +392,7 @@ def test_a_poll_finishing_after_stop_reports_nothing():
     config = Config("SDK_KEY")
     config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
     mock_requester.all_data = {FEATURES: {}, SEGMENTS: {}}
-    processor = PollingUpdateProcessor(config, mock_requester, store, ready)
+    processor = PollingUpdateProcessor(with_update_sink(config, store), mock_requester, store, ready)
 
     processor.stop()
     processor._poll()
@@ -472,3 +473,8 @@ def test_environment_id_is_none_when_requester_provides_no_headers():
     assert ready.wait(2)
 
     assert sink.environment_id is None
+
+
+def test_constructor_raises_without_update_sink():
+    with pytest.raises(ValueError, match="data_source_update_sink"):
+        PollingUpdateProcessor(Config("SDK_KEY"), mock_requester, store, ready)

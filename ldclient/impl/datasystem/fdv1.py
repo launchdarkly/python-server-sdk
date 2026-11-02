@@ -277,7 +277,6 @@ class FDv1(DataSystem):
         return DataAvailability.REFRESHED
 
     def _make_update_processor(self, config: Config, store: FeatureStore, ready: Event):
-        # Mirrors LDClient._make_update_processor but scoped for FDv1
         if config.update_processor_class:
             return config.update_processor_class(config, store, ready)
 

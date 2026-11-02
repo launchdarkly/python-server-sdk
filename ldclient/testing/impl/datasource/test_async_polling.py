@@ -30,7 +30,10 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState
 )
-from ldclient.testing.mock_async_components import MockAsyncFeatureStore
+from ldclient.testing.mock_async_components import (
+    MockAsyncFeatureStore,
+    with_async_update_sink
+)
 from ldclient.testing.test_util import no_retry_jitter
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -86,7 +89,7 @@ def make_processor(config=None, store=None, ready=None, requester=None, retry_st
         requester = MagicMock()
         requester.close = AsyncMock()
     return AsyncPollingUpdateProcessor(
-        config=config,
+        config=with_async_update_sink(config, store),
         requester=requester,
         store=store,
         ready=ready,
@@ -707,3 +710,8 @@ class TestAsyncPollingUpdateProcessor:
             await stop_task
 
         requester.close.assert_awaited_once()
+
+
+def test_constructor_raises_without_update_sink():
+    with pytest.raises(ValueError, match="data_source_update_sink"):
+        AsyncPollingUpdateProcessor(make_config(), MagicMock(), MockAsyncFeatureStore(), asyncio.Event())

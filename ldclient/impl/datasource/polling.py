@@ -11,7 +11,7 @@ from typing import Any, Mapping, Optional, Protocol, Tuple, runtime_checkable
 from ldclient.config import Config
 from ldclient.impl.datasource.datasource_common import (
     record_environment_id,
-    sink_or_store
+    require_update_sink
 )
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.retry import (
@@ -52,7 +52,7 @@ class PollingUpdateProcessor(UpdateProcessor):
 
     def __init__(self, config: Config, requester: FeatureRequester, store: FeatureStore, ready: Event, retry_state: Optional[RetryState] = None):
         self._config = config
-        self._data_source_update_sink: Optional[DataSourceUpdateSink] = config.data_source_update_sink
+        self._data_source_update_sink: DataSourceUpdateSink = require_update_sink(config.data_source_update_sink)
         self._requester = requester
         self._store = store
         self._ready = ready
@@ -69,10 +69,6 @@ class PollingUpdateProcessor(UpdateProcessor):
     def stop(self):
         log.info("Stopping PollingUpdateProcessor")
         self._task.stop()
-
-        if self._data_source_update_sink is None:
-            return
-
         self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
     def _poll(self) -> None:
@@ -80,10 +76,8 @@ class PollingUpdateProcessor(UpdateProcessor):
         try:
             (all_data, headers) = self._get_all_data_with_headers()
             record_environment_id(self._data_source_update_sink, headers)
-            sink_or_store(self._data_source_update_sink, self._store).init(all_data)
-
-            if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+            self._data_source_update_sink.init(all_data)
+            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
             # Report the status before signaling readiness, so a caller that
             # wakes on readiness cannot still read INITIALIZING.
@@ -112,8 +106,7 @@ class PollingUpdateProcessor(UpdateProcessor):
         delay = self._retry.next_delay
         level("%s - will retry in %.1fs" % (description, delay), exc_info=stacktrace)
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
     def _get_all_data_with_headers(self) -> Tuple[Any, Optional[Mapping[str, str]]]:
         """

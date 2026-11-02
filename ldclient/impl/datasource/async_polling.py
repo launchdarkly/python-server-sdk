@@ -9,7 +9,7 @@ from typing import Optional
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent, AsyncRepeatingTask
-from ldclient.impl.datasource.datasource_common import async_sink_or_store
+from ldclient.impl.datasource.datasource_common import require_update_sink
 from ldclient.impl.retry import (
     FailureKind,
     RetryState,
@@ -22,6 +22,7 @@ from ldclient.impl.util import (
     log
 )
 from ldclient.interfaces import (
+    AsyncDataSourceUpdateSink,
     AsyncFeatureRequester,
     AsyncFeatureStore,
     AsyncUpdateProcessor,
@@ -41,7 +42,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
 
     def __init__(self, config: AsyncConfig, requester: AsyncFeatureRequester, store: AsyncFeatureStore, ready: AsyncEvent, retry_state: Optional[RetryState] = None):
         self._config = config
-        self._data_source_update_sink = config.data_source_update_sink
+        self._data_source_update_sink: AsyncDataSourceUpdateSink = require_update_sink(config.data_source_update_sink)
         self._requester = requester
         self._store = store
         self._ready = ready
@@ -60,8 +61,7 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         log.info("Stopping AsyncPollingUpdateProcessor")
         self._task.stop()
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
         # Do not close the transport while an in-flight request still uses it.
         try:
@@ -73,10 +73,8 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         """Makes one poll request and records the outcome on the retry state."""
         try:
             all_data = await self._requester.get_all_data()
-            await async_sink_or_store(self._data_source_update_sink, self._store).init(all_data)
-
-            if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+            await self._data_source_update_sink.init(all_data)
+            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
             # Report the status before signaling readiness, so a caller that
             # wakes on readiness cannot still read INITIALIZING.
@@ -105,5 +103,4 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         delay = self._retry.next_delay
         level("%s - will retry in %.1fs" % (description, delay), exc_info=stacktrace)
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
