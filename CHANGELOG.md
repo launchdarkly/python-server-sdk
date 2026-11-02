@@ -2,6 +2,19 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.19.0](https://github.com/launchdarkly/python-server-sdk/compare/9.18.4...9.19.0) (2026-11-02)
+
+
+### Features
+
+* Accept synchronous hooks on the async client ([#548](https://github.com/launchdarkly/python-server-sdk/issues/548)) ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+* Remove the experimental AsyncHook class ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+
+
+### Bug Fixes
+
+* Run after-evaluation hooks when an async evaluation is cancelled or raises ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+
 ## [9.18.4](https://github.com/launchdarkly/python-server-sdk/compare/9.18.3...9.18.4) (2026-10-26)
 
 
