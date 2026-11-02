@@ -295,10 +295,10 @@ class TestStoreDisablesPersistentCache:
                 return callback({})
 
             def delete(self, kind, key, version):
-                pass
+                return False
 
             def upsert(self, kind, item):
-                pass
+                return False
 
             @property
             def initialized(self):

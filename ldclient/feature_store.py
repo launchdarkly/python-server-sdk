@@ -119,16 +119,17 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
                 log.debug("Initialized '%s' store with %d items", k.namespace, len(all_data[k]))
 
     # noinspection PyShadowingNames
-    def delete(self, kind, key: str, version: int):
+    def delete(self, kind, key: str, version: int) -> bool:
         """ """
         with self._lock.write():
             itemsOfKind = self._items[kind]
             i = itemsOfKind.get(key)
             if i is None or i['version'] < version:
-                i = {'deleted': True, 'version': version}
-                itemsOfKind[key] = i
+                itemsOfKind[key] = {'deleted': True, 'version': version}
+                return True
+            return False
 
-    def upsert(self, kind, item):
+    def upsert(self, kind, item) -> bool:
         """ """
         decoded_item = kind.decode(item)
         key = item['key']
@@ -138,6 +139,8 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
             if i is None or i['version'] < item['version']:
                 itemsOfKind[key] = decoded_item
                 log.debug("Updated %s in '%s' to version %d", key, kind.namespace, item['version'])
+                return True
+            return False
 
     @property
     def initialized(self) -> bool:

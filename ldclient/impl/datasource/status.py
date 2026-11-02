@@ -1,5 +1,5 @@
 import time
-from typing import Callable, Mapping, Optional, Protocol, Set
+from typing import Any, Callable, Mapping, Optional, Protocol, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
 from ldclient.impl.listeners import Listeners
@@ -63,16 +63,20 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         self.__send_change_events(self.__compute_changed_items_for_full_data_set(old_data, all_data))
 
     def upsert(self, kind: VersionedDataKind, item: dict):
-        self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
+        updated = self.__monitor_store_update(lambda: self.__store.upsert(kind, item))
 
-        # TODO(SDK-62): We only want to do this if the store successfully wrote the record,
-        # which requires upsert to return a bool result (breaking change).
-        key = item.get('key', '')
-        self.__update_dependency_for_single_item(kind, key, item)
+        # Update dependencies and send change events only if the store applied the write.
+        # A rejected write does not change the stored data.
+        if updated:
+            key = item.get('key', '')
+            self.__update_dependency_for_single_item(kind, key, item)
 
     def delete(self, kind: VersionedDataKind, key: str, version: int):
-        self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
-        self.__update_dependency_for_single_item(kind, key, None)
+        deleted = self.__monitor_store_update(lambda: self.__store.delete(kind, key, version))
+
+        # Update dependencies and send change events only if the store applied the delete.
+        if deleted:
+            self.__update_dependency_for_single_item(kind, key, None)
 
     def update_status(self, new_state: DataSourceState, new_error: Optional[DataSourceErrorInfo]):
         status_to_broadcast = None
@@ -98,9 +102,9 @@ class DataSourceUpdateSinkImpl(DataSourceUpdateSink):
         if status_to_broadcast is not None:
             self.__status_listeners.notify(status_to_broadcast)
 
-    def __monitor_store_update(self, fn: Callable[[], None]):
+    def __monitor_store_update(self, fn: Callable[[], Any]) -> Any:
         try:
-            fn()
+            return fn()
         except Exception as e:
             error_info = DataSourceErrorInfo(DataSourceErrorKind.STORE_ERROR, 0, time.time(), str(e))
             self.update_status(DataSourceState.INTERRUPTED, error_info)

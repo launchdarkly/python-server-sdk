@@ -194,6 +194,19 @@ def test_upsert_triggers_flag_listener(basic_data):
     assert spy.statuses[0].key == 'flag1'
 
 
+def test_rejected_upsert_does_not_trigger_flag_listener(basic_data):
+    flag_change_listener = Listeners()
+    sink = DataSourceUpdateSinkImpl(InMemoryFeatureStore(), Listeners(), flag_change_listener)
+    sink.init(basic_data)
+
+    spy = SpyListener()
+    flag_change_listener.add(spy)
+    # The store already has version 1 of this flag, so it rejects this write.
+    sink.upsert(FEATURES, FlagBuilder('flag1').version(1).on(False).build())
+
+    assert len(spy.statuses) == 0
+
+
 def test_delete_triggers_flag_listener(basic_data):
     flag_change_listener = Listeners()
     sink = DataSourceUpdateSinkImpl(InMemoryFeatureStore(), Listeners(), flag_change_listener)
@@ -202,10 +215,8 @@ def test_delete_triggers_flag_listener(basic_data):
     spy = SpyListener()
     flag_change_listener.add(spy)
     sink.delete(FEATURES, 'flag1', 2)
-
-    # TODO(sc-212471): Once the store starts returning a success status on delete, the flag change
-    # notification can start ignoring duplicate requests like this.
-    # sink.delete(FEATURES, 'flag1', 2)
+    # The store rejects this duplicate delete, so it sends no change event.
+    sink.delete(FEATURES, 'flag1', 2)
 
     assert len(spy.statuses) == 1
     assert spy.statuses[0].key == 'flag1'
@@ -304,9 +315,8 @@ def test_triggers_dependent_segment_is_modified(prereq_data):
     flag_change_listener.add(spy)
 
     sink.upsert(SEGMENTS, SegmentBuilder('segment1').version(2).build())
-    # TODO(sc-212471): Once the store starts returning a success status on upsert, the flag change
-    # notification can start ignoring duplicate requests like this.
-    # sink.upsert(SEGMENTS, SegmentBuilder('segment1').version(2).build())
+    # The store rejects this duplicate upsert, so it sends no change events.
+    sink.upsert(SEGMENTS, SegmentBuilder('segment1').version(2).build())
 
     assert len(spy.statuses) == 3
 
@@ -325,9 +335,8 @@ def test_triggers_if_dependent_segment_removed(prereq_data):
     flag_change_listener.add(spy)
 
     sink.delete(SEGMENTS, 'segment2', 2)
-    # TODO(sc-212471): Once the store starts returning a success status on delete, the flag change
-    # notification can start ignoring duplicate requests like this.
-    # sink.delete(SEGMENTS, 'segment2', 2)
+    # The store rejects this duplicate delete, so it sends no change events.
+    sink.delete(SEGMENTS, 'segment2', 2)
 
     assert len(spy.statuses) == 3
 

@@ -111,26 +111,36 @@ class FeatureStore(ABC):
         """
 
     @abstractmethod
-    def delete(self, kind: VersionedDataKind, key: str, version: int):
+    def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
         """
         Deletes the object associated with the specified key, if it exists and its version is less than
         the specified version. The object should be replaced in the data store by a
-        placeholder with the specified version and a "deleted" property of TErue.
+        placeholder with the specified version and a "deleted" property of True.
+
+        Implementations must return whether they applied the delete. The SDK uses this result to
+        decide whether to send flag change events.
 
         :param kind: The kind of object to delete
         :param key: The key of the object to be deleted
         :param version: The version for the delete operation
+        :return: True if the store was updated (a newer delete placeholder was written); False if the
+            delete was rejected because the stored version was equal or newer
         """
 
     @abstractmethod
-    def upsert(self, kind: VersionedDataKind, item: dict):
+    def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
         """
         Updates or inserts the object associated with the specified key. If an item with the same key
         already exists, it should update it only if the new item's version property is greater than
         the old one.
 
+        Implementations must return whether they applied the update. The SDK uses this result to
+        decide whether to send flag change events.
+
         :param kind: The kind of object to update
         :param item: The object to update or insert
+        :return: True if the store was updated (the item was new or a newer version); False if the
+            update was rejected because the stored version was equal or newer
         """
 
     @property
@@ -266,6 +276,10 @@ class FeatureStoreCore(ABC):
         it returns the item that was passed in, and if the update failed due to the version check
         then it returns the item that is currently in the data store (this ensures that
         ``CachingStoreWrapper`` will update the cache correctly).
+
+        ``CachingStoreWrapper`` compares the returned object to the object that it passed in. If they
+        are the same object, it reports the write as applied. Thus, on success, return the same
+        object that was passed in, not a copy.
 
         :param kind: The kind of object to update
         :param item: The object to update or insert

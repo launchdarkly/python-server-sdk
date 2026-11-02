@@ -68,18 +68,22 @@ class StubFeatureStore(FeatureStore):
         items = self._data.get(kind, {})
         return {key: callback(value) for key, value in items.items()}
 
-    def delete(self, kind: VersionedDataKind, key: str, version: int):
+    def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
         self.delete_calls.append((kind, key, version))
         existing = self._data.get(kind, {}).get(key)
         if existing and existing.get("version", 0) < version:
             self._data[kind][key] = {"key": key, "version": version, "deleted": True}
+            return True
+        return False
 
-    def upsert(self, kind: VersionedDataKind, item: dict):
+    def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
         self.upsert_calls.append((kind, item.get("key"), item.get("version")))
         key = item["key"]
         existing = self._data.get(kind, {}).get(key)
         if not existing or existing.get("version", 0) < item.get("version", 0):
             self._data[kind][key] = item
+            return True
+        return False
 
     @property
     def initialized(self) -> bool:

@@ -248,10 +248,10 @@ class TestCachingStoreWrapper:
         itemv1 = {"key": key, "version": 1}
         itemv2 = {"key": key, "version": 2}
 
-        wrapper.upsert(THINGS, itemv1)
+        assert wrapper.upsert(THINGS, itemv1) is True
         assert core.data[THINGS][key] == itemv1
 
-        wrapper.upsert(THINGS, itemv2)
+        assert wrapper.upsert(THINGS, itemv2) is True
         assert core.data[THINGS][key] == itemv2
 
         # if we have a cache, verify that the new item is now cached by writing a different value
@@ -273,10 +273,10 @@ class TestCachingStoreWrapper:
         itemv1 = {"key": key, "version": 1}
         itemv2 = {"key": key, "version": 2}
 
-        wrapper.upsert(THINGS, itemv2)
+        assert wrapper.upsert(THINGS, itemv2) is True
         assert core.data[THINGS][key] == itemv2
 
-        wrapper.upsert(THINGS, itemv1)
+        assert wrapper.upsert(THINGS, itemv1) is False
         assert core.data[THINGS][key] == itemv2  # value in store remains the same
 
         itemv3 = {"key": key, "version": 3}
@@ -303,7 +303,7 @@ class TestCachingStoreWrapper:
         core.force_set(THINGS, itemv1)
         assert wrapper.get(THINGS, key) == itemv1
 
-        wrapper.delete(THINGS, key, 2)
+        assert wrapper.delete(THINGS, key, 2) is True
         assert core.data[THINGS][key] == itemv2
 
         core.force_set(THINGS, itemv3)  # make a change that bypasses the cache

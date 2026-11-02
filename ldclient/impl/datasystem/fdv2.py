@@ -83,10 +83,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def all(self, kind, callback):
         return self.__wrapper(lambda: self.store.all(kind, callback))
 
-    def delete(self, kind, key, version):
+    def delete(self, kind, key, version) -> bool:
         return self.__wrapper(lambda: self.store.delete(kind, key, version))
 
-    def upsert(self, kind, item):
+    def upsert(self, kind, item) -> bool:
         return self.__wrapper(lambda: self.store.upsert(kind, item))
 
     @property
