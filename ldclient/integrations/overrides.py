@@ -64,8 +64,9 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     The file name extension decides the format of each file: a file whose name ends in
     ``.yaml`` or ``.yml``, in any case, is YAML, and any other file is JSON. YAML requires the
     ``pyyaml`` package. Whether a file with no content is valid depends on its format: a JSON file
-    with no content, or only white space, is not a JSON document and fails to load, and a YAML
-    file with no content is a document with no entries.
+    with no content, or only white space, is not a JSON document and fails to load, as does one
+    that holds anything but an object, such as ``null``, and a YAML file with no content, or only
+    comments or ``null``, is a document with no entries.
 
     When multiple files are configured, their entries are combined in the configured order.
     The order determines which file wins under the duplicate keys handling. A reload replaces
@@ -84,9 +85,10 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     reload applies all files or none, until the file has stayed so without being written for
     about a second, and for at most about five seconds while it keeps being rewritten. After
     that, a YAML file is applied with no entries, and an empty JSON file fails to load and keeps
-    the overrides in effect. YAML that is cut off between two entries can still parse, so for a
-    YAML file, replacing its entire contents in one operation, such as renaming a fully written
-    temporary file over it, avoids briefly applying only a part of it.
+    the overrides in effect. YAML that is cut off at almost any point can still parse, with fewer
+    entries or with different values, so for a YAML file, replacing its entire contents in one
+    operation, such as renaming a fully written temporary file over it, avoids briefly applying
+    only a part of it.
 
     Whenever the set of overrides in effect changes, including at startup, the source logs the
     overrides in effect and what each configured file supplied, at Info level.

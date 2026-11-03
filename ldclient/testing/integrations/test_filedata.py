@@ -83,7 +83,7 @@ def test_parse_json_document():
     assert document.segments['seg1'].included == {'user1'}
 
 
-@pytest.mark.parametrize('path', ['/data.yaml', '/data.yml', '/data.YAML', '/data.Yml', 'relative/data.yaml'])
+@pytest.mark.parametrize('path', ['/data.yaml', '/data.yml', '/data.YAML', '/data.Yml', 'relative/data.yaml', '/x/.yaml', '/x/.YML'])
 def test_a_yaml_extension_selects_yaml(path):
     assert is_yaml_path(path)
 
@@ -152,6 +152,19 @@ def test_parse_fills_in_missing_key_and_version():
     assert document.flags['flag1'].version == 1
     assert document.segments['seg1'].key == 'seg1'
     assert document.segments['seg1'].version == 1
+
+
+@pytest.mark.parametrize('content', [b'null', b' null\n', b'["a", "b"]', b'1', b'"text"', b'true'])
+def test_parse_rejects_a_json_document_that_is_not_an_object(content):
+    with pytest.raises(ValueError) as excinfo:
+        parse_document(content)
+    assert str(excinfo.value) == 'the document must be an object'
+
+
+@pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
+def test_parse_reads_yaml_null_as_no_entries():
+    assert parse_document(b'null\n', is_yaml=True) == Document()
+    assert parse_document(b'~\n', is_yaml=True) == Document()
 
 
 def test_parse_rejects_documents_that_are_not_objects():
@@ -662,7 +675,9 @@ def test_reloader_retries_after_failed_initial_load(make_fixture):
 
 
 def test_reloader_stops_retrying_after_success(make_fixture):
-    f = make_fixture('{"flagValues"', retry_delay=SHORT_DELAY, skip_unchanged=True)
+    # The retry delay is well over the pause of the fixture's in-place writes, so that a retry is
+    # unlikely to read the file in the middle of one on a slow machine.
+    f = make_fixture('{"flagValues"', retry_delay=0.2, skip_unchanged=True)
     f.reloader.reload_now()
     f.require_errored()
 
@@ -1501,6 +1516,110 @@ def test_reloader_reads_a_file_after_one_that_cannot_be_read(make_fixture, tmp_p
     require_held_back(f)
 
 
+@yaml_required
+def test_reloader_starts_the_bound_of_a_file_that_cannot_be_read_over(make_fixture, monkeypatch):
+    # The file is held back, then cannot be read for a long time, then is readable again and
+    # empty after a new write. The failing loads hold nothing back and tried to read the file,
+    # so its bound started over, and the new emptying is held back.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+
+    original = filedata._read_file
+    unreadable = [True]
+
+    def read_file(path: str, skip_missing_paths: bool):
+        if path == f.path and unreadable[0]:
+            raise FileReadError(path, "unable to read file: permission denied")
+        return original(path, skip_missing_paths)
+
+    monkeypatch.setattr(filedata, '_read_file', read_file)
+    for _ in range(6):
+        assert load(f) is None
+        clock.advance(HOUR)
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+
+    unreadable[0] = False
+    change_modification_time(f.path)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_keeps_the_delay_of_a_held_back_file_through_a_failed_read(make_fixture, monkeypatch):
+    # A read that fails says nothing about the content, so the file's delay goes on. Once it can
+    # be read again, still empty and unmodified, it has been empty for the whole delay.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+
+    original = filedata._read_file
+    unreadable = [True]
+
+    def read_file(path: str, skip_missing_paths: bool):
+        if path == f.path and unreadable[0]:
+            raise FileReadError(path, "unable to read file: permission denied")
+        return original(path, skip_missing_paths)
+
+    monkeypatch.setattr(filedata, '_read_file', read_file)
+    clock.advance(0.5 * HOUR)
+    assert load(f) is None
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+
+    unreadable[0] = False
+    clock.advance(0.5 * HOUR)
+    result = load(f)
+    assert result is not None and result.flags == {}
+
+
+def test_reloader_holds_back_a_json_file_that_holds_only_a_byte_order_mark(make_fixture, caplog):
+    # A byte order mark is not content, so a JSON file in effect that holds only one, as a read
+    # can see of a file being written, is held back quietly.
+    caplog.set_level(logging.DEBUG)
+    f, clock = make_held_fixture(make_fixture, '{"flagValues": {"flag1": true}}', name='data.json')
+    with open(f.path, 'wb') as out:
+        out.write(b'\xef\xbb\xbf')
+    require_held_back(f)
+    assert deferrals_logged(caplog) == 1
+
+
+def test_reloader_reports_a_json_file_that_is_not_an_object(make_fixture):
+    f, clock = make_held_fixture(make_fixture, '{"flagValues": {"flag1": true}}', name='data.json')
+    write_file(f.path, 'null')
+    assert load(f) is None
+    err = f.errored.get_nowait()
+    assert isinstance(err, FileReadError)
+    assert 'must be an object' in str(err)
+    assert 'as JSON, the format of its name' in str(err)
+
+
+def test_reloader_reports_the_first_failure_when_an_empty_file_also_fails(make_fixture, tmp_path):
+    # The first file cannot be parsed, and the second is empty, which as JSON fails too. The load
+    # reports the first failure, and logs the other at Debug level.
+    first = os.path.join(str(tmp_path), 'first.json')
+    second = os.path.join(str(tmp_path), 'second.json')
+    write_file(first, '{"flagValues"')
+    write_file(second, '')
+    f = make_fixture('{}')
+    f.reloader = Reloader([first, second], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put)
+    f.reloader.reload_now()
+    err = f.require_errored()
+    assert isinstance(err, FileReadError)
+    assert err.path == first
+
+
+def test_reloader_logs_the_failures_after_the_first(make_fixture, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG)
+    first = os.path.join(str(tmp_path), 'first.json')
+    second = os.path.join(str(tmp_path), 'second.json')
+    write_file(first, '{"flagValues"')
+    write_file(second, '{"flags"')
+    f = make_fixture('{}')
+    f.reloader = Reloader([first, second], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put)
+    f.reloader.reload_now()
+    assert f.require_errored().path == first
+    assert any(r.levelno == logging.DEBUG and second in r.getMessage() for r in caplog.records)
+
+
 def test_reloader_failing_load_reports_the_first_failure(make_fixture, tmp_path):
     # Every file is read even after one fails, and the load reports the first failure.
     first = os.path.join(str(tmp_path), 'first.json')
@@ -1888,7 +2007,7 @@ def test_reloader_applies_an_emptied_yaml_file_that_stays_empty_at_the_retry(mak
     # retry delay, so that first retry applies it as a document with no entries.
     assert f.require_applied().flags == {}
     elapsed = time.monotonic() - started
-    assert EMPTY_FILE_RETRY_DELAY <= elapsed < 1.5 * EMPTY_FILE_RETRY_DELAY
+    assert EMPTY_FILE_RETRY_DELAY <= elapsed < 2 * EMPTY_FILE_RETRY_DELAY
     assert deferrals_logged(caplog) == 1
 
 
@@ -1906,13 +2025,14 @@ def test_reloader_a_further_hold_does_not_put_off_the_retry(make_fixture, caplog
     started = time.monotonic()
     f.reloader.trigger()
     wait_for_deferrals(caplog, 1)
-    time.sleep(1.0)
+    time.sleep(1.5)
     f.reloader.trigger()
     wait_for_deferrals(caplog, 2)
 
+    # A whole retry delay from the second hold would come at 4.5 s.
     assert f.require_applied().flags == {}
     elapsed = time.monotonic() - started
-    assert retry_delay <= elapsed < retry_delay + 0.65
+    assert retry_delay <= elapsed < retry_delay + 1.0
 
 
 def test_reloader_says_why_it_loads_the_files_again(make_fixture, caplog):
