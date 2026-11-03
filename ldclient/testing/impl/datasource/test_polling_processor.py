@@ -399,6 +399,39 @@ def test_a_poll_finishing_after_stop_reports_nothing():
     assert [status.state for status in spy.statuses] == [DataSourceState.OFF]
 
 
+class BlockingFeatureRequester(MockFeatureRequester):
+    """Blocks each request until the test releases it."""
+
+    def __init__(self):
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def get_all_data(self):
+        self.entered.set()
+        self.release.wait(5)
+        return super().get_all_data()
+
+
+def test_stop_waits_for_an_in_flight_poll():
+    """stop() must not return while a poll can still write to the store."""
+    requester = BlockingFeatureRequester()
+    requester.all_data = {FEATURES: {}, SEGMENTS: {}}
+    processor = PollingUpdateProcessor(Config("SDK_KEY"), requester, store, ready)
+    processor.start()
+    assert requester.entered.wait(2)
+
+    stopper = threading.Thread(target=processor.stop)
+    stopper.start()
+    stopper.join(0.2)
+    assert stopper.is_alive()
+
+    requester.release.set()
+    stopper.join(2)
+    assert not stopper.is_alive()
+    assert processor._task.join(0) is True
+
+
 def test_valid_status_is_reported_before_ready_is_set():
     # Mirrors go-server-sdk#442: a caller that wakes on readiness must not
     # still be able to read INITIALIZING.

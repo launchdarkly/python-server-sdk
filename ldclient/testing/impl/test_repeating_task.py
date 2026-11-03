@@ -182,3 +182,40 @@ def test_task_can_be_stopped_from_within_the_task():
         assert counter == 2
     finally:
         task.stop()
+
+
+def test_join_waits_for_a_running_callback():
+    entered = Event()
+    release = Event()
+    task = RepeatingTask.at_interval("ldclient.testing.block", 0.01, 0, lambda: (entered.set(), release.wait(5)))
+    task.start()
+    assert entered.wait(2)
+
+    task.stop()
+    assert task.join(0.1) is False
+
+    release.set()
+    assert task.join(2) is True
+
+
+def test_join_before_start_does_not_wait():
+    task = RepeatingTask.at_interval("ldclient.testing.never-started", 0.01, 0, lambda: None)
+    task.stop()
+
+    assert task.join(5) is True
+
+
+def test_join_from_the_callback_does_not_wait():
+    results: Queue = Queue()
+
+    def stop_self():
+        task.stop()
+        started = time.monotonic()
+        results.put((task.join(5), time.monotonic() - started))
+
+    task = RepeatingTask.at_interval("ldclient.testing.stop-self", 0.01, 0, stop_self)
+    task.start()
+
+    joined, elapsed = results.get(timeout=2)
+    assert joined is True
+    assert elapsed < 1

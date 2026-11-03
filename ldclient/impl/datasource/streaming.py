@@ -2,7 +2,7 @@ import json
 import time
 from threading import TIMEOUT_MAX
 from threading import Event as ThreadEvent
-from threading import Thread
+from threading import Thread, current_thread
 from typing import Callable, Optional
 from urllib import parse
 
@@ -41,6 +41,10 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 # allows for up to 5 minutes to elapse without any data sent across the stream. The heartbeats sent as comments on the
 # stream will keep this from triggering
 stream_read_timeout = 5 * 60
+
+
+# Seconds that stop() waits for the stream thread to finish.
+_STOP_TIMEOUT = 5.0
 
 
 class StreamingUpdateProcessor(Thread, UpdateProcessor):
@@ -172,6 +176,14 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
 
         if self._sse:
             self._sse.close()
+
+        # Wait for the stream thread, so it cannot write to a closed store. A
+        # call from the stream thread itself, such as from a listener, does
+        # not wait.
+        if self.is_alive() and current_thread() is not self:
+            self.join(_STOP_TIMEOUT)
+            if self.is_alive():
+                log.warning("Streaming thread did not stop within %s seconds", _STOP_TIMEOUT)
 
     def _interrupt_stream(self):
         """Drops the stream connection so the next read reconnects. The SSE

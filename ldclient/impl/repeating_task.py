@@ -1,4 +1,4 @@
-from threading import TIMEOUT_MAX, Event, Thread
+from threading import TIMEOUT_MAX, Event, Thread, current_thread
 from typing import Any, Callable
 
 from ldclient.impl.delay import DelaySource, FixedDelay
@@ -63,6 +63,20 @@ class RepeatingTask:
         The stop is permanent. A later :meth:`start` does not resume the task.
         """
         self.__stop.set()
+
+    def join(self, timeout: float) -> bool:
+        """
+        Waits up to ``timeout`` seconds for the worker thread to finish.
+
+        Call :meth:`stop` first. A call from the worker thread itself does not
+        wait, so a callback can stop its own task safely.
+
+        :return: True if the worker thread is not running when the call returns
+        """
+        if not self.__started or current_thread() is self.__thread:
+            return True
+        self.__thread.join(timeout)
+        return not self.__thread.is_alive()
 
     def _run(self):
         if self.__initial_delay > 0:
