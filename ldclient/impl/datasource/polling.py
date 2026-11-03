@@ -35,9 +35,6 @@ from ldclient.interfaces import (
     UpdateProcessor
 )
 
-# Seconds that stop() waits for the worker thread to finish.
-_STOP_TIMEOUT = 5.0
-
 
 @runtime_checkable
 class _FeatureRequesterWithHeaders(Protocol):
@@ -73,12 +70,10 @@ class PollingUpdateProcessor(UpdateProcessor):
         log.info("Stopping PollingUpdateProcessor")
         self._task.stop()
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+        if self._data_source_update_sink is None:
+            return
 
-        # Wait for an in-flight poll, so it cannot write to a closed store.
-        if not self._task.join(_STOP_TIMEOUT):
-            log.warning("Polling thread did not stop within %s seconds", _STOP_TIMEOUT)
+        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
     def _poll(self) -> None:
         """Makes one poll request and records the outcome on the retry state."""

@@ -1,10 +1,11 @@
-from threading import Event
+from threading import Event, Thread
 from typing import Callable, List
 from unittest.mock import Mock
 
 from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl
 from ldclient.impl.datasystem.fdv1 import _FeatureStoreClientWrapper
 from ldclient.impl.listeners import Listeners
+from ldclient.versioned_data_kind import FEATURES
 
 
 class CallbackListener:
@@ -105,11 +106,9 @@ def test_sink_will_be_notified_when_store_is_back_online():
     assert statuses[1].available is True
 
 
-def test_store_failure_after_close_does_not_report_or_poll():
+def test_writes_after_close_do_not_reach_the_store():
     store = Mock()
     store.is_monitoring_enabled = lambda: True
-    store.is_available = Mock(return_value=False)
-    store.init = raise_an_error
 
     listener = RecordStatusListener()
     listeners = Listeners()
@@ -118,15 +117,47 @@ def test_store_failure_after_close_does_not_report_or_poll():
 
     wrapper = _FeatureStoreClientWrapper(store, sink)
     wrapper.close()
-    try:
-        wrapper.init({})
-        raise Exception("init should have raised an exception")
-    except BaseException:
-        pass
 
-    # The poller checks every 0.5 seconds, so this wait covers one check.
-    Event().wait(0.7)
+    wrapper.init({})
+    assert wrapper.upsert(FEATURES, {'key': 'flag', 'version': 1}) is False
+    assert wrapper.delete(FEATURES, 'flag', 2) is False
 
-    assert len(listener.statuses) == 0
-    store.is_available.assert_not_called()
+    store.init.assert_not_called()
+    store.upsert.assert_not_called()
+    store.delete.assert_not_called()
     store.close.assert_called_once()
+    assert len(listener.statuses) == 0
+
+
+def test_close_waits_for_a_write_in_progress():
+    entered = Event()
+    release = Event()
+    calls: List[str] = []
+
+    def slow_upsert(kind, item):
+        entered.set()
+        release.wait(5)
+        calls.append('upsert')
+        return True
+
+    store = Mock()
+    store.is_monitoring_enabled = lambda: True
+    store.upsert = slow_upsert
+    store.close = lambda: calls.append('close')
+
+    wrapper = _FeatureStoreClientWrapper(store, DataStoreUpdateSinkImpl(Listeners()))
+
+    writer = Thread(target=lambda: wrapper.upsert(FEATURES, {'key': 'flag', 'version': 1}))
+    writer.start()
+    assert entered.wait(2)
+
+    closer = Thread(target=wrapper.close)
+    closer.start()
+    closer.join(0.2)
+    assert closer.is_alive()
+
+    release.set()
+    closer.join(2)
+    writer.join(2)
+    assert not closer.is_alive()
+    assert calls == ['upsert', 'close']

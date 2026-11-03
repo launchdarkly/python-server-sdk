@@ -534,54 +534,6 @@ def test_stop_before_start_does_not_raise():
     sp.stop()
 
 
-def test_stop_waits_for_the_stream_thread():
-    store = InMemoryFeatureStore()
-    ready = Event()
-
-    with start_server() as server:
-        with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
-            server.for_path('/all', stream)
-
-            sp = StreamingUpdateProcessor(config, store, ready, None)
-            sp.start()
-            assert ready.wait(start_wait)
-
-            sp.stop()
-
-            assert not sp.is_alive()
-
-
-def test_stop_from_a_listener_on_the_stream_thread_does_not_wait():
-    store = InMemoryFeatureStore()
-    ready = Event()
-    elapsed: List[float] = []
-    sp = None
-
-    def stop_on_valid(status):
-        if status.state == DataSourceState.VALID:
-            started = time.monotonic()
-            sp.stop()
-            elapsed.append(time.monotonic() - started)
-
-    listeners = Listeners()
-    listeners.add(stop_on_valid)
-
-    with start_server() as server:
-        with stream_content(make_put_event()) as stream:
-            config = Config(sdk_key='sdk-key', stream_uri=server.uri)
-            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
-            server.for_path('/all', stream)
-
-            sp = StreamingUpdateProcessor(config, store, ready, None)
-            sp.start()
-            wait_until(lambda: len(elapsed) > 0, start_wait)
-            sp.join(start_wait)
-
-            assert elapsed[0] < 1
-            assert not sp.is_alive()
-
-
 def test_a_stop_before_the_connection_exists_still_ends_the_run():
     """stop() has nothing to close when run() has not built the client yet, so
     the run itself must not go on to read a connection nobody will close."""

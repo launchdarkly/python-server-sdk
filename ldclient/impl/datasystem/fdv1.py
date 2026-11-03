@@ -1,4 +1,4 @@
-from threading import Event
+from threading import Event, Lock
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from ldclient.config import Config
@@ -47,6 +47,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__store_update_sink = store_update_sink
         self.__monitoring_enabled = self.is_monitoring_enabled()
 
+        # Held for each write and by close(). A write that starts after
+        # close() does nothing, and close() waits for a write in progress.
+        self.__write_lock = Lock()
+
         # Covers the following variables
         self.__lock = ReadWriteLock()
         self.__last_available = True
@@ -54,7 +58,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__closed = False
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+        with self.__write_lock:
+            if self.__closed:
+                return
+            self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
 
     def get(self, kind, key, callback):
         return self.__wrapper(lambda: self.store.get(kind, key, callback))
@@ -63,10 +70,16 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return self.__wrapper(lambda: self.store.all(kind, callback))
 
     def delete(self, kind, key, version) -> bool:
-        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+        with self.__write_lock:
+            if self.__closed:
+                return False
+            return self.__wrapper(lambda: self.store.delete(kind, key, version))
 
     def upsert(self, kind, item) -> bool:
-        return self.__wrapper(lambda: self.store.upsert(kind, item))
+        with self.__write_lock:
+            if self.__closed:
+                return False
+            return self.__wrapper(lambda: self.store.upsert(kind, item))
 
     @property
     def initialized(self) -> bool:
@@ -127,11 +140,15 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return self.store.is_available()
 
     def close(self) -> None:
-        """Stops the availability poller and closes the wrapped store."""
-        with self.__lock.write():
-            self.__closed = True
-            poller_to_stop = self.__poller
-            self.__poller = None
+        """Stops the availability poller and closes the wrapped store.
+
+        Waits for a write in progress. Later writes do nothing.
+        """
+        with self.__write_lock:
+            with self.__lock.write():
+                self.__closed = True
+                poller_to_stop = self.__poller
+                self.__poller = None
 
         if poller_to_stop is not None:
             poller_to_stop.stop()
