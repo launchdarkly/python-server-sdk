@@ -977,6 +977,69 @@ def test_reloader_forgets_an_emptying_once_the_file_is_read_with_content(make_fi
 
 
 @yaml_required
+def test_reloader_holds_back_a_file_emptied_again_after_a_read_with_content_whose_state_looks_the_same(make_fixture, tmp_path):
+    # On a file system that records modification times coarsely, a file emptied a second time can
+    # look exactly as it did the first time. The read of its content in between still starts its
+    # delay over. The other file is kept written while empty, so that no load applies.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    first_emptying = os.stat(f.path)
+    truncate(other)
+    require_held_back(f)
+
+    clock.advance(50 / 60 * HOUR)
+    write_file(f.path, YAML_FLAG1)
+    change_modification_time(other)
+    require_held_back(f)
+
+    clock.advance(20 / 60 * HOUR)
+    truncate(f.path)
+    os.utime(f.path, ns=(first_emptying.st_atime_ns, first_emptying.st_mtime_ns))
+    change_modification_time(other)
+    require_held_back(f)
+
+    # The other file gets its content back while this one is still within its new delay.
+    clock.advance(10 / 60 * HOUR)
+    write_file(other, YAML_FLAG2)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_holds_back_a_file_rewritten_with_the_same_content_again_later(make_fixture):
+    # A tool rewrites the file in place with the same content now and then. The load after each
+    # rewrite is skipped as unchanged, which confirms the data in effect like an application, so
+    # a later rewrite is held back on its own and not cut short by the first one's bound.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1, skip_unchanged=True)
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, YAML_FLAG1)
+    assert load(f) is None
+
+    clock.advance(6 * HOUR)
+    truncate(f.path)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_holds_back_a_file_emptied_again_after_unparsable_content_whose_state_looks_the_same(make_fixture):
+    # The file is emptied and held back, then saved with content that cannot be parsed, then
+    # emptied again with the modification time of its first emptying, as a coarse file system can
+    # make it look. Reading content ended its empty state, so it starts a new delay.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    first_emptying = os.stat(f.path)
+    require_held_back(f)
+    write_file(f.path, 'flagValues: [')
+    assert load(f) is None
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+
+    clock.advance(70 / 60 * HOUR)
+    truncate(f.path)
+    os.utime(f.path, ns=(first_emptying.st_atime_ns, first_emptying.st_mtime_ns))
+    require_held_back(f)
+
+
+@yaml_required
 def test_reloader_applies_the_written_content_of_a_held_back_file_at_once(make_fixture):
     # Two quick rewrites in place: the second truncation follows the first write before any load
     # reads the new content, as when both fall in one debounce window. The file is empty at every
@@ -1110,6 +1173,385 @@ def test_reloader_stops_holding_back_files_rewritten_in_turn_after_five_retry_de
     truncate(paths[0])
     result = load(f)
     assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_measures_a_file_from_its_own_read_when_an_earlier_file_reads_slowly(make_fixture, tmp_path, monkeypatch):
+    # The read of the earlier file stalls while the later file is being rewritten in place. The
+    # later file's delay counts from when it was read, not from when the load began.
+    clock = FakeClock()
+    slow = os.path.join(str(tmp_path), 'slow.yaml')
+    write_file(slow, YAML_FLAG2)
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([slow, f.path], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    original = filedata._read_file
+    stall = [True]
+
+    def read_file(path: str, skip_missing_paths: bool):
+        read = original(path, skip_missing_paths)
+        if path == slow and stall[0]:
+            truncate(f.path)
+            clock.advance(0.9 * HOUR)
+        return read
+
+    monkeypatch.setattr(filedata, '_read_file', read_file)
+    require_held_back(f)
+    stall[0] = False
+    clock.advance(0.2 * HOUR)
+    require_held_back(f)
+
+    write_file(f.path, 'flagValues:\n  flag3: true\n')
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2', 'flag3']
+
+
+@yaml_required
+def test_reloader_measures_a_file_from_its_own_read_when_a_later_file_reads_slowly(make_fixture, tmp_path, monkeypatch):
+    # The file is found empty before the read of a later file stalls. Its delay counts from its
+    # own read, so it is over one retry delay after that read, and the retry the hold asks for
+    # comes then.
+    clock = FakeClock()
+    slow = os.path.join(str(tmp_path), 'slow.yaml')
+    write_file(slow, YAML_FLAG2)
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, slow], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    original = filedata._read_file
+    stall = [True]
+
+    def read_file(path: str, skip_missing_paths: bool):
+        read = original(path, skip_missing_paths)
+        if path == slow and stall[0]:
+            clock.advance(0.9 * HOUR)
+        return read
+
+    monkeypatch.setattr(filedata, '_read_file', read_file)
+    truncate(f.path)
+    require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(0.1 * HOUR + 0.1 * HOUR)
+    stall[0] = False
+    clock.advance(0.1 * HOUR)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_a_failing_other_file_does_not_restart_the_bound(make_fixture, tmp_path):
+    # The file keeps being written while every load finds it empty, and the other file fails to
+    # parse every other load. The failures do not start the file's bound over.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    require_held_back(f)
+    for i in range(1, 10):
+        clock.advance(0.5 * HOUR)
+        change_modification_time(f.path)
+        write_file(other, 'flagValues: [' if i % 2 == 1 else YAML_FLAG2)
+        assert load(f) is None
+
+    clock.advance(0.5 * HOUR)
+    change_modification_time(f.path)
+    write_file(other, YAML_FLAG2)
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+
+
+@yaml_required
+def test_reloader_another_files_bound_does_not_cut_a_rewrite_short(make_fixture, tmp_path):
+    # One file keeps being written while every load finds it empty, until its bound is over.
+    # The other file is a quarter of a retry delay into an ordinary rewrite then, and stays held
+    # back until it is written.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    require_held_back(f)
+    for _ in range(9):
+        clock.advance(0.5 * HOUR)
+        change_modification_time(f.path)
+        require_held_back(f)
+
+    clock.advance(0.25 * HOUR)
+    change_modification_time(f.path)
+    truncate(other)
+    require_held_back(f)
+
+    clock.advance(0.25 * HOUR)
+    change_modification_time(f.path)
+    require_held_back(f)
+
+    write_file(other, 'flagValues:\n  flag2: false\n')
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag2']
+    assert result.flags['flag2'].variations == [False]
+
+
+@yaml_required
+def test_reloader_applies_files_emptied_in_staggered_turns_after_the_bound(make_fixture, tmp_path):
+    # Two files stay empty and are truncated again in turn, so that whenever one of them has
+    # stayed empty for the whole delay, the other is still within its delay and holds the load
+    # back. A file that settles so does not get a fresh bound while the other is held back.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    require_held_back(f)
+    applied = False
+    for i in range(1, 15):
+        clock.advance(54 / 60 * HOUR)
+        if i == 1:
+            truncate(other)
+        change_modification_time(other if i % 2 == 1 else f.path)
+        applied = load(f) is not None
+        if applied:
+            break
+        # The retry that the hold arms, a little after the other file's delay is over.
+        clock.advance(12 / 60 * HOUR)
+        applied = load(f) is not None
+        clock.advance(-12 / 60 * HOUR)
+        if applied:
+            break
+    assert applied, "the files were held back without end"
+
+
+@yaml_required
+def test_reloader_bound_of_a_file_held_back_during_a_failure_starts_over_once_it_is_read_again(make_fixture, tmp_path):
+    # While the other file fails to load, this file is rewritten once and its gap is held back.
+    # Much later, the other file is fixed while this one is in the middle of another rewrite,
+    # which is held back with a bound of its own.
+    clock = FakeClock()
+    broken = os.path.join(str(tmp_path), 'other.json')
+    write_file(broken, '{"flagValues": {"flag3": false}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, broken], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    write_file(broken, '{bad')
+    truncate(f.path)
+    assert load(f) is None
+    write_file(f.path, YAML_FLAG2)
+    assert load(f) is None
+    clock.advance(6 * HOUR)
+    assert load(f) is None
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+    assert f.errored.empty(), "an identical failure was reported again"
+
+    write_file(broken, '{"flagValues": {"flag3": false}}')
+    truncate(f.path)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_hold_asks_for_the_retry_from_the_end_of_the_load(make_fixture, tmp_path, monkeypatch):
+    # The read of the file after the held one takes longer than what is left of the held file's
+    # delay, so the retry is due right away, after the margin.
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    truncate(f.path)
+    require_held_back(f)
+
+    original = filedata._read_file
+    stall = [True]
+
+    def read_file(path: str, skip_missing_paths: bool):
+        read = original(path, skip_missing_paths)
+        if path == other and stall[0]:
+            stall[0] = False
+            clock.advance(6 / 60 * HOUR)
+        return read
+
+    monkeypatch.setattr(filedata, '_read_file', read_file)
+    clock.advance(57 / 60 * HOUR)
+    require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(0.1 * HOUR)
+
+
+@pytest.mark.parametrize('name, good, broken, fixed', [
+    pytest.param('data.yaml', YAML_FLAG1, 'flagValues: [', 'flagValues:\n  flag1: false\n', marks=yaml_required, id='yaml'),
+    pytest.param('data.json', '{"flagValues": {"flag1": true}}', '{"flagValues"', '{"flagValues": {"flag1": false}}', id='json'),
+])
+def test_reloader_holds_back_the_fix_of_a_file_saved_in_place_with_an_error(make_fixture, name, good, broken, fixed):
+    # An operator saves a typo in place, and the fix in place much later. The truncation of the
+    # second save is held back like the first, so the fix is applied and the file never empty.
+    f, clock = make_held_fixture(make_fixture, good, name=name)
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, broken)
+    assert load(f) is None
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+    for _ in range(6):
+        clock.advance(HOUR)
+        assert load(f) is None
+    assert f.errored.empty(), "an identical failure was reported again"
+
+    truncate(f.path)
+    require_held_back(f)
+    write_file(f.path, fixed)
+    result = load(f)
+    assert result is not None and result.flags['flag1'].variations == [False]
+
+
+@yaml_required
+def test_reloader_file_that_a_failing_load_did_not_reach_keeps_its_bound(make_fixture, tmp_path):
+    # The file is kept written while empty. A file before it fails to parse on every other load,
+    # so those loads never get to it, and it keeps its bound.
+    clock = FakeClock()
+    first = os.path.join(str(tmp_path), 'first.json')
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([first, f.path], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    require_held_back(f)
+    for i in range(1, 10):
+        clock.advance(0.5 * HOUR)
+        change_modification_time(f.path)
+        write_file(first, '{"flagValues"' if i % 2 == 1 else '{"flagValues": {"flag3": true}}')
+        assert load(f) is None
+
+    clock.advance(0.5 * HOUR)
+    change_modification_time(f.path)
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    result = load(f)
+    assert result is not None and flag_keys(result) == ['flag3']
+
+
+@yaml_required
+def test_reloader_load_that_holds_a_file_back_and_then_fails_does_not_start_bounds_over(make_fixture, tmp_path):
+    # Two files are rewritten in turn, and a third fails to parse on every other load, after one of
+    # the two has been held back. Those loads hold a file back, so they do not start the bounds
+    # over, and the files are applied in the end.
+    clock = FakeClock()
+    other = os.path.join(str(tmp_path), 'other.yaml')
+    last = os.path.join(str(tmp_path), 'last.json')
+    write_file(other, YAML_FLAG2)
+    write_file(last, '{"flagValues": {"flag3": true}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, other, last], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    require_held_back(f)
+    applied = False
+    for i in range(1, 13):
+        clock.advance(0.5 * HOUR)
+        if i % 2 == 1:
+            write_file(f.path, YAML_FLAG1)
+            truncate(other)
+            write_file(last, '{"flagValues"')
+        else:
+            write_file(other, YAML_FLAG2)
+            truncate(f.path)
+            write_file(last, '{"flagValues": {"flag3": true}}')
+        if load(f) is not None:
+            applied = True
+            break
+    assert applied, "the files were held back without end"
+
+
+@yaml_required
+def test_reloader_file_found_missing_starts_a_new_delay_when_it_is_created_empty_again(make_fixture, tmp_path):
+    # The file is emptied and held back, then deleted, then created empty again with the
+    # modification time of its first emptying, while another file fails to parse, so nothing is
+    # applied meanwhile. Being found missing ended its empty state, so it starts a new delay.
+    clock = FakeClock()
+    broken = os.path.join(str(tmp_path), 'other.json')
+    write_file(broken, '{"flagValues": {"flag3": true}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([f.path, broken], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, skip_missing_paths=True, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    write_file(broken, '{bad')
+    truncate(f.path)
+    first_emptying = os.stat(f.path)
+    assert load(f) is None
+    os.remove(f.path)
+    assert load(f) is None
+
+    clock.advance(70 / 60 * HOUR)
+    write_file(f.path, '')
+    os.utime(f.path, ns=(first_emptying.st_atime_ns, first_emptying.st_mtime_ns))
+    write_file(broken, '{"flagValues": {"flag3": true}}')
+    while not f.errored.empty():
+        f.errored.get_nowait()
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_hold_asks_for_the_retry_after_the_delay_and_a_tenth(make_fixture):
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(1.1 * HOUR)
+
+
+@yaml_required
+def test_reloader_later_hold_asks_for_the_rest_of_the_delay(make_fixture):
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    clock.advance(0.4 * HOUR)
+    require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(0.6 * HOUR + 0.1 * HOUR)
+
+
+@yaml_required
+def test_reloader_hold_asks_for_the_retry_when_the_bound_is_over(make_fixture):
+    # The file was written again, so its delay would end one retry delay from now, but its bound
+    # ends sooner.
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+    truncate(f.path)
+    require_held_back(f)
+    for _ in range(9):
+        clock.advance(0.5 * HOUR)
+        change_modification_time(f.path)
+        require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(0.5 * HOUR + 0.1 * HOUR)
+
+
+@yaml_required
+@pytest.mark.parametrize('due_first', ['first', 'last'])
+def test_reloader_hold_asks_for_the_retry_when_the_first_held_file_is_due(make_fixture, tmp_path, due_first):
+    f, clock, other = make_two_file_fixture(make_fixture, tmp_path, YAML_FLAG1, YAML_FLAG2)
+    earlier, later = (f.path, other) if due_first == 'first' else (other, f.path)
+    truncate(earlier)
+    require_held_back(f)
+    clock.advance(0.5 * HOUR)
+    truncate(later)
+    require_held_back(f)
+    assert f.reloader._last_requested_retry_delay == pytest.approx(0.5 * HOUR + 0.1 * HOUR)
+
+
+@yaml_required
+def test_reloader_hold_after_a_change_signal_asks_for_the_same_retry(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f, clock = make_held_fixture(make_fixture, YAML_FLAG1)
+
+    def wait_for_requested_delay(expected: float) -> None:
+        deadline = time.monotonic() + TEST_TIMEOUT
+        while f.reloader._last_requested_retry_delay != pytest.approx(expected):
+            assert time.monotonic() < deadline, "asked for %r" % f.reloader._last_requested_retry_delay
+            time.sleep(0.01)
+
+    truncate(f.path)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 1)
+    wait_for_requested_delay(1.1 * HOUR)
+    clock.advance(0.4 * HOUR)
+    f.reloader.trigger()
+    wait_for_deferrals(caplog, 2)
+    wait_for_requested_delay(0.7 * HOUR)
+
+
+def test_reloader_failure_asks_for_the_retry_delay(make_fixture):
+    f = make_fixture('{"flagValues"', retry_delay=HOUR, clock=FakeClock())
+    f.reloader.reload_now()
+    f.require_errored()
+    assert f.reloader._last_requested_retry_delay == HOUR
 
 
 @yaml_required
@@ -1356,6 +1798,23 @@ def test_reloader_a_further_hold_does_not_put_off_the_retry(make_fixture, caplog
     assert f.require_applied().flags == {}
     elapsed = time.monotonic() - started
     assert retry_delay <= elapsed < retry_delay + 0.65
+
+
+def test_reloader_says_why_it_loads_the_files_again(make_fixture, caplog):
+    caplog.set_level(logging.DEBUG)
+    f = make_fixture('{"flagValues": {"flag1": true}}', retry_delay=0.2)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    # The retry that a hold arms reads the files again because a file was found empty. It finds
+    # the file still empty, which fails as JSON, and the retry after that failure says so.
+    truncate(f.path)
+    f.reloader.trigger()
+    for expected in ('Reading flag data again after a file was found empty', 'Retrying flag data load after earlier failure'):
+        deadline = time.monotonic() + TEST_TIMEOUT
+        while not any(r.getMessage() == expected for r in caplog.records):
+            assert time.monotonic() < deadline, "no log line %r" % expected
+            time.sleep(0.01)
 
 
 def test_reloader_reports_an_emptied_json_file_only_at_the_retry_and_keeps_the_data(make_fixture, caplog):

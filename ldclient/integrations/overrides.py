@@ -82,7 +82,7 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     empty, or with only a YAML comment or document marker, may be in the middle of a rewrite. The
     source then keeps the overrides in effect, and changes to the other files wait too, since a
     reload applies all files or none, until the file has stayed so without being written for
-    about a second, and for at most about five seconds while files keep being rewritten. After
+    about a second, and for at most about five seconds while it keeps being rewritten. After
     that, a YAML file is applied with no entries, and an empty JSON file fails to load and keeps
     the overrides in effect. YAML that is cut off between two entries can still parse, so for a
     YAML file, replacing its entire contents in one operation, such as renaming a fully written

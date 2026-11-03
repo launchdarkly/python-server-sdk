@@ -311,20 +311,21 @@ def _read_files(paths: List[str], skip_missing_paths: bool) -> List[_FileRead]:
     Reads the raw content of all of the given files in order. Raises :class:`FileReadError`
     when a file cannot be read, including a missing file unless ``skip_missing_paths`` is true.
     """
-    contents: List[_FileRead] = []
-    for path in paths:
-        try:
-            with open(path, "rb") as f:
-                contents.append(_FileRead(path, f.read()))
-        except FileNotFoundError:
-            if skip_missing_paths:
-                log.debug("File %s does not exist; it contributes no data", path)
-                contents.append(_FileRead(path, None))
-                continue
-            raise FileReadError(path, "unable to read file: the file does not exist")
-        except OSError as e:
-            raise FileReadError(path, "unable to read file: %s" % e)
-    return contents
+    return [_read_file(path, skip_missing_paths) for path in paths]
+
+
+def _read_file(path: str, skip_missing_paths: bool) -> _FileRead:
+    """Reads the raw content of one file, as :func:`_read_files` does."""
+    try:
+        with open(path, "rb") as f:
+            return _FileRead(path, f.read())
+    except FileNotFoundError:
+        if skip_missing_paths:
+            log.debug("File %s does not exist; it contributes no data", path)
+            return _FileRead(path, None)
+        raise FileReadError(path, "unable to read file: the file does not exist")
+    except OSError as e:
+        raise FileReadError(path, "unable to read file: %s" % e)
 
 
 def _parse_file(path: str, raw: bytes) -> Optional[Document]:
@@ -391,19 +392,29 @@ def _observe_all(paths: List[str]) -> List[FileState]:
     return [_observe(path) for path in paths]
 
 
-# Loads stop holding files back once they have held some back for this many retry delays in a
-# row.
+# A file is held back for at most this many retry delays after a load first held it back, until
+# data is applied.
 _MAX_HOLD_RETRY_DELAYS = 5
 
 
 @dataclass
 class _EmptyFile:
-    """A file whose content is in effect and that loads have found with no entries since."""
+    """A file whose content is in effect and that loads have found with no entries."""
 
-    since: float
-    """Since when the file has had no entries without being written, on the reloader's clock."""
-    state: FileState
+    since: Optional[float] = None
+    """
+    Since when the file has had no entries without being written, on the reloader's clock, or
+    None when the last load that got to it read content, even content that failed to parse, or
+    found it missing.
+    """
+    state: FileState = None
     """The file's state then: its modification time and size, through any symbolic link."""
+    first_held: Optional[float] = None
+    """
+    When a load first held the file back, or None. It bounds how long the file is held back.
+    It is kept while loads hold files back, so files emptied in turn stay bounded, and cleared by
+    a load that holds nothing back and gets to the file, or when data is applied.
+    """
 
 
 class Reloader:
@@ -419,11 +430,13 @@ class Reloader:
     the current data without reporting a failure, and the other files' changes wait too, since a
     load applies all files or none. The file is held back until it has stayed so, without being
     written, for the retry delay; a change of its modification time or size starts the delay
-    over. Loads stop holding files back once they have held some back for five retry delays in a
-    row, so files that keep being rewritten are applied in the end. A file whose content is not
-    in effect, such as a placeholder that has always been empty, is never held back. Every file
-    is read and parsed before any is held back, so files emptied together wait together, and a
-    file that cannot be parsed fails the load even while another is held back.
+    over. Each file is held back for at most five retry delays after a load first held it back,
+    until a load holds nothing back, so a file that keeps being rewritten is applied in the end
+    without cutting short another file's rewrite. A file whose content is not in effect, such as a
+    placeholder that has always been empty, is never held back. Every file is read and parsed
+    before any is held back, so files emptied together wait together, and a file that cannot be
+    parsed fails the load even while another is held back. The clock is read after each file's
+    own read, so a slow read of another file does not shorten a file's delay.
 
     The worker thread starts on the first :meth:`reload_now` or :meth:`trigger` call, so a
     reloader that is constructed but never used does not leak a thread.
@@ -480,6 +493,8 @@ class Reloader:
         self._started = False
         self._debounce_deadline: Optional[float] = None
         self._retry_deadline: Optional[float] = None
+        # Whether the pending retry was armed by a load that held files back.
+        self._retry_after_hold = False
 
         # Serializes the load work between reload_now and the worker thread. The fields below are
         # only touched while holding it.
@@ -489,14 +504,15 @@ class Reloader:
         # Whether each configured file contributed content to the data in effect. A missing file,
         # or one with no entries, contributed none.
         self._applied_had_content: Dict[str, bool] = {}
-        # The files whose content is in effect and that loads have found with no entries since.
-        # A file is removed when a load reads it with entries.
+        # The files whose content is in effect and that loads have found with no entries. All are
+        # forgotten when data is applied; failures change nothing.
         self._empty_files: Dict[str, _EmptyFile] = {}
-        # When the current run of loads that hold files back began, or None when the last load
-        # held none back.
-        self._holding_since: Optional[float] = None
-        # Set by a load that holds files back.
+        # Whether the last load held files back, which the log line of the retry it arms names.
         self._held_back = False
+        # Whether the current load has held a file back, even if it then fails.
+        self._holding_this_load = False
+        # The delay of the last retry that was armed, for tests.
+        self._last_requested_retry_delay: Optional[float] = None
 
     def reload_now(self) -> None:
         """
@@ -505,13 +521,8 @@ class Reloader:
         """
         self._ensure_started()
         retry_after = self._reload()
-        if retry_after is not None and self._retry_delay > 0:
-            with self._cond:
-                if not self._closed:
-                    deadline = time.monotonic() + retry_after
-                    if self._retry_deadline is None or deadline < self._retry_deadline:
-                        self._retry_deadline = deadline
-                        self._cond.notify()
+        if retry_after is not None:
+            self._arm_retry(retry_after, keep_sooner=True)
 
     def trigger(self) -> None:
         """
@@ -535,6 +546,24 @@ class Reloader:
             self._closed = True
             self._cond.notify_all()
 
+    def _arm_retry(self, retry_after: float, keep_sooner: bool) -> None:
+        """
+        Arms the automatic retry for the given time from now, unless retries are off. With
+        ``keep_sooner``, a retry that is already due sooner stays as it is.
+        """
+        if self._retry_delay <= 0:
+            return
+        with self._cond:
+            if self._closed:
+                return
+            deadline = time.monotonic() + retry_after
+            if keep_sooner and self._retry_deadline is not None and self._retry_deadline <= deadline:
+                return
+            self._retry_deadline = deadline
+            self._retry_after_hold = self._held_back
+            self._last_requested_retry_delay = retry_after
+            self._cond.notify()
+
     def _ensure_started(self) -> None:
         with self._cond:
             if self._closed or self._started:
@@ -546,6 +575,7 @@ class Reloader:
     def _run(self) -> None:
         while True:
             is_retry = False
+            after_hold = False
             with self._cond:
                 while True:
                     if self._closed:
@@ -568,10 +598,13 @@ class Reloader:
                     else:
                         self._retry_deadline = None
                         is_retry = True
+                        after_hold = self._retry_after_hold
                     break
 
-            if is_retry:
-                log.debug("Loading flag data again after an earlier failed or held back load")
+            if is_retry and after_hold:
+                log.debug("Reading flag data again after a file was found empty")
+            elif is_retry:
+                log.debug("Retrying flag data load after earlier failure")
             else:
                 log.info("Reloading flag data after detecting a change")
             try:
@@ -579,10 +612,8 @@ class Reloader:
             except Exception as e:
                 log.exception("Unexpected error while reloading flag data: %s", e)
                 retry_after = None
-            if retry_after is not None and self._retry_delay > 0:
-                with self._cond:
-                    if not self._closed:
-                        self._retry_deadline = time.monotonic() + retry_after
+            if retry_after is not None:
+                self._arm_retry(retry_after, keep_sooner=False)
 
     def _is_closed(self) -> bool:
         with self._cond:
@@ -598,26 +629,36 @@ class Reloader:
             if self._is_closed():
                 return None
             self._held_back = False
-            retry_after = self._load()
-            if not self._held_back:
-                # A run of loads that hold files back ends with any load that does not.
-                self._holding_since = None
+            self._holding_this_load = False
+            reached: List[str] = []
+            retry_after = self._load(reached)
+            if not self._holding_this_load:
+                # A load that holds nothing back, whether it applies, is skipped or fails, starts the
+                # bound over for every file that it got to, including one that failed to be read or
+                # parsed: such a file is no longer held back, so its next rewrite is a new one. A
+                # file that the load did not get to keeps its bound.
+                for path in reached:
+                    empty = self._empty_files.get(path)
+                    if empty is not None:
+                        empty.first_held = None
             return retry_after
 
-    def _load(self) -> Optional[float]:
-        try:
-            contents = _read_files(self._paths, self._skip_missing_paths)
-        except Exception as e:
-            return self._fail(e)
-
-        # Every file is parsed and classified before any is held back, so that every file that
-        # is found with no entries starts its delay in this load.
-        now = self._clock()
+    def _load(self, reached: List[str]) -> Optional[float]:
+        """The body of :meth:`_reload`. It records in ``reached`` each file that it gets to."""
+        # Every file is read, parsed and classified before any is held back, so that every file
+        # that is found with no entries starts its delay in this load.
         held_back: List[str] = []
         parsed: List[Tuple[_FileRead, Optional[Document]]] = []
         had_content: Dict[str, bool] = {}
-        for read in contents:
+        for path in self._paths:
+            reached.append(path)
+            try:
+                read = _read_file(path, self._skip_missing_paths)
+            except Exception as e:
+                return self._fail(e)
             if read.raw is None:
+                # A missing file is not an empty one.
+                self._end_empty(read.path)
                 had_content[read.path] = False
                 parsed.append((read, None))
                 continue
@@ -631,22 +672,28 @@ class Reloader:
                 try:
                     document = _parse_file(read.path, read.raw)
                 except FileReadError as e:
+                    # Content that cannot be parsed is not an empty file either.
+                    self._end_empty(read.path)
                     return self._fail(e)
                 has_document = document is not None
             if has_document:
-                self._empty_files.pop(read.path, None)
-            elif self._should_hold_back(read.path, now):
+                self._end_empty(read.path)
+            # The clock is read after this file's own read, so that a slow read of another file
+            # does not shorten its delay.
+            elif self._should_hold_back(read.path, self._clock()):
                 held_back.append(read.path)
+                self._holding_this_load = True
                 continue
-            elif not has_content(read.raw):
+            # The file was read and is not held back, even if it then fails to parse.
+            had_content[read.path] = has_document
+            if not has_content(read.raw):
                 try:
                     document = _parse_file(read.path, read.raw)
                 except FileReadError as e:
                     return self._fail(e)
-            had_content[read.path] = has_document
             parsed.append((read, document))
         if len(held_back) > 0:
-            return self._hold_back(held_back, now)
+            return self._hold_back(held_back, self._clock())
 
         try:
             merged, digest = _merge_files(parsed, self._duplicate_keys_handling)
@@ -664,8 +711,8 @@ class Reloader:
         if self._skip_unchanged and not recovering and digest == self._last_good_digest:
             # The digest does not say which file holds which bytes, so content that moved from
             # one file to another is skipped as unchanged, and what each file contributes has to
-            # be remembered here too.
-            self._applied_had_content.update(had_content)
+            # be remembered here too. The data in effect is confirmed, so the bounds start over.
+            self._remember_applied(had_content)
             return None
 
         # Nothing is remembered until the consumer has accepted the result. A result the
@@ -677,8 +724,23 @@ class Reloader:
             return self._fail(e)
         self._last_error_message = None
         self._last_good_digest = digest
-        self._applied_had_content.update(had_content)
+        self._remember_applied(had_content)
         return None
+
+    def _end_empty(self, path: str) -> None:
+        """
+        Ends the empty state of a file that a load read with content, even content that cannot be
+        parsed, or found missing, so that it starts a new delay when it is found empty again. Its
+        bound is kept until a load holds nothing back.
+        """
+        empty = self._empty_files.get(path)
+        if empty is not None:
+            empty.since = None
+
+    def _remember_applied(self, had_content: Dict[str, bool]) -> None:
+        """Records what each file contributed to the data in effect, and forgets the empty files."""
+        self._applied_had_content.update(had_content)
+        self._empty_files.clear()
 
     def _should_hold_back(self, path: str, now: float) -> bool:
         """
@@ -687,41 +749,53 @@ class Reloader:
         It is held back until it has stayed so, without being written, for the retry delay. A
         change of its state, its modification time and size read through any symbolic link,
         means that it was written since a load last found it so, for example rewritten and
-        truncated again between two loads, so the delay starts over. Loads stop holding files
-        back once they have held some back for five retry delays in a row, so that a file that
-        keeps being written while every load finds it empty, or files that are rewritten in turn,
-        are not held back without end. A file whose content is not in effect is parsed right
-        away, and so is any file when retries are off, since nothing would read it again.
+        truncated again between two loads, so the delay starts over. A file that has stayed so
+        for the whole delay is not held back. Each file is held back for at most five retry
+        delays after a load first held it back, so that a file that keeps being written while
+        every load finds it empty, or files that are emptied in turn, are not held back without
+        end. The bound starts over only at a load that holds nothing back, for every file that
+        load got to, including one that failed to be read or parsed, whether the load applies, is
+        skipped or fails. A file after the one that failed keeps its bound. A file whose content is not in effect
+        is parsed right away, and so is any file when retries are off, since nothing would read it
+        again.
         """
         if self._retry_delay <= 0 or not self._applied_had_content.get(path, False):
             return False
         state = _observe(path)
         empty = self._empty_files.get(path)
         if empty is None:
-            empty = _EmptyFile(since=now, state=state)
+            empty = _EmptyFile()
             self._empty_files[path] = empty
-        elif empty.state != state:
+        if empty.since is None or empty.state != state:
             empty.since = now
             empty.state = state
-        holding_since = now if self._holding_since is None else self._holding_since
-        return now - empty.since < self._retry_delay and now - holding_since < _MAX_HOLD_RETRY_DELAYS * self._retry_delay
+        if now - empty.since >= self._retry_delay:
+            # The file stayed empty for the whole delay. Its bound starts over only at a load that
+            # holds nothing back, so that files emptied in turn do not keep each other held back.
+            return False
+        if empty.first_held is not None and now - empty.first_held >= _MAX_HOLD_RETRY_DELAYS * self._retry_delay:
+            return False
+        if empty.first_held is None:
+            empty.first_held = now
+        return True
 
     def _hold_back(self, held_back: List[str], now: float) -> Optional[float]:
         """
         Keeps the current data for a load that holds files back. Whatever the files' format,
         nothing is applied or reported. The returned time arms the retry for when the first of
-        the files has stayed so for the retry delay, or when the loads have held files back for
-        as long as they may, plus a tenth of the retry delay, so that a timer that fires a little
-        early still finds the delay over. The change signal for a write starts a load sooner.
+        the files has stayed so for the retry delay, or has been held back for as long as it may
+        be, plus a tenth of the retry delay, so that a timer that fires a little early still
+        finds the time over. The change signal for a write starts a load sooner.
         """
         if self._is_closed():
             return None
-        if self._holding_since is None:
-            self._holding_since = now
-        until = self._holding_since + _MAX_HOLD_RETRY_DELAYS * self._retry_delay
+        until = float("inf")
         for path in held_back:
             log.debug("File %s has no entries, possibly while it is being rewritten; waiting for it to be written before applying it", path)
-            until = min(until, self._empty_files[path].since + self._retry_delay)
+            empty = self._empty_files[path]
+            since = now if empty.since is None else empty.since
+            first_held = now if empty.first_held is None else empty.first_held
+            until = min(until, since + self._retry_delay, first_held + _MAX_HOLD_RETRY_DELAYS * self._retry_delay)
         self._held_back = True
         return max(until - now, 0.0) + self._retry_delay / 10
 
