@@ -58,10 +58,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__closed = False
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        with self.__write_lock:
-            if self.__closed:
-                return
-            self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+        self.__write(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)), None)
 
     def get(self, kind, key, callback):
         return self.__wrapper(lambda: self.store.get(kind, key, callback))
@@ -70,16 +67,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return self.__wrapper(lambda: self.store.all(kind, callback))
 
     def delete(self, kind, key, version) -> bool:
-        with self.__write_lock:
-            if self.__closed:
-                return False
-            return self.__wrapper(lambda: self.store.delete(kind, key, version))
+        return self.__write(lambda: self.store.delete(kind, key, version), False)
 
     def upsert(self, kind, item) -> bool:
-        with self.__write_lock:
-            if self.__closed:
-                return False
-            return self.__wrapper(lambda: self.store.upsert(kind, item))
+        return self.__write(lambda: self.store.upsert(kind, item), False)
 
     @property
     def initialized(self) -> bool:
@@ -88,6 +79,19 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def __wrapper(self, fn: Callable):
         try:
             return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __write(self, fn: Callable, result_if_closed: Any):
+        # The failure is reported after the lock is released. A status listener can then
+        # write or close the client without a deadlock.
+        try:
+            with self.__write_lock:
+                if self.__closed:
+                    return result_if_closed
+                return fn()
         except BaseException:
             if self.__monitoring_enabled:
                 self.__update_availability(False)

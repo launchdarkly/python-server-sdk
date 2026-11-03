@@ -161,3 +161,37 @@ def test_close_waits_for_a_write_in_progress():
     writer.join(2)
     assert not closer.is_alive()
     assert calls == ['upsert', 'close']
+
+
+def test_a_listener_can_close_the_wrapper_after_a_failed_write():
+    store = Mock()
+    store.is_monitoring_enabled = lambda: True
+    store.is_available = Mock(return_value=False)
+    store.init = raise_an_error
+
+    wrapper = None
+    closed = Event()
+
+    def close_on_failure(status):
+        if not status.available:
+            wrapper.close()
+            closed.set()
+
+    listeners = Listeners()
+    listeners.add(CallbackListener(close_on_failure))
+    wrapper = _FeatureStoreClientWrapper(store, DataStoreUpdateSinkImpl(listeners))
+
+    writer = Thread(target=lambda: _ignore_errors(lambda: wrapper.init({})), daemon=True)
+    writer.start()
+    writer.join(2)
+
+    assert not writer.is_alive()
+    assert closed.is_set()
+    store.close.assert_called_once()
+
+
+def _ignore_errors(fn):
+    try:
+        fn()
+    except Exception:
+        pass
