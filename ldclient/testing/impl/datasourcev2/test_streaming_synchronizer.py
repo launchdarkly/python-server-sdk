@@ -295,6 +295,78 @@ def test_handles_delete_objects(events):  # pylint: disable=redefined-outer-name
     assert updates[0].change_set.intent_code == IntentCode.TRANSFER_FULL
 
 
+def test_ignores_objects_with_unknown_kinds(events):  # pylint: disable=redefined-outer-name
+    unknown_put_event = Event(
+        event=EventName.PUT_OBJECT,
+        data=json.dumps({"version": 1, "kind": "some-future-kind", "key": "unknown-key", "object": {"foo": 1}}),
+    )
+    unknown_delete_event = Event(
+        event=EventName.DELETE_OBJECT,
+        data=json.dumps({"version": 2, "kind": "some-future-kind", "key": "unknown-key"}),
+    )
+    builder = list_sse_client(
+        [
+            events[EventName.SERVER_INTENT],
+            unknown_put_event,
+            events[EventName.PUT_OBJECT],
+            unknown_delete_event,
+            events[EventName.DELETE_OBJECT],
+            events[EventName.PAYLOAD_TRANSFERRED],
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    # Stream a payload that mixes unknown kinds with known flag changes.
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    # The payload completes with only the known changes and no error.
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.VALID
+    assert updates[0].error is None
+
+    assert updates[0].change_set is not None
+    assert [(c.action, c.kind, c.key) for c in updates[0].change_set.changes] == [
+        (ChangeType.PUT, ObjectKind.FLAG, "flag-key"),
+        (ChangeType.DELETE, ObjectKind.FLAG, "flag-key"),
+    ]
+    assert updates[0].change_set.selector.state == "p:SOMETHING:300"
+
+
+@pytest.mark.parametrize("event_name", [EventName.PUT_OBJECT, EventName.DELETE_OBJECT])
+@pytest.mark.parametrize(
+    "data, problem",
+    [
+        ('"x"', "data must be an object"),
+        ("[1]", "data must be an object"),
+        ("null", "data must be an object"),
+        ("5", "data must be an object"),
+        ('{"version": 1, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": null, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": 5, "key": "flag-key", "object": {}}', "kind must be a string"),
+        ('{"version": 1, "kind": ["flag"], "key": "flag-key", "object": {}}', "kind must be a string"),
+    ],
+)
+def test_rejects_malformed_objects(events, event_name, data, problem):  # pylint: disable=redefined-outer-name
+    builder = list_sse_client(
+        [
+            events[EventName.SERVER_INTENT],
+            Event(event=event_name, data=data),
+        ]
+    )
+
+    synchronizer = make_streaming_data_source()
+    synchronizer._sse_client_builder = builder
+    updates = list(synchronizer.sync(MockSelectorStore(Selector.no_selector())))
+
+    assert len(updates) == 1
+    assert updates[0].state == DataSourceState.INTERRUPTED
+    assert updates[0].change_set is None
+    assert updates[0].error is not None
+    assert updates[0].error.kind == DataSourceErrorKind.UNKNOWN
+    assert updates[0].error.message == f"{event_name.value} {problem}"
+
+
 def test_swallows_goodbye(events):  # pylint: disable=redefined-outer-name
     builder = list_sse_client(
         [
