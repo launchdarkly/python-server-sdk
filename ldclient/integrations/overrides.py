@@ -61,12 +61,9 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     ``client_side_only=True`` leaves it out, even when the flag it overrides is available to them.
     To override such a flag, define it in ``flags`` with ``"clientSide": true``.
 
-    The file name extension decides the format of each file: a file whose name ends in
-    ``.yaml`` or ``.yml``, in any case, is YAML, and any other file is JSON. YAML requires the
-    ``pyyaml`` package. Whether a file with no content is valid depends on its format: a JSON file
-    with no content, or only white space, is not a JSON document and fails to load, as does one
-    that holds anything but an object, such as ``null``, and a YAML file with no content, or only
-    comments or ``null``, is a document with no entries.
+    The file name decides the format of each file: a file whose name ends in ``.yaml`` or
+    ``.yml`` is YAML, which requires the ``pyyaml`` package, and any other file is JSON. Files
+    must be UTF-8.
 
     When multiple files are configured, their entries are combined in the configured order.
     The order determines which file wins under the duplicate keys handling. A reload replaces
@@ -77,18 +74,12 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     source logs the failure, retries after a short delay, and recovers on its own once the file
     is readable again.
 
-    A file can be rewritten in place. To remove a file's overrides, delete it or write a document
-    with no entries, such as ``{}``. A JSON file with no content is not a valid document: it fails
-    to load, and the overrides in effect stay. A file whose content is in effect and that is found
-    empty, or with only a YAML comment or document marker, may be in the middle of a rewrite. The
-    source then keeps the overrides in effect, and changes to the other files wait too, since a
-    reload applies all files or none, until the file has stayed so without being written for
-    about a second, and for at most about five seconds while it keeps being rewritten. After
-    that, a YAML file is applied with no entries, and an empty JSON file fails to load and keeps
-    the overrides in effect. YAML that is cut off at almost any point can still parse, with fewer
-    entries or with different values, so for a YAML file, replacing its entire contents in one
-    operation, such as renaming a fully written temporary file over it, avoids briefly applying
-    only a part of it.
+    Files can be rewritten in place: if the source finds a file empty while it is being
+    rewritten, it keeps the overrides in effect until the new content is written. To remove a
+    file's overrides, delete the file or write a document with no entries, such as ``{}``. An
+    empty JSON file is not a valid document. A partly written YAML file can still parse, so for a
+    YAML file, replacing its contents in one operation, such as by renaming a fully written
+    temporary file over it, avoids briefly applying a partly written file.
 
     Whenever the set of overrides in effect changes, including at startup, the source logs the
     overrides in effect and what each configured file supplied, at Info level.
