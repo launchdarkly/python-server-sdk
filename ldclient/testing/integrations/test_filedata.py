@@ -188,6 +188,32 @@ def test_parse_validates_definition_property_types():
         parse_document(b'{"segments": {"seg1": {"key": "seg1", "version": 1, "included": "not a list"}}}')
 
 
+@pytest.mark.parametrize('content', [
+    '{"flagValues": {"flag1": true}}'.encode('utf-16'),
+    '{"flagValues": {"flag1": true}}'.encode('utf-32'),
+    b'{"flagValues": {"flag1": "\xff"}}',
+], ids=['utf-16', 'utf-32', 'invalid-utf-8'])
+@pytest.mark.parametrize('is_yaml', [False, pytest.param(True, marks=pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed"))], ids=['json', 'yaml'])
+def test_parse_rejects_content_that_is_not_utf_8(content, is_yaml):
+    with pytest.raises(ValueError):
+        parse_document(content, is_yaml=is_yaml)
+
+
+def test_reloader_reports_a_file_that_is_not_utf_8_and_keeps_working(make_fixture):
+    # A file in another encoding fails to load like any other content that cannot be parsed, and
+    # the reloader keeps loading the files when they change.
+    f = make_fixture('{"flagValues": {"flag1": true}}')
+    f.reloader.reload_now()
+    f.require_applied()
+    with open(f.path, 'wb') as out:
+        out.write('{"flagValues": {"flag1": false}}'.encode('utf-16'))
+    f.reloader.trigger()
+    assert isinstance(f.require_errored(), FileReadError)
+    write_file(f.path, '{"flagValues": {"flag1": false}}')
+    f.reloader.trigger()
+    assert f.require_applied().flags['flag1'].variations == [False]
+
+
 def test_read_file_json_and_errors(tmp_path):
     path = os.path.join(str(tmp_path), 'data.json')
     write_file(path, '{"flagValues": {"flag1": true}}')
@@ -1392,9 +1418,9 @@ def test_reloader_holds_back_the_fix_of_a_file_saved_in_place_with_an_error(make
 
 
 @yaml_required
-def test_reloader_file_that_a_failing_load_did_not_reach_keeps_its_bound(make_fixture, tmp_path):
-    # The file is kept written while empty. A file before it fails to parse on every other load,
-    # so those loads never get to it, and it keeps its bound.
+def test_reloader_file_kept_written_while_empty_is_applied_after_its_bound_while_an_earlier_file_fails(make_fixture, tmp_path):
+    # The file is kept written while empty. A file before it fails to parse on every other load.
+    # Those loads still read and hold back this file, so they do not start its bound over.
     clock = FakeClock()
     first = os.path.join(str(tmp_path), 'first.json')
     write_file(first, '{"flagValues": {"flag3": true}}')
@@ -1416,6 +1442,96 @@ def test_reloader_file_that_a_failing_load_did_not_reach_keeps_its_bound(make_fi
     write_file(first, '{"flagValues": {"flag3": true}}')
     result = load(f)
     assert result is not None and flag_keys(result) == ['flag3']
+
+
+@yaml_required
+def test_reloader_bound_of_a_file_after_a_failing_file_starts_over_once_it_is_read_again(make_fixture, tmp_path):
+    # The file is held back, then a file configured before it breaks while this one gets its
+    # content back. The failing loads still read this file, and they hold nothing back, so its
+    # bound starts over. Much later the other file is fixed while this one is rewritten in place,
+    # and the truncation is held back.
+    clock = FakeClock()
+    first = os.path.join(str(tmp_path), 'first.json')
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([first, f.path], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    require_held_back(f)
+    write_file(first, '{"flagValues"')
+    write_file(f.path, YAML_FLAG2)
+    assert load(f) is None
+    for _ in range(6):
+        clock.advance(HOUR)
+        assert load(f) is None
+    assert isinstance(f.errored.get_nowait(), FileReadError)
+    assert f.errored.empty()
+
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    truncate(f.path)
+    require_held_back(f)
+
+
+@yaml_required
+def test_reloader_reads_a_file_after_one_that_cannot_be_read(make_fixture, tmp_path):
+    # A file configured before this one goes missing, and missing files are not skipped, so it
+    # cannot be read. The failing loads still read this file, which got its content back, and
+    # they hold nothing back, so its bound starts over.
+    clock = FakeClock()
+    first = os.path.join(str(tmp_path), 'first.json')
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    f = make_fixture(YAML_FLAG1, name='data.yaml')
+    f.reloader = Reloader([first, f.path], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, retry_delay=HOUR, clock=clock)
+    f.reloader.reload_now()
+    f.require_applied()
+
+    truncate(f.path)
+    require_held_back(f)
+    os.remove(first)
+    write_file(f.path, YAML_FLAG2)
+    assert load(f) is None
+    assert f.errored.get_nowait().path == first
+    clock.advance(6 * HOUR)
+    assert load(f) is None
+
+    write_file(first, '{"flagValues": {"flag3": true}}')
+    truncate(f.path)
+    require_held_back(f)
+
+
+def test_reloader_failing_load_reports_the_first_failure(make_fixture, tmp_path):
+    # Every file is read even after one fails, and the load reports the first failure.
+    first = os.path.join(str(tmp_path), 'first.json')
+    second = os.path.join(str(tmp_path), 'second.json')
+    write_file(first, '{"flagValues"')
+    write_file(second, '{"flags"')
+    f = make_fixture('{}')
+    f.reloader = Reloader([first, second], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put)
+    f.reloader.reload_now()
+    err = f.require_errored()
+    assert isinstance(err, FileReadError)
+    assert err.path == first
+
+
+@yaml_required
+def test_reloader_applies_the_same_bytes_moved_to_a_file_of_another_format(make_fixture, tmp_path):
+    # The format comes from the extension, so the same bytes moved from x.yaml to x.json parse
+    # differently: YAML reads 1e3 as a string, JSON as a number. The load is not skipped as
+    # unchanged.
+    yaml_path = os.path.join(str(tmp_path), 'x.yaml')
+    json_path = os.path.join(str(tmp_path), 'x.json')
+    content = '{"flagValues": {"flag1": 1e3}}'
+    write_file(yaml_path, content)
+    f = make_fixture('{}')
+    f.reloader = Reloader([yaml_path, json_path], DuplicateKeysHandling.FAIL, apply=f.applied.put, on_error=f.errored.put, skip_missing_paths=True, skip_unchanged=True)
+    f.reloader.reload_now()
+    assert f.require_applied().flags['flag1'].variations == ['1e3']
+
+    os.replace(yaml_path, json_path)
+    result = load(f)
+    assert result is not None and result.flags['flag1'].variations == [1000.0]
 
 
 @yaml_required
@@ -1638,10 +1754,8 @@ def test_reloader_applies_a_file_that_is_deleted_and_then_created_empty_at_once(
 
 @yaml_required
 def test_reloader_does_not_hold_back_a_file_whose_content_moved_away(make_fixture, tmp_path):
-    # The content moves from one file to the other. The digest of the files' bytes does not say
-    # which file holds them, so it is the same as before and the load is skipped as unchanged.
-    # The file that no longer exists contributes no content, so when it is created empty, that
-    # is applied at once.
+    # The content moves from one file to the other. The file that no longer exists contributes no
+    # content, so when it is created empty, that is applied at once.
     clock = FakeClock()
     other = os.path.join(str(tmp_path), 'other.yaml')
     f = make_fixture(YAML_FLAG1, name='data.yaml')
@@ -1651,7 +1765,8 @@ def test_reloader_does_not_hold_back_a_file_whose_content_moved_away(make_fixtur
 
     write_file(other, YAML_FLAG1)
     os.remove(f.path)
-    assert load(f) is None
+    result = load(f)
+    assert result is not None and result.files == [FileSummary(path=f.path), FileSummary(path=other, present=True, flags=1)]
 
     write_file(f.path, '')
     result = load(f)
@@ -1661,9 +1776,8 @@ def test_reloader_does_not_hold_back_a_file_whose_content_moved_away(make_fixtur
 
 @yaml_required
 def test_reloader_holds_back_a_file_whose_content_was_moved_to_it_from_another(make_fixture, tmp_path):
-    # The file is renamed to the other configured path (mv data.yaml other.yaml), so the bytes are
-    # the same as before and the load is skipped as unchanged. The other path's content is in
-    # effect now, so an in-place rewrite of it is held back.
+    # The file is renamed to the other configured path (mv data.yaml other.yaml). The other
+    # path's content is in effect now, so an in-place rewrite of it is held back.
     clock = FakeClock()
     other = os.path.join(str(tmp_path), 'other.yaml')
     f = make_fixture(YAML_FLAG1, name='data.yaml')
@@ -1672,7 +1786,8 @@ def test_reloader_holds_back_a_file_whose_content_was_moved_to_it_from_another(m
     assert flag_keys(f.require_applied()) == ['flag1']
 
     os.replace(f.path, other)
-    assert load(f) is None
+    result = load(f)
+    assert result is not None and result.files == [FileSummary(path=f.path), FileSummary(path=other, present=True, flags=1)]
 
     truncate(other)
     require_held_back(f)

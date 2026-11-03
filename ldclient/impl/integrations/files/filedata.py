@@ -343,20 +343,26 @@ def _parse_files(contents: List[_FileRead], duplicate_keys_handling: DuplicateKe
 
 def _merge_files(parsed: List[Tuple[_FileRead, Optional[Document]]], duplicate_keys_handling: DuplicateKeysHandling) -> Tuple[MergeResult, bytes]:
     """
-    Merges the parsed files. It also returns a digest of the raw file contents, so a caller can
-    tell whether a later load read the same bytes. One read feeds both the digest and the parse,
-    so the digest can never disagree with the content that was parsed. The digest covers the
-    bytes of the files that exist, not which file holds them.
+    Merges the parsed files. It also returns a digest of the files that were read, so a caller
+    can tell whether a later load read the same. One read feeds both the digest and the parse,
+    so the digest can never disagree with the content that was parsed. The digest covers each
+    path, whether its file exists, and its bytes: the same bytes in a file with another name can
+    be in another format, and parse differently.
     """
     documents: List[Document] = []
     files: List[FileSummary] = []
     hasher = hashlib.sha256()
     for read, document in parsed:
+        path = read.path.encode("utf-8", errors="surrogateescape")
+        hasher.update(len(path).to_bytes(8, "big"))
+        hasher.update(path)
         if read.raw is None:
+            hasher.update(b"-")
             files.append(FileSummary(path=read.path))
             continue
+        hasher.update(b"+")
+        hasher.update(len(read.raw).to_bytes(8, "big"))
         hasher.update(read.raw)
-        hasher.update(b"\0")
         documents.append(Document() if document is None else document)
         files.append(FileSummary(path=read.path, present=True))
 
@@ -433,9 +439,10 @@ class Reloader:
     over. Each file is held back for at most five retry delays after a load first held it back,
     until a load holds nothing back, so a file that keeps being rewritten is applied in the end
     without cutting short another file's rewrite. A file whose content is not in effect, such as a
-    placeholder that has always been empty, is never held back. Every file is read and parsed
-    before any is held back, so files emptied together wait together, and a file that cannot be
-    parsed fails the load even while another is held back. The clock is read after each file's
+    placeholder that has always been empty, is never held back. Every file is read and parsed,
+    even after another file fails, before any is held back, so files emptied together wait
+    together, and a file that cannot be read or parsed fails the load, with the first failure,
+    even while another is held back. The clock is read after each file's
     own read, so a slow read of another file does not shorten a file's delay.
 
     The worker thread starts on the first :meth:`reload_now` or :meth:`trigger` call, so a
@@ -645,8 +652,11 @@ class Reloader:
 
     def _load(self, reached: List[str]) -> Optional[float]:
         """The body of :meth:`_reload`. It records in ``reached`` each file that it gets to."""
-        # Every file is read, parsed and classified before any is held back, so that every file
-        # that is found with no entries starts its delay in this load.
+        # Every file is read, parsed and classified, even after another file fails, before the
+        # load fails, holds files back or merges them. So every file that is found with no
+        # entries starts its delay in this load, and every file is reached, so a load that holds
+        # nothing back starts every file's bound over. The load fails with the first failure.
+        failure: Optional[Exception] = None
         held_back: List[str] = []
         parsed: List[Tuple[_FileRead, Optional[Document]]] = []
         had_content: Dict[str, bool] = {}
@@ -655,7 +665,8 @@ class Reloader:
             try:
                 read = _read_file(path, self._skip_missing_paths)
             except Exception as e:
-                return self._fail(e)
+                failure = failure or e
+                continue
             if read.raw is None:
                 # A missing file is not an empty one.
                 self._end_empty(read.path)
@@ -674,7 +685,8 @@ class Reloader:
                 except FileReadError as e:
                     # Content that cannot be parsed is not an empty file either.
                     self._end_empty(read.path)
-                    return self._fail(e)
+                    failure = failure or e
+                    continue
                 has_document = document is not None
             if has_document:
                 self._end_empty(read.path)
@@ -690,8 +702,11 @@ class Reloader:
                 try:
                     document = _parse_file(read.path, read.raw)
                 except FileReadError as e:
-                    return self._fail(e)
+                    failure = failure or e
+                    continue
             parsed.append((read, document))
+        if failure is not None:
+            return self._fail(failure)
         if len(held_back) > 0:
             return self._hold_back(held_back, self._clock())
 
@@ -709,9 +724,8 @@ class Reloader:
         # that things are good again.
         recovering = self._last_error_message is not None
         if self._skip_unchanged and not recovering and digest == self._last_good_digest:
-            # The digest does not say which file holds which bytes, so content that moved from
-            # one file to another is skipped as unchanged, and what each file contributes has to
-            # be remembered here too. The data in effect is confirmed, so the bounds start over.
+            # The data in effect is confirmed, as by an application, so it is remembered the same
+            # way, and the bounds start over.
             self._remember_applied(had_content)
             return None
 
