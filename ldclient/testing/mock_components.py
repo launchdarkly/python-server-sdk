@@ -44,6 +44,9 @@ class MockBigSegmentStore(BigSegmentStore):
     def membership_queries(self) -> list:
         return self.__membership_queries.copy()
 
+    def stop(self):
+        pass
+
     def __fail(self):
         raise Exception("deliberate error")
 

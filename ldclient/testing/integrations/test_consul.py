@@ -1,14 +1,16 @@
-import json
-
 import pytest
 
 from ldclient.integrations import Consul
-from ldclient.testing.integrations.persistent_feature_store_test_base import *
+from ldclient.testhelpers.storetest import FeatureStoreCoreTestSuite
 from ldclient.testing.test_util import skip_database_tests
 
 have_consul = False
 try:
     import consul
+
+    from ldclient.impl.integrations.consul.consul_feature_store import (
+        _ConsulFeatureStoreCore
+    )
 
     have_consul = True
 except ImportError:
@@ -18,22 +20,9 @@ pytestmark = pytest.mark.skipif(not have_consul, reason="skipping Consul tests b
 
 
 @pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
-def consul_defaults_to_available():
-    consul = Consul.new_feature_store()
-    assert consul.is_monitoring_enabled() is True
-    assert consul.is_available() is True
-
-
-@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
-def consul_detects_nonexistent_store():
-    consul = Consul.new_feature_store(host='http://i-mean-what-are-the-odds')
-    assert consul.is_monitoring_enabled() is True
-    assert consul.is_available() is False
-
-
-class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
-    def create_persistent_feature_store(self, prefix, caching) -> FeatureStore:
-        return Consul.new_feature_store(prefix=prefix, caching=caching)
+class TestConsulFeatureStoreCore(FeatureStoreCoreTestSuite):
+    def create_core(self, prefix):
+        return _ConsulFeatureStoreCore(None, None, prefix, {})
 
     def clear_data(self, prefix):
         client = consul.Consul()
@@ -41,16 +30,9 @@ class ConsulFeatureStoreTester(PersistentFeatureStoreTester):
         for key in keys or []:
             client.kv.delete(key)
 
-    def write_raw_item(self, prefix, kind, key, item):
-        client = consul.Consul()
-        db_key = "%s/%s/%s" % (prefix or Consul.DEFAULT_PREFIX, kind.namespace, key)
-        client.kv.put(db_key, json.dumps(item))
-
-
-class TestConsulFeatureStore(PersistentFeatureStoreTestBase):
-    @property
-    def tester_class(self):
-        return ConsulFeatureStoreTester
+    def create_error_core(self):
+        # Nothing listens on this port, so each operation fails.
+        return _ConsulFeatureStoreCore('localhost', 1, None, {})
 
 
 # Consul does not support Big Segments.

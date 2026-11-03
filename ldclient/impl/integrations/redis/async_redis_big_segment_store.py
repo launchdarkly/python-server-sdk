@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
-from ldclient.impl.util import log, redact_password
+from ldclient import log
+from ldclient.impl.integrations.redis.redis_util import redact_password
 from ldclient.interfaces import AsyncBigSegmentStore, BigSegmentStoreMetadata
 
 have_async_redis = False

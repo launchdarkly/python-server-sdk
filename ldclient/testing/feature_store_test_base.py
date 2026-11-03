@@ -8,9 +8,8 @@ from ldclient.versioned_data_kind import FEATURES
 
 # The basic test suite to be run against all feature store implementations.
 #
-# FeatureStoreTestBase and FeatureStoreTester are used only by test_in_memory_feature_store. For all
-# database integrations, see testing.integrations.persistent_feature_store_test_base which extends
-# them with additional tests.
+# FeatureStoreTestBase and FeatureStoreTester are used only by test_in_memory_feature_store. The
+# database integrations use the public suites in ldclient.testhelpers.storetest.
 
 
 class FeatureStoreTester:

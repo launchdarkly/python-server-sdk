@@ -1,7 +1,10 @@
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
 
-from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.util import log, redact_password
+from ldclient import log
+from ldclient.impl.integrations.redis.redis_util import (
+    INITED_KEY,
+    redact_password
+)
 from ldclient.interfaces import (
     AsyncFeatureStoreCore,
     DiagnosticDescription,
@@ -33,9 +36,9 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
         if not have_async_redis:
             raise NotImplementedError("Cannot use async Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
-        self._init_key = "{0}:{1}".format(self._prefix, CachingStoreWrapper.__INITED_CACHE_KEY__)
+        self._init_key = "{0}:{1}".format(self._prefix, INITED_KEY)
         self._client = redis_client.from_url(url, **redis_opts)
-        self.test_update_hook: Optional[Callable[[str, str], None]] = None  # exposed for testing
+        self.test_update_hook: Optional[Callable[[str, str], Awaitable[None]]] = None  # exposed for testing
         log.info("Started AsyncRedisFeatureStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
 
     async def is_available(self) -> bool:
@@ -86,7 +89,7 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
                     await pipe.watch(base_key)
                     old = await self.get_internal(kind, key)
                     if self.test_update_hook is not None:
-                        self.test_update_hook(base_key, key)
+                        await self.test_update_hook(base_key, key)
                     old_version = None if old is None else kind.deserialize(old.serialized_item)['version']
                     if old_version is not None and old_version >= item.version:
                         log.debug(
