@@ -48,7 +48,9 @@ class _FileOverrideSource(OverrideSource):
     Reads overrides from the configured files and supplies each successful load to the sink as
     a full snapshot. A configured file that does not exist contributes no overrides. A file
     that cannot be read or parsed fails that load, the last good snapshot stays in effect, and
-    the load is retried.
+    the load is retried. A file whose content is in effect and that is found with no entries is
+    held back until it has stayed so for the retry delay, because it may be in the middle of an
+    in-place rewrite.
     """
 
     def __init__(self, paths: List[str], duplicate_keys_handling: DuplicateKeysHandling, change_detection: ChangeDetection, poll_interval: float):
