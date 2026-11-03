@@ -9,6 +9,7 @@ storable objects as completely generic JSON dictionaries, rather than having any
 for features or segments.
 """
 
+import json
 from collections import namedtuple
 from typing import Any, Callable, Iterable, Optional
 
@@ -43,6 +44,27 @@ class VersionedDataKind:
 
     def encode(self, item: Any) -> dict:
         return item.to_json_dict() if isinstance(item, ModelEntity) else item
+
+    def serialize(self, item: Any) -> str:
+        """
+        Serializes an item of this kind to a JSON string.
+
+        :param item: The item, as a model object or as a dict
+        :return: The JSON string
+        """
+        return json.dumps(self.encode(item))
+
+    def deserialize(self, serialized: str) -> Any:
+        """
+        Deserializes an item of this kind from a JSON string.
+
+        A persistent store core can use this method to find the version of an item that it stores
+        only as a serialized string: ``kind.deserialize(serialized)['version']``.
+
+        :param serialized: The JSON string
+        :return: The item
+        """
+        return self.decode(json.loads(serialized))
 
 
 class VersionedDataKindWithOrdering(VersionedDataKind):

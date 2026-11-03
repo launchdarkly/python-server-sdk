@@ -197,6 +197,30 @@ class FeatureStore(ABC):
         """
 
 
+@dataclass(frozen=True)
+class SerializedItemDescriptor:
+    """
+    A versioned item in its serialized form, as a persistent store core reads or writes it.
+
+    The SDK serializes each item before it gives the item to a :class:`FeatureStoreCore` or an
+    :class:`AsyncFeatureStoreCore`, and deserializes each item that a core returns. A core thus
+    stores and returns opaque strings, and does not need to know the data model.
+
+    A core can store the version and the deleted state separately from the serialized string, or it
+    can store only the serialized string. In the second case, the core returns a version of 0 and
+    ``deleted`` as False. The SDK then gets both values from the serialized string.
+    """
+
+    version: int
+    """The version of the item. A core that does not store the version separately returns 0."""
+
+    deleted: bool
+    """True if the item is a placeholder for a deleted item (a "tombstone")."""
+
+    serialized_item: str
+    """The serialized item. For a deleted item, this is a placeholder that has the deleted flag."""
+
+
 class FeatureStoreCore(ABC):
     """
     Interface for a simplified subset of the functionality of :class:`FeatureStore`, to be used
@@ -204,65 +228,66 @@ class FeatureStoreCore(ABC):
     developers of custom ``FeatureStore`` implementations to avoid repeating logic that would
     commonly be needed in any such implementation, such as caching. Instead, they can implement
     only ``FeatureStoreCore`` and then create a ``CachingStoreWrapper``.
+
+    All items that go into and come out of these methods are :class:`SerializedItemDescriptor`
+    instances. The wrapper serializes and deserializes the items, encodes deleted items, and caches
+    the results. A core must not cache items.
     """
 
     @abstractmethod
-    def get_internal(self, kind: VersionedDataKind, key: str) -> dict:
+    def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[SerializedItemDescriptor]:
         """
-        Returns the object to which the specified key is mapped, or None if no such item exists.
-        The method should not attempt to filter out any items based on their deleted property,
-        nor to cache any items.
+        Returns the item to which the specified key is mapped, or None if no such item exists.
+        Return a deleted item (a "tombstone") as is. Do not filter it out.
 
-        :param kind: The kind of object to get
-        :param key: The key of the object
-        :return: The object to which the specified key is mapped, or None
-        """
-
-    @abstractmethod
-    def get_all_internal(self, callback) -> Mapping[str, dict]:
-        """
-        Returns a dictionary of all associated objects of a given kind. The method should not attempt
-        to filter out any items based on their deleted property, nor to cache any items.
-
-        :param kind: The kind of objects to get
-        :return: A dictionary of keys to items
+        :param kind: The kind of item to get
+        :param key: The key of the item
+        :return: The serialized item, or None
         """
 
     @abstractmethod
-    def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]):
+    def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, SerializedItemDescriptor]:
         """
-        Initializes (or re-initializes) the store with the specified set of objects. Any existing entries
-        will be removed. Implementations can assume that this set of objects is up to date-- there is no
-        need to perform individual version comparisons between the existing objects and the supplied
-        data.
+        Returns all items of the specified kind, keyed by the key that each item is stored under.
+        Include deleted items. Do not filter them out.
 
-        :param all_data: A dictionary of data kinds to item collections
+        :param kind: The kind of items to get
+        :return: A dictionary of keys to serialized items
         """
 
     @abstractmethod
-    def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+    def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, SerializedItemDescriptor]]):
         """
-        Updates or inserts the object associated with the specified key. If an item with the same key
-        already exists, it should update it only if the new item's version property is greater than
-        the old one. It should return the final state of the item, i.e. if the update succeeded then
-        it returns the item that was passed in, and if the update failed due to the version check
-        then it returns the item that is currently in the data store (this ensures that
-        ``CachingStoreWrapper`` will update the cache correctly).
+        Initializes (or re-initializes) the store with the specified set of items. Remove all
+        existing items. The items are up to date, so do not compare versions.
 
-        ``CachingStoreWrapper`` compares the returned object to the object that it passed in. If they
-        are the same object, it reports the write as applied. Thus, on success, return the same
-        object that was passed in, not a copy.
+        The SDK gives the kinds and the items in an order that keeps references valid. If the store
+        cannot write all items in one transaction, write them in the given order.
 
-        :param kind: The kind of object to update
-        :param item: The object to update or insert
-        :return: The state of the object after the update
+        :param all_data: A dictionary of data kinds to dictionaries of keys to serialized items
+        """
+
+    @abstractmethod
+    def upsert_internal(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> bool:
+        """
+        Updates or inserts the item associated with the specified key. If an item with the same key
+        already exists, update it only if the version of the new item is greater than the version
+        of the existing item. A deleted item has a version, and the same rule applies to it.
+
+        To find the version of an existing item that the core stores only as a serialized string,
+        use :func:`ldclient.versioned_data_kind.VersionedDataKind.deserialize`.
+
+        :param kind: The kind of item to update
+        :param key: The key of the item
+        :param item: The serialized item to write
+        :return: True if the core wrote the item, or False if the version check rejected it
         """
 
     @abstractmethod
     def initialized_internal(self) -> bool:
         """
         Returns true if this store has been initialized. In a shared data store, it should be able to
-        detect this even if initInternal was called in a different process, i.e. the test should be
+        detect this even if init_internal was called in a different process, i.e. the test should be
         based on looking at what is in the data store. The method does not need to worry about caching
         this value; ``CachingStoreWrapper`` will only call it when necessary.
         """
@@ -445,7 +470,7 @@ class AsyncFeatureStoreCore(ABC):
     Async equivalent of :class:`FeatureStoreCore`, for use with
     :class:`ldclient.async_feature_store_helpers.AsyncCachingStoreWrapper`. It exposes a simplified
     subset of the functionality of :class:`AsyncFeatureStore`, so a database integration only has to
-    implement the database-specific logic; the wrapper adds caching and encode/decode handling.
+    implement the database-specific logic. The wrapper adds caching and serialization.
 
     .. caution::
         This feature is experimental and should NOT be considered ready for production
@@ -453,58 +478,54 @@ class AsyncFeatureStoreCore(ABC):
         compatibility guarantees. Pin to a specific minor version and review the changelog
         before upgrading.
 
-    All items passed to and returned from these methods are plain JSON-compatible dicts, not decoded
-    model objects. The wrapper handles decoding for its cache and its callers.
+    All items that go into and come out of these methods are :class:`SerializedItemDescriptor`
+    instances, with the same rules as for :class:`FeatureStoreCore`.
     """
 
     @abstractmethod
-    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[SerializedItemDescriptor]:
         """
-        Returns the object to which the specified key is mapped, or None if no such item exists.
-        The method should not attempt to filter out any items based on their deleted property,
-        nor to cache any items.
+        Returns the item to which the specified key is mapped, or None if no such item exists.
+        Return a deleted item (a "tombstone") as is. Do not filter it out.
 
-        :param kind: The kind of object to get
-        :param key: The key of the object
-        :return: The object to which the specified key is mapped, or None
-        """
-        ...
-
-    @abstractmethod
-    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
-        """
-        Returns a dictionary of all associated objects of a given kind. The method should not attempt
-        to filter out any items based on their deleted property, nor to cache any items.
-
-        :param kind: The kind of objects to get
-        :return: A dictionary of keys to items
+        :param kind: The kind of item to get
+        :param key: The key of the item
+        :return: The serialized item, or None
         """
         ...
 
     @abstractmethod
-    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, SerializedItemDescriptor]:
         """
-        Initializes (or re-initializes) the store with the specified set of objects. Any existing
-        entries will be removed. Implementations can assume that this set of objects is up to date--
-        there is no need to perform individual version comparisons between the existing objects and
-        the supplied data.
+        Returns all items of the specified kind, keyed by the key that each item is stored under.
+        Include deleted items. Do not filter them out.
 
-        :param all_data: A dictionary of data kinds to item collections
+        :param kind: The kind of items to get
+        :return: A dictionary of keys to serialized items
         """
         ...
 
     @abstractmethod
-    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, SerializedItemDescriptor]]) -> None:
         """
-        Updates or inserts the object associated with the specified key. If an item with the same key
-        already exists, it should update it only if the new item's version property is greater than
-        the old one. It should return the final state of the item, that is, the item that was passed
-        in if the update succeeded, or the item that is currently in the data store if the update
-        failed the version check. This lets the wrapper update its cache correctly.
+        Initializes (or re-initializes) the store with the specified set of items. This is the
+        same as :func:`FeatureStoreCore.init_internal`.
 
-        :param kind: The kind of object to update
-        :param item: The object to update or insert
-        :return: The state of the object after the update
+        :param all_data: A dictionary of data kinds to dictionaries of keys to serialized items
+        """
+        ...
+
+    @abstractmethod
+    async def upsert_internal(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> bool:
+        """
+        Updates or inserts the item associated with the specified key, if its version is greater
+        than the version of the existing item. This is the same as
+        :func:`FeatureStoreCore.upsert_internal`.
+
+        :param kind: The kind of item to update
+        :param key: The key of the item
+        :param item: The serialized item to write
+        :return: True if the core wrote the item, or False if the version check rejected it
         """
         ...
 

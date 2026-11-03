@@ -23,7 +23,14 @@ from ldclient.interfaces import (
     DataStoreMode,
     IntentCode,
     ObjectKind,
-    Selector
+    Selector,
+    SerializedItemDescriptor
+)
+from ldclient.testing.serialized_items import (
+    from_descriptor,
+    from_descriptors,
+    to_descriptor,
+    to_descriptors
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
@@ -274,19 +281,20 @@ class FakeAsyncCore(AsyncFeatureStoreCore):
         self.inited = False
         self.query_count = 0
 
-    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
-        self.data = {FEATURES: dict(all_data.get(FEATURES, {})), SEGMENTS: dict(all_data.get(SEGMENTS, {}))}
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, SerializedItemDescriptor]]) -> None:
+        decoded = from_descriptors(all_data)
+        self.data = {FEATURES: decoded.get(FEATURES, {}), SEGMENTS: decoded.get(SEGMENTS, {})}
         self.inited = True
 
-    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
-        return self.data.get(kind, {}).get(key)
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[SerializedItemDescriptor]:
+        return to_descriptor(self.data.get(kind, {}).get(key))
 
-    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
-        return dict(self.data.get(kind, {}))
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, SerializedItemDescriptor]:
+        return to_descriptors(self.data.get(kind, {})) or {}
 
-    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
-        self.data[kind][item["key"]] = item
-        return item
+    async def upsert_internal(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> bool:
+        self.data[kind][key] = from_descriptor(item)
+        return True
 
     async def initialized_internal(self) -> bool:
         self.query_count += 1

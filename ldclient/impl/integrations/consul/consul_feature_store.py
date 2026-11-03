@@ -1,7 +1,9 @@
-import json
-
 from ldclient import log
-from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
+from ldclient.interfaces import (
+    DiagnosticDescription,
+    FeatureStoreCore,
+    SerializedItemDescriptor
+)
 
 have_consul = False
 try:
@@ -69,9 +71,8 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         # operations (the "txn" method), so we'll write them one at a time.
         for kind, items in all_data.items():
             for key, item in items.items():
-                encoded_item = json.dumps(item)
-                db_key = self._item_key(kind, item['key'])
-                self._client.kv.put(db_key, encoded_item)
+                db_key = self._item_key(kind, key)
+                self._client.kv.put(db_key, item.serialized_item)
                 unused_old_keys.discard(db_key)
                 num_items = num_items + 1
 
@@ -86,7 +87,7 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def get_internal(self, kind, key):
         index, resp = self._client.kv.get(self._item_key(kind, key))
-        return None if resp is None else json.loads(resp['Value'].decode('utf-8'))
+        return None if resp is None else _descriptor(resp['Value'])
 
     def get_all_internal(self, kind):
         items_out = {}
@@ -99,33 +100,30 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             db_key = result['Key']
             if not db_key.startswith(item_key_prefix):
                 continue
-            item = json.loads(result['Value'].decode('utf-8'))
-            items_out[db_key[len(item_key_prefix):]] = item
+            items_out[db_key[len(item_key_prefix):]] = _descriptor(result['Value'])
         return items_out
 
-    def upsert_internal(self, kind, new_item):
-        key = self._item_key(kind, new_item['key'])
-        encoded_item = json.dumps(new_item)
+    def upsert_internal(self, kind, key, new_item):
+        db_key = self._item_key(kind, key)
 
         # We will potentially keep retrying indefinitely until someone's write succeeds
         while True:
-            index, old_value = self._client.kv.get(key)
+            index, old_value = self._client.kv.get(db_key)
             if old_value is None:
                 mod_index = 0
             else:
-                old_item = json.loads(old_value['Value'].decode('utf-8'))
-                # Check whether the item is stale. If so, don't do the update (and return the existing item to
-                # CachingStoreWrapper so it can be cached)
-                if old_item['version'] >= new_item['version']:
-                    return old_item
+                # Do not write an item that is not newer than the existing item.
+                old_version = kind.deserialize(old_value['Value'].decode('utf-8'))['version']
+                if old_version >= new_item.version:
+                    return False
                 mod_index = old_value['ModifyIndex']
 
             # Otherwise, try to write. We will do a compare-and-set operation, so the write will only succeed if
             # the key's ModifyIndex is still equal to the previous value. If the previous ModifyIndex was zero,
             # it means the key did not previously exist and the write will only succeed if it still doesn't exist.
-            success = self._client.kv.put(key, encoded_item, cas=mod_index)
+            success = self._client.kv.put(db_key, new_item.serialized_item, cas=mod_index)
             if success:
-                return new_item
+                return True
 
             log.debug('Concurrent modification detected, retrying')
 
@@ -144,3 +142,9 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
 
     def _inited_key(self):
         return self._prefix + '$inited'
+
+
+def _descriptor(value: bytes) -> SerializedItemDescriptor:
+    # The store keeps only the serialized item. The SDK reads the version and the deleted state
+    # from it.
+    return SerializedItemDescriptor(version=0, deleted=False, serialized_item=value.decode('utf-8'))
