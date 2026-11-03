@@ -71,6 +71,10 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'fdv1-fallback',
             'retry-conformance-fdv1-streaming',
             'retry-conformance-fdv1-polling',
+            'service-endpoints',
+            'wrapper',
+            'http-proxy',
+            'tls:skip-verify-peer',
         ]
     }
     return aiohttp.web.Response(
