@@ -113,16 +113,12 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
             inner_disable()
 
     def is_monitoring_enabled(self) -> bool:
-        """Returns whether the inner store opts in to availability monitoring.
+        """Returns the monitoring setting of the inner store."""
+        return self._store.is_monitoring_enabled()
 
-        Delegates to the store's own opt-in. A store that does not report
-        availability is not polled, so it is never marked unavailable with no
-        path back to recovery.
-        """
-        store_check = getattr(self._store, "is_monitoring_enabled", None)
-        if not callable(store_check):
-            return False
-        return store_check()
+    async def is_available(self) -> bool:
+        """Returns the result of the availability check of the inner store."""
+        return await self._store.is_available()
 
     async def _wrap(self, fn: Callable):
         try:
@@ -162,7 +158,7 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
 
     async def _check_availability(self) -> None:
         try:
-            if await self._store.is_available():  # type: ignore[attr-defined]
+            if await self._store.is_available():
                 self._update_availability(True)
         except BaseException as e:
             log.error("Unexpected error from data store status function: %s", e)
@@ -185,14 +181,10 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
             except asyncio.TimeoutError:
                 log.warning("Timed out waiting for the persistent store availability poller to stop")
 
-        close = getattr(self._store, "close", None)
-        if callable(close):
-            try:
-                result = close()
-                if inspect.isawaitable(result):
-                    await result
-            except Exception as e:
-                log.warning("Error closing the persistent store: %s", e)
+        try:
+            await self._store.close()
+        except Exception as e:
+            log.warning("Error closing the persistent store: %s", e)
 
 
 class _AsyncReadOnlyStoreView(AsyncReadOnlyStore):

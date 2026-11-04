@@ -62,6 +62,9 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         except BaseException:
             return False
 
+    def close(self) -> None:
+        """Does nothing. The boto3 client has no close method in all supported versions."""
+
     def init_internal(self, all_data):
         # Start by reading the existing keys; we will later delete any of these that weren't in all_data.
         unused_old_keys = self._read_existing_keys(all_data.keys())

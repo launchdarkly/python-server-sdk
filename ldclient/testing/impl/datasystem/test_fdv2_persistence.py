@@ -97,6 +97,9 @@ class StubFeatureStore(FeatureStore):
         """For monitoring support"""
         return self._monitoring_enabled
 
+    def close(self) -> None:
+        pass
+
     def set_available(self, available: bool):
         """Test helper to simulate availability changes"""
         self._available = available

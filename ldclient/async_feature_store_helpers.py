@@ -2,7 +2,6 @@
 This submodule contains support code for writing async feature store implementations.
 """
 
-import inspect
 from typing import Any, Dict, Mapping, Optional
 
 from ldclient.feature_store import CacheConfig
@@ -48,16 +47,11 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
         :param cache_config: the caching parameters
         """
         self._core = core
-        self._has_available_method = callable(getattr(core, 'is_available', None))
         super().__init__(cache_config)
 
     async def is_available(self) -> bool:
-        """Tests whether the underlying store seems to be reachable.
-
-        Returns False if the core does not provide an availability check.
-        """
-        # We know is_available exists since we are checking _has_available_method.
-        return await self._core.is_available() if self._has_available_method else False  # type: ignore
+        """Returns the result of the availability check of the core."""
+        return await self._core.is_available()
 
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
         """ """
@@ -119,13 +113,9 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
         return result
 
     async def close(self) -> None:
-        """Releases the cache and closes the underlying core if it supports it."""
+        """Releases the cache and closes the core."""
         self.disable_cache()
-        core_close = getattr(self._core, "close", None)
-        if callable(core_close):
-            result = core_close()
-            if inspect.isawaitable(result):
-                await result
+        await self._core.close()
 
     def describe_configuration(self, config) -> str:
         describe = getattr(self._core, 'describe_configuration', None)

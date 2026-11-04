@@ -8,11 +8,12 @@ from ldclient.testing.async_feature_store_test_base import (
 )
 
 
-def test_async_in_memory_status_checks():
+@pytest.mark.asyncio
+async def test_async_in_memory_status_checks():
     store = AsyncInMemoryFeatureStore()
 
-    assert store.is_monitoring_enabled() is False
-    assert store.is_available() is True
+    assert not store.is_monitoring_enabled()
+    assert await store.is_available()
 
 
 class AsyncInMemoryFeatureStoreTester(AsyncFeatureStoreTester):

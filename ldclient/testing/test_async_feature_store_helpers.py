@@ -4,6 +4,7 @@ import pytest
 
 from ldclient.async_feature_store_helpers import AsyncCachingStoreWrapper
 from ldclient.feature_store import CacheConfig
+from ldclient.interfaces import AsyncFeatureStoreCore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 # These tests exercise the caching-wrapper logic only, using an in-memory mock core, so they run
@@ -18,12 +19,20 @@ def make_wrapper(core, cached):
     return AsyncCachingStoreWrapper(core, CacheConfig(expiration=30) if cached else CacheConfig.disabled())
 
 
-class MockAsyncCore:
+class MockAsyncCore(AsyncFeatureStoreCore):
     def __init__(self):
         self.data = {}
         self.inited = False
         self.inited_query_count = 0
         self.error = None
+        self.available = True
+        self.closed = False
+
+    async def is_available(self):
+        return self.available
+
+    async def close(self):
+        self.closed = True
 
     async def init_internal(self, all_data):
         self._maybe_throw()
@@ -75,39 +84,37 @@ class MockAsyncCore:
             items.pop(key, None)
 
 
-class AvailableCore(MockAsyncCore):
-    def __init__(self, available):
-        super().__init__()
-        self._available = available
-
-    async def is_available(self):
-        return self._available
-
-
 class CustomError(Exception):
     pass
 
 
 class TestAsyncCachingStoreWrapper:
-    @pytest.mark.parametrize("available", [False, True])
-    def test_monitoring_enabled_if_available_is_defined(self, available: bool):
-        wrapper = make_wrapper(AvailableCore(available), False)
-        assert wrapper.is_monitoring_enabled() is True
+    def test_monitoring_is_enabled(self):
+        wrapper = make_wrapper(MockAsyncCore(), False)
+        assert wrapper.is_monitoring_enabled()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("available", [False, True])
-    async def test_is_available_reflects_core(self, available: bool):
-        wrapper = make_wrapper(AvailableCore(available), False)
-        assert await wrapper.is_available() is available
+    async def test_is_available_delegates_to_core(self, available: bool):
+        core = MockAsyncCore()
+        core.available = available
+        wrapper = make_wrapper(core, False)
+        assert await wrapper.is_available() == available
 
-    def test_monitoring_not_enabled_if_available_is_not_defined(self):
-        wrapper = make_wrapper(MockAsyncCore(), False)
-        assert wrapper.is_monitoring_enabled() is False
-
-    @pytest.mark.asyncio
-    async def test_is_available_false_if_not_defined(self):
-        wrapper = make_wrapper(MockAsyncCore(), False)
-        assert await wrapper.is_available() is False
+    @pytest.mark.parametrize("missing", ["is_available", "close"])
+    def test_core_without_required_method_cannot_be_instantiated(self, missing: str):
+        methods = {name: getattr(MockAsyncCore, name) for name in ("is_available", "close")}
+        del methods[missing]
+        core_class = type("IncompleteCore", (AsyncFeatureStoreCore,), {
+            "get_internal": MockAsyncCore.get_internal,
+            "get_all_internal": MockAsyncCore.get_all_internal,
+            "init_internal": MockAsyncCore.init_internal,
+            "upsert_internal": MockAsyncCore.upsert_internal,
+            "initialized_internal": MockAsyncCore.initialized_internal,
+            **methods,
+        })
+        with pytest.raises(TypeError):
+            core_class()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("cached", [False, True])
@@ -341,16 +348,11 @@ class TestAsyncCachingStoreWrapper:
         assert wrapper.initialized is True
 
     @pytest.mark.asyncio
-    async def test_close_closes_core_if_supported(self):
-        closed = {"value": False}
-
-        class ClosableCore(MockAsyncCore):
-            async def close(self):
-                closed["value"] = True
-
-        wrapper = make_wrapper(ClosableCore(), True)
+    async def test_close_closes_core(self):
+        core = MockAsyncCore()
+        wrapper = make_wrapper(core, True)
         await wrapper.close()
-        assert closed["value"] is True
+        assert core.closed
 
     @pytest.mark.asyncio
     async def test_describe_configuration_delegates_to_core(self):

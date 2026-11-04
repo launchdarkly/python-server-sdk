@@ -72,6 +72,9 @@ class RecordingCore(FeatureStoreCore):
     def initialized_internal(self):
         return self.inited
 
+    def is_available(self):
+        return True
+
     def close(self):
         self.closed = True
 
@@ -438,30 +441,3 @@ class TestCloseChain:
 
         assert inner._cache is _NOOP_CACHE
         assert core.closed is True
-
-    def test_close_when_core_has_no_close_method(self):
-        class CoreWithoutClose:
-            def __init__(self):
-                self.data: dict = {}
-                self.inited = False
-
-            def init_internal(self, all_data):
-                self.data = dict(all_data)
-                self.inited = True
-
-            def get_internal(self, kind, key):
-                return self.data.get(kind, {}).get(key)
-
-            def get_all_internal(self, kind):
-                return self.data.get(kind, {})
-
-            def upsert_internal(self, kind, item):
-                return item
-
-            def initialized_internal(self):
-                return self.inited
-
-        wrapper = CachingStoreWrapper(CoreWithoutClose(), CacheConfig.default())  # type: ignore[arg-type]
-
-        wrapper.close()  # must not raise
-        assert wrapper._cache is _NOOP_CACHE

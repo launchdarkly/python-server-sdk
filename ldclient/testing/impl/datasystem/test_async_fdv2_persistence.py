@@ -103,6 +103,9 @@ class StubAsyncFeatureStore(AsyncFeatureStore):
     async def is_initialized(self) -> bool:
         return self._initialized
 
+    def is_monitoring_enabled(self) -> bool:
+        return False
+
     async def is_available(self) -> bool:
         return self._available
 

@@ -654,39 +654,9 @@ class FakeAsyncStore(AsyncFeatureStore):
         self.closed = True
 
 
-class StoreWithoutAvailability(AsyncFeatureStore):
-    async def init(self, all_data):
-        pass
-
-    async def get(self, kind, key):
-        return None
-
-    async def all(self, kind):
-        return {}
-
-    async def upsert(self, kind, item):
-        return True
-
-    async def delete(self, kind, key, version):
-        return True
-
-    @property
-    def initialized(self) -> bool:
-        return True
-
-    async def is_initialized(self) -> bool:
-        return True
-
-
-class StoreWithAvailabilityNoOptIn(StoreWithoutAvailability):
-    """Reports availability but does not opt in to monitoring.
-
-    Models a custom store that provides is_available yet omits
-    is_monitoring_enabled, which must not turn on availability polling.
-    """
-
-    async def is_available(self) -> bool:
-        return True
+class StoreWithoutMonitoring(FakeAsyncStore):
+    def is_monitoring_enabled(self) -> bool:
+        return False
 
 
 @pytest.mark.asyncio
@@ -696,16 +666,19 @@ async def test_is_monitoring_enabled_true_when_store_opts_in():
 
 
 @pytest.mark.asyncio
-async def test_is_monitoring_enabled_false_without_is_available():
-    wrapper = _AsyncFeatureStoreClientWrapper(StoreWithoutAvailability(), lambda _s: None)
-    assert wrapper.is_monitoring_enabled() is False
+async def test_is_monitoring_enabled_false_when_store_does_not_opt_in():
+    wrapper = _AsyncFeatureStoreClientWrapper(StoreWithoutMonitoring(), lambda _s: None)
+    assert not wrapper.is_monitoring_enabled()
 
 
 @pytest.mark.asyncio
-async def test_is_monitoring_enabled_false_when_store_does_not_opt_in():
-    # A store with is_available but no is_monitoring_enabled must not be polled.
-    wrapper = _AsyncFeatureStoreClientWrapper(StoreWithAvailabilityNoOptIn(), lambda _s: None)
-    assert wrapper.is_monitoring_enabled() is False
+async def test_is_available_delegates_to_store():
+    store = FakeAsyncStore()
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda _s: None)
+    assert await wrapper.is_available()
+
+    store._available = False
+    assert not await wrapper.is_available()
 
 
 @pytest.mark.asyncio
