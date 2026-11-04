@@ -1,3 +1,4 @@
+import gzip
 import json
 import time
 import uuid
@@ -763,6 +764,30 @@ def verify_recoverable_http_error(status):
         ep.flush()
         ep._wait_until_inactive()
         assert mock_http.request_data is not None
+
+
+def test_event_payload_is_gzip_compressed_by_default():
+    with DefaultTestProcessor() as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('Content-Encoding') == 'gzip'
+        output = json.loads(gzip.decompress(mock_http.raw_request_data))
+        assert len(output) == 1
+        assert output[0]['kind'] == 'identify'
+
+
+def test_event_payload_is_not_compressed_when_disabled():
+    with DefaultTestProcessor(enable_event_compression=False) as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('Content-Encoding') is None
+        output = json.loads(mock_http.raw_request_data)
+        assert len(output) == 1
+        assert output[0]['kind'] == 'identify'
 
 
 def test_event_payload_id_is_sent():

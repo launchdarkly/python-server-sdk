@@ -174,7 +174,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         application: Optional[dict] = None,
         hooks: Optional[List[AsyncHook]] = None,
         plugins: Optional[List[AsyncPlugin]] = None,
-        enable_event_compression: bool = False,
+        enable_event_compression: bool = True,
         omit_anonymous_contexts: bool = False,
         payload_filter_key: Optional[str] = None,
         datasystem_config: Optional[AsyncDataSystemConfig] = None,
@@ -245,7 +245,11 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         :param application: Optional properties for setting application metadata. See :py:attr:`~application`
         :param hooks: Hooks provide entrypoints which allow for observation of SDK functions.
         :param plugins: A list of plugins to be used with the SDK. Plugin support is currently experimental and subject to change.
-        :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
+        :param enable_event_compression: Whether to use GZIP compression for the event payloads that the SDK
+          sends. The default is True. Set this to False if you send events to a Relay Proxy older than
+          version 8.9, because those versions cannot accept compressed events. Relay Proxy users can also
+          set this to False to prevent extra CPU use, because the Relay Proxy decompresses and recompresses
+          the payloads.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload. Payload filtering is not supported with the FDv2 data system, so this has no effect on FDv2 requests.
         :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and segment data. When set, it overrides ``feature_store``, ``update_processor_class``, ``stream``, and ``use_ldd``.

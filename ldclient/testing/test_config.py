@@ -72,6 +72,20 @@ def test_a_configured_initial_reconnect_delay_is_reported_as_given(config_class,
     assert config.initial_reconnect_delay == configured
 
 
+@pytest.mark.parametrize("config_class", CONFIG_CLASSES, ids=CONFIG_IDS)
+def test_event_compression_is_enabled_by_default(config_class):
+    config = config_class(sdk_key="SDK_KEY")
+
+    assert config.enable_event_compression
+
+
+@pytest.mark.parametrize("config_class", CONFIG_CLASSES, ids=CONFIG_IDS)
+def test_event_compression_can_be_disabled(config_class):
+    config = config_class(sdk_key="SDK_KEY", enable_event_compression=False)
+
+    assert not config.enable_event_compression
+
+
 def test_can_set_valid_diagnostic_interval():
     config = Config(sdk_key="SDK_KEY", diagnostic_recording_interval=61)
     assert config.diagnostic_recording_interval == 61

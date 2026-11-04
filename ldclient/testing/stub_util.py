@@ -1,3 +1,4 @@
+import gzip
 import json
 from email.utils import formatdate
 
@@ -9,6 +10,13 @@ from ldclient.interfaces import (
     UpdateProcessor
 )
 from ldclient.testing.http_util import ChunkedResponse, JsonResponse
+
+
+def decode_request_body(headers, body):
+    """Return the request body. Decompress the body if the headers show gzip encoding."""
+    if headers is not None and headers.get('Content-Encoding') == 'gzip':
+        return gzip.decompress(body)
+    return body
 
 
 def item_as_json(item):
@@ -141,6 +149,13 @@ class MockHttp:
 
     @property
     def request_data(self):
+        """Return the body of the last request. Decompress the body if it is gzip-encoded."""
+        if len(self._recorded_requests) != 0:
+            return decode_request_body(*self._recorded_requests[-1])
+
+    @property
+    def raw_request_data(self):
+        """Return the body of the last request as the SDK sent it."""
         if len(self._recorded_requests) != 0:
             return self._recorded_requests[-1][1]
 
