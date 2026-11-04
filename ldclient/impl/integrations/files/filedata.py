@@ -904,18 +904,23 @@ def _link_target(path: str) -> Optional[str]:
     resolved to a real path, or None when the configured file is not a link, the target's
     directory does not exist, or the links loop. The target file itself need not exist, so that
     a link created ahead of its target is followed once the target appears.
+
+    A relative link is relative to the real directory that holds it, so it is joined to that
+    directory's real path. Normalizing the path as written would take a ".." to the wrong place
+    when a directory in that path is itself a link.
     """
     try:
         if not os.path.islink(path):
             return None
         target = path
         for _ in range(_MAX_LINKS):
+            directory = os.path.dirname(target)
+            if not os.path.isdir(directory):
+                return None
+            real_directory = os.path.realpath(directory)
             if not os.path.islink(target):
-                directory = os.path.dirname(target)
-                if not os.path.isdir(directory):
-                    return None
-                return os.path.join(os.path.realpath(directory), os.path.basename(target))
-            target = os.path.join(os.path.dirname(target), os.readlink(target))
+                return os.path.join(real_directory, os.path.basename(target))
+            target = os.path.join(real_directory, os.readlink(target))
         return None
     except (OSError, ValueError):
         return None
@@ -946,7 +951,10 @@ class Watcher:
     the link's target is watched as well, for the target's path, so that an edit to the target
     is reported. The links are resolved again after every reported change, after a retry sets up
     watches, and when a directory that holds a target is deleted, as happens when a Kubernetes
-    ConfigMap volume is updated. So a link that comes to point elsewhere is followed.
+    ConfigMap volume is updated. So a link that comes to point elsewhere is followed. A link
+    that cannot be resolved, for example because its target's directory does not exist yet or
+    was deleted, is resolved again on the retry interval until its target is watched, and the
+    callback then runs once.
 
     Notifications for the watched paths invoke the callback. The callback can run several times
     for one logical edit, so feed it into a :class:`Reloader`.
@@ -991,6 +999,10 @@ class Watcher:
         # _directories and keeps its own watch.
         self._target_paths: Set[str] = set()
         self._target_directories: Set[str] = set()
+        # True while a configured link's target is not watched, because the link cannot be
+        # resolved or its target's directory cannot be watched. The retry schedule runs while it
+        # is true.
+        self._links_unresolved = False
 
         self._set_up_watches(is_retry=False)
         self._refresh_links()
@@ -1062,11 +1074,16 @@ class Watcher:
     def _retry_pending(self) -> None:
         self._set_up_watches(is_retry=True)
         with self._lock:
-            # The schedule ends once everything is watched. It is set up again when a directory
-            # becomes pending later. The check and the stop happen under the lock, so a
-            # directory that becomes pending at the same time either keeps this schedule or
-            # starts a new one.
-            if len(self._pending_directories) == 0 and self._observer_running and self._retry_task is not None:
+            links_unresolved = self._links_unresolved
+        if links_unresolved and self._refresh_links():
+            # The target that a retry watches may have changed while it was not watched.
+            self._on_change()
+        with self._lock:
+            # The schedule ends once everything is watched, the targets of the configured links
+            # included. It is set up again when a directory becomes pending or a link cannot be
+            # resolved later. The check and the stop happen under the lock, so a directory that
+            # becomes pending at the same time either keeps this schedule or starts a new one.
+            if len(self._pending_directories) == 0 and not self._links_unresolved and self._observer_running and self._retry_task is not None:
                 self._retry_task.stop()
                 self._retry_task = None
 
@@ -1115,25 +1132,30 @@ class Watcher:
         except Exception as e:
             log.debug('Unable to remove the watch on directory "%s": %s', directory, e)
 
-    def _refresh_links(self) -> None:
+    def _refresh_links(self) -> bool:
         """
         Resolves each configured file that is a symbolic link and watches the directory of each
-        target that is not a configured directory, which has a watch of its own. A target in a
-        directory that does not exist is not watched. A directory that no longer holds a target
-        of a configured link loses its watch.
+        target that is not a configured directory, which has a watch of its own. A directory that
+        no longer holds a target of a configured link loses its watch. A link that cannot be
+        resolved, for example because its target's directory does not exist yet, or whose
+        target's directory cannot be watched, keeps the retry schedule running, which resolves
+        the links again. Returns True if it set up a watch.
 
         This runs on the observer's thread too, which holds the observer's lock, so it takes only
         the watcher's own lock and never while the observer is called.
         """
         targets = set()
+        unresolved = []
         for path in self._paths:
             target = _link_target(path)
             if target is not None:
                 targets.add(target)
+            elif os.path.islink(path):
+                unresolved.append(path)
         directories = {os.path.dirname(target) for target in targets} - self._directories
         with self._lock:
             if self._closed:
-                return
+                return False
             self._target_paths = targets
             added = sorted(d for d in directories if d not in self._watches)
             removed = [d for d in self._target_directories if d not in directories]
@@ -1141,16 +1163,30 @@ class Watcher:
             stale = [(d, self._watches.pop(d, None)) for d in removed]
         for directory, watch in stale:
             self._unschedule(directory, watch)
+        watched_any = False
+        unwatched = False
         for directory in added:
             watch = self._schedule(directory)
             if watch is None:
+                unwatched = True
                 continue
             with self._lock:
                 keep = not self._closed and directory in self._target_directories and directory not in self._watches
                 if keep:
                     self._watches[directory] = watch
-            if not keep:
+            if keep:
+                watched_any = True
+            else:
                 self._unschedule(directory, watch)
+        if unresolved:
+            log.debug('Cannot resolve the target of %s yet. The links are resolved again shortly.', ", ".join(unresolved))
+        with self._lock:
+            if self._closed:
+                return watched_any
+            self._links_unresolved = bool(unresolved) or unwatched
+            if self._links_unresolved:
+                self._ensure_retry_scheduled_locked()
+        return watched_any
 
     def _handle_event(self, event) -> None:
         event_type = getattr(event, "event_type", None)

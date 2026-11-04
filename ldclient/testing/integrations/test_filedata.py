@@ -2551,6 +2551,72 @@ def test_watcher_follows_a_link_through_a_directory_link_that_is_replaced_as_in_
 
 
 @watchdog_required
+def test_watcher_follows_a_relative_link_in_a_directory_that_is_reached_through_another_link(tmp_path, make_watcher):
+    # A deployment layout: current is a link to a release directory, and the data file in the
+    # release is a relative link to a directory next to the releases.
+    releases = os.path.join(str(tmp_path), 'releases')
+    os.mkdir(releases)
+    os.mkdir(os.path.join(releases, '2026'))
+    os.mkdir(os.path.join(releases, 'shared'))
+    target = os.path.join(releases, 'shared', 'flags.json')
+    write_file(target, 'a')
+    make_symlink('../shared/flags.json', os.path.join(releases, '2026', 'flags.json'))
+    make_symlink('releases/2026', os.path.join(str(tmp_path), 'current'))
+    w = make_watcher([os.path.join(str(tmp_path), 'current', 'flags.json')])
+    w.require_no_change(0.15)
+    write_file(target, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_watches_the_target_of_a_link_once_the_target_directory_appears(tmp_path, make_watcher, monkeypatch):
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    config = os.path.join(str(tmp_path), 'config')
+    data = os.path.join(str(tmp_path), 'data')
+    os.mkdir(config)
+    target = os.path.join(data, 'flags.json')
+    make_symlink(target, os.path.join(config, 'flags.json'))
+    w = make_watcher([os.path.join(config, 'flags.json')])
+    w.require_no_change(0.15)
+
+    os.mkdir(data)
+    write_file(target, 'a')
+    # The retry that watches the target's directory signals a change so the file is read.
+    w.require_change()
+    w.drain()
+
+    write_file(target, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+@pytest.mark.skipif(not sys.platform.startswith('linux'), reason='the directory loss is reported through inotify')
+def test_watcher_watches_the_target_of_a_link_again_after_its_directory_is_deleted_and_recreated(tmp_path, make_watcher, monkeypatch):
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    config = os.path.join(str(tmp_path), 'config')
+    data = os.path.join(str(tmp_path), 'data')
+    os.mkdir(config)
+    os.mkdir(data)
+    target = os.path.join(data, 'flags.json')
+    write_file(target, 'a')
+    make_symlink(target, os.path.join(config, 'flags.json'))
+    w = make_watcher([os.path.join(config, 'flags.json')])
+    w.require_no_change(0.15)
+
+    shutil.rmtree(data)
+    w.require_change()
+    w.drain()
+
+    os.mkdir(data)
+    write_file(target, 'bb')
+    w.require_change()
+    w.drain()
+
+    write_file(target, 'ccc')
+    w.require_change()
+
+
+@watchdog_required
 def test_watcher_picks_up_directory_that_appears_later(tmp_path, make_watcher):
     directory = os.path.join(str(tmp_path), 'later')
     path = os.path.join(directory, 'data.json')
