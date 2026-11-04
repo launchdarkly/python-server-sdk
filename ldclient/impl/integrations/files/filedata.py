@@ -243,14 +243,15 @@ def _member_items(parsed: dict, name: str) -> Dict[str, Any]:
 
 def _definition(item: Any, key: str, kind_name: str) -> dict:
     """
-    Validates the shape of a flag or segment entry. The entry is stored under its map key. The
-    file format allows a definition to omit its own key and version, which the model requires,
-    so those two properties are filled in from the map key and a version of 1.
+    Validates the shape of a flag or segment entry. The map key is the entry's key for every
+    purpose: the entry is stored under it, duplicates are detected by it, and the definition's
+    own key is set to it, so that evaluations report the flag by that key. The file format
+    allows a definition to omit its version, which the model requires, so a version of 1 is
+    filled in.
     """
     if not isinstance(item, dict):
         raise ValueError('%s "%s" must be an object' % (kind_name, key))
-    if "key" not in item:
-        item["key"] = key
+    item["key"] = key
     if "version" not in item:
         item["version"] = 1
     return item

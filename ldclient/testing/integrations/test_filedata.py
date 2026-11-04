@@ -154,6 +154,22 @@ def test_parse_fills_in_missing_key_and_version():
     assert document.segments['seg1'].version == 1
 
 
+def test_parse_replaces_a_different_key_with_the_map_key():
+    document = parse_document(b'{"flags": {"flag1": {"key": "other-flag", "on": true}}, "segments": {"seg1": {"key": "other-segment"}}}')
+    assert list(document.flags.keys()) == ['flag1']
+    assert document.flags['flag1'].key == 'flag1'
+    assert list(document.segments.keys()) == ['seg1']
+    assert document.segments['seg1'].key == 'seg1'
+
+
+def test_merge_treats_entries_with_the_same_key_property_under_different_map_keys_as_different_flags():
+    document = parse_document(b'{"flags": {"flag1": {"key": "shared", "on": true}, "flag2": {"key": "shared", "on": false}}}')
+    result = merge([document], DuplicateKeysHandling.FAIL)
+    assert sorted(result.flags.keys()) == ['flag1', 'flag2']
+    assert result.flags['flag1'].key == 'flag1'
+    assert result.flags['flag2'].key == 'flag2'
+
+
 @pytest.mark.parametrize('content', [b'null', b' null\n', b'["a", "b"]', b'1', b'"text"', b'true'])
 def test_parse_rejects_a_json_document_that_is_not_an_object(content):
     with pytest.raises(ValueError) as excinfo:
