@@ -133,6 +133,12 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
         :attr:`ChangeDetection.POLLING`. The two modes are alternatives, so setting one replaces
         the other. :attr:`ChangeDetection.WATCHING` requires the ``watchdog`` package.
 
+        Watching follows edits to the configured files and to the targets of configured symbolic
+        links, including the update of a mounted Kubernetes ConfigMap. It does not follow a
+        deployment that points a link further along the path, or a configured directory, at
+        another location, such as a ``current`` link to a release directory, or that replaces a
+        configured directory. Use polling for such deployments.
+
         :param mode: the mode, as the enum or its string value (``"polling"`` or ``"watching"``)
         """
         self.__change_detection = ChangeDetection(mode)
