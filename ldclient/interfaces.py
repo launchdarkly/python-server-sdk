@@ -150,79 +150,51 @@ class FeatureStore(ABC):
         Returns whether the store has been initialized yet or not
         """
 
-    # WARN: This isn't a required method on a FeatureStore yet. The SDK will
-    # currently check if the provided store responds to this method, and if
-    # it does, will take appropriate action based on the documented behavior
-    # below. This will become required in a future major version release of
-    # the SDK.
-    #
-    # @abstractmethod
-    # def is_monitoring_enabled(self) -> bool:
-    #     """
-    #     Returns true if this data store implementation supports status
-    #     monitoring.
-    #
-    #     This is normally only true for persistent data stores but it could also
-    #     be true for any custom :class:`FeatureStore` implementation.
-    #
-    #     Returning true means that the store guarantees that if it ever enters
-    #     an invalid state (that is, an operation has failed or it knows that
-    #     operations cannot succeed at the moment), it will publish a status
-    #     update, and will then publish another status update once it has
-    #     returned to a valid state.
-    #
-    #     Custom implementations must implement :func:`FeatureStore.is_available`
-    #     which synchronously checks if the store is available. Without this
-    #     method, the SDK cannot ensure status updates will occur once the store
-    #     has gone offline.
-    #
-    #     The same value will be returned from
-    #     :func:`DataStoreStatusProvider.is_monitoring_enabled`.
-    #     """
+    @abstractmethod
+    def is_monitoring_enabled(self) -> bool:
+        """
+        Returns True if this store supports status monitoring.
 
-    # WARN: This isn't a required method on a FeatureStore. The SDK will
-    # check if the provided store responds to this method, and if it does,
-    # will take appropriate action based on the documented behavior below.
-    # Usage of this method will be dropped in a future version of the SDK.
-    #
-    # @abstractmethod
-    # def is_available(self) -> bool:
-    #     """
-    #     Tests whether the data store seems to be functioning normally.
-    #
-    #     This should not be a detailed test of different kinds of operations,
-    #     but just the smallest possible operation to determine whether (for
-    #     instance) we can reach the database.
-    #
-    #     Whenever one of the store's other methods throws an exception, the SDK
-    #     will assume that it may have become unavailable (e.g. the database
-    #     connection was lost). The SDK will then call is_available at intervals
-    #     until it returns true.
-    #
-    #     :return: true if the underlying data store is reachable
-    #     """
+        This is normally True only for persistent data stores. A custom :class:`FeatureStore`
+        implementation can also return True.
 
-    # WARN: This isn't a required method on a FeatureStore. The SDK will
-    # check if the provided store responds to this method, and if it does,
-    # will call it during shutdown to release any resources (such as database
-    # connections or connection pools) that the store may be using.
-    #
-    # @abstractmethod
-    # def close(self):
-    #     """
-    #     Releases any resources used by the data store implementation.
-    #
-    #     This method will be called by the SDK during shutdown to ensure proper
-    #     cleanup of resources such as database connections, connection pools,
-    #     network sockets, or other resources that should be explicitly released.
-    #
-    #     Implementations should be idempotent - calling close() multiple times
-    #     should be safe and have no additional effect after the first call.
-    #
-    #     This is particularly important for persistent data stores that maintain
-    #     connection pools or other long-lived resources that should be properly
-    #     cleaned up when the SDK is shut down.
-    #     """
+        If this method returns True, the store must publish a status update when it becomes
+        unavailable. An unavailable store is a store where an operation failed, or where the store
+        knows that operations cannot succeed. The store must then publish another status update
+        when it becomes available again. The SDK uses :func:`is_available` to detect this change.
+
+        In-memory stores must return False.
+
+        The SDK returns the same value from :func:`DataStoreStatusProvider.is_monitoring_enabled`.
+
+        :return: True if the store supports status monitoring
+        """
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """
+        Tests whether the data store operates normally.
+
+        Do not test different kinds of operations in detail. Do the smallest possible operation
+        that shows that the store works. For example, make sure that the database is reachable.
+
+        When one of the other methods of the store raises an exception, the SDK assumes that the
+        store can be unavailable. If :func:`is_monitoring_enabled` returns True, the SDK then calls
+        this method at intervals until it returns True.
+
+        A store that cannot become unavailable, such as an in-memory store, must return True.
+
+        :return: True if the underlying data store is reachable
+        """
+
+    @abstractmethod
+    def close(self) -> None:
+        """
+        Releases the resources that the store uses, such as database connections.
+
+        The SDK calls this method when the client closes. A later call must have no effect.
+        A store that has no resources to release can do nothing.
+        """
 
 
 class FeatureStoreCore(ABC):
@@ -295,27 +267,27 @@ class FeatureStoreCore(ABC):
         this value; ``CachingStoreWrapper`` will only call it when necessary.
         """
 
-    # WARN: This isn't a required method on a FeatureStoreCore. The SDK will
-    # check if the provided store responds to this method, and if it does,
-    # will take appropriate action based on the documented behavior below.
-    # Usage of this method will be dropped in a future version of the SDK.
-    #
-    # @abstractmethod
-    # def is_available(self) -> bool:
-    #     """
-    #     Tests whether the data store seems to be functioning normally.
-    #
-    #     This should not be a detailed test of different kinds of operations,
-    #     but just the smallest possible operation to determine whether (for
-    #     instance) we can reach the database.
-    #
-    #     Whenever one of the store's other methods throws an exception, the SDK
-    #     will assume that it may have become unavailable (e.g. the database
-    #     connection was lost). The SDK will then call is_available at intervals
-    #     until it returns true.
-    #
-    #     :return: true if the underlying data store is reachable
-    #     """
+    @abstractmethod
+    def is_available(self) -> bool:
+        """
+        Tests whether the data store operates normally. This is the same as
+        :func:`FeatureStore.is_available`.
+
+        :class:`ldclient.feature_store_helpers.CachingStoreWrapper` reports status monitoring as
+        enabled for all cores. When an operation fails, the SDK calls this method at intervals
+        until it returns True.
+
+        :return: True if the underlying data store is reachable
+        """
+
+    @abstractmethod
+    def close(self) -> None:
+        """
+        Releases the resources that the core uses, such as database connections.
+
+        :class:`ldclient.feature_store_helpers.CachingStoreWrapper` calls this method when the
+        wrapper closes. A later call must have no effect.
+        """
 
 
 class AsyncReadOnlyStore(Protocol):
@@ -434,14 +406,38 @@ class AsyncFeatureStore(ABC):
         Implementations should latch a positive result: once the store is initialized it stays so.
         """
 
+    @abstractmethod
+    def is_monitoring_enabled(self) -> bool:
+        """
+        Returns True if this store supports status monitoring.
+
+        This has the same meaning as :func:`FeatureStore.is_monitoring_enabled`. In-memory stores
+        must return False.
+
+        :return: True if the store supports status monitoring
+        """
+
+    @abstractmethod
+    async def is_available(self) -> bool:
+        """
+        Tests whether the data store operates normally.
+
+        This has the same meaning as :func:`FeatureStore.is_available`. If
+        :func:`is_monitoring_enabled` returns True, the SDK calls this method at intervals after an
+        operation fails, until it returns True. A store that cannot become unavailable must return
+        True.
+
+        :return: True if the underlying data store is reachable
+        """
+
+    @abstractmethod
     async def close(self) -> None:
         """
-        Releases any resources used by the store implementation.
+        Releases the resources that the store uses, such as database connections.
 
-        The default implementation is a no-op. Persistent store implementations should
-        override this to close connections and release resources on shutdown.
+        The SDK calls this method when the client closes. A later call must have no effect.
+        A store that has no resources to release can do nothing.
         """
-        pass
 
 
 class AsyncFeatureStoreCore(ABC):
@@ -521,41 +517,49 @@ class AsyncFeatureStoreCore(ABC):
         """
         ...
 
-    # An implementation may also define ``async def is_available(self) -> bool`` and
-    # ``async def close(self) -> None``. The wrapper detects and uses them if present, so they are
-    # not declared here as required methods.
-
-
-# Internal use only. Common methods for components that perform a task in the background.
-class BackgroundOperation:
-
-    # noinspection PyMethodMayBeStatic
-    def start(self):
+    @abstractmethod
+    async def is_available(self) -> bool:
         """
-        Starts an operation in the background.  Should return immediately and not block.
-        """
-        pass
+        Tests whether the data store operates normally. This is the same as
+        :func:`AsyncFeatureStore.is_available`.
 
-    def stop(self):
-        """
-        Stops an operation running in the background.  May return before the operation is actually stopped.
-        """
-        pass
+        :class:`ldclient.async_feature_store_helpers.AsyncCachingStoreWrapper` reports status
+        monitoring as enabled for all cores. When an operation fails, the SDK calls this method at
+        intervals until it returns True.
 
-    # noinspection PyMethodMayBeStatic
-    def is_alive(self) -> bool:
+        :return: True if the underlying data store is reachable
         """
-        Returns whether the operation is alive or not
+        ...
+
+    @abstractmethod
+    async def close(self) -> None:
         """
-        return True
+        Releases the resources that the core uses, such as database connections.
+
+        :class:`ldclient.async_feature_store_helpers.AsyncCachingStoreWrapper` calls this method
+        when the wrapper closes. A later call must have no effect.
+        """
+        ...
 
 
-class UpdateProcessor(BackgroundOperation, ABC):
+class UpdateProcessor(ABC):
     """
     Interface for the component that obtains feature flag data in some way and passes it to a
     :class:`FeatureStore`. The built-in implementations of this are the client's standard streaming
     or polling behavior. For testing purposes, there is also :func:`ldclient.integrations.Files.new_data_source()`.
     """
+
+    def start(self):
+        """
+        Starts the update processor in the background. Returns immediately and does not block.
+        """
+        pass
+
+    def stop(self):
+        """
+        Stops the update processor. Can return before the background work stops.
+        """
+        pass
 
     def initialized(self) -> bool:  # type: ignore[empty-body]
         """

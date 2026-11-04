@@ -1,3 +1,4 @@
+import gzip
 import json
 import queue
 import socket
@@ -122,7 +123,10 @@ class MockServerRequest:
         self.headers = request.headers
         content_length = int(request.headers.get('content-length', 0))
         if content_length:
-            self.body = request.rfile.read(content_length).decode('UTF-8')
+            raw = request.rfile.read(content_length)
+            if request.headers.get('content-encoding') == 'gzip':
+                raw = gzip.decompress(raw)
+            self.body = raw.decode('UTF-8')
         else:
             self.body = None
 

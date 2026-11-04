@@ -119,6 +119,7 @@ class AsyncFDv1(AsyncDataSystem):
     async def stop(self):
         if self._update_processor is not None:
             await self._update_processor.stop()
+        await self._store.close()
 
     @property
     def store(self) -> AsyncReadOnlyStore:

@@ -28,7 +28,7 @@ class AsyncInMemoryFeatureStore(AsyncFeatureStore, DiagnosticDescription):
     def is_monitoring_enabled(self) -> bool:
         return False
 
-    def is_available(self) -> bool:
+    async def is_available(self) -> bool:
         return True
 
     async def get(self, kind: VersionedDataKind, key: str) -> Optional[Any]:

@@ -38,6 +38,15 @@ class ErroringFeatureStore(FeatureStore):
     def initialized(self):
         return True
 
+    def is_monitoring_enabled(self):
+        return False
+
+    def is_available(self):
+        return True
+
+    def close(self):
+        pass
+
 
 def get_log_lines(caplog, level):
     loglines = caplog.records
@@ -128,7 +137,7 @@ def test_variation_detail_for_flag_that_evaluates_to_none():
     expected = EvaluationDetail('default', None, {'kind': 'OFF'})
     actual = client.variation_detail('feature.key', user, default='default')
     assert expected == actual
-    assert actual.is_default_value() is True
+    assert actual.is_default_value is True
 
 
 def test_variation_when_feature_store_throws_error(caplog):
@@ -145,7 +154,7 @@ def test_variation_detail_when_feature_store_throws_error(caplog):
     expected = EvaluationDetail('default', None, {'kind': 'ERROR', 'errorKind': 'EXCEPTION'})
     actual = client.variation_detail('feature.key', Context.from_dict({"key": "user", "kind": "user"}), default='default')
     assert expected == actual
-    assert actual.is_default_value() is True
+    assert actual.is_default_value is True
     errlog = get_log_lines(caplog, 'ERROR')
     assert errlog == ['Unexpected error while retrieving feature flag "feature.key": NotImplementedError()']
 
@@ -214,6 +223,15 @@ class RawDictFeatureStore(FeatureStore):
     @property
     def initialized(self):
         return True
+
+    def is_monitoring_enabled(self):
+        return False
+
+    def is_available(self):
+        return True
+
+    def close(self):
+        pass
 
 
 def test_all_flags_state_decodes_dicts_from_custom_store():

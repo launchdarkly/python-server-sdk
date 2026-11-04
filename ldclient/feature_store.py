@@ -84,6 +84,9 @@ class InMemoryFeatureStore(FeatureStore, DiagnosticDescription):
     def is_available(self) -> bool:
         return True
 
+    def close(self) -> None:
+        """Does nothing. The in-memory store has no resources to release."""
+
     def get(self, kind: VersionedDataKind, key: str, callback: Callable[[Any], Any] = lambda x: x) -> Any:
         """ """
         with self._lock.read():

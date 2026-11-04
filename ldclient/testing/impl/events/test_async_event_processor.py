@@ -37,7 +37,7 @@ from ldclient.impl.events.types import (
     EventInputIdentify
 )
 from ldclient.testing.builders import FlagBuilder
-from ldclient.testing.stub_util import _MockHTTPHeaderDict
+from ldclient.testing.stub_util import _MockHTTPHeaderDict, decode_request_body
 
 pytestmark = pytest.mark.asyncio
 
@@ -83,6 +83,13 @@ class MockAioHttp:
 
     @property
     def request_data(self):
+        """Return the body of the last request. Decompress the body if it is gzip-encoded."""
+        if len(self._recorded_requests) != 0:
+            return decode_request_body(*self._recorded_requests[-1])
+
+    @property
+    def raw_request_data(self):
+        """Return the body of the last request as the SDK sent it."""
         if len(self._recorded_requests) != 0:
             return self._recorded_requests[-1][1]
 
@@ -481,15 +488,28 @@ async def test_does_not_block_on_full_inbox():
     assert had_no_more
 
 
-async def test_event_payload_is_gzip_compressed_when_enabled():
+async def test_event_payload_is_gzip_compressed_by_default():
     mock_http = MockAioHttp()
-    async with make_processor(mock_http, enable_event_compression=True) as ep:
+    async with make_processor(mock_http) as ep:
         ep.send_event(EventInputIdentify(timestamp, context))
         ep.flush()
         await ep._wait_until_inactive()
 
         assert mock_http.request_headers.get('Content-Encoding') == 'gzip'
-        output = json.loads(gzip.decompress(mock_http.request_data))
+        output = json.loads(gzip.decompress(mock_http.raw_request_data))
+        assert len(output) == 1
+        assert output[0]['kind'] == 'identify'
+
+
+async def test_event_payload_is_not_compressed_when_disabled():
+    mock_http = MockAioHttp()
+    async with make_processor(mock_http, enable_event_compression=False) as ep:
+        ep.send_event(EventInputIdentify(timestamp, context))
+        ep.flush()
+        await ep._wait_until_inactive()
+
+        assert mock_http.request_headers.get('Content-Encoding') is None
+        output = json.loads(mock_http.raw_request_data)
         assert len(output) == 1
         assert output[0]['kind'] == 'identify'
 

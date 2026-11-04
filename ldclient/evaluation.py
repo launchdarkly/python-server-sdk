@@ -64,9 +64,10 @@ class EvaluationDetail:
         """
         return self.__reason
 
+    @property
     def is_default_value(self) -> bool:
-        """Returns True if the flag evaluated to the default value rather than one of its
-        variations.
+        """This property is True when the flag evaluation gives the default value and not one of
+        the flag variations.
         """
         return self.__variation_index is None
 

@@ -52,6 +52,10 @@ class _ConsulFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         except BaseException:
             return False
 
+    def close(self) -> None:
+        """Closes the HTTP session of the Consul client."""
+        self._client.http.session.close()
+
     def init_internal(self, all_data):
         # Start by reading the existing keys; we will later delete any of these that weren't in all_data.
         index, keys = self._client.kv.get(self._prefix, recurse=True, keys=True)

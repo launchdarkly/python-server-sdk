@@ -80,9 +80,6 @@ class MockAsyncUpdateProcessor(AsyncUpdateProcessor):
     def initialized(self) -> bool:
         return True
 
-    def is_alive(self) -> bool:
-        return True
-
 
 def with_async_update_sink(config, store):
     """

@@ -72,6 +72,12 @@ class FakeAsyncFeatureStore(AsyncFeatureStore):
     async def is_initialized(self) -> bool:
         return self._inited
 
+    def is_monitoring_enabled(self) -> bool:
+        return False
+
+    async def is_available(self) -> bool:
+        return True
+
     async def close(self) -> None:
         self.closed = True
 
@@ -285,6 +291,12 @@ class FakeAsyncCore(AsyncFeatureStoreCore):
     async def initialized_internal(self) -> bool:
         self.query_count += 1
         return self.inited
+
+    async def is_available(self) -> bool:
+        return True
+
+    async def close(self) -> None:
+        pass
 
 
 @pytest.mark.asyncio
