@@ -2456,9 +2456,10 @@ def test_watcher_detects_file_deletion(tmp_path, make_watcher):
     w.require_change()
 
 
-def make_symlink(target: str, link: str) -> None:
+def make_symlink(target: str, link: str, directory: bool = False) -> None:
+    # Windows needs to know whether a link leads to a directory when the link is created.
     try:
-        os.symlink(target, link)
+        os.symlink(target, link, target_is_directory=directory)
     except (OSError, NotImplementedError) as e:
         pytest.skip('symbolic links cannot be created here: %s' % e)
 
@@ -2533,14 +2534,14 @@ def test_watcher_follows_a_link_through_a_directory_link_that_is_replaced_as_in_
     os.mkdir(config)
     os.mkdir(old)
     write_file(os.path.join(old, 'flags.json'), 'a')
-    make_symlink('..2026_a', os.path.join(config, '..data'))
+    make_symlink('..2026_a', os.path.join(config, '..data'), directory=True)
     make_symlink('..data/flags.json', os.path.join(config, 'flags.json'))
     w = make_watcher([os.path.join(config, 'flags.json')])
     w.require_no_change(0.15)
 
     os.mkdir(new)
     write_file(os.path.join(new, 'flags.json'), 'bb')
-    make_symlink('..2026_b', os.path.join(config, '..data_tmp'))
+    make_symlink('..2026_b', os.path.join(config, '..data_tmp'), directory=True)
     os.replace(os.path.join(config, '..data_tmp'), os.path.join(config, '..data'))
     shutil.rmtree(old)
     w.require_change()
@@ -2561,7 +2562,7 @@ def test_watcher_follows_a_relative_link_in_a_directory_that_is_reached_through_
     target = os.path.join(releases, 'shared', 'flags.json')
     write_file(target, 'a')
     make_symlink('../shared/flags.json', os.path.join(releases, '2026', 'flags.json'))
-    make_symlink('releases/2026', os.path.join(str(tmp_path), 'current'))
+    make_symlink(os.path.join('releases', '2026'), os.path.join(str(tmp_path), 'current'), directory=True)
     w = make_watcher([os.path.join(str(tmp_path), 'current', 'flags.json')])
     w.require_no_change(0.15)
     write_file(target, 'bb')
@@ -2584,7 +2585,7 @@ def test_watcher_signals_when_a_link_resolves_to_a_target_in_a_directory_that_is
 
     write_file(os.path.join(other, 'flags.json'), 'a')
     w.drain()
-    make_symlink(other, os.path.join(str(tmp_path), 'data'))
+    make_symlink(other, os.path.join(str(tmp_path), 'data'), directory=True)
     # The retry that resolves the link signals a change so the file is read.
     w.require_change()
 
@@ -2604,8 +2605,9 @@ def test_watcher_keeps_a_target_watch_that_another_thread_set_up_at_the_same_tim
 
     # Two threads resolve the links at once and both find the target's directory unwatched. The
     # observer gives both the same watch, and the other thread stores it first.
-    real_data = os.path.realpath(data)
     with watcher._lock:
+        assert len(watcher._target_directories) == 1
+        real_data = next(iter(watcher._target_directories))
         watcher._watches.pop(real_data)
     schedule = watcher._schedule
 
@@ -2646,6 +2648,9 @@ def test_watcher_warns_once_while_a_directory_cannot_be_watched_and_again_once_i
     write_file(path, 'a')
     w.require_change()
     w.drain()
+    if not sys.platform.startswith('linux'):
+        # The loss of a watched directory is reported through inotify.
+        return
 
     # Once the directory was watched, losing it again is reported again.
     os.remove(path)
