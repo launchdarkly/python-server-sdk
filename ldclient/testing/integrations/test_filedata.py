@@ -1,5 +1,7 @@
 import logging
 import os
+import shutil
+import sys
 import threading
 import time
 from queue import Empty, Queue
@@ -2451,6 +2453,100 @@ def test_watcher_detects_file_deletion(tmp_path, make_watcher):
     write_file(path, 'a')
     w = make_watcher([path])
     os.remove(path)
+    w.require_change()
+
+
+def make_symlink(target: str, link: str) -> None:
+    try:
+        os.symlink(target, link)
+    except (OSError, NotImplementedError) as e:
+        pytest.skip('symbolic links cannot be created here: %s' % e)
+
+
+@watchdog_required
+def test_watcher_detects_a_change_to_the_target_of_a_link_in_another_directory(tmp_path, make_watcher):
+    data = os.path.join(str(tmp_path), 'data')
+    config = os.path.join(str(tmp_path), 'config')
+    os.mkdir(data)
+    os.mkdir(config)
+    target = os.path.join(data, 'flags.json')
+    link = os.path.join(config, 'flags.json')
+    write_file(target, 'a')
+    make_symlink(target, link)
+    w = make_watcher([link])
+    w.require_no_change(0.15)
+    write_file(target, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_detects_a_change_to_the_target_of_a_link_in_the_same_directory(tmp_path, make_watcher):
+    target = os.path.join(str(tmp_path), 'real.json')
+    link = os.path.join(str(tmp_path), 'data.json')
+    write_file(target, 'a')
+    make_symlink(target, link)
+    w = make_watcher([link])
+    w.require_no_change(0.15)
+    write_file(target, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_follows_a_link_that_is_replaced_to_point_at_another_directory(tmp_path, make_watcher):
+    one = os.path.join(str(tmp_path), 'one')
+    two = os.path.join(str(tmp_path), 'two')
+    config = os.path.join(str(tmp_path), 'config')
+    for directory in (one, two, config):
+        os.mkdir(directory)
+    first = os.path.join(one, 'flags.json')
+    second = os.path.join(two, 'flags.json')
+    link = os.path.join(config, 'flags.json')
+    write_file(first, 'a')
+    write_file(second, 'a')
+    make_symlink(first, link)
+    w = make_watcher([link])
+    w.require_no_change(0.15)
+
+    # Replaced by rename, as deployment tools replace a link.
+    make_symlink(second, link + '.tmp')
+    os.replace(link + '.tmp', link)
+    w.require_change()
+    w.drain()
+
+    write_file(second, 'bb')
+    w.require_change()
+    w.drain()
+
+    write_file(first, 'ccc')
+    w.require_no_change()
+
+
+@watchdog_required
+@pytest.mark.skipif(not sys.platform.startswith('linux'), reason='the directory loss is reported through inotify')
+def test_watcher_follows_a_link_through_a_directory_link_that_is_replaced_as_in_a_configmap(tmp_path, make_watcher):
+    # The layout that Kubernetes uses for a mounted ConfigMap: the file is a link through the
+    # ..data link to a timestamped directory, and an update writes a new directory, replaces
+    # ..data, and deletes the old directory.
+    config = os.path.join(str(tmp_path), 'config')
+    old = os.path.join(config, '..2026_a')
+    new = os.path.join(config, '..2026_b')
+    os.mkdir(config)
+    os.mkdir(old)
+    write_file(os.path.join(old, 'flags.json'), 'a')
+    make_symlink('..2026_a', os.path.join(config, '..data'))
+    make_symlink('..data/flags.json', os.path.join(config, 'flags.json'))
+    w = make_watcher([os.path.join(config, 'flags.json')])
+    w.require_no_change(0.15)
+
+    os.mkdir(new)
+    write_file(os.path.join(new, 'flags.json'), 'bb')
+    make_symlink('..2026_b', os.path.join(config, '..data_tmp'))
+    os.replace(os.path.join(config, '..data_tmp'), os.path.join(config, '..data'))
+    shutil.rmtree(old)
+    w.require_change()
+    w.drain()
+
+    write_file(os.path.join(new, 'flags.json'), 'ccc')
     w.require_change()
 
 

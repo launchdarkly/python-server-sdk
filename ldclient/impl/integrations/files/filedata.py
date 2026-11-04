@@ -893,6 +893,34 @@ class Poller:
             self._on_change()
 
 
+# The most symbolic links followed from one configured file, as in the operating system's own
+# limit, so that a loop of links ends.
+_MAX_LINKS = 40
+
+
+def _link_target(path: str) -> Optional[str]:
+    """
+    The path of the file that a configured symbolic link finally points to, with its directory
+    resolved to a real path, or None when the configured file is not a link, the target's
+    directory does not exist, or the links loop. The target file itself need not exist, so that
+    a link created ahead of its target is followed once the target appears.
+    """
+    try:
+        if not os.path.islink(path):
+            return None
+        target = path
+        for _ in range(_MAX_LINKS):
+            if not os.path.islink(target):
+                directory = os.path.dirname(target)
+                if not os.path.isdir(directory):
+                    return None
+                return os.path.join(os.path.realpath(directory), os.path.basename(target))
+            target = os.path.join(os.path.dirname(target), os.readlink(target))
+        return None
+    except (OSError, ValueError):
+        return None
+
+
 def _event_path(value: Any) -> Optional[str]:
     """The path carried by a watchdog event as text, or None when the event has none."""
     if isinstance(value, bytes):
@@ -914,6 +942,12 @@ class Watcher:
     When a retry sets up a watch, the callback runs once, so that changes made while the watch
     was not in place are picked up.
 
+    A configured file can be a symbolic link to a file in another directory. The directory of
+    the link's target is watched as well, for the target's path, so that an edit to the target
+    is reported. The links are resolved again after every reported change, after a retry sets up
+    watches, and when a directory that holds a target is deleted, as happens when a Kubernetes
+    ConfigMap volume is updated. So a link that comes to point elsewhere is followed.
+
     Notifications for the watched paths invoke the callback. The callback can run several times
     for one logical edit, so feed it into a :class:`Reloader`.
     """
@@ -922,10 +956,10 @@ class Watcher:
         if not have_watchdog:
             raise RuntimeError("the watchdog package is required to watch files for changes")
         self._on_change = on_change
+        self._paths = [os.path.abspath(path) for path in paths]
         self._watched_paths: Set[str] = set()
         self._directories: Set[str] = set()
-        for path in paths:
-            absolute = os.path.abspath(path)
+        for absolute in self._paths:
             real_directory = os.path.realpath(os.path.dirname(absolute))
             self._watched_paths.add(os.path.join(real_directory, os.path.basename(absolute)))
             self._directories.add(real_directory)
@@ -952,8 +986,14 @@ class Watcher:
         # Serializes the watch setup against close, so that a setup in progress cannot start
         # anything after close has stopped the observer.
         self._setup_lock = threading.Lock()
+        # The files that the configured symbolic links point to, and the directories that are
+        # watched only because a target is in them. A directory that is also configured is in
+        # _directories and keeps its own watch.
+        self._target_paths: Set[str] = set()
+        self._target_directories: Set[str] = set()
 
         self._set_up_watches(is_retry=False)
+        self._refresh_links()
 
     def _set_up_watches(self, is_retry: bool) -> None:
         """
@@ -993,6 +1033,7 @@ class Watcher:
                 if len(self._pending_directories) > 0:
                     self._ensure_retry_scheduled_locked()
         if is_retry and armed:
+            self._refresh_links()
             self._on_change()
 
     def _schedule(self, directory: str) -> Optional[Any]:
@@ -1041,24 +1082,97 @@ class Watcher:
             self._pending_directories.add(directory)
             self._ensure_retry_scheduled_locked()
         log.warning('Directory "%s" no longer exists. It is watched again when it exists.', directory)
-        if stale is not None:
-            # The observer keeps a watch whose directory is gone, and a later watch on the same
-            # path would reuse it, so it is removed.
-            try:
-                self._observer.unschedule(stale)
-            except Exception as e:
-                log.debug('Unable to remove the watch on directory "%s": %s', directory, e)
+        self._unschedule(directory, stale)
+        with self._lock:
+            held_target = any(os.path.dirname(target) == directory for target in self._target_paths)
+        if held_target:
+            # The file that a configured link names has changed.
+            self._refresh_links()
+            self._on_change()
+
+    def _target_directory_lost(self, directory: str) -> None:
+        """
+        Drops the watch on a directory that held only link targets, resolves the links again,
+        and runs the callback, since the file that a configured link names has changed.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            stale = self._watches.pop(directory, None)
+            self._target_directories.discard(directory)
+        log.debug('Directory "%s" of a linked data file no longer exists. The links are resolved again.', directory)
+        self._unschedule(directory, stale)
+        self._refresh_links()
+        self._on_change()
+
+    def _unschedule(self, directory: str, watch: Optional[Any]) -> None:
+        if watch is None:
+            return
+        # The observer keeps a watch whose directory is gone, and a later watch on the same path
+        # would reuse it, so it is removed.
+        try:
+            self._observer.unschedule(watch)
+        except Exception as e:
+            log.debug('Unable to remove the watch on directory "%s": %s', directory, e)
+
+    def _refresh_links(self) -> None:
+        """
+        Resolves each configured file that is a symbolic link and watches the directory of each
+        target that is not a configured directory, which has a watch of its own. A target in a
+        directory that does not exist is not watched. A directory that no longer holds a target
+        of a configured link loses its watch.
+
+        This runs on the observer's thread too, which holds the observer's lock, so it takes only
+        the watcher's own lock and never while the observer is called.
+        """
+        targets = set()
+        for path in self._paths:
+            target = _link_target(path)
+            if target is not None:
+                targets.add(target)
+        directories = {os.path.dirname(target) for target in targets} - self._directories
+        with self._lock:
+            if self._closed:
+                return
+            self._target_paths = targets
+            added = sorted(d for d in directories if d not in self._watches)
+            removed = [d for d in self._target_directories if d not in directories]
+            self._target_directories = set(directories)
+            stale = [(d, self._watches.pop(d, None)) for d in removed]
+        for directory, watch in stale:
+            self._unschedule(directory, watch)
+        for directory in added:
+            watch = self._schedule(directory)
+            if watch is None:
+                continue
+            with self._lock:
+                keep = not self._closed and directory in self._target_directories and directory not in self._watches
+                if keep:
+                    self._watches[directory] = watch
+            if not keep:
+                self._unschedule(directory, watch)
 
     def _handle_event(self, event) -> None:
         event_type = getattr(event, "event_type", None)
         if event_type not in _CHANGE_EVENT_TYPES:
             return
         src_path = _event_path(getattr(event, "src_path", None))
-        if event_type in ("deleted", "moved") and getattr(event, "is_directory", False) and src_path in self._directories:
-            self._directory_lost(src_path)
-            return
+        if event_type in ("deleted", "moved") and getattr(event, "is_directory", False):
+            if src_path in self._directories:
+                self._directory_lost(src_path)
+                return
+            with self._lock:
+                is_target_directory = src_path is not None and src_path in self._target_directories
+            if src_path is not None and is_target_directory:
+                self._target_directory_lost(src_path)
+                return
+        with self._lock:
+            target_paths = self._target_paths
         for candidate in (src_path, _event_path(getattr(event, "dest_path", None))):
-            if candidate in self._watched_paths:
+            if candidate in self._watched_paths or candidate in target_paths:
+                # The change can be to a configured link itself, so the links are resolved again
+                # first.
+                self._refresh_links()
                 self._on_change()
                 return
 
