@@ -434,21 +434,21 @@ class Reloader:
     signals, retains the last good result on failure by not calling ``apply``, retries after
     failures, and skips applications that would change nothing.
 
-    A file can be rewritten in place: a writer truncates it and then writes the new content, and
-    a load in between finds it empty. When retries are enabled, a load that finds a file with no
-    entries, because it is empty or holds only what its parser reads as nothing (a YAML comment
-    or document marker), while that file's content is in effect, holds the file back: it keeps
-    the current data without reporting a failure, and the other files' changes wait too, since a
-    load applies all files or none. The file is held back until it has stayed so, without being
-    written, for the retry delay; a change of its modification time or size starts the delay
-    over. Each file is held back for at most five retry delays after a load first held it back,
-    until a load holds nothing back, so a file that keeps being rewritten is applied in the end
-    without cutting short another file's rewrite. A file whose content is not in effect, such as a
-    placeholder that has always been empty, is never held back. Every file is read and parsed,
-    even after another file fails, before any is held back, so files emptied together wait
-    together, and a file that cannot be read or parsed fails the load, with the first failure,
-    even while another is held back. The clock is read after each file's
-    own read, so a slow read of another file does not shorten a file's delay.
+    A file can be rewritten in place: a writer truncates it and then writes the new content, and a
+    load in between finds it empty. When retries are enabled, a load that finds a file with no
+    entries, because it is empty or holds only what its parser reads as nothing (a YAML comment or
+    document marker), while that file's content is in effect, holds the file back: it keeps the
+    current data without reporting a failure, and the other files' changes wait too, since a load
+    applies all files or none. The file is held back until it has stayed so, without being written,
+    for the retry delay; a change of its modification time or size starts the delay over. Each file
+    is held back for at most five retry delays after a load first held it back, until a load holds
+    nothing back, so a file that keeps being rewritten is applied in the end without cutting short
+    another file's rewrite. A file whose content is not in effect, such as a placeholder that has
+    always been empty, is never held back. Every file is read and parsed, even after another file
+    fails, before any is held back, so files emptied together wait together, and a file that cannot
+    be read or parsed fails the load, with the first failure, even while another is held back. The
+    clock is read after each file's own read, so a slow read of another file does not shorten a
+    file's delay.
 
     The worker thread starts on the first :meth:`reload_now` or :meth:`trigger` call, so a
     reloader that is constructed but never used does not leak a thread.
