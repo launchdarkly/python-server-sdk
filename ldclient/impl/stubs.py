@@ -16,9 +16,6 @@ class NullEventProcessor(EventProcessor):
     def stop(self):
         pass
 
-    def is_alive(self):
-        return False
-
     def send_event(self, event):
         pass
 
@@ -36,9 +33,6 @@ class NullUpdateProcessor(UpdateProcessor):
     def stop(self):
         pass
 
-    def is_alive(self):
-        return False
-
     def initialized(self):
         return True
 
@@ -53,9 +47,6 @@ class AsyncNullEventProcessor(AsyncEventProcessor):
 
     async def stop(self):
         pass
-
-    def is_alive(self):
-        return False
 
     def send_event(self, event):
         pass

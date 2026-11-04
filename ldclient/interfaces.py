@@ -542,36 +542,24 @@ class AsyncFeatureStoreCore(ABC):
         ...
 
 
-# Internal use only. Common methods for components that perform a task in the background.
-class BackgroundOperation:
-
-    # noinspection PyMethodMayBeStatic
-    def start(self):
-        """
-        Starts an operation in the background.  Should return immediately and not block.
-        """
-        pass
-
-    def stop(self):
-        """
-        Stops an operation running in the background.  May return before the operation is actually stopped.
-        """
-        pass
-
-    # noinspection PyMethodMayBeStatic
-    def is_alive(self) -> bool:
-        """
-        Returns whether the operation is alive or not
-        """
-        return True
-
-
-class UpdateProcessor(BackgroundOperation, ABC):
+class UpdateProcessor(ABC):
     """
     Interface for the component that obtains feature flag data in some way and passes it to a
     :class:`FeatureStore`. The built-in implementations of this are the client's standard streaming
     or polling behavior. For testing purposes, there is also :func:`ldclient.integrations.Files.new_data_source()`.
     """
+
+    def start(self):
+        """
+        Starts the update processor in the background. Returns immediately and does not block.
+        """
+        pass
+
+    def stop(self):
+        """
+        Stops the update processor. Can return before the background work stops.
+        """
+        pass
 
     def initialized(self) -> bool:  # type: ignore[empty-body]
         """
