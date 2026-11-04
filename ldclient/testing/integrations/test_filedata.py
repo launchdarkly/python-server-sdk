@@ -2569,6 +2569,92 @@ def test_watcher_follows_a_relative_link_in_a_directory_that_is_reached_through_
 
 
 @watchdog_required
+def test_watcher_signals_when_a_link_resolves_to_a_target_in_a_directory_that_is_already_watched(tmp_path, make_watcher, monkeypatch):
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    config = os.path.join(str(tmp_path), 'config')
+    other = os.path.join(str(tmp_path), 'other')
+    os.mkdir(config)
+    os.mkdir(other)
+    write_file(os.path.join(other, 'other.json'), 'a')
+    # The link leads through data, which does not exist yet, to a directory that the watcher
+    # already watches because another configured file is in it.
+    make_symlink(os.path.join(str(tmp_path), 'data', 'flags.json'), os.path.join(config, 'flags.json'))
+    w = make_watcher([os.path.join(config, 'flags.json'), os.path.join(other, 'other.json')])
+    w.require_no_change(0.15)
+
+    write_file(os.path.join(other, 'flags.json'), 'a')
+    w.drain()
+    make_symlink(other, os.path.join(str(tmp_path), 'data'))
+    # The retry that resolves the link signals a change so the file is read.
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_keeps_a_target_watch_that_another_thread_set_up_at_the_same_time(tmp_path, make_watcher, monkeypatch):
+    data = os.path.join(str(tmp_path), 'data')
+    config = os.path.join(str(tmp_path), 'config')
+    os.mkdir(data)
+    os.mkdir(config)
+    target = os.path.join(data, 'flags.json')
+    write_file(target, 'a')
+    make_symlink(target, os.path.join(config, 'flags.json'))
+    w = make_watcher([os.path.join(config, 'flags.json')])
+    w.require_no_change(0.15)
+    watcher = w.watcher
+
+    # Two threads resolve the links at once and both find the target's directory unwatched. The
+    # observer gives both the same watch, and the other thread stores it first.
+    real_data = os.path.realpath(data)
+    with watcher._lock:
+        watcher._watches.pop(real_data)
+    schedule = watcher._schedule
+
+    def schedule_while_another_thread_stores_the_watch(directory):
+        watch = schedule(directory)
+        with watcher._lock:
+            watcher._watches[directory] = watch
+        return watch
+
+    monkeypatch.setattr(watcher, '_schedule', schedule_while_another_thread_stores_the_watch)
+    unschedule = mock.Mock(wraps=watcher._observer.unschedule)
+    monkeypatch.setattr(watcher._observer, 'unschedule', unschedule)
+    watcher._refresh_links()
+
+    unschedule.assert_not_called()
+    write_file(target, 'bb')
+    w.require_change()
+
+
+@watchdog_required
+def test_watcher_warns_once_while_a_directory_cannot_be_watched_and_again_once_it_was_watched(tmp_path, make_watcher, monkeypatch, caplog):
+    monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
+    caplog.set_level(logging.DEBUG)
+    directory = os.path.join(str(tmp_path), 'later')
+    path = os.path.join(directory, 'data.json')
+    message = 'Cannot watch directory "%s" for changes yet because it does not exist' % directory
+
+    def records(level):
+        return [r for r in caplog.records if r.levelno == level and r.getMessage() == message]
+
+    w = make_watcher([path])
+    # Several retries fail the same way.
+    time.sleep(SHORT_DELAY * 6)
+    assert len(records(logging.WARNING)) == 1
+    assert len(records(logging.DEBUG)) >= 2
+
+    os.mkdir(directory)
+    write_file(path, 'a')
+    w.require_change()
+    w.drain()
+
+    # Once the directory was watched, losing it again is reported again.
+    os.remove(path)
+    os.rmdir(directory)
+    time.sleep(SHORT_DELAY * 6)
+    assert len(records(logging.WARNING)) == 2
+
+
+@watchdog_required
 def test_watcher_watches_the_target_of_a_link_once_the_target_directory_appears(tmp_path, make_watcher, monkeypatch):
     monkeypatch.setattr(filedata, '_WATCH_RETRY_INTERVAL', SHORT_DELAY)
     config = os.path.join(str(tmp_path), 'config')

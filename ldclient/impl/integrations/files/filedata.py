@@ -951,10 +951,15 @@ class Watcher:
     the link's target is watched as well, for the target's path, so that an edit to the target
     is reported. The links are resolved again after every reported change, after a retry sets up
     watches, and when a directory that holds a target is deleted, as happens when a Kubernetes
-    ConfigMap volume is updated. So a link that comes to point elsewhere is followed. A link
-    that cannot be resolved, for example because its target's directory does not exist yet or
-    was deleted, is resolved again on the retry interval until its target is watched, and the
-    callback then runs once.
+    ConfigMap volume is updated. A link that cannot be resolved, for example because its target's
+    directory does not exist yet or was deleted, is resolved again on the retry interval until
+    its target is watched, and the callback then runs once.
+
+    A change that none of those events reports is not followed: a link further along the chain
+    that is pointed elsewhere while its old target stays, a configured directory that is itself
+    a link and is pointed elsewhere, or a configured directory that is renamed and replaced.
+    Deployments that switch files that way, such as a ``current`` link to a release directory,
+    should use polling, which reads every configured path on each interval.
 
     Notifications for the watched paths invoke the callback. The callback can run several times
     for one logical edit, so feed it into a :class:`Reloader`.
@@ -1003,6 +1008,9 @@ class Watcher:
         # resolved or its target's directory cannot be watched. The retry schedule runs while it
         # is true.
         self._links_unresolved = False
+        # The last reason logged for each directory that cannot be watched yet, so that a retry
+        # that fails the same way logs at debug level. A directory leaves it once it is watched.
+        self._unwatchable_messages: Dict[str, str] = {}
 
         self._set_up_watches(is_retry=False)
         self._refresh_links()
@@ -1053,13 +1061,30 @@ class Watcher:
         # The observer accepts a watch on a directory that does not exist and fails later when
         # it starts the watch, so the check happens here first.
         if not os.path.isdir(directory):
-            log.warning('Cannot watch directory "%s" for changes yet because it does not exist', directory)
+            self._log_unwatchable(directory, 'Cannot watch directory "%s" for changes yet because it does not exist' % directory)
             return None
         try:
-            return self._observer.schedule(self._handler, directory, recursive=False)
+            watch = self._observer.schedule(self._handler, directory, recursive=False)
         except Exception as e:
-            log.warning('Cannot watch directory "%s" for changes yet: %s', directory, e)
+            self._log_unwatchable(directory, 'Cannot watch directory "%s" for changes yet: %s' % (directory, e))
             return None
+        with self._lock:
+            self._unwatchable_messages.pop(directory, None)
+        return watch
+
+    def _log_unwatchable(self, directory: str, message: str) -> None:
+        """
+        Logs why a directory cannot be watched. The retry attempts it again every interval, so
+        an unchanged reason for the same directory is logged at debug level after the first time,
+        until the directory is watched.
+        """
+        with self._lock:
+            repeated = self._unwatchable_messages.get(directory) == message
+            self._unwatchable_messages[directory] = message
+        if repeated:
+            log.debug(message)
+        else:
+            log.warning(message)
 
     def _ensure_retry_scheduled(self) -> None:
         with self._lock:
@@ -1139,7 +1164,8 @@ class Watcher:
         no longer holds a target of a configured link loses its watch. A link that cannot be
         resolved, for example because its target's directory does not exist yet, or whose
         target's directory cannot be watched, keeps the retry schedule running, which resolves
-        the links again. Returns True if it set up a watch.
+        the links again. Returns True if it set up a watch or if a link now leads to a target it
+        did not lead to before, which can be in a directory that is already watched.
 
         This runs on the observer's thread too, which holds the observer's lock, so it takes only
         the watcher's own lock and never while the observer is called.
@@ -1156,6 +1182,7 @@ class Watcher:
         with self._lock:
             if self._closed:
                 return False
+            new_targets = targets - self._target_paths
             self._target_paths = targets
             added = sorted(d for d in directories if d not in self._watches)
             removed = [d for d in self._target_directories if d not in directories]
@@ -1171,12 +1198,15 @@ class Watcher:
                 unwatched = True
                 continue
             with self._lock:
-                keep = not self._closed and directory in self._target_directories and directory not in self._watches
+                stored = self._watches.get(directory)
+                keep = not self._closed and directory in self._target_directories and stored is None
                 if keep:
                     self._watches[directory] = watch
             if keep:
                 watched_any = True
-            else:
+            elif stored is None or stored != watch:
+                # The observer shares one watch per directory, so a watch that another thread
+                # stored for this directory meanwhile is this one, and removing it would end it.
                 self._unschedule(directory, watch)
         if unresolved:
             log.debug('Cannot resolve the target of %s yet. The links are resolved again shortly.', ", ".join(unresolved))
@@ -1186,7 +1216,7 @@ class Watcher:
             self._links_unresolved = bool(unresolved) or unwatched
             if self._links_unresolved:
                 self._ensure_retry_scheduled_locked()
-        return watched_any
+        return watched_any or len(new_targets) > 0
 
     def _handle_event(self, event) -> None:
         event_type = getattr(event, "event_type", None)
