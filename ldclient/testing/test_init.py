@@ -11,8 +11,8 @@ def test_set_config():
     old_sdk_key = "OLD_SDK_KEY"
     new_sdk_key = "NEW_SDK_KEY"
 
-    old_config = Config(sdk_key=old_sdk_key, stream=False, offline=True)
-    new_config = Config(sdk_key=new_sdk_key, stream=False, offline=True)
+    old_config = Config(sdk_key=old_sdk_key, offline=True)
+    new_config = Config(sdk_key=new_sdk_key, offline=True)
     ldclient.set_config(old_config)
 
     old_client = ldclient.get()

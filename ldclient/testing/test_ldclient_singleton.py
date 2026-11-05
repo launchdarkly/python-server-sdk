@@ -56,7 +56,6 @@ def test_set_sdk_key_after_init():
 
                 stream_server.for_path('/sdk/stream', stream_handler)
 
-                # copy_with_new_sdk_key drops datasystem_config, so the test builds a new config.
                 ldclient.set_config(make_streaming_config(sdk_key, stream_server.uri))
                 wait_until(ldclient.get().is_initialized, timeout=30)
 

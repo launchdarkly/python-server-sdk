@@ -1,7 +1,6 @@
 # pylint: disable=missing-docstring
 
 import asyncio
-import logging
 from typing import Any, AsyncGenerator, Dict, List, Mapping, Optional
 
 import pytest
@@ -752,17 +751,3 @@ async def test_successful_ops_pass_through():
     assert got is not None and got["key"] == "flag-a"
     allf = await wrapper.all(FEATURES)
     assert "flag-a" in allf
-
-
-def test_warns_when_payload_filter_key_is_configured(caplog):
-    caplog.set_level(logging.WARNING, logger="ldclient.util")
-    AsyncFDv2(AsyncConfig(sdk_key="dummy", payload_filter_key="microservice-1"), DataSystemConfig(initializers=None, synchronizers=None))
-
-    assert any("Payload filtering is not supported with the FDv2 data system" in record.message for record in caplog.records)
-
-
-def test_does_not_warn_when_payload_filter_key_is_not_configured(caplog):
-    caplog.set_level(logging.WARNING, logger="ldclient.util")
-    AsyncFDv2(AsyncConfig(sdk_key="dummy"), DataSystemConfig(initializers=None, synchronizers=None))
-
-    assert not any("Payload filtering" in record.message for record in caplog.records)

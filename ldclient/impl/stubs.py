@@ -1,9 +1,4 @@
-from ldclient.interfaces import (
-    AsyncEventProcessor,
-    AsyncUpdateProcessor,
-    EventProcessor,
-    UpdateProcessor
-)
+from ldclient.interfaces import AsyncEventProcessor, EventProcessor
 
 
 class NullEventProcessor(EventProcessor):
@@ -21,20 +16,6 @@ class NullEventProcessor(EventProcessor):
 
     def flush(self):
         pass
-
-
-class NullUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, store, ready):
-        self._ready = ready
-
-    def start(self):
-        self._ready.set()
-
-    def stop(self):
-        pass
-
-    def initialized(self):
-        return True
 
 
 class AsyncNullEventProcessor(AsyncEventProcessor):
@@ -55,22 +36,4 @@ class AsyncNullEventProcessor(AsyncEventProcessor):
         pass
 
     async def flush_and_wait(self, timeout: float) -> bool:
-        return True
-
-
-class AsyncNullUpdateProcessor(AsyncUpdateProcessor):
-    """Async no-op update processor. The async equivalent of
-    :class:`NullUpdateProcessor`, used by async FDv1 when offline or in LDD
-    mode so the data system can await ``stop()`` uniformly."""
-
-    def __init__(self, config, store, ready):
-        self._ready = ready
-
-    def start(self):
-        self._ready.set()
-
-    async def stop(self):
-        pass
-
-    def initialized(self):
         return True

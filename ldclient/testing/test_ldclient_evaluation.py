@@ -1,5 +1,6 @@
 import logging
 import time
+from threading import Event
 
 from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
@@ -8,7 +9,7 @@ from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.big_segments import _hash_for_user_key
 from ldclient.impl.evaluator import _make_big_segment_ref
-from ldclient.interfaces import FeatureStore
+from ldclient.interfaces import DataStoreMode, FeatureStore
 from ldclient.testing.builders import *
 from ldclient.testing.mock_components import MockBigSegmentStore
 from ldclient.testing.stub_util import MockEventProcessor
@@ -447,9 +448,31 @@ def test_all_flags_state_degrades_per_flag_on_evaluator_error():
     assert 'prerequisites' not in metadata['bad-last']
 
 
-def make_client_with_cached_data(store):
-    # Daemon mode never receives data from a data source, so the client serves
-    # cached values from the store.
+class _SilentSynchronizer:
+    """A synchronizer that sends no data until it stops."""
+
+    def __init__(self):
+        self._stopped = Event()
+
+    @property
+    def name(self) -> str:
+        return 'silent'
+
+    def sync(self, ss):
+        self._stopped.wait()
+        return
+        yield
+
+    def stop(self):
+        self._stopped.set()
+
+
+class _SilentSynchronizerBuilder:
+    def build(self, config):
+        return _SilentSynchronizer()
+
+
+def make_client_with_data_system(datasystem_config):
     return LDClient(
         config=Config(
             sdk_key='SDK_KEY',
@@ -457,9 +480,21 @@ def make_client_with_cached_data(store):
             events_uri=unreachable_uri,
             stream_uri=unreachable_uri,
             event_processor_class=MockEventProcessor,
-            datasystem_config=datasystem.daemon(store).build(),
-        )
+            datasystem_config=datasystem_config,
+        ),
+        start_wait=0,
     )
+
+
+def make_client_with_cached_data(store):
+    # The data source never sends data, so the client serves cached values from the store.
+    dsc = datasystem.custom().synchronizers(_SilentSynchronizerBuilder()).data_store(store, DataStoreMode.READ_ONLY).build()
+    return make_client_with_data_system(dsc)
+
+
+def evaluation_warnings(caplog):
+    warnings = get_log_lines(caplog, 'WARNING')
+    return [m for m in warnings if m.startswith('Feature Flag evaluation attempted') or m.startswith('all_flags_state() called before')]
 
 
 def test_cached_data_warnings_are_logged_once_per_client(caplog):
@@ -480,3 +515,15 @@ def test_cached_data_warnings_are_logged_once_per_client(caplog):
     assert len(all_flags_warnings) == 1
     assert eval_warnings[0].endswith('This message is logged once.')
     assert all_flags_warnings[0].endswith('This message is logged once.')
+    client.close()
+
+
+def test_daemon_mode_does_not_log_cached_data_warnings(caplog):
+    caplog.set_level(logging.WARNING, logger='ldclient.util')
+    store = InMemoryFeatureStore()
+    store.init({FEATURES: {'key1': flag1}})
+    with make_client_with_data_system(datasystem.daemon(store).build()) as client:
+        assert client.variation('key1', user, default='default') == 'value1'
+        assert client.all_flags_state(user).valid
+
+    assert evaluation_warnings(caplog) == []

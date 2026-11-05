@@ -106,24 +106,6 @@ class ClientEntity:
 
             opts["datasystem_config"] = datasystem.build()
 
-        elif config.get("streaming") is not None:
-            streaming = config["streaming"]
-            if streaming.get("baseUri") is not None:
-                opts["stream_uri"] = streaming["baseUri"]
-            if streaming.get("filter") is not None:
-                opts["payload_filter_key"] = streaming["filter"]
-            _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
-        elif config.get("polling") is not None:
-            opts['stream'] = False
-            polling = config["polling"]
-            if polling.get("baseUri") is not None:
-                opts["base_uri"] = polling["baseUri"]
-            if polling.get("filter") is not None:
-                opts["payload_filter_key"] = polling["filter"]
-            _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-        else:
-            opts['use_ldd'] = True
-
         if config.get("events") is not None:
             events = config["events"]
             opts["enable_event_compression"] = events.get("enableGzip", False)
@@ -151,9 +133,6 @@ class ClientEntity:
             _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = BigSegmentsConfig(**big_config)
-
-        if config.get("persistentDataStore") is not None:
-            opts["feature_store"] = _create_persistent_store(config["persistentDataStore"])
 
         start_wait = config.get("startWaitTimeMs") or 5000
         config = Config(**opts)

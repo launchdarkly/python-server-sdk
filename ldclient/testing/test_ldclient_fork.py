@@ -15,9 +15,10 @@ import pytest
 
 from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
+from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.migrations import Stage
-from ldclient.testing.stub_util import MockEventProcessor, MockUpdateProcessor
+from ldclient.testing.stub_util import MockEventProcessor
 
 unreachable_uri = "http://fake"
 
@@ -43,9 +44,8 @@ def make_client(**kwargs) -> LDClient:
     return LDClient(config=make_config(**kwargs), start_wait=0)
 
 
-def make_ldd_client(**kwargs) -> LDClient:
-    # The fork check keys on use_ldd, which only the FDv1 data system honors.
-    return make_client(use_ldd=True, datasystem_config=None, update_processor_class=MockUpdateProcessor, **kwargs)
+def make_daemon_client(**kwargs) -> LDClient:
+    return make_client(datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(), **kwargs)
 
 
 def fork_warnings(caplog) -> list:
@@ -185,8 +185,8 @@ def test_no_warning_in_offline_mode(caplog, monkeypatch):
     assert fork_warnings(caplog) == []
 
 
-def test_no_warning_in_ldd_mode_with_events_disabled(caplog, monkeypatch):
-    with make_ldd_client(send_events=False) as client:
+def test_no_warning_in_daemon_mode_with_events_disabled(caplog, monkeypatch):
+    with make_daemon_client(send_events=False) as client:
         pretend_forked(monkeypatch)
         client.variation("flag", context, False)
         client.identify(context)
@@ -194,8 +194,8 @@ def test_no_warning_in_ldd_mode_with_events_disabled(caplog, monkeypatch):
     assert fork_warnings(caplog) == []
 
 
-def test_warns_in_ldd_mode_with_events_enabled(caplog, monkeypatch):
-    with make_ldd_client(send_events=True) as client:
+def test_warns_in_daemon_mode_with_events_enabled(caplog, monkeypatch):
+    with make_daemon_client(send_events=True) as client:
         pretend_forked(monkeypatch)
         client.variation("flag", context, False)
     assert len(fork_warnings(caplog)) == 1

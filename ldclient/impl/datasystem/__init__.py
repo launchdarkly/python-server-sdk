@@ -1,6 +1,6 @@
 """
-This package contains the generic interfaces used for the data system (v1 and
-v2), as well as types for v1 and v2 specific protocols.
+This package contains the interfaces for the data system, and the types for
+the FDv2 protocol.
 """
 
 from abc import abstractmethod

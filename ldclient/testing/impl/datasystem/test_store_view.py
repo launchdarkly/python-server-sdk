@@ -2,7 +2,6 @@
 
 from typing import Any, Callable, Dict
 
-from ldclient.impl.datasystem.fdv1 import _ReadOnlyFeatureStoreView
 from ldclient.impl.datasystem.fdv2 import _ReadOnlyStoreView
 from ldclient.impl.datasystem.store import Store
 from ldclient.impl.listeners import Listeners
@@ -52,43 +51,13 @@ class FakeSyncFeatureStore:
         return True
 
 
-def test_feature_store_view_get_decodes_dict_and_passes_callback():
-    raw = _flag_dict("flag-a", 1)
-    view = _ReadOnlyFeatureStoreView(FakeSyncFeatureStore({"flag-a": raw}))  # type: ignore[arg-type]
-
-    result = view.get(FEATURES, "flag-a")
-    assert result == FEATURES.decode(raw)
-    assert not isinstance(result, dict)
-
-    key = view.get(FEATURES, "flag-a", lambda flag: flag.key if flag else None)
-    assert key == "flag-a"
-
-
-def test_feature_store_view_get_passes_through_model():
+def test_store_view_passes_through_a_model_from_the_persistent_store():
     decoded = FEATURES.decode(_flag_dict("flag-a", 1))
-    view = _ReadOnlyFeatureStoreView(FakeSyncFeatureStore({"flag-a": decoded}))  # type: ignore[arg-type]
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(FakeSyncFeatureStore({"flag-a": decoded}), False, None)  # type: ignore[arg-type]
+    view = _ReadOnlyStoreView(store)
+
     assert view.get(FEATURES, "flag-a") is decoded
-
-
-def test_feature_store_view_get_missing_returns_none():
-    view = _ReadOnlyFeatureStoreView(FakeSyncFeatureStore({}))  # type: ignore[arg-type]
-    assert view.get(FEATURES, "missing") is None
-
-
-def test_feature_store_view_all_decodes_and_passes_callback():
-    raw = _flag_dict("flag-a", 1)
-    view = _ReadOnlyFeatureStoreView(FakeSyncFeatureStore({"flag-a": raw}))  # type: ignore[arg-type]
-
-    result = view.all(FEATURES)
-    assert result["flag-a"] == FEATURES.decode(raw)
-
-    count = view.all(FEATURES, lambda items: len(items))
-    assert count == 1
-
-
-def test_feature_store_view_initialized_delegates():
-    view = _ReadOnlyFeatureStoreView(FakeSyncFeatureStore({}))  # type: ignore[arg-type]
-    assert view.initialized is True
 
 
 def test_store_view_get_decodes_and_passes_callback():

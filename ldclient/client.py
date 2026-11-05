@@ -8,7 +8,8 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from ldclient.config import Config
+from ldclient import datasystem
+from ldclient.config import Config, DataSystemConfig
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.hook import (
@@ -54,6 +55,18 @@ _FORK_WARNING_MESSAGE = (
 )
 
 
+def _is_daemon_mode(datasystem_config: DataSystemConfig) -> bool:
+    """
+    Return true if the data system has a persistent store and no data sources. The SDK then reads
+    flags only from the store, which another process such as the Relay Proxy keeps up to date.
+    """
+    return _has_no_data_sources(datasystem_config) and datasystem_config.data_store is not None
+
+
+def _has_no_data_sources(datasystem_config: DataSystemConfig) -> bool:
+    return not datasystem_config.initializers and not datasystem_config.synchronizers
+
+
 class LDClient:
     """The LaunchDarkly SDK client object.
 
@@ -76,6 +89,7 @@ class LDClient:
         self._config = config
         self._config._instance_id = str(uuid4())
         self._config._validate()
+        self._datasystem_config = config.datasystem_config or datasystem.default().build()
 
         self._event_processor = None
         self._event_factory_default = EventFactory(False)
@@ -146,13 +160,13 @@ class LDClient:
 
     def _fork_breaks_client(self) -> bool:
         """
-        Return true if this configuration needs background threads. Offline mode has none. LDD mode
-        with events disabled reads flags from the persistent store and sends nothing, so a fork does
-        not break it.
+        Return true if this configuration needs background threads. Offline mode has none. Daemon
+        mode with events disabled reads flags from the persistent store and sends nothing, so a fork
+        does not break it.
         """
         if self._config.offline:
             return False
-        if self._config.use_ldd and not self._config.send_events:
+        if _is_daemon_mode(self._datasystem_config) and not self._config.send_events:
             return False
         return True
 
@@ -163,16 +177,7 @@ class LDClient:
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
-        datasystem_config = self._config.datasystem_config
-        if datasystem_config is None:
-            # Initialize data system (FDv1) to encapsulate v1 data plumbing
-            from ldclient.impl.datasystem.fdv1 import (  # local import to avoid circular dependency
-                FDv1
-            )
-
-            self._data_system: DataSystem = FDv1(self._config)
-        else:
-            self._data_system = FDv2(self._config, datasystem_config)
+        self._data_system: DataSystem = FDv2(self._config, self._datasystem_config)
 
         self.__flag_tracker = FlagTrackerImpl(
             self._data_system.flag_change_listeners,
@@ -196,9 +201,10 @@ class LDClient:
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
-
-        if self._config.use_ldd:
-            log.info("Started LaunchDarkly Client in LDD mode")
+        elif _is_daemon_mode(self._datasystem_config):
+            log.info("Started LaunchDarkly Client in daemon mode")
+        elif _has_no_data_sources(self._datasystem_config):
+            log.warning("The data system has no data sources and no persistent store. All evaluations will return default values.")
 
         diagnostic_accumulator = self._set_event_processor(self._config)
 
@@ -210,7 +216,7 @@ class LDClient:
         update_processor_ready = threading.Event()
         self._data_system.start(update_processor_ready)
 
-        if not self._config.offline and not self._config.use_ldd:
+        if not self._config.offline and not _is_daemon_mode(self._datasystem_config):
             if start_wait > 60:
                 log.warning(f"Client was configured to block for up to {start_wait} seconds when initializing. We recommend blocking no longer than 60.")
 
@@ -338,7 +344,7 @@ class LDClient:
 
         If this returns true, it means the client has data it can use to evaluate flags. That could be
         because it connected to LaunchDarkly at least once and received flag data, or because it has
-        cached data from a persistent store, or because it was configured for offline or LDD (daemon)
+        cached data from a persistent store, or because it was configured for offline or daemon
         mode. It could still have encountered a connection problem after that point, and cached data may
         not be current, so this does not guarantee that the flag data is up to date; if you need to know
         the connection status in more detail, use :attr:`data_source_status_provider`.
@@ -353,7 +359,7 @@ class LDClient:
 
         :return: true if the client is initialized and has flag data available
         """
-        if self.is_offline() or self._config.use_ldd:
+        if self.is_offline():
             return True
 
         return self._data_system.data_availability.at_least(DataAvailability.CACHED)
@@ -445,7 +451,7 @@ class LDClient:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
         availability = self._data_system.data_availability
-        if availability != DataAvailability.REFRESHED:
+        if not availability.at_least(self._data_system.target_availability):
             if availability == DataAvailability.CACHED:
                 if not self._eval_cached_data_warned:
                     with self._cached_data_warning_lock:
@@ -523,7 +529,7 @@ class LDClient:
         self._check_forked()
 
         availability = self._data_system.data_availability
-        if availability != DataAvailability.REFRESHED:
+        if not availability.at_least(self._data_system.target_availability):
             if availability == DataAvailability.CACHED:
                 if not self._all_flags_cached_data_warned:
                     with self._cached_data_warning_lock:

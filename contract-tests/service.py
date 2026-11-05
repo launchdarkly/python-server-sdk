@@ -65,7 +65,6 @@ def status():
             'all-flags-details-only-for-tracked-flags',
             'big-segments',
             'context-type',
-            'filtering',
             'secure-mode-hash',
             'tags',
             'migrations',
@@ -86,8 +85,6 @@ def status():
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',
-            'retry-conformance-fdv1-streaming',
-            'retry-conformance-fdv1-polling',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}

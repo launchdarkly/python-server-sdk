@@ -547,7 +547,7 @@ class TestDataV2:
     the data that the application has put into it using the ``update`` method.
     ::
 
-        from ldclient.impl.datasystem import config as datasystem_config
+        from ldclient import datasystem
         from ldclient.integrations.test_datav2 import TestDataV2
 
 
@@ -555,7 +555,7 @@ class TestDataV2:
         td.update(td.flag('flag-key-1').variation_for_all(True))
 
         # Configure the data system with TestDataV2 as both initializer and synchronizer
-        data_config = datasystem_config.custom()
+        data_config = datasystem.custom()
         data_config.initializers([td.builder])
         data_config.synchronizers(td.builder)
 

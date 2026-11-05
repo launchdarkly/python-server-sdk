@@ -1,7 +1,6 @@
 """
-The FDv2 data system does not support payload filtering. These tests show that its data sources do
-not send the payload filter key, also when the config has one. This includes the FDv1 fallback
-requesters, so that a fallback does not change the client to a filtered subset of the data.
+The FDv2 data sources send no query parameters except the basis. The FDv1 fallback requesters send
+none. In particular, no data source sends a payload filter.
 """
 
 from unittest import mock
@@ -23,7 +22,6 @@ from ldclient.interfaces import Selector
 from ldclient.testing.http_util import start_server
 from ldclient.testing.mock_components import MockSelectorStore
 
-FILTER_KEY = 'microservice-1'
 SELECTOR = Selector.new_selector('p:SOMETHING:300', 300)
 
 
@@ -33,14 +31,14 @@ def path_and_query(request):
 
 
 def make_config(base_uri: str = 'http://localhost') -> Config:
-    return Config('sdk-key', base_uri=base_uri, stream_uri=base_uri, payload_filter_key=FILTER_KEY)
+    return Config('sdk-key', base_uri=base_uri, stream_uri=base_uri)
 
 
 @pytest.mark.parametrize('selector, expected_query', [
     (None, {}),
     (SELECTOR, {'basis': [SELECTOR.state]}),
 ])
-def test_polling_requester_does_not_send_the_filter(selector, expected_query):
+def test_polling_requester_sends_only_the_basis(selector, expected_query):
     with start_server() as server:
         config = make_config(server.uri)
         requester = Urllib3PollingRequester(config, config.base_uri, config.http)
@@ -48,7 +46,7 @@ def test_polling_requester_does_not_send_the_filter(selector, expected_query):
         assert path_and_query(server.require_request()) == ('/sdk/poll', expected_query)
 
 
-def test_fdv1_fallback_polling_requester_does_not_send_the_filter():
+def test_fdv1_fallback_polling_requester_sends_only_the_basis():
     with start_server() as server:
         config = make_config(server.uri)
         requester = Urllib3FDv1PollingRequester(config, config.base_uri, config.http)
@@ -61,7 +59,7 @@ def test_fdv1_fallback_polling_requester_does_not_send_the_filter():
     (None, {}),
     (SELECTOR, {'basis': [SELECTOR.state]}),
 ])
-async def test_async_polling_requester_does_not_send_the_filter(selector, expected_query):
+async def test_async_polling_requester_sends_only_the_basis(selector, expected_query):
     with start_server() as server:
         config = make_config(server.uri)
         requester = AiohttpPollingRequester(config, config.base_uri, config.http)
@@ -73,7 +71,7 @@ async def test_async_polling_requester_does_not_send_the_filter(selector, expect
 
 
 @pytest.mark.asyncio
-async def test_async_fdv1_fallback_polling_requester_does_not_send_the_filter():
+async def test_async_fdv1_fallback_polling_requester_sends_only_the_basis():
     with start_server() as server:
         config = make_config(server.uri)
         requester = AiohttpFDv1PollingRequester(config, config.base_uri, config.http)
@@ -88,7 +86,7 @@ async def test_async_fdv1_fallback_polling_requester_does_not_send_the_filter():
     (Selector.no_selector(), {}),
     (SELECTOR, {'basis': SELECTOR.state}),
 ])
-def test_streaming_does_not_send_the_filter(selector, expected_params):
+def test_streaming_sends_only_the_basis(selector, expected_params):
     config = make_config()
     with mock.patch.object(streaming.ConnectStrategy, 'http', wraps=streaming.ConnectStrategy.http) as http:
         streaming.create_sse_client(config.stream_base_uri, config.http, config.initial_reconnect_delay, config, MockSelectorStore(selector))
@@ -102,7 +100,7 @@ def test_streaming_does_not_send_the_filter(selector, expected_params):
     (Selector.no_selector(), {}),
     (SELECTOR, {'basis': SELECTOR.state}),
 ])
-def test_async_streaming_does_not_send_the_filter(selector, expected_params):
+def test_async_streaming_sends_only_the_basis(selector, expected_params):
     config = make_config()
     with mock.patch.object(async_streaming, 'AsyncSSEFactory') as factory_cls:
         async_streaming.create_sse_client(

@@ -39,6 +39,9 @@ from ldclient.interfaces import (
     Update
 )
 
+# The FDv1 fallback synchronizer polls this endpoint.
+FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
+
 
 # pylint: disable=too-many-branches,too-many-return-statements
 def polling_payload_to_changeset(data: dict) -> _Result[ChangeSet, str]:

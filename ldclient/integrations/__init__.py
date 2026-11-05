@@ -3,8 +3,7 @@ This submodule contains factory/configuration methods for integrating the SDK wi
 other than LaunchDarkly.
 """
 
-from threading import Event
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from ldclient import log
 from ldclient.config import Config, DataSourceBuilder
@@ -19,7 +18,6 @@ from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import (
 from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBFeatureStoreCore
 )
-from ldclient.impl.integrations.files.file_data_source import _FileDataSource
 from ldclient.impl.integrations.files.file_data_sourcev2 import (
     FileDataSourceV2Builder
 )
@@ -29,7 +27,7 @@ from ldclient.impl.integrations.redis.redis_big_segment_store import (
 from ldclient.impl.integrations.redis.redis_feature_store import (
     _RedisFeatureStoreCore
 )
-from ldclient.interfaces import BigSegmentStore, FeatureStore, UpdateProcessor
+from ldclient.interfaces import BigSegmentStore
 
 
 class Consul:
@@ -46,14 +44,17 @@ class Consul:
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
-        To use this method, you must first install the ``python-consul`` package. Then, put the object
-        returned by this method into the ``feature_store`` property of your client configuration
-        (:class:`ldclient.config.Config`).
+        To use this method, you must first install the ``python-consul`` package. Then, pass the object
+        returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
+        :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
+        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
+            from ldclient import datasystem
+            from ldclient.config import Config
             from ldclient.integrations import Consul
             store = Consul.new_feature_store()
-            config = Config(feature_store=store)
+            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
 
         :param host: hostname of the Consul server (uses ``localhost`` if omitted)
         :param port: port of the Consul server (uses 8500 if omitted)
@@ -82,13 +83,17 @@ class DynamoDB:
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
         To use this method, you must first install the ``boto3`` package for the AWS SDK.
-        Then, put the object returned by this method into the ``feature_store`` property of your
-        client configuration (:class:`ldclient.config.Config`).
+        Then, pass the object
+        returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
+        :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
+        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
+            from ldclient import datasystem
+            from ldclient.config import Config
             from ldclient.integrations import DynamoDB
             store = DynamoDB.new_feature_store("my-table-name")
-            config = Config(feature_store=store)
+            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
 
         Note that the DynamoDB table must already exist; the LaunchDarkly SDK does not create the table
         automatically, because it has no way of knowing what additional properties (such as permissions
@@ -160,15 +165,18 @@ class DynamoDB:
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
-        To use this method, you must first install the ``aioboto3`` package. Then, put the object
-        returned by this method into the ``feature_store`` property of your client configuration
-        when constructing an ``AsyncLDClient``.
+        To use this method, you must first install the ``aioboto3`` package. Then, pass the object
+        returned by this method to :func:`ldclient.async_datasystem.persistent_store`, or to
+        :func:`ldclient.async_datasystem.daemon` if another process keeps the store up to date, and set
+        the result as the ``datasystem_config`` of your client configuration
+        (:class:`ldclient.async_config.AsyncConfig`).
         ::
 
-            from ldclient.config import Config
+            from ldclient import async_datasystem
+            from ldclient.async_config import AsyncConfig
             from ldclient.integrations import DynamoDB
             store = DynamoDB.async_feature_store("my-table-name")
-            config = Config(feature_store=store)
+            config = AsyncConfig('sdk-key', datasystem_config=async_datasystem.persistent_store(store).build())
 
         The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
         one DynamoDB table.
@@ -218,15 +226,17 @@ class Redis:
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
-        To use this method, you must first install the ``redis`` package. Then, put the object
-        returned by this method into the ``feature_store`` property of your client configuration
-        (:class:`ldclient.config.Config`).
+        To use this method, you must first install the ``redis`` package. Then, pass the object
+        returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
+        :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
+        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
+            from ldclient import datasystem
             from ldclient.config import Config
             from ldclient.integrations import Redis
             store = Redis.new_feature_store()
-            config = Config(feature_store=store)
+            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
 
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
@@ -305,15 +315,18 @@ class Redis:
         For more details about how and why you can use a persistent feature store, see the
         `SDK reference guide <https://docs.launchdarkly.com/sdk/concepts/data-stores>`_.
 
-        To use this method, you must first install the ``redis`` package (version >=5.0.1). Then, put
-        the object returned by this method into the ``feature_store`` property of your client
-        configuration when constructing an ``AsyncLDClient``.
+        To use this method, you must first install the ``redis`` package (version >=5.0.1). Then, pass
+        the object returned by this method to :func:`ldclient.async_datasystem.persistent_store`, or to
+        :func:`ldclient.async_datasystem.daemon` if another process keeps the store up to date, and set
+        the result as the ``datasystem_config`` of your client configuration
+        (:class:`ldclient.async_config.AsyncConfig`).
         ::
 
-            from ldclient.config import Config
+            from ldclient import async_datasystem
+            from ldclient.async_config import AsyncConfig
             from ldclient.integrations import Redis
             store = Redis.async_feature_store()
-            config = Config(feature_store=store)
+            config = AsyncConfig('sdk-key', datasystem_config=async_datasystem.persistent_store(store).build())
 
         The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
         one Redis instance.
@@ -376,50 +389,6 @@ class Files:
     """Provides factory methods for integrations with filesystem data."""
 
     @staticmethod
-    def new_data_source(paths: List[str], auto_update: bool = False, poll_interval: float = 1, force_polling: bool = False) -> Optional[Callable[[Config, FeatureStore, Event], UpdateProcessor]]:
-        """Provides a way to use local files as a source of feature flag state. This would typically be
-        used in a test environment, to operate using a predetermined feature flag state without an
-        actual LaunchDarkly connection.
-
-        To use this component, call ``new_data_source``, specifying the file path(s) of your data file(s)
-        in the ``paths`` parameter; then put the value returned by this method into the ``update_processor_class``
-        property of your LaunchDarkly client configuration (:class:`ldclient.config.Config`).
-        ::
-
-            from ldclient.integrations import Files
-            data_source = Files.new_data_source(paths=[ myFilePath ])
-            config = Config(update_processor_class=data_source)
-
-        This will cause the client not to connect to LaunchDarkly to get feature flags. The
-        client may still make network connections to send analytics events, unless you have disabled
-        this in your configuration with ``send_events`` or ``offline``.
-
-        The format of the data files is described in the SDK Reference Guide on
-        `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
-        Note that in order to use YAML, you will need to install the ``pyyaml`` package.
-
-        If the data source encounters any error in any file-- malformed content, a missing file, or a
-        duplicate key-- it will not load flags from any of the files.
-
-        :param paths: the paths of the source files for loading flag data. These may be absolute paths
-          or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``
-          package is installed, in which case YAML is also allowed.
-        :param auto_update: (default: false) True if the data source should watch for changes to the source file(s)
-          and reload flags whenever there is a change. The default implementation of this feature is based on
-          polling the filesystem, which may not perform well; if you install the ``watchdog`` package, its
-          native file watching mechanism will be used instead. Note that auto-updating will only work if all
-          of the files you specified have valid directory paths at startup time.
-        :param poll_interval: (default: 1) the minimum interval, in seconds, between checks for file
-          modifications-- used only if ``auto_update`` is true, and if the native file-watching mechanism from
-          ``watchdog`` is not being used.
-        :param force_polling: (default: false) True if the data source should implement auto-update via
-          polling the filesystem even if a native mechanism is available. This is mainly for SDK testing.
-
-        :return: an object (actually a lambda) to be stored in the ``update_processor_class`` configuration property
-        """
-        return lambda config, store, ready: _FileDataSource(store, config.data_source_update_sink, ready, paths, auto_update, poll_interval, force_polling)
-
-    @staticmethod
     def new_data_source_v2(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
         """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
 
@@ -432,28 +401,28 @@ class Files:
         ::
 
             from ldclient.integrations import Files
-            from ldclient.impl.datasystem.config import custom
+            from ldclient.datasystem import custom
 
             file_source = Files.new_data_source_v2(paths=['my_flags.json'])
 
             # Use as initializer only
             data_system = custom().initializers([file_source]).build()
-            config = Config(data_system=data_system)
+            config = Config('sdk-key', datasystem_config=data_system)
 
             # Use as synchronizer only
             data_system = custom().synchronizers(file_source).build()
-            config = Config(data_system=data_system)
+            config = Config('sdk-key', datasystem_config=data_system)
 
             # Use as both initializer and synchronizer
             data_system = custom().initializers([file_source]).synchronizers(file_source).build()
-            config = Config(data_system=data_system)
+            config = Config('sdk-key', datasystem_config=data_system)
 
         This will cause the client not to connect to LaunchDarkly to get feature flags. The
         client may still make network connections to send analytics events, unless you have disabled
         this in your configuration with ``send_events`` or ``offline``.
 
-        The format of the data files is the same as for the v1 file data source, described in the
-        SDK Reference Guide on `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
+        The format of the data files is described in the SDK Reference Guide on
+        `Reading flags from a file <https://docs.launchdarkly.com/sdk/features/flags-from-files#python>`_.
         Note that in order to use YAML, you will need to install the ``pyyaml`` package.
 
         If the data source encounters any error in any file-- malformed content, a missing file, or a

@@ -2,8 +2,8 @@ from threading import Event, Thread
 from typing import Callable, List
 from unittest.mock import Mock
 
-from ldclient.impl.datastore.status import DataStoreUpdateSinkImpl
-from ldclient.impl.datasystem.fdv1 import _FeatureStoreClientWrapper
+from ldclient.impl.datasystem.fdv2 import _FeatureStoreClientWrapper
+from ldclient.impl.datasystem.fdv2_common import DataStoreStatusProviderImpl
 from ldclient.impl.listeners import Listeners
 from ldclient.versioned_data_kind import FEATURES
 
@@ -40,7 +40,7 @@ def test_store_will_not_notify_if_wrapped_store_does_not_support_monitoring():
     listener = RecordStatusListener()
     listeners = Listeners()
     listeners.add(listener)
-    sink = DataStoreUpdateSinkImpl(listeners)
+    sink = DataStoreStatusProviderImpl(store, listeners)
 
     wrapper = _FeatureStoreClientWrapper(store, sink)
     try:
@@ -56,11 +56,12 @@ def test_store_will_not_notify_if_wrapped_store_cannot_come_back_online():
     store = Mock()
     store.is_monitoring_enabled = lambda: True
     store.init = raise_an_error
+    store.is_available = lambda: False
 
     listener = RecordStatusListener()
     listeners = Listeners()
     listeners.add(listener)
-    sink = DataStoreUpdateSinkImpl(listeners)
+    sink = DataStoreStatusProviderImpl(store, listeners)
 
     wrapper = _FeatureStoreClientWrapper(store, sink)
     try:
@@ -90,7 +91,7 @@ def test_sink_will_be_notified_when_store_is_back_online():
     listener = CallbackListener(set_event)
     listeners = Listeners()
     listeners.add(listener)
-    sink = DataStoreUpdateSinkImpl(listeners)
+    sink = DataStoreStatusProviderImpl(store, listeners)
 
     wrapper = _FeatureStoreClientWrapper(store, sink)
     try:
@@ -113,7 +114,7 @@ def test_writes_after_close_do_not_reach_the_store():
     listener = RecordStatusListener()
     listeners = Listeners()
     listeners.add(listener)
-    sink = DataStoreUpdateSinkImpl(listeners)
+    sink = DataStoreStatusProviderImpl(store, listeners)
 
     wrapper = _FeatureStoreClientWrapper(store, sink)
     wrapper.close()
@@ -145,7 +146,7 @@ def test_close_waits_for_a_write_in_progress():
     store.upsert = slow_upsert
     store.close = lambda: calls.append('close')
 
-    wrapper = _FeatureStoreClientWrapper(store, DataStoreUpdateSinkImpl(Listeners()))
+    wrapper = _FeatureStoreClientWrapper(store, DataStoreStatusProviderImpl(store, Listeners()))
 
     writer = Thread(target=lambda: wrapper.upsert(FEATURES, {'key': 'flag', 'version': 1}))
     writer.start()
@@ -179,7 +180,7 @@ def test_a_listener_can_close_the_wrapper_after_a_failed_write():
 
     listeners = Listeners()
     listeners.add(CallbackListener(close_on_failure))
-    wrapper = _FeatureStoreClientWrapper(store, DataStoreUpdateSinkImpl(listeners))
+    wrapper = _FeatureStoreClientWrapper(store, DataStoreStatusProviderImpl(store, listeners))
 
     writer = Thread(target=lambda: _ignore_errors(lambda: wrapper.init({})), daemon=True)
     writer.start()

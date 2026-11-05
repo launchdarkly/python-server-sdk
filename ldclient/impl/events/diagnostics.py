@@ -64,14 +64,12 @@ def _create_diagnostic_config_object(config):
         'socketTimeoutMillis': config.http.read_timeout * 1000,
         'eventsFlushIntervalMillis': config.flush_interval * 1000,
         'usingProxy': config.http.http_proxy is not None,
-        'streamingDisabled': not config.stream,
-        'usingRelayDaemon': config.use_ldd,
         'allAttributesPrivate': config.all_attributes_private,
         'pollingIntervalMillis': config.poll_interval * 1000,
         'userKeysCapacity': config.context_keys_capacity,
         'userKeysFlushIntervalMillis': config.context_keys_flush_interval * 1000,
         'diagnosticRecordingIntervalMillis': config.diagnostic_recording_interval * 1000,
-        'dataStoreType': _get_component_type_name(config.feature_store, config, 'memory'),
+        'dataStoreType': _get_component_type_name(_persistent_store(config), config, 'memory'),
     }
 
 
@@ -88,6 +86,11 @@ def _create_diagnostic_platform_object():
         'pythonVersion': platform.python_version(),
         'pythonImplementation': platform.python_implementation(),
     }
+
+
+def _persistent_store(config):
+    datasystem_config = config.datasystem_config
+    return datasystem_config.data_store if datasystem_config is not None else None
 
 
 def _get_component_type_name(component, config, default_name):

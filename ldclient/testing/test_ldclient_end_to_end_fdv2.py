@@ -14,6 +14,7 @@ from ldclient import datasystem
 from ldclient.client import Context, LDClient
 from ldclient.config import Config, HTTPConfig
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.testing.http_util import (
     BasicResponse,
@@ -58,9 +59,9 @@ def poll_response(flags):
     return JsonResponse({'events': fdv2_events(flags)})
 
 
-def stream_response(flags):
+def stream_response(flags, headers=None):
     """Return an open SSE stream that sends a full transfer of the given flags."""
-    stream = ChunkedResponse({'Content-Type': 'text/event-stream'})
+    stream = ChunkedResponse({'Content-Type': 'text/event-stream', **(headers or {})})
     for e in fdv2_events(flags):
         stream.push('event: %s\ndata: %s\n\n' % (e['event'], json.dumps(e['data'])))
     return stream
@@ -89,6 +90,86 @@ def test_client_starts_in_streaming_mode():
                 r = server.await_request()
                 assert r.path == '/sdk/stream'
                 assert r.headers['Authorization'] == sdk_key
+
+
+def test_config_ignores_initial_instance_id():
+    with start_server() as server:
+        with stream_response([always_true_flag]) as stream:
+            server.for_path('/sdk/stream', stream)
+            config = make_config(server.uri, datasystem.streaming())
+            config._instance_id = "Hey, I'm not supposed to modify this"
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+
+                r = server.await_request()
+                assert r.headers['X-LaunchDarkly-Instance-Id'] == config._instance_id
+                assert r.headers['X-LaunchDarkly-Instance-Id'] != "Hey, I'm not supposed to modify this"
+
+
+def test_client_sends_event_without_diagnostics():
+    with start_server() as server:
+        with start_server() as events_server:
+            server.for_path('/sdk/poll', poll_response([always_true_flag]))
+            events_server.for_path('/bulk', BasicResponse(202))
+            config = Config(sdk_key, base_uri=server.uri, events_uri=events_server.uri, diagnostic_opt_out=True,
+                            datasystem_config=datasystem.polling().build())
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+                client.identify(user)
+                client.flush()
+
+                r = events_server.await_request()
+                assert r.headers['Authorization'] == sdk_key
+                data = json.loads(r.body)
+                assert len(data) == 1
+                assert data[0]['kind'] == 'identify'
+
+
+def test_client_sends_diagnostics():
+    with start_server() as server:
+        with start_server() as events_server:
+            server.for_path('/sdk/poll', poll_response([always_true_flag]))
+            events_server.for_path('/diagnostic', BasicResponse(202))
+            config = Config(sdk_key, base_uri=server.uri, events_uri=events_server.uri,
+                            datasystem_config=datasystem.polling().build())
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+
+                r = events_server.await_request()
+                assert r.headers['Authorization'] == sdk_key
+                data = json.loads(r.body)
+                assert data['kind'] == 'diagnostic-init'
+
+
+def test_hooks_receive_environment_id_in_streaming_mode():
+    contexts = []
+
+    class CapturingHook(Hook):
+        @property
+        def metadata(self) -> Metadata:
+            return Metadata(name='capturing-hook')
+
+        def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+            contexts.append(series_context)
+            return data
+
+        def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail) -> dict:
+            return data
+
+    with start_server() as server:
+        with stream_response([always_true_flag], headers={'X-LD-EnvID': 'env-abc-123'}) as stream:
+            server.for_path('/sdk/stream', stream)
+            config = make_config(server.uri, datasystem.streaming(), hooks=[CapturingHook()])
+
+            with LDClient(config=config) as client:
+                assert client.is_initialized()
+                client.variation(always_true_flag['key'], user, False)
+
+                assert len(contexts) == 1
+                assert contexts[0].environment_id == 'env-abc-123'
 
 
 def test_client_starts_in_polling_mode():

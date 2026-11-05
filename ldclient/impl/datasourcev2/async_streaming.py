@@ -241,7 +241,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
         """
         Stops the streaming synchronizer, closing any open connections.
         """
-        log.info("Stopping StreamingUpdateProcessor")
+        log.info("Stopping StreamingDataSourceV2 synchronizer")
         self._running = False
         if self._sse:
             await self._sse.close()

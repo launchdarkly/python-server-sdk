@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from ldclient import datasystem
 from ldclient.config import Config, HTTPConfig
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
@@ -50,7 +51,7 @@ def test_create_diagnostic_config_defaults():
     test_config = Config("SDK_KEY")
     diag_config = _create_diagnostic_config_object(test_config)
 
-    assert len(diag_config) == 16
+    assert len(diag_config) == 14
     assert diag_config['customBaseURI'] is False
     assert diag_config['customEventsURI'] is False
     assert diag_config['customStreamURI'] is False
@@ -59,8 +60,6 @@ def test_create_diagnostic_config_defaults():
     assert diag_config['socketTimeoutMillis'] == 15000
     assert diag_config['eventsFlushIntervalMillis'] == 5000
     assert diag_config['usingProxy'] is False
-    assert diag_config['streamingDisabled'] is False
-    assert diag_config['usingRelayDaemon'] is False
     assert diag_config['allAttributesPrivate'] is False
     assert diag_config['pollingIntervalMillis'] == 30000
     assert diag_config['userKeysCapacity'] == 1000
@@ -78,10 +77,8 @@ def test_create_diagnostic_config_custom():
         events_max_pending=10,
         flush_interval=1,
         stream_uri='https://test.com',
-        stream=False,
         poll_interval=60,
-        use_ldd=True,
-        feature_store=test_store,
+        datasystem_config=datasystem.daemon(test_store).build(),
         all_attributes_private=True,
         context_keys_capacity=10,
         context_keys_flush_interval=60,
@@ -90,7 +87,7 @@ def test_create_diagnostic_config_custom():
     )
     diag_config = _create_diagnostic_config_object(test_config)
 
-    assert len(diag_config) == 16
+    assert len(diag_config) == 14
     assert diag_config['customBaseURI'] is True
     assert diag_config['customEventsURI'] is True
     assert diag_config['customStreamURI'] is True
@@ -99,8 +96,6 @@ def test_create_diagnostic_config_custom():
     assert diag_config['socketTimeoutMillis'] == 1000
     assert diag_config['eventsFlushIntervalMillis'] == 1000
     assert diag_config['usingProxy'] is True
-    assert diag_config['streamingDisabled'] is True
-    assert diag_config['usingRelayDaemon'] is True
     assert diag_config['allAttributesPrivate'] is True
     assert diag_config['pollingIntervalMillis'] == 60000
     assert diag_config['userKeysCapacity'] == 10

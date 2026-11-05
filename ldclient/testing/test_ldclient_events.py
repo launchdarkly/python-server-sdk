@@ -15,7 +15,7 @@ from ldclient.testing.builders import *
 from ldclient.testing.test_ldclient import (
     context,
     make_client,
-    make_ldd_client,
+    make_daemon_client,
     make_offline_client,
     unreachable_uri,
     user
@@ -46,8 +46,8 @@ def test_client_has_null_event_processor_if_send_events_off():
         assert isinstance(client._event_processor, NullEventProcessor)
 
 
-def test_client_has_normal_event_processor_in_ldd_mode():
-    with make_ldd_client() as client:
+def test_client_has_normal_event_processor_in_daemon_mode():
+    with make_daemon_client() as client:
         assert isinstance(client._event_processor, DefaultEventProcessor)
 
 

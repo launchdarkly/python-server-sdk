@@ -3,9 +3,7 @@ Test utilities for async SDK components.
 """
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
-from ldclient.impl.datasource.async_status import AsyncDataSourceUpdateSinkImpl
-from ldclient.impl.listeners import Listeners
-from ldclient.interfaces import AsyncEventProcessor, AsyncUpdateProcessor
+from ldclient.interfaces import AsyncEventProcessor
 
 
 class MockAsyncEventProcessor(AsyncEventProcessor):
@@ -58,35 +56,3 @@ class MockAsyncFeatureStore(AsyncInMemoryFeatureStore):
         Useful for tearing down test state without going through the delete tombstone mechanism.
         """
         self._items[kind].pop(key, None)
-
-
-class MockAsyncUpdateProcessor(AsyncUpdateProcessor):
-    """A mock UpdateProcessor that immediately reports itself as initialized.
-
-    Used to fake a ready data source in client tests. If a ``ready`` event is provided, it is
-    set immediately in the constructor, matching the behavior of the sync ``MockUpdateProcessor``.
-    """
-
-    def __init__(self, config=None, store=None, ready=None):
-        if ready is not None:
-            ready.set()
-
-    def start(self):
-        pass
-
-    async def stop(self):
-        pass
-
-    def initialized(self) -> bool:
-        return True
-
-
-def with_async_update_sink(config, store):
-    """
-    Gives the config an async data source update sink that writes to the
-    store, if the config has no sink. The data system does this for a real
-    client. Returns the config.
-    """
-    if config.data_source_update_sink is None:
-        config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, Listeners(), Listeners())
-    return config

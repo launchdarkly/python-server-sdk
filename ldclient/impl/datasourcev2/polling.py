@@ -18,8 +18,8 @@ from ldclient.config import (
     DataSourceBuilderConfig,
     HTTPConfig
 )
-from ldclient.impl.datasource.feature_requester import FDV1_POLLING_ENDPOINT
 from ldclient.impl.datasourcev2.polling_common import (
+    FDV1_POLLING_ENDPOINT,
     PollAction,
     fdv1_polling_payload_to_changeset,
     map_polling_result,
