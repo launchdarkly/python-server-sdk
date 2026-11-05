@@ -9,12 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ldclient.async_client import AsyncLDClient
-from ldclient.async_config import AsyncConfig
+from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.context import Context
+from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.interfaces import DataStoreMode
 from ldclient.testing.mock_async_components import (
     MockAsyncEventProcessor,
-    MockAsyncFeatureStore,
-    MockAsyncUpdateProcessor
+    MockAsyncFeatureStore
 )
 from ldclient.versioned_data_kind import FEATURES
 
@@ -22,6 +23,26 @@ from ldclient.versioned_data_kind import FEATURES
 def _offline_config(**kwargs):
     """Return an AsyncConfig that uses offline mode to avoid any network connections."""
     return AsyncConfig("test-sdk-key", offline=True, **kwargs)
+
+
+def _test_data_config(td=None, **kwargs):
+    """Return an AsyncConfig whose FDv2 data system syncs from TestDataV2."""
+    if td is None:
+        td = TestDataV2.data_source()
+    return AsyncConfig(
+        "test-sdk-key",
+        datasystem_config=AsyncDataSystemConfig(synchronizers=[td.async_builder]),
+        **kwargs,
+    )
+
+
+def _daemon_config(store, **kwargs):
+    """Return an AsyncConfig whose FDv2 data system reads only from the given store."""
+    return AsyncConfig(
+        "test-sdk-key",
+        datasystem_config=AsyncDataSystemConfig(data_store=store, data_store_mode=DataStoreMode.READ_ONLY),
+        **kwargs,
+    )
 
 
 def _make_flag(key: str, value, version: int = 1) -> dict:
@@ -54,27 +75,17 @@ async def test_default_variation_returns_default_when_not_started():
 
 @pytest.mark.asyncio
 async def test_variation_returns_flag_value_when_initialized():
-    """After start(), variation() returns the stored flag value.
+    """After start(), variation() returns the flag value from the data source.
 
-    We use update_processor_class=MockAsyncUpdateProcessor so that the client
-    considers itself initialized (store.initialized becomes True once the
-    NullUpdateProcessor fires ready) without any network connection.
+    TestDataV2 supplies the flag without any network connection, so the
+    client initializes as soon as the synchronizer delivers its basis.
     """
-    store = MockAsyncFeatureStore()
-    flag = _make_flag('my-flag', 'hello')
-    await store.force_set(FEATURES, flag)
-    # Pre-initialize the store so is_initialized() returns True
-    store._initialized = True
+    td = TestDataV2.data_source()
+    td.update(td.flag('my-flag').value_for_all('hello'))
 
-    # Use MockAsyncUpdateProcessor which sets ready immediately
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    client = AsyncLDClient(config)
+    client = AsyncLDClient(_test_data_config(td, send_events=False))
     await client.start(start_wait=1.0)
+    assert await client.is_initialized()
 
     context = Context.create('user-1')
     result = await client.variation('my-flag', context, 'default')
@@ -117,12 +128,7 @@ async def test_context_manager():
 @pytest.mark.asyncio
 async def test_flush_delegates_to_event_processor():
     """flush() calls flush() on the underlying event processor."""
-    config = AsyncConfig(
-        "test-sdk-key",
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    client = AsyncLDClient(config)
+    client = AsyncLDClient(_test_data_config(send_events=False))
     await client.start()
 
     # Replace the event processor with a mock that tracks flush calls
@@ -243,18 +249,10 @@ async def test_flag_tracker_available_before_start():
 @pytest.mark.asyncio
 async def test_variation_detail_returns_reason():
     """variation_detail() returns an EvaluationDetail with a non-None reason."""
-    store = MockAsyncFeatureStore()
-    flag = _make_flag('detail-flag', 'hello')
-    await store.force_set(FEATURES, flag)
-    store._initialized = True
+    td = TestDataV2.data_source()
+    td.update(td.flag('detail-flag').value_for_all('hello'))
 
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    async with AsyncLDClient(config) as client:
+    async with AsyncLDClient(_test_data_config(td, send_events=False)) as client:
         context = Context.create('user-1')
         detail = await client.variation_detail('detail-flag', context, 'fallback')
 
@@ -266,14 +264,8 @@ async def test_variation_detail_returns_reason():
 @pytest.mark.asyncio
 async def test_track_sends_event():
     """track() sends a custom event to the event processor."""
-    store = MockAsyncFeatureStore()
-    store._initialized = True
-
     mock_ep = MockAsyncEventProcessor()
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
+    config = _test_data_config(
         event_processor_class=lambda _cfg: mock_ep,
         send_events=True,
     )
@@ -292,16 +284,7 @@ async def test_track_sends_event():
 @pytest.mark.asyncio
 async def test_data_source_status_provider_accessible():
     """data_source_status_provider is not None after start()."""
-    store = MockAsyncFeatureStore()
-    store._initialized = True
-
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    async with AsyncLDClient(config) as client:
+    async with AsyncLDClient(_test_data_config(send_events=False)) as client:
         assert client.data_source_status_provider is not None
 
 
@@ -311,12 +294,7 @@ async def test_is_offline_reflects_config():
     async with AsyncLDClient(_offline_config()) as client:
         assert client.is_offline() is True
 
-    config = AsyncConfig(
-        "test-sdk-key",
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    async with AsyncLDClient(config) as client:
+    async with AsyncLDClient(_test_data_config(send_events=False)) as client:
         assert client.is_offline() is False
 
 
@@ -438,13 +416,7 @@ async def test_all_flags_state_returns_flag_values():
         'flag-b': _make_flag('flag-b', 'value-b'),
     }})
 
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    async with AsyncLDClient(config) as client:
+    async with AsyncLDClient(_daemon_config(store, send_events=False)) as client:
         context = Context.create('user-1')
         state = await client.all_flags_state(context)
 
@@ -469,13 +441,7 @@ async def test_all_flags_state_degrades_gracefully_when_evaluator_raises():
         'flag-bad-last': _make_flag('flag-bad-last', 'y'),
     }})
 
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
-        send_events=False,
-    )
-    async with AsyncLDClient(config) as client:
+    async with AsyncLDClient(_daemon_config(store, send_events=False)) as client:
         async def fake_evaluate(flag, context, event_factory):
             if flag['key'].startswith('flag-bad'):
                 raise RuntimeError("boom")
@@ -503,25 +469,15 @@ async def test_all_flags_state_degrades_gracefully_when_evaluator_raises():
     assert 'prerequisites' not in flags_state['flag-bad-first']
 
 
-class UninitializedAsyncUpdateProcessor(MockAsyncUpdateProcessor):
-    def initialized(self) -> bool:
-        return False
-
-
 @pytest.mark.asyncio
 async def test_cached_data_warnings_are_logged_once_per_client(caplog):
     caplog.set_level(logging.WARNING, logger='ldclient.util')
     store = MockAsyncFeatureStore()
     await store.force_set(FEATURES, _make_flag('my-flag', 'hello'))
-    store._initialized = True
-    config = AsyncConfig(
-        "test-sdk-key",
-        feature_store=store,
-        update_processor_class=UninitializedAsyncUpdateProcessor,
-        send_events=False,
-    )
-    client = AsyncLDClient(config)
+    # Daemon mode reports cached data, so every evaluation reads last known values.
+    client = AsyncLDClient(_daemon_config(store, send_events=False))
     await client.start(start_wait=1.0)
+    assert await client.is_initialized()
     context = Context.create('user-1')
 
     assert await client.variation('my-flag', context, 'default') == 'hello'
