@@ -221,10 +221,6 @@ class DataSourceBuilderConfig(SdkIdentityConfig, Protocol):
     def poll_interval(self) -> float:
         """The interval between polling requests."""
 
-    @property
-    def payload_filter_key(self) -> Optional[str]:
-        """The payload filter key applied as a query parameter."""
-
     # Set by the client after construction, so it is a read-write attribute
     # rather than a read-only property.
     _instance_id: Optional[str]

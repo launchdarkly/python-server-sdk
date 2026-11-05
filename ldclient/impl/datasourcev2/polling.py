@@ -160,17 +160,9 @@ class Urllib3PollingRequester(Requester):
         Returns a Result containing a tuple of ChangeSet and any request headers,
         or an error if the data could not be retrieved.
         """
-        query_params = {}
-        if self._config.payload_filter_key is not None:
-            query_params["filter"] = self._config.payload_filter_key
-
-        if selector is not None and selector.is_defined():
-            query_params["basis"] = selector.state
-
         uri = self._poll_uri
-        if len(query_params) > 0:
-            filter_query = parse.urlencode(query_params)
-            uri += f"?{filter_query}"
+        if selector is not None and selector.is_defined():
+            uri += "?%s" % parse.urlencode({"basis": selector.state})
 
         hdrs = _headers(self._config)
         hdrs["Accept-Encoding"] = "gzip"
@@ -334,14 +326,7 @@ class Urllib3FDv1PollingRequester(Requester):
         Returns a Result containing a tuple of ChangeSet and any request headers,
         or an error if the data could not be retrieved.
         """
-        query_params = {}
-        if self._config.payload_filter_key is not None:
-            query_params["filter"] = self._config.payload_filter_key
-
         uri = self._poll_uri
-        if len(query_params) > 0:
-            filter_query = parse.urlencode(query_params)
-            uri += f"?{filter_query}"
 
         hdrs = _headers(self._config)
         hdrs["Accept-Encoding"] = "gzip"

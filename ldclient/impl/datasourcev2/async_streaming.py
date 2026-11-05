@@ -6,7 +6,6 @@ with any required supporting classes and protocols.
 import json
 from time import time
 from typing import AsyncGenerator, Callable, Optional, Tuple
-from urllib import parse
 
 import aiohttp
 from ld_eventsource import AsyncSSEClient
@@ -70,8 +69,6 @@ def create_sse_client(
     caller owns it and ``None`` is returned in its place.
     """
     uri = base_uri + STREAMING_ENDPOINT
-    if config.payload_filter_key is not None:
-        uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
 
     def query_params() -> dict:
         selector = ss.selector()

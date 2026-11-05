@@ -6,7 +6,6 @@ with any required supporting classes and protocols.
 import json
 from time import time
 from typing import Callable, Generator, Optional, Tuple
-from urllib import parse
 
 from ld_eventsource import SSEClient
 from ld_eventsource.actions import Event, Fault, Start
@@ -73,8 +72,6 @@ def create_sse_client(
     to the LaunchDarkly streaming endpoint.
     """
     uri = base_uri + STREAMING_ENDPOINT
-    if config.payload_filter_key is not None:
-        uri += "?%s" % parse.urlencode({"filter": config.payload_filter_key})
 
     # We don't want the stream to use the same read timeout as the rest of the SDK.
     base_headers = _base_headers(config)
