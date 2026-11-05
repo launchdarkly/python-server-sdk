@@ -347,7 +347,6 @@ def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSy
         _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
         fdv1_fallback_synchronizer = fallback_builder
 
-
     ds_kwargs: dict = {
         "initializers": initializers,
         "synchronizers": synchronizers,

@@ -91,7 +91,6 @@ class ClientEntity:
                 _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
                 datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
-
             # Handle persistent data store configuration for dataSystem
             store_config = datasystem_config.get("store")
             if store_config is not None:
