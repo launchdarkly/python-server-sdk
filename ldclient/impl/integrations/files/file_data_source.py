@@ -96,7 +96,7 @@ class _FileDataSource(UpdateProcessor):
                 log.error('Unable to load flag data from "%s": %s' % (path, repr(e)))
                 traceback.print_exc()
                 if self._data_source_update_sink is not None:
-                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time, str(e)))
+                    self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.INVALID_DATA, 0, time.time(), str(e)))
                 return
         try:
             self._sink_or_store().init(all_data)
@@ -107,7 +107,7 @@ class _FileDataSource(UpdateProcessor):
             log.error('Unable to store data: %s' % repr(e))
             traceback.print_exc()
             if self._data_source_update_sink is not None:
-                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time, str(e)))
+                self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.UNKNOWN, 0, time.time(), str(e)))
 
     def _load_file(self, path, all_data):
         content = None
