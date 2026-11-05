@@ -2,6 +2,18 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.20.0](https://github.com/launchdarkly/python-server-sdk/compare/9.19.0...9.20.0) (2026-11-05)
+
+
+### Features
+
+* Replace the expiringdict dependency with an internal cache ([#563](https://github.com/launchdarkly/python-server-sdk/issues/563)) ([ca34aad](https://github.com/launchdarkly/python-server-sdk/commit/ca34aad162af51c6ff343a7ead1d3f2710efbcf9))
+
+
+### Bug Fixes
+
+* Ignore FDv2 objects with unrecognized kinds ([#541](https://github.com/launchdarkly/python-server-sdk/issues/541)) ([d5eeb80](https://github.com/launchdarkly/python-server-sdk/commit/d5eeb8064183705af6c93a727b13a0d26b0f6ce8))
+
 ## [9.19.0](https://github.com/launchdarkly/python-server-sdk/compare/9.18.4...9.19.0) (2026-11-02)
 
 
