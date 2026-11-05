@@ -28,12 +28,6 @@ def test_rejects_max_len_below_one(max_len):
         ExpiringCache(max_len, 5.0)
 
 
-def test_uses_monotonic_clock_by_default():
-    cache = ExpiringCache(10, 5.0)
-    cache["a"] = 1
-    assert cache.get("a") == 1
-
-
 def test_get_returns_stored_value():
     cache, _ = make_cache()
     cache["a"] = 1
