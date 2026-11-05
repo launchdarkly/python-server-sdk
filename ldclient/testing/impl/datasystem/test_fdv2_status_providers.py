@@ -1,6 +1,7 @@
 import time
 from typing import Tuple
 
+import pytest
 from mock import Mock
 
 from ldclient.impl.datasystem import fdv2_common
@@ -143,16 +144,17 @@ def test_removed_data_source_listener_is_not_notified():
     assert len(spy.statuses) == 1
 
 
-def test_valid_after_off_changes_state_to_valid():
-    # FDv2 moves to the next synchronizer after one reports OFF, so OFF is not terminal.
+@pytest.mark.parametrize('later_state', [DataSourceState.VALID, DataSourceState.INTERRUPTED, DataSourceState.INITIALIZING])
+def test_off_is_terminal(later_state):
     provider, spy = make_source_provider()
     provider.update_status(DataSourceState.VALID, None)
     provider.update_status(DataSourceState.OFF, None)
 
-    provider.update_status(DataSourceState.VALID, None)
+    provider.update_status(later_state, make_error())
 
-    assert provider.status.state == DataSourceState.VALID
-    assert [s.state for s in spy.statuses] == [DataSourceState.VALID, DataSourceState.OFF, DataSourceState.VALID]
+    assert provider.status.state == DataSourceState.OFF
+    assert provider.status.error is None
+    assert [s.state for s in spy.statuses] == [DataSourceState.VALID, DataSourceState.OFF]
 
 
 def test_data_store_status_defaults_to_available_and_not_stale():

@@ -44,6 +44,11 @@ class DataSourceStatusProviderImpl(DataSourceStatusProvider):
         with self.__lock.write():
             old_status = self.__status
 
+            # OFF is terminal. Work that is still in progress when the data system stops must not
+            # report a status after OFF.
+            if old_status.state == DataSourceState.OFF:
+                return
+
             if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
                 new_state = DataSourceState.INITIALIZING
 
