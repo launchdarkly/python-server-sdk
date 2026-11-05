@@ -91,7 +91,7 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
             self._cache_put_upsert(kind, key, encoded_item)
         elif self._caching():
             # The store has a newer item. Read it, so that the cache does not keep an older one.
-            self._cache_put_item(kind, key, await self._core.get_internal(kind, key))
+            self._cache_put_rejected_upsert(kind, key, await self._core.get_internal(kind, key))
         return updated
 
     @property

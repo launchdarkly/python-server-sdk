@@ -303,6 +303,25 @@ class TestAsyncCachingStoreWrapper:
         assert await wrapper.get(THINGS, key) == itemv2
 
     @pytest.mark.asyncio
+    async def test_cached_upsert_unsuccessful_drops_the_all_items_cache(self):
+        # Another process writes a newer item after the wrapper caches all items. The wrapper then
+        # tries to write an older item, and the core rejects it. All items must come from the store
+        # again, so that the wrapper does not keep the older item.
+        core = MockAsyncCore()
+        wrapper = make_wrapper(core, True)
+        key = "flag"
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
+        itemv3 = {"key": key, "version": 3}
+
+        await wrapper.init({THINGS: {key: itemv1}})
+        assert await wrapper.all(THINGS) == {key: itemv1}
+
+        core.force_set(THINGS, itemv3)
+        assert await wrapper.upsert(THINGS, itemv2) is False
+        assert await wrapper.all(THINGS) == {key: itemv3}
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("cached", [False, True])
     async def test_upsert_can_throw_exception(self, cached):
         core = MockAsyncCore()

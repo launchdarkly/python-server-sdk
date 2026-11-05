@@ -190,6 +190,15 @@ class _CachingStoreWrapperBase:
         self._cache[self._item_cache_key(kind, key)] = [kind.decode(encoded_item)]
         self._cache.pop(self._all_cache_key(kind), None)
 
+    def _cache_put_rejected_upsert(self, kind, key, descriptor):
+        """Updates the cache after the core rejected a write, because the store has a newer item.
+
+        Caches the newer item from the core. Also drops the all-items entry, because that entry can
+        also have an older item.
+        """
+        self._cache_put_item(kind, key, descriptor)
+        self._cache.pop(self._all_cache_key(kind), None)
+
     def _caching(self) -> bool:
         return self._cache is not _NOOP_CACHE
 
@@ -273,7 +282,7 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
             self._cache_put_upsert(kind, key, encoded_item)
         elif self._caching():
             # The store has a newer item. Read it, so that the cache does not keep an older one.
-            self._cache_put_item(kind, key, self._core.get_internal(kind, key))
+            self._cache_put_rejected_upsert(kind, key, self._core.get_internal(kind, key))
         return updated
 
     @property

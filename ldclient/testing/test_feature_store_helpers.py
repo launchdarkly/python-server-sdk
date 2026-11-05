@@ -313,6 +313,24 @@ class TestCachingStoreWrapper:
         core.force_set(THINGS, itemv3)  # bypasses cache so we can verify that itemv2 is in the cache
         assert wrapper.get(THINGS, key) == itemv2
 
+    def test_cached_upsert_unsuccessful_drops_the_all_items_cache(self):
+        # Another process writes a newer item after the wrapper caches all items. The wrapper then
+        # tries to write an older item, and the core rejects it. All items must come from the store
+        # again, so that the wrapper does not keep the older item.
+        core = MockCore()
+        wrapper = make_wrapper(core, True)
+        key = "flag"
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
+        itemv3 = {"key": key, "version": 3}
+
+        wrapper.init({THINGS: {key: itemv1}})
+        assert wrapper.all(THINGS) == {key: itemv1}
+
+        core.force_set(THINGS, itemv3)
+        assert wrapper.upsert(THINGS, itemv2) is False
+        assert wrapper.all(THINGS) == {key: itemv3}
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_upsert_can_throw_exception(self, cached):
         core = MockCore()
