@@ -1,8 +1,6 @@
 import asyncio
 from typing import Awaitable, Callable, Optional, Tuple
 
-from expiringdict import ExpiringDict
-
 from ldclient.async_config import AsyncBigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.aio.concurrency import AsyncRepeatingTask
@@ -11,6 +9,7 @@ from ldclient.impl.big_segments_common import (
     _hash_for_user_key,
     is_stale
 )
+from ldclient.impl.expiring_cache import ExpiringCache
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.util import log
 from ldclient.interfaces import (
@@ -66,7 +65,7 @@ class AsyncBigSegmentStoreManager:
         self.__poll_task = None  # type: Optional[AsyncRepeatingTask]
 
         if self.__store:
-            self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
+            self.__cache = ExpiringCache(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
             self.__poll_task = AsyncRepeatingTask.at_interval("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
 
     def start(self):
