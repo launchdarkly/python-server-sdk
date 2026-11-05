@@ -1,6 +1,8 @@
 import time
 from typing import Callable
 
+from ldclient.impl.datasource.status import DataSourceUpdateSinkImpl
+from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import (
     BigSegmentStore,
     BigSegmentStoreMetadata,
@@ -54,3 +56,14 @@ class MockSelectorStore():
 
     def selector(self) -> Selector:
         return self._selector
+
+
+def with_update_sink(config, store):
+    """
+    Gives the config a data source update sink that writes to the store, if
+    the config has no sink. The data system does this for a real client.
+    Returns the config.
+    """
+    if config.data_source_update_sink is None:
+        config._data_source_update_sink = DataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+    return config

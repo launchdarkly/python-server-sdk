@@ -5,19 +5,15 @@ Pure helpers shared by the FDv1 polling and streaming data sources.
 # currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
-from typing import Mapping, Optional, Protocol, Union, runtime_checkable
+from typing import Mapping, Optional, Protocol, TypeVar, runtime_checkable
 
 from ldclient.impl.util import _LD_ENVID_HEADER
-from ldclient.interfaces import (
-    AsyncDataSourceUpdateSink,
-    AsyncFeatureStore,
-    DataSourceUpdateSink,
-    FeatureStore
-)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 STREAM_ALL_PATH = '/all'
 FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
+
+T = TypeVar('T')
 
 ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
@@ -39,32 +35,18 @@ class StreamClosedError(Exception):
         super().__init__("the server closed the stream connection")
 
 
-def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore) -> Union[DataSourceUpdateSink, FeatureStore]:
+def require_update_sink(sink: Optional[T]) -> T:
     """
-    The original implementation of the data sources relied on the feature store
-    directly, which we are trying to move away from. Customers who might have
-    instantiated one directly for some reason wouldn't know they have to set
-    the config's sink manually, so we have to fall back to the store if the
-    sink isn't present.
+    Returns the data source update sink, or raises if it is missing.
 
-    The next major release should be able to simplify this structure and
-    remove the need for fall back to the data store because the update sink
-    should always be present.
+    The data system puts the sink on the config before it builds a data
+    source. A data source writes all its updates to the sink, so it cannot
+    operate without one.
+
+    :raises ValueError: if the sink is None
     """
     if sink is None:
-        return store
-
-    return sink
-
-
-def async_sink_or_store(sink: Optional[AsyncDataSourceUpdateSink], store: AsyncFeatureStore) -> Union[AsyncDataSourceUpdateSink, AsyncFeatureStore]:
-    """
-    The async counterpart of :func:`sink_or_store`, kept separate so each side
-    names its own sink and store types. One shared generic function accepted a
-    sync sink beside an async store without complaint.
-    """
-    if sink is None:
-        return store
+        raise ValueError("config.data_source_update_sink is not set. The data system must set it before it builds a data source.")
 
     return sink
 

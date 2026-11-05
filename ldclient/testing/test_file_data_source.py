@@ -18,6 +18,7 @@ from ldclient.interfaces import (
     DataSourceState,
     DataSourceStatus
 )
+from ldclient.testing.mock_components import with_update_sink
 from ldclient.testing.test_util import SpyListener
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -119,7 +120,7 @@ def teardown_function():
 
 def make_data_source(config, **kwargs):
     global data_source
-    data_source = Files.new_data_source(**kwargs)(config, store, ready)
+    data_source = Files.new_data_source(**kwargs)(with_update_sink(config, store), store, ready)
     return data_source
 
 
@@ -337,3 +338,8 @@ def test_does_not_allow_unsafe_yaml():
         if client is not None:
             client.close()
     assert unsafe_yaml_caused_method_to_be_called is False
+
+
+def test_constructor_raises_without_update_sink():
+    with pytest.raises(ValueError, match="data_source_update_sink"):
+        Files.new_data_source(paths=[])(Config("SDK_KEY"), store, ready)

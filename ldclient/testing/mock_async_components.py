@@ -3,6 +3,8 @@ Test utilities for async SDK components.
 """
 
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
+from ldclient.impl.datasource.async_status import AsyncDataSourceUpdateSinkImpl
+from ldclient.impl.listeners import Listeners
 from ldclient.interfaces import AsyncEventProcessor, AsyncUpdateProcessor
 
 
@@ -77,3 +79,14 @@ class MockAsyncUpdateProcessor(AsyncUpdateProcessor):
 
     def initialized(self) -> bool:
         return True
+
+
+def with_async_update_sink(config, store):
+    """
+    Gives the config an async data source update sink that writes to the
+    store, if the config has no sink. The data system does this for a real
+    client. Returns the config.
+    """
+    if config.data_source_update_sink is None:
+        config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, Listeners(), Listeners())
+    return config

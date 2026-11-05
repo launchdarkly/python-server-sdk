@@ -40,6 +40,7 @@ from ldclient.testing.http_util import (
     SequentialHandler,
     start_server
 )
+from ldclient.testing.mock_components import with_update_sink
 from ldclient.testing.proxy_test_util import do_proxy_tests
 from ldclient.testing.stub_util import (
     make_delete_event,
@@ -91,7 +92,7 @@ def test_request_properties():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.method == 'GET'
@@ -112,7 +113,7 @@ def test_sends_instance_id():
             config._instance_id = 'my-instance-id'
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Instance-Id') == 'my-instance-id'
@@ -127,7 +128,7 @@ def test_sends_wrapper_header():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, wrapper_name='Flask', wrapper_version='0.1.0')
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask/0.1.0'
@@ -142,7 +143,7 @@ def test_sends_wrapper_header_without_version():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, wrapper_name='Flask')
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Wrapper') == 'Flask'
@@ -157,7 +158,7 @@ def test_sends_tag_header():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, application={"id": "my-id", "version": "my-version"})
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 req = server.await_request()
                 assert req.headers.get('X-LaunchDarkly-Tags') == 'application-id/my-id application-version/my-version'
@@ -174,7 +175,7 @@ def test_receives_put_event():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -195,7 +196,7 @@ def test_receives_patch_events():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -220,7 +221,7 @@ def test_receives_delete_events():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -246,7 +247,7 @@ def test_reconnects_if_stream_is_broken():
                 config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
                 server.for_path('/all', SequentialHandler(stream1, stream2))
 
-                with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                     sp.start()
                     server.await_request
                     ready.wait(start_wait)
@@ -268,7 +269,7 @@ def test_retries_on_network_error():
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', two_errors_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -287,7 +288,7 @@ def test_recoverable_http_error(status):
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', two_errors_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -307,7 +308,7 @@ def test_unexpected_http_error_backs_off_a_long_way(status):
             config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
             server.for_path('/all', error_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 server.wait_until_request_received()
                 # The next attempt is past the normal ceiling, so the failure
@@ -339,7 +340,7 @@ def test_unexpected_http_error_keeps_retrying(status):
             config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
             server.for_path('/all', error_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None, retry_state=fast_retry_state()) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=fast_retry_state()) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -389,7 +390,7 @@ def test_the_sdk_configures_the_sse_client_never_to_wait():
     with start_server() as server:
         server.for_path('/all', BasicResponse(503))
         config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=30)
-        sp = StreamingUpdateProcessor(config, store, Event(), None)
+        sp = StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None)
         client = sp._create_sse_client()
         try:
             actions = iter(client.all)
@@ -424,7 +425,7 @@ def test_server_close_backs_off_and_keeps_the_stream_running():
                 server.for_path('/all', SequentialHandler(stream1, stream2))
 
                 retry = fast_retry_state()
-                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=retry) as sp:
                     sp.start()
                     ready.wait(start_wait)
                     assert sp.initialized()
@@ -447,7 +448,7 @@ def test_server_close_uses_the_normal_delay_curve():
     store = InMemoryFeatureStore()
     config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
     retry = for_streaming(1)
-    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp = StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None, retry_state=retry)
     sp._running = True
     sp._stop_event.set()  # so the wait returns at once
 
@@ -488,7 +489,7 @@ def test_our_own_interrupt_is_not_counted_as_a_server_close():
             server.for_path('/all', SequentialHandler(invalid_stream, valid_stream))
 
             retry = fast_retry_state()
-            with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=retry) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -515,7 +516,7 @@ def test_a_leaked_interrupt_flag_does_not_swallow_a_server_close():
                 server.for_path('/all', SequentialHandler(stream1, stream2))
 
                 retry = fast_retry_state()
-                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=retry) as sp:
                     sp._interrupted_by_sdk = True
                     sp.start()
                     ready.wait(start_wait)
@@ -530,7 +531,7 @@ def test_a_leaked_interrupt_flag_does_not_swallow_a_server_close():
 def test_stop_before_start_does_not_raise():
     """stop() can land before run() has built the SSE client."""
     config = Config(sdk_key='sdk-key', stream_uri='http://localhost')
-    sp = StreamingUpdateProcessor(config, InMemoryFeatureStore(), Event(), None)
+    sp = StreamingUpdateProcessor(with_update_sink(config, InMemoryFeatureStore()), InMemoryFeatureStore(), Event(), None)
     sp.stop()
 
 
@@ -544,7 +545,7 @@ def test_a_stop_before_the_connection_exists_still_ends_the_run():
         with stream_content(make_put_event()) as stream:
             server.for_path('/all', stream)
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
-            sp = StreamingUpdateProcessor(config, store, ready, None)
+            sp = StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None)
 
             sp.stop()
             thread = Thread(target=sp.run, daemon=True)
@@ -565,7 +566,7 @@ def test_a_raise_inside_the_loop_closes_the_connection():
         with stream_content(make_put_event()) as stream:
             server.for_path('/all', stream)
             config = Config(sdk_key='sdk-key', stream_uri=server.uri)
-            sp = StreamingUpdateProcessor(config, store, Event(), None)
+            sp = StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None)
 
             # KeyboardInterrupt is not an Exception, so the loop cannot catch it.
             def explode(*args, **kwargs):
@@ -599,7 +600,7 @@ def _handle_errors_without_waiting(retry, errors):
     is pre-set so the interruptible wait returns at once."""
     store = InMemoryFeatureStore()
     config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
-    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp = StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None, retry_state=retry)
     sp._running = True
     sp._stop_event.set()
     for error in errors:
@@ -660,7 +661,7 @@ def test_an_extended_regime_wait_is_cut_short_by_stop():
         server.for_path('/all', BasicResponse(401))
         retry = fast_retry_state(ONE_HOUR)
 
-        with StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry) as sp:
+        with StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None, retry_state=retry) as sp:
             sp.start()
             server.wait_until_request_received()
             # Confirm the wait under test really is long before measuring the stop.
@@ -699,7 +700,7 @@ def test_several_messages_on_one_stream_do_not_extend_the_reset_window():
             # restarted reads back as a different time.
             windows = record_healthy_windows(policy)
             with ticking_clock():
-                with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=retry) as sp:
                     sp.start()
                     ready.wait(start_wait)
                     assert sp.initialized()
@@ -733,7 +734,7 @@ def test_a_fresh_stream_starts_a_new_reset_window():
                 )
                 windows = record_healthy_windows(policy)
                 with ticking_clock():
-                    with StreamingUpdateProcessor(config, store, ready, None, retry_state=retry) as sp:
+                    with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None, retry_state=retry) as sp:
                         sp.start()
                         ready.wait(start_wait)
                         assert sp.initialized()
@@ -759,7 +760,7 @@ def test_transport_failures_stay_in_the_normal_regime(error):
     store = InMemoryFeatureStore()
     config = Config(sdk_key='sdk-key', initial_reconnect_delay=1)
     retry = for_streaming(1)
-    sp = StreamingUpdateProcessor(config, store, Event(), None, retry_state=retry)
+    sp = StreamingUpdateProcessor(with_update_sink(config, store), store, Event(), None, retry_state=retry)
     sp._running = True
     sp._stop_event.set()  # so the wait returns at once
 
@@ -775,7 +776,7 @@ def test_http_proxy(monkeypatch):
         ready = Event()
         with stream_content(make_put_event()) as stream:
             server.for_path(config.stream_base_uri + '/all', stream)
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 # Wait till the server has received a request. We need to do this even though do_proxy_tests also
                 # does it, because if we return too soon out of this block, the object returned by stream_content
@@ -799,7 +800,7 @@ def test_records_diagnostic_on_stream_init_success():
             server.for_path('/all', stream)
             diag_accum = _DiagnosticAccumulator(1)
 
-            with StreamingUpdateProcessor(config, store, ready, diag_accum) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, diag_accum) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 recorded_inits = diag_accum.create_event_and_reset(0, 0)['streamInits']
@@ -818,7 +819,7 @@ def test_records_diagnostic_on_stream_init_failure():
             server.for_path('/all', error_then_success)
             diag_accum = _DiagnosticAccumulator(1)
 
-            with StreamingUpdateProcessor(config, store, ready, diag_accum) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, diag_accum) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 recorded_inits = diag_accum.create_event_and_reset(0, 0)['streamInits']
@@ -845,7 +846,7 @@ def test_status_includes_http_code(status):
             config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
             server.for_path('/all', two_errors_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -886,7 +887,7 @@ def test_invalid_json_triggers_listener():
             config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
             server.for_path('/all', SequentialHandler(invalid_stream, valid_stream))
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sp.initialized()
@@ -921,7 +922,7 @@ def test_failure_transitions_from_valid():
         config.data_source_update_sink.update_status(DataSourceState.VALID, None)
         server.for_path('/all', error_handler)
 
-        with StreamingUpdateProcessor(config, store, ready, None) as sp:
+        with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
             sp.start()
             server.wait_until_request_received()
             wait_until(lambda: len(spy.statuses) == 2)
@@ -950,7 +951,7 @@ def test_records_environment_id_from_stream_headers():
             config._data_source_update_sink = sink
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sink.environment_id == 'env-abc-123'
@@ -967,7 +968,7 @@ def test_environment_id_is_none_when_not_provided():
             config._data_source_update_sink = sink
             server.for_path('/all', stream)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sink.environment_id is None
@@ -985,7 +986,7 @@ def test_does_not_record_environment_id_from_error_response_headers():
             config._data_source_update_sink = sink
             server.for_path('/all', error_then_success)
 
-            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+            with StreamingUpdateProcessor(with_update_sink(config, store), store, ready, None) as sp:
                 sp.start()
                 ready.wait(start_wait)
                 assert sink.environment_id is None
@@ -1036,3 +1037,8 @@ def test_stream_init_duration_unaffected_by_wall_clock_step(monkeypatch):
     assert failed is False
     assert duration >= 0
     assert duration < 1000
+
+
+def test_constructor_raises_without_update_sink():
+    with pytest.raises(ValueError, match="data_source_update_sink"):
+        StreamingUpdateProcessor(Config("SDK_KEY"), InMemoryFeatureStore(), Event(), None)

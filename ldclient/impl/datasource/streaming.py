@@ -20,7 +20,7 @@ from ldclient.impl.datasource.datasource_common import (
     StreamClosedError,
     parse_path,
     record_environment_id,
-    sink_or_store
+    require_update_sink
 )
 from ldclient.impl.http import HTTPFactory, _http_factory
 from ldclient.impl.retry import (
@@ -34,6 +34,7 @@ from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
     DataSourceState,
+    DataSourceUpdateSink,
     UpdateProcessor
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
@@ -57,7 +58,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         if config.payload_filter_key is not None:
             self._uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
         self._config = config
-        self._data_source_update_sink = config.data_source_update_sink
+        self._data_source_update_sink: DataSourceUpdateSink = require_update_sink(config.data_source_update_sink)
         self._store = store
         self._running = False
         self._ready = ready
@@ -91,7 +92,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                     message_ok = False
                     message_handled = False
                     try:
-                        message_ok = self._process_message(sink_or_store(self._data_source_update_sink, self._store), action)
+                        message_ok = self._process_message(self._data_source_update_sink, action)
                         message_handled = True
                     except json.decoder.JSONDecodeError as e:
                         log.info("Error while handling stream event; will restart stream: %s" % e)
@@ -113,8 +114,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
                         self._record_stream_init(False)
                         self._connection_attempt_started_monotonic = None
 
-                        if self._data_source_update_sink is not None:
-                            self._data_source_update_sink.update_status(DataSourceState.VALID, None)
+                        self._data_source_update_sink.update_status(DataSourceState.VALID, None)
 
                         if not self._ready.is_set():
                             log.info("StreamingUpdateProcessor initialized ok.")
@@ -167,8 +167,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         # OFF means an explicit shutdown. No stream failure produces it. It is
         # reported before teardown, so a slow close cannot hold back the status
         # that tells a waiter to give up. The sink drops anything after OFF.
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.OFF, None)
+        self._data_source_update_sink.update_status(DataSourceState.OFF, None)
 
         if self._sse:
             self._sse.close()
@@ -256,8 +255,7 @@ class StreamingUpdateProcessor(Thread, UpdateProcessor):
         delay = self._retry.next_delay
         level("%s - will retry in %.1fs" % (description, delay))
 
-        if self._data_source_update_sink is not None:
-            self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
+        self._data_source_update_sink.update_status(DataSourceState.INTERRUPTED, error_info)
 
         interrupted = self._stop_event.wait(min(delay, TIMEOUT_MAX))
 
