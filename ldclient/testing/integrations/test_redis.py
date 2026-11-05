@@ -103,7 +103,10 @@ class TestRedisFeatureStore(PersistentFeatureStoreTestBase):
 
         store.upsert(FEATURES, feature)
         result = store.get(FEATURES, 'flagkey', lambda x: x)
-        assert result['version'] == 2
+        # The hook writes version 2 during the first attempt, which makes the transaction fail. During
+        # the retry, the core reads version 2 and rejects the write, and the hook then writes version 3.
+        # The wrapper reads the item again after a rejected write, so it returns version 3.
+        assert result['version'] == 3
 
     def test_upsert_race_condition_against_external_client_with_lower_version(self):
         other_client = RedisTestHelper.make_client()
