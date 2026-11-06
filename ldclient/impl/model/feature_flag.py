@@ -1,3 +1,4 @@
+import copy
 from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.impl.model.clause import Clause
@@ -96,10 +97,12 @@ class FeatureFlag(ModelEntity):
         '_salt',
         '_track_events',
         '_debug_events_until_date',
+        '_is_override',
     ]
 
     def __init__(self, data: dict):
         super().__init__(data)
+        self._is_override = False
         # In the following logic, we're being somewhat lenient in terms of allowing most properties to
         # be absent even if they are really required in the schema. That's for backward compatibility
         # with test logic that constructed incomplete JSON, and also with the file data source which
@@ -202,3 +205,24 @@ class FeatureFlag(ModelEntity):
     @property
     def sampling_ratio(self) -> Optional[int]:
         return self._sampling_ratio
+
+    @property
+    def is_override(self) -> bool:
+        """
+        True if this flag definition was supplied by an SDK override source rather than by
+        LaunchDarkly data. The marker is never part of the JSON representation. Only the SDK
+        components that manage override entries set it. Components that read a definition
+        through the store may treat a marked definition the same as any other.
+
+        Flag overrides are currently experimental and subject to change.
+        """
+        return self._is_override
+
+    def with_override_marker(self) -> 'FeatureFlag':
+        """
+        Returns a shallow copy of this flag with the override marker set. The copy shares the
+        underlying data with this instance, which is left unmarked.
+        """
+        marked = copy.copy(self)
+        marked._is_override = True
+        return marked
