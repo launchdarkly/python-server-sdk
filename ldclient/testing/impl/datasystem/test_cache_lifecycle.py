@@ -30,6 +30,12 @@ from ldclient.interfaces import (
     ObjectKind,
     Selector
 )
+from ldclient.testing.serialized_items import (
+    from_descriptor,
+    from_descriptors,
+    to_descriptor,
+    to_descriptors
+)
 from ldclient.versioned_data_kind import FEATURES
 
 
@@ -50,24 +56,25 @@ class RecordingCore(FeatureStoreCore):
 
     def init_internal(self, all_data):
         self.init_calls += 1
-        self.data = {kind: dict(items) for kind, items in all_data.items()}
+        self.data = from_descriptors(all_data)
         self.inited = True
 
     def get_internal(self, kind, key):
         self.get_calls += 1
-        return self.data.get(kind, {}).get(key)
+        return to_descriptor(self.data.get(kind, {}).get(key))
 
     def get_all_internal(self, kind):
-        return self.data.get(kind, {})
+        return to_descriptors(self.data.get(kind, {}))
 
-    def upsert_internal(self, kind, item):
+    def upsert_internal(self, kind, key, descriptor):
         self.upsert_calls += 1
+        item = from_descriptor(descriptor)
         items = self.data.setdefault(kind, {})
-        existing = items.get(item['key'])
+        existing = items.get(key)
         if existing is None or existing.get('version', 0) < item.get('version', 0):
-            items[item['key']] = item
-            return item
-        return existing
+            items[key] = item
+            return True
+        return False
 
     def initialized_internal(self):
         return self.inited

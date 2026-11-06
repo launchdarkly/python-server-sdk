@@ -1,11 +1,13 @@
-import json
 from typing import Any, Dict
 
 from ldclient import log
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.util import redact_password
-from ldclient.interfaces import DiagnosticDescription, FeatureStoreCore
-from ldclient.versioned_data_kind import FEATURES
+from ldclient.interfaces import (
+    DiagnosticDescription,
+    FeatureStoreCore,
+    SerializedItemDescriptor
+)
 
 have_redis = False
 try:
@@ -52,8 +54,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             base_key = self._items_key(kind)
             pipe.delete(base_key)
             for key, item in items.items():
-                item_json = json.dumps(item)
-                pipe.hset(base_key, key, item_json)
+                pipe.hset(base_key, key, item.serialized_item)
             all_count = all_count + len(items)
 
         pipe.set(self._init_key, self._init_key)
@@ -70,7 +71,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         results = {}
         for key, item_json in all_items.items():
             key = key.decode('utf-8')  # necessary in Python 3
-            results[key] = json.loads(item_json.decode('utf-8'))
+            results[key] = _descriptor(item_json)
         return results
 
     def get_internal(self, kind, key):
@@ -81,13 +82,11 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             log.debug("RedisFeatureStore: key %s not found in '%s'. Returning None.", key, kind.namespace)
             return None
 
-        return json.loads(item_json.decode('utf-8'))
+        return _descriptor(item_json)
 
-    def upsert_internal(self, kind, item):
+    def upsert_internal(self, kind, key, item):
         r = redis.Redis(connection_pool=self._pool)
         base_key = self._items_key(kind)
-        key = item['key']
-        item_json = json.dumps(item)
 
         for _ in range(_MAX_UPSERT_RETRIES):
             pipeline = r.pipeline()
@@ -95,20 +94,21 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
             old = self.get_internal(kind, key)
             if self.test_update_hook is not None:
                 self.test_update_hook(base_key, key)
-            if old and old['version'] >= item['version']:
+            old_version = None if old is None else kind.deserialize(old.serialized_item)['version']
+            if old_version is not None and old_version >= item.version:
                 log.debug(
                     'RedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
-                    'delete' if item.get('deleted') else 'update',
+                    'delete' if item.deleted else 'update',
                     key,
-                    old['version'],
-                    item['version'],
+                    old_version,
+                    item.version,
                     kind.namespace,
                 )
                 pipeline.unwatch()
-                return old
+                return False
             else:
                 pipeline.multi()
-                pipeline.hset(base_key, key, item_json)
+                pipeline.hset(base_key, key, item.serialized_item)
                 try:
                     pipeline.execute()
                     # Unlike Redis implementations for other platforms, in redis-py a failed WATCH
@@ -116,7 +116,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
                 except redis.exceptions.WatchError:
                     log.debug("RedisFeatureStore: concurrent modification detected, retrying")
                     continue
-            return item
+            return True
 
         raise RuntimeError("failed to update key %s in '%s' after %d attempts" % (key, kind.namespace, _MAX_UPSERT_RETRIES))
 
@@ -130,3 +130,9 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
     def _before_update_transaction(self, base_key, key):
         # exposed for testing
         pass
+
+
+def _descriptor(item_json: bytes) -> SerializedItemDescriptor:
+    # The store keeps only the serialized item. The SDK reads the version and the deleted state
+    # from it.
+    return SerializedItemDescriptor(version=0, deleted=False, serialized_item=item_json.decode('utf-8'))

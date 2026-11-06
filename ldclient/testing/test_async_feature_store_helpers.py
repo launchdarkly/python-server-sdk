@@ -1,10 +1,17 @@
 import asyncio
+import json
 
 import pytest
 
 from ldclient.async_feature_store_helpers import AsyncCachingStoreWrapper
 from ldclient.feature_store import CacheConfig
-from ldclient.interfaces import AsyncFeatureStoreCore
+from ldclient.interfaces import AsyncFeatureStoreCore, SerializedItemDescriptor
+from ldclient.testing.serialized_items import (
+    from_descriptor,
+    from_descriptors,
+    to_descriptor,
+    to_descriptors
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 # These tests exercise the caching-wrapper logic only, using an in-memory mock core, so they run
@@ -36,22 +43,20 @@ class MockAsyncCore(AsyncFeatureStoreCore):
 
     async def init_internal(self, all_data):
         self._maybe_throw()
-        self.data = {}
-        for kind, items in all_data.items():
-            self.data[kind] = items.copy()
+        self.data = from_descriptors(all_data)
 
     async def get_internal(self, kind, key):
         self._maybe_throw()
         items = self.data.get(kind)
-        return None if items is None else items.get(key)
+        return None if items is None else to_descriptor(items.get(key))
 
     async def get_all_internal(self, kind):
         self._maybe_throw()
-        return self.data.get(kind)
+        return to_descriptors(self.data.get(kind))
 
-    async def upsert_internal(self, kind, item):
+    async def upsert_internal(self, kind, key, descriptor):
         self._maybe_throw()
-        key = item.get('key')
+        item = from_descriptor(descriptor)
         items = self.data.get(kind)
         if items is None:
             items = {}
@@ -59,8 +64,8 @@ class MockAsyncCore(AsyncFeatureStoreCore):
         old_item = items.get(key)
         if old_item is None or old_item.get('version') < item.get('version'):
             items[key] = item
-            return item
-        return old_item
+            return True
+        return False
 
     async def initialized_internal(self):
         self._maybe_throw()
@@ -298,6 +303,25 @@ class TestAsyncCachingStoreWrapper:
         assert await wrapper.get(THINGS, key) == itemv2
 
     @pytest.mark.asyncio
+    async def test_cached_upsert_unsuccessful_drops_the_all_items_cache(self):
+        # Another process writes a newer item after the wrapper caches all items. The wrapper then
+        # tries to write an older item, and the core rejects it. All items must come from the store
+        # again, so that the wrapper does not keep the older item.
+        core = MockAsyncCore()
+        wrapper = make_wrapper(core, True)
+        key = "flag"
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
+        itemv3 = {"key": key, "version": 3}
+
+        await wrapper.init({THINGS: {key: itemv1}})
+        assert await wrapper.all(THINGS) == {key: itemv1}
+
+        core.force_set(THINGS, itemv3)
+        assert await wrapper.upsert(THINGS, itemv2) is False
+        assert await wrapper.all(THINGS) == {key: itemv3}
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("cached", [False, True])
     async def test_upsert_can_throw_exception(self, cached):
         core = MockAsyncCore()
@@ -367,3 +391,56 @@ class TestAsyncCachingStoreWrapper:
     async def test_describe_configuration_defaults_to_custom(self):
         wrapper = make_wrapper(MockAsyncCore(), False)
         assert wrapper.describe_configuration(None) == "custom"
+
+
+class DescriptorAsyncCore(MockAsyncCore):
+    """Returns fixed serialized items and records the serialized items that it receives."""
+
+    def __init__(self, returned=None):
+        super().__init__()
+        self.returned = returned
+        self.received = []
+
+    async def get_internal(self, kind, key):
+        return self.returned
+
+    async def get_all_internal(self, kind):
+        return {'item': self.returned}
+
+    async def upsert_internal(self, kind, key, descriptor):
+        self.received.append((key, descriptor))
+        return True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+async def test_a_version_from_the_core_replaces_the_serialized_version(cached):
+    core = DescriptorAsyncCore(SerializedItemDescriptor(version=5, deleted=False, serialized_item=json.dumps({"key": "item", "version": 3})))
+    wrapper = make_wrapper(core, cached)
+
+    assert await wrapper.get(THINGS, "item") == {"key": "item", "version": 5}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+async def test_an_item_that_the_core_marks_deleted_is_not_returned(cached):
+    core = DescriptorAsyncCore(SerializedItemDescriptor(version=4, deleted=True, serialized_item="placeholder"))
+    wrapper = make_wrapper(core, cached)
+
+    assert await wrapper.get(THINGS, "item") is None
+    assert await wrapper.all(THINGS) == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+async def test_delete_gives_the_core_a_serialized_placeholder(cached):
+    core = DescriptorAsyncCore()
+    wrapper = make_wrapper(core, cached)
+
+    assert await wrapper.delete(THINGS, "item", 7) is True
+
+    [(key, descriptor)] = core.received
+    assert key == "item"
+    assert descriptor.version == 7
+    assert descriptor.deleted is True
+    assert json.loads(descriptor.serialized_item) == {"key": "item", "version": 7, "deleted": True}
