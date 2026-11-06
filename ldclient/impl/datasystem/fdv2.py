@@ -292,6 +292,8 @@ class FDv2(_FDv2Base, DataSystem):
                 if thread.is_alive():
                     log.warning("Thread %s did not terminate in time", thread.name)
 
+        self._data_source_status_provider.update_status(DataSourceState.OFF, None)
+
         # Close the store
         self._store.close()
 
@@ -569,8 +571,10 @@ class FDv2(_FDv2Base, DataSystem):
                 if update.state == DataSourceState.VALID and not set_on_ready.is_set():
                     set_on_ready.set()
 
-                # Update status
-                self._data_source_status_provider.update_status(update.state, update.error)
+                # A synchronizer that reports OFF has failed, but the data system goes on with the
+                # next synchronizer. The data system reports OFF only when it stops.
+                status_state = DataSourceState.INTERRUPTED if update.state == DataSourceState.OFF else update.state
+                self._data_source_status_provider.update_status(status_state, update.error)
 
                 # Check if we should fall back to FDv1 immediately. fallback_to_fdv1
                 # may ride along on a Valid update (payload + directive in the same

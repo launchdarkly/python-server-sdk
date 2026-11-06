@@ -13,6 +13,7 @@ from urllib import parse
 import urllib3
 
 from ldclient.config import (
+    DEFAULT_POLL_INTERVAL,
     DataSourceBuilder,
     DataSourceBuilderConfig,
     HTTPConfig
@@ -232,7 +233,10 @@ class PollingDataSourceBuilder(DataSourceBuilder):
         return self
 
     def poll_interval(self, poll_interval: float) -> 'PollingDataSourceBuilder':
-        """Sets the polling interval for the PollingDataSource."""
+        """
+        Sets the polling interval, in seconds. An interval below 30 seconds is raised to 30
+        seconds.
+        """
         self.__poll_interval = poll_interval
         return self
 
@@ -259,7 +263,8 @@ class PollingDataSourceBuilder(DataSourceBuilder):
         )
 
         return PollingDataSource(
-            poll_interval=self.__poll_interval or config.poll_interval,
+            # The minimum also applies to an interval that is set on this builder.
+            poll_interval=max(self.__poll_interval or config.poll_interval, DEFAULT_POLL_INTERVAL),
             requester=requester
         )
 
@@ -280,7 +285,10 @@ class FallbackToFDv1PollingDataSourceBuilder(DataSourceBuilder):
         return self
 
     def poll_interval(self, poll_interval: float) -> 'FallbackToFDv1PollingDataSourceBuilder':
-        """Sets the polling interval for the data source."""
+        """
+        Sets the polling interval, in seconds. An interval below 30 seconds is raised to 30
+        seconds.
+        """
         self.__poll_interval = poll_interval
         return self
 
