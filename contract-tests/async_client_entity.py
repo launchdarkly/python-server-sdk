@@ -301,9 +301,9 @@ def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSy
     """Build an AsyncDataSystemConfig from the harness's dataSystem config.
 
     Wires the FDv2 initializers, the ordered synchronizer chain, the FDv1
-    fallback synchronizer, the payload filter, and an optional async
-    persistent store. The async client injects its shared aiohttp session
-    into these builders when it starts.
+    fallback synchronizer, and an optional async persistent store. The async
+    client injects its shared aiohttp session into these builders when it
+    starts.
     """
     initializers: Optional[list] = None
     init_configs = datasystem_config.get('initializers')
@@ -346,9 +346,6 @@ def _build_async_data_system(datasystem_config: dict, opts: dict) -> AsyncDataSy
         _set_optional_value(fdv1_fallback_config, "baseUri", fallback_builder.base_uri)
         _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
         fdv1_fallback_synchronizer = fallback_builder
-
-    if datasystem_config.get("payloadFilter") is not None:
-        opts["payload_filter_key"] = datasystem_config["payloadFilter"]
 
     ds_kwargs: dict = {
         "initializers": initializers,

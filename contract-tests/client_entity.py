@@ -91,9 +91,6 @@ class ClientEntity:
                 _set_optional_time(fdv1_fallback_config, "pollIntervalMs", fallback_builder.poll_interval)
                 datasystem.fdv1_compatible_synchronizer(fallback_builder)
 
-            if datasystem_config.get("payloadFilter") is not None:
-                opts["payload_filter_key"] = datasystem_config["payloadFilter"]
-
             # Handle persistent data store configuration for dataSystem
             store_config = datasystem_config.get("store")
             if store_config is not None:
