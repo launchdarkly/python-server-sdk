@@ -19,6 +19,8 @@ class SimpleLRUCache:
     '''
 
     def put(self, key, value):
+        if self.capacity <= 0:
+            return False
         found = key in self.cache
         if found:
             self.cache.move_to_end(key)
