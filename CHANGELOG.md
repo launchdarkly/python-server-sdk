@@ -2,6 +2,13 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.20.1](https://github.com/launchdarkly/python-server-sdk/compare/9.20.0...9.20.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* Make TestData value_for_all return its value when targeting is off ([#567](https://github.com/launchdarkly/python-server-sdk/issues/567)) ([70565bb](https://github.com/launchdarkly/python-server-sdk/commit/70565bb70c4bd25033d64c3d12a92672dd386f24))
+
 ## [9.20.0](https://github.com/launchdarkly/python-server-sdk/compare/9.19.0...9.20.0) (2026-11-05)
 
 
