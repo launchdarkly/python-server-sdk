@@ -296,7 +296,7 @@ class FlagBuilder:
         :param value the desired value to be returned for all users
         :return the flag builder
         """
-        return self.variations(value).variation_for_all(0)
+        return self.variations(value).variation_for_all(0).off_variation(0)
 
     def variation_for_user(self, user_key: str, variation: Union[bool, int]) -> 'FlagBuilder':
         """Sets the flag to return the specified variation for a specific user key when targeting
