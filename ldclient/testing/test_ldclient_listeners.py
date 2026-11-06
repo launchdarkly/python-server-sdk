@@ -1,20 +1,23 @@
+import json
 from queue import Queue
 
+from ldclient import datasystem
 from ldclient.client import Config, LDClient
 from ldclient.config import BigSegmentsConfig
 from ldclient.interfaces import DataSourceState
 from ldclient.testing.http_util import start_server
 from ldclient.testing.mock_components import MockBigSegmentStore
-from ldclient.testing.stub_util import (
-    MockEventProcessor,
-    MockUpdateProcessor,
-    make_put_event,
-    stream_content
-)
+from ldclient.testing.stub_util import MockEventProcessor, stream_content
+
+
+def make_fdv2_full_transfer_events() -> str:
+    intent = {'payloads': [{'id': 'p1', 'target': 1, 'intentCode': 'xfer-full', 'reason': 'payload-missing'}]}
+    transferred = {'state': '(p:p1:1)', 'version': 1}
+    return 'event: server-intent\ndata: %s\n\nevent: payload-transferred\ndata: %s\n\n' % (json.dumps(intent), json.dumps(transferred))
 
 
 def test_big_segment_store_status_unavailable():
-    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
+    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, datasystem_config=datasystem.custom().build())
     client = LDClient(config)
     assert client.big_segment_store_status_provider.status.available is False
 
@@ -22,7 +25,7 @@ def test_big_segment_store_status_unavailable():
 def test_big_segment_store_status_updates():
     segstore = MockBigSegmentStore()
     segstore.setup_metadata_always_up_to_date()
-    config = Config(sdk_key='SDK_KEY', big_segments=BigSegmentsConfig(store=segstore, status_poll_interval=0.01), event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
+    config = Config(sdk_key='SDK_KEY', big_segments=BigSegmentsConfig(store=segstore, status_poll_interval=0.01), event_processor_class=MockEventProcessor, datasystem_config=datasystem.custom().build())
     statuses = Queue()
 
     with LDClient(config) as client:
@@ -47,16 +50,16 @@ def test_big_segment_store_status_updates():
 
 
 def test_data_source_status_default():
-    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
+    config = Config(sdk_key='SDK_KEY', event_processor_class=MockEventProcessor, datasystem_config=datasystem.custom().build())
     client = LDClient(config)
     assert client.data_source_status_provider.status.state == DataSourceState.INITIALIZING
 
 
 def test_data_source_status_updates():
     with start_server() as stream_server:
-        with stream_content(make_put_event()) as stream_handler:
-            stream_server.for_path('/all', stream_handler)
-            config = Config(sdk_key='sdk-key', stream_uri=stream_server.uri, send_events=False)
+        with stream_content(make_fdv2_full_transfer_events()) as stream_handler:
+            stream_server.for_path('/sdk/stream', stream_handler)
+            config = Config(sdk_key='sdk-key', stream_uri=stream_server.uri, send_events=False, datasystem_config=datasystem.streaming().build())
 
             with LDClient(config=config) as client:
                 assert client.data_source_status_provider.status.state == DataSourceState.VALID
