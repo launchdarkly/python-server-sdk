@@ -29,7 +29,7 @@ counters, so LaunchDarkly can distinguish them. They produce no individual evalu
 import math
 import os
 import threading
-from typing import Iterable, List, Optional, Union
+from typing import List, Optional, Sequence, Union
 
 from ldclient.config import DataSourceBuilderConfig, OverrideSourceBuilder
 from ldclient.impl.integrations.files.filedata import (
@@ -103,7 +103,7 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     system.
     """
 
-    def __init__(self, paths: Union[str, 'os.PathLike[str]', Iterable[Union[str, 'os.PathLike[str]']]]):
+    def __init__(self, paths: Union[str, 'os.PathLike[str]', Sequence[Union[str, 'os.PathLike[str]']]]):
         """
         :param paths: the files to load overrides from, as a single path or a list of paths.
           Each path is a string or a path object such as :class:`pathlib.Path`. The order is
@@ -113,11 +113,16 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
         :raises TypeError: when a path is neither a string nor a path object that names a string
           path
         """
-        if isinstance(paths, (str, os.PathLike)):
+        # bytes and bytearray are single values too, so that they get the error below instead of
+        # being read as a sequence of integers.
+        if isinstance(paths, (str, bytes, bytearray, os.PathLike)):
             paths = [paths]
         self.__paths: List[str] = []
         for path in paths:
-            name = os.fspath(path)
+            try:
+                name: object = os.fspath(path)
+            except TypeError:
+                name = None
             if not isinstance(name, str):
                 raise TypeError("file paths for the file-based override source must be strings or path objects; got %r" % (path,))
             self.__paths.append(name)
