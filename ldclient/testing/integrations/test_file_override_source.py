@@ -122,6 +122,26 @@ def test_builder_accepts_a_single_path_string(tmp_path):
     assert source._paths == [path]
 
 
+def test_builder_accepts_a_single_path_object(tmp_path):
+    path = tmp_path / 'overrides.json'
+    source = FileOverrideSourceBuilder(path).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [str(path)]
+
+
+def test_builder_accepts_a_list_of_path_objects(tmp_path):
+    paths = [tmp_path / 'a.json', tmp_path / 'b.json']
+    source = FileOverrideSourceBuilder(paths).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [str(path) for path in paths]
+
+
+@pytest.mark.parametrize('paths', [[b'/overrides.json'], [42]], ids=['bytes', 'int'])
+def test_builder_rejects_a_path_that_is_not_a_string_or_path_object(paths):
+    with pytest.raises(TypeError):
+        FileOverrideSourceBuilder(paths)
+
+
 def test_builder_resolves_relative_paths():
     source = FileOverrideSourceBuilder(['relative/overrides.json']).build(SDKConfig('SDK_KEY'))
     assert isinstance(source, _FileOverrideSource)
@@ -254,6 +274,13 @@ def test_source_loads_initial_data_synchronously(tmp_path, sources):
     assert flag_values(snapshot) == {'flag1': True, 'flag2': 'x'}
     assert list(snapshot[1].keys()) == ['seg']
     assert snapshot[0]['flag1'].is_override is False, "the source supplies unmarked definitions; the SDK marks them"
+
+
+def test_source_loads_a_file_given_as_a_path_object(tmp_path, sources):
+    path = tmp_path / 'overrides.json'
+    write_file(str(path), '{"flagValues": {"flag1": true}}')
+    _, sink = build_source(sources, path)
+    assert flag_values(sink.require_snapshot()) == {'flag1': True}
 
 
 @yaml_required
