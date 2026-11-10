@@ -122,6 +122,66 @@ def test_builder_accepts_a_single_path_string(tmp_path):
     assert source._paths == [path]
 
 
+def test_builder_accepts_a_single_path_object(tmp_path):
+    path = tmp_path / 'overrides.json'
+    source = FileOverrideSourceBuilder(path).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [str(path)]
+
+
+def test_builder_accepts_a_list_of_path_objects(tmp_path):
+    paths = [tmp_path / 'a.json', tmp_path / 'b.json']
+    source = FileOverrideSourceBuilder(paths).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [str(path) for path in paths]
+
+
+class LabeledPath:
+    """A path object whose string form is not its path, as with :class:`os.DirEntry`."""
+
+    def __init__(self, path):
+        self._path = path
+
+    def __fspath__(self):
+        return self._path
+
+    def __str__(self):
+        return '<LabeledPath>'
+
+
+@pytest.mark.parametrize('as_list', [False, True], ids=['single', 'list'])
+def test_builder_uses_the_file_system_path_of_a_path_object(tmp_path, as_list):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    paths = [LabeledPath(path)] if as_list else LabeledPath(path)
+    source = FileOverrideSourceBuilder(paths).build(SDKConfig('SDK_KEY'))
+    assert isinstance(source, _FileOverrideSource)
+    assert source._paths == [path]
+
+
+@pytest.mark.parametrize(
+    'paths',
+    [
+        b'/overrides.json',
+        bytearray(b'/overrides.json'),
+        [b'/overrides.json'],
+        LabeledPath(b'/overrides.json'),
+        [LabeledPath(b'/overrides.json')],
+        [42],
+        [None],
+    ],
+    ids=['bytes', 'bytearray', 'bytes in a list', 'path object naming bytes', 'path object naming bytes in a list', 'int', 'none'],
+)
+def test_builder_rejects_a_path_that_is_not_a_string_or_path_object(paths):
+    with pytest.raises(TypeError, match='file paths for the file-based override source must be strings or path objects'):
+        FileOverrideSourceBuilder(paths)
+
+
+def test_builder_names_a_rejected_bytes_path_whole():
+    with pytest.raises(TypeError) as excinfo:
+        FileOverrideSourceBuilder(b'/overrides.json')
+    assert "b'/overrides.json'" in str(excinfo.value)
+
+
 def test_builder_resolves_relative_paths():
     source = FileOverrideSourceBuilder(['relative/overrides.json']).build(SDKConfig('SDK_KEY'))
     assert isinstance(source, _FileOverrideSource)
@@ -254,6 +314,13 @@ def test_source_loads_initial_data_synchronously(tmp_path, sources):
     assert flag_values(snapshot) == {'flag1': True, 'flag2': 'x'}
     assert list(snapshot[1].keys()) == ['seg']
     assert snapshot[0]['flag1'].is_override is False, "the source supplies unmarked definitions; the SDK marks them"
+
+
+def test_source_loads_a_file_given_as_a_path_object(tmp_path, sources):
+    path = tmp_path / 'overrides.json'
+    write_file(str(path), '{"flagValues": {"flag1": true}}')
+    _, sink = build_source(sources, path)
+    assert flag_values(sink.require_snapshot()) == {'flag1': True}
 
 
 @yaml_required
