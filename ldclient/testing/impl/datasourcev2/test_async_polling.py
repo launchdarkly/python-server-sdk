@@ -314,3 +314,35 @@ async def test_requester_is_closed_after_stop():
     await asyncio.wait_for(task, timeout=2)
 
     assert requester.closed is True
+
+
+@pytest.mark.asyncio
+async def test_sync_requester_exception_interrupts_and_recovers():
+    class _RaisingThenValidRequester:
+        def __init__(self):
+            self._raised = False
+
+        async def fetch(self, selector):
+            if not self._raised:
+                self._raised = True
+                raise ConnectionError("connection refused")
+            return _Success(value=(_valid_change_set(), {}))
+
+        async def close(self) -> None:
+            pass
+
+    src = AsyncPollingDataSource(poll_interval=0.01, requester=_RaisingThenValidRequester())
+    sync = src.sync(_ss())
+
+    interrupted = await sync.__anext__()
+    valid = await sync.__anext__()
+    await src.stop()
+    await sync.aclose()
+
+    assert interrupted.state == DataSourceState.INTERRUPTED
+    assert interrupted.error is not None
+    assert interrupted.error.kind == DataSourceErrorKind.NETWORK_ERROR
+    assert interrupted.error.status_code == 0
+    assert "connection refused" in interrupted.error.message
+    assert interrupted.fallback_to_fdv1 is False
+    assert valid.state == DataSourceState.VALID
