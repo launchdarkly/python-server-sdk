@@ -2,7 +2,8 @@
 This submodule contains support code for writing feature store implementations.
 """
 
-from typing import Any, Dict, Mapping
+import json
+from typing import Any, Dict, Mapping, Optional
 
 from expiringdict import ExpiringDict
 
@@ -11,7 +12,8 @@ from ldclient.impl.util import log
 from ldclient.interfaces import (
     DiagnosticDescription,
     FeatureStore,
-    FeatureStoreCore
+    FeatureStoreCore,
+    SerializedItemDescriptor
 )
 from ldclient.versioned_data_kind import VersionedDataKind
 
@@ -22,6 +24,37 @@ def _ensure_encoded(kind, item):
 
 def _is_deleted(item):
     return item is not None and item.get('deleted') is True
+
+
+def _serialize(encoded_item: dict) -> SerializedItemDescriptor:
+    """Serializes an encoded item, which can be a deleted item, for a persistent store core."""
+    return SerializedItemDescriptor(
+        version=encoded_item.get('version', 0),
+        deleted=encoded_item.get('deleted') is True,
+        serialized_item=json.dumps(encoded_item),
+    )
+
+
+def _serialize_all(all_data) -> Dict[VersionedDataKind, Dict[str, SerializedItemDescriptor]]:
+    """Serializes a full data set. The order of the kinds and of the items does not change."""
+    return {kind: {key: _serialize(kind.encode(item)) for key, item in items.items()} for kind, items in all_data.items()}
+
+
+def _deserialize(kind, key: str, descriptor: Optional[SerializedItemDescriptor]):
+    """Deserializes an item that a persistent store core returned.
+
+    Returns None if the core found no item. A deleted item becomes a decoded placeholder with the
+    deleted flag. If the core gives a version that differs from the version in the serialized item,
+    the version from the core is used.
+    """
+    if descriptor is None:
+        return None
+    if descriptor.deleted:
+        return kind.decode({'key': key, 'version': descriptor.version, 'deleted': True})
+    data = json.loads(descriptor.serialized_item)
+    if descriptor.version != 0 and data.get('version') != descriptor.version:
+        data['version'] = descriptor.version
+    return kind.decode(data)
 
 
 class _NoopCache:
@@ -107,12 +140,12 @@ class _CachingStoreWrapperBase:
         item = cached_item[0]
         return (True, None if _is_deleted(item) else item)
 
-    def _cache_put_item(self, kind, key, encoded_item):
-        """Decodes an item fetched from the core, caches it, and returns the value to return.
+    def _cache_put_item(self, kind, key, descriptor):
+        """Deserializes an item fetched from the core, caches it, and returns the value to return.
 
         The returned value is None if the item is missing or deleted.
         """
-        item = None if encoded_item is None else kind.decode(encoded_item)
+        item = _deserialize(kind, key, descriptor)
         self._cache[self._item_cache_key(kind, key)] = [item]
         return None if _is_deleted(item) else item
 
@@ -127,12 +160,12 @@ class _CachingStoreWrapperBase:
             return (False, None)
         return (True, cached_items)
 
-    def _cache_put_all(self, kind, encoded_items):
-        """Decodes all items fetched from the core, drops deleted ones, caches the result, and returns it."""
+    def _cache_put_all(self, kind, descriptors):
+        """Deserializes all items fetched from the core, drops deleted ones, caches the result, and returns it."""
         all_items = {}
-        if encoded_items is not None:
-            for key, item in encoded_items.items():
-                all_items[key] = kind.decode(item)
+        if descriptors is not None:
+            for key, descriptor in descriptors.items():
+                all_items[key] = _deserialize(kind, key, descriptor)
         items = self._items_if_not_deleted(all_items)
         self._cache[self._all_cache_key(kind)] = items
         return items
@@ -152,16 +185,22 @@ class _CachingStoreWrapperBase:
                     decoded_items[key] = decoded_item
             cache[self._all_cache_key(kind)] = decoded_items
 
-    def _cache_put_upsert(self, kind, new_state):
-        """Updates the cache after an upsert.
-
-        Caches the item the core returned and drops the now-stale all-items entry. Returns the
-        decoded item.
-        """
-        new_decoded_item = kind.decode(new_state)
-        self._cache[self._item_cache_key(kind, new_decoded_item.get('key'))] = [new_decoded_item]
+    def _cache_put_upsert(self, kind, key, encoded_item):
+        """Updates the cache after the core wrote an item, and drops the now-stale all-items entry."""
+        self._cache[self._item_cache_key(kind, key)] = [kind.decode(encoded_item)]
         self._cache.pop(self._all_cache_key(kind), None)
-        return new_decoded_item
+
+    def _cache_put_rejected_upsert(self, kind, key, descriptor):
+        """Updates the cache after the core rejected a write, because the store has a newer item.
+
+        Caches the newer item from the core. Also drops the all-items entry, because that entry can
+        also have an older item.
+        """
+        self._cache_put_item(kind, key, descriptor)
+        self._cache.pop(self._all_cache_key(kind), None)
+
+    def _caching(self) -> bool:
+        return self._cache is not _NOOP_CACHE
 
     @staticmethod
     def _item_cache_key(kind, key):
@@ -209,7 +248,7 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
 
     def init(self, all_encoded_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
         """ """
-        self._core.init_internal(all_encoded_data)  # currently FeatureStoreCore expects to receive dicts
+        self._core.init_internal(_serialize_all(all_encoded_data))
         self._cache_init(all_encoded_data)
         self._inited = True
 
@@ -218,16 +257,16 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
         hit, value = self._cache_get_item(kind, key)
         if hit:
             return callback(value)
-        encoded_item = self._core.get_internal(kind, key)  # currently FeatureStoreCore returns dicts
-        return callback(self._cache_put_item(kind, key, encoded_item))
+        descriptor = self._core.get_internal(kind, key)
+        return callback(self._cache_put_item(kind, key, descriptor))
 
     def all(self, kind, callback=lambda x: x):
         """ """
         hit, value = self._cache_get_all(kind)
         if hit:
             return callback(value)
-        encoded_items = self._core.get_all_internal(kind)
-        return callback(self._cache_put_all(kind, encoded_items))
+        descriptors = self._core.get_all_internal(kind)
+        return callback(self._cache_put_all(kind, descriptors))
 
     def delete(self, kind, key, version) -> bool:
         """ """
@@ -237,11 +276,14 @@ class CachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, Featu
     def upsert(self, kind, encoded_item) -> bool:
         """ """
         encoded_item = _ensure_encoded(kind, encoded_item)
-        new_state = self._core.upsert_internal(kind, encoded_item)
-        self._cache_put_upsert(kind, new_state)
-        # The core returns the item that we passed in if it applied the write. It returns the
-        # existing item if the version check rejected the write. Identity thus shows the result.
-        return new_state is encoded_item
+        key = encoded_item['key']
+        updated = self._core.upsert_internal(kind, key, _serialize(encoded_item))
+        if updated:
+            self._cache_put_upsert(kind, key, encoded_item)
+        elif self._caching():
+            # The store has a newer item. Read it, so that the cache does not keep an older one.
+            self._cache_put_rejected_upsert(kind, key, self._core.get_internal(kind, key))
+        return updated
 
     @property
     def initialized(self) -> bool:

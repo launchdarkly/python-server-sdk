@@ -1,10 +1,17 @@
+import json
 from time import sleep
 
 import pytest
 
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.interfaces import FeatureStoreCore
+from ldclient.interfaces import FeatureStoreCore, SerializedItemDescriptor
+from ldclient.testing.serialized_items import (
+    from_descriptor,
+    from_descriptors,
+    to_descriptor,
+    to_descriptors
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 
 THINGS = VersionedDataKind(namespace="things", request_api_path="", stream_api_path="")
@@ -32,22 +39,20 @@ class MockCore(FeatureStoreCore):
 
     def init_internal(self, all_data):
         self._maybe_throw()
-        self.data = {}
-        for kind, items in all_data.items():
-            self.data[kind] = items.copy()
+        self.data = from_descriptors(all_data)
 
     def get_internal(self, kind, key):
         self._maybe_throw()
         items = self.data.get(kind)
-        return None if items is None else items.get(key)
+        return None if items is None else to_descriptor(items.get(key))
 
     def get_all_internal(self, kind):
         self._maybe_throw()
-        return self.data.get(kind)
+        return to_descriptors(self.data.get(kind))
 
-    def upsert_internal(self, kind, item):
+    def upsert_internal(self, kind, key, descriptor):
         self._maybe_throw()
-        key = item.get('key')
+        item = from_descriptor(descriptor)
         items = self.data.get(kind)
         if items is None:
             items = {}
@@ -55,8 +60,8 @@ class MockCore(FeatureStoreCore):
         old_item = items.get(key)
         if old_item is None or old_item.get('version') < item.get('version'):
             items[key] = item
-            return item
-        return old_item
+            return True
+        return False
 
     def initialized_internal(self):
         self._maybe_throw()
@@ -308,6 +313,24 @@ class TestCachingStoreWrapper:
         core.force_set(THINGS, itemv3)  # bypasses cache so we can verify that itemv2 is in the cache
         assert wrapper.get(THINGS, key) == itemv2
 
+    def test_cached_upsert_unsuccessful_drops_the_all_items_cache(self):
+        # Another process writes a newer item after the wrapper caches all items. The wrapper then
+        # tries to write an older item, and the core rejects it. All items must come from the store
+        # again, so that the wrapper does not keep the older item.
+        core = MockCore()
+        wrapper = make_wrapper(core, True)
+        key = "flag"
+        itemv1 = {"key": key, "version": 1}
+        itemv2 = {"key": key, "version": 2}
+        itemv3 = {"key": key, "version": 3}
+
+        wrapper.init({THINGS: {key: itemv1}})
+        assert wrapper.all(THINGS) == {key: itemv1}
+
+        core.force_set(THINGS, itemv3)
+        assert wrapper.upsert(THINGS, itemv2) is False
+        assert wrapper.all(THINGS) == {key: itemv3}
+
     @pytest.mark.parametrize("cached", [False, True])
     def test_upsert_can_throw_exception(self, cached):
         core = MockCore()
@@ -388,3 +411,72 @@ class TestCachingStoreWrapper:
         # From this point on it should remain true and the method should not be called
         assert wrapper.initialized is True
         assert core.inited_query_count == 2
+
+
+class DescriptorCore(MockCore):
+    """Returns fixed serialized items and records the serialized items that it receives."""
+
+    def __init__(self, returned=None):
+        super().__init__()
+        self.returned = returned
+        self.received = []
+
+    def get_internal(self, kind, key):
+        return self.returned
+
+    def get_all_internal(self, kind):
+        return {'item': self.returned}
+
+    def upsert_internal(self, kind, key, descriptor):
+        self.received.append((key, descriptor))
+        return True
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_a_version_from_the_core_replaces_the_serialized_version(cached):
+    core = DescriptorCore(SerializedItemDescriptor(version=5, deleted=False, serialized_item=json.dumps({"key": "item", "version": 3})))
+    wrapper = make_wrapper(core, cached)
+
+    assert wrapper.get(THINGS, "item") == {"key": "item", "version": 5}
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_a_version_of_zero_from_the_core_keeps_the_serialized_version(cached):
+    core = DescriptorCore(SerializedItemDescriptor(version=0, deleted=False, serialized_item=json.dumps({"key": "item", "version": 3})))
+    wrapper = make_wrapper(core, cached)
+
+    assert wrapper.get(THINGS, "item") == {"key": "item", "version": 3}
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_an_item_that_the_core_marks_deleted_is_not_returned(cached):
+    core = DescriptorCore(SerializedItemDescriptor(version=4, deleted=True, serialized_item="placeholder"))
+    wrapper = make_wrapper(core, cached)
+
+    assert wrapper.get(THINGS, "item") is None
+    assert wrapper.all(THINGS) == {}
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_upsert_gives_the_core_the_key_version_and_serialized_item(cached):
+    core = DescriptorCore()
+    wrapper = make_wrapper(core, cached)
+    item = {"key": "item", "version": 2}
+
+    assert wrapper.upsert(THINGS, item) is True
+
+    assert core.received == [("item", SerializedItemDescriptor(version=2, deleted=False, serialized_item=json.dumps(item)))]
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_delete_gives_the_core_a_serialized_placeholder(cached):
+    core = DescriptorCore()
+    wrapper = make_wrapper(core, cached)
+
+    assert wrapper.delete(THINGS, "item", 7) is True
+
+    [(key, descriptor)] = core.received
+    assert key == "item"
+    assert descriptor.version == 7
+    assert descriptor.deleted is True
+    assert json.loads(descriptor.serialized_item) == {"key": "item", "version": 7, "deleted": True}

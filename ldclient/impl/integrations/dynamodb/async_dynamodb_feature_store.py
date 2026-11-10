@@ -1,10 +1,13 @@
 import asyncio
-import json
 from contextlib import AsyncExitStack
-from typing import Any, Mapping, Optional, cast
+from typing import Any, Mapping, Optional
 
 from ldclient.impl.util import log
-from ldclient.interfaces import AsyncFeatureStoreCore, DiagnosticDescription
+from ldclient.interfaces import (
+    AsyncFeatureStoreCore,
+    DiagnosticDescription,
+    SerializedItemDescriptor
+)
 from ldclient.versioned_data_kind import VersionedDataKind
 
 have_aioboto3 = False
@@ -85,7 +88,7 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
         except BaseException:
             return False
 
-    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, SerializedItemDescriptor]]) -> None:
         client = await self._get_client()
         # Start by reading the existing keys; we will later delete any of these that were not in all_data.
         unused_old_keys = await self._read_existing_keys(client, all_data.keys())
@@ -96,7 +99,7 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
         # Insert or update every provided item
         for kind, items in all_data.items():
             for key, item in items.items():
-                encoded_item = self._marshal_item(kind, item)
+                encoded_item = self._marshal_item(kind, key, item)
                 requests.append({'PutRequest': {'Item': encoded_item}})
                 combined_key = (self._namespace_for_kind(kind), key)
                 unused_old_keys.discard(combined_key)
@@ -113,39 +116,40 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
         await _AsyncDynamoDBHelpers.batch_write_requests(client, self._table_name, requests)
         log.info('Initialized table %s with %d items', self._table_name, num_items)
 
-    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[SerializedItemDescriptor]:
         client = await self._get_client()
         resp = await self._get_item_by_keys(client, self._namespace_for_kind(kind), key)
         return self._unmarshal_item(resp.get('Item'))
 
-    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, SerializedItemDescriptor]:
         client = await self._get_client()
         items_out = {}
         paginator = client.get_paginator('query')
         async for resp in paginator.paginate(**self._make_query_for_kind(kind)):
             for item in resp['Items']:
-                # Every stored item carries the JSON attribute, so _unmarshal_item never returns None here.
-                item_out = cast(dict, self._unmarshal_item(item))
-                items_out[item_out['key']] = item_out
+                item_out = self._unmarshal_item(item)
+                if item_out is not None:
+                    # Use the sort key that each item is stored under. A deleted item (a
+                    # "tombstone") is not guaranteed to have a key of its own.
+                    items_out[item[self.SORT_KEY]['S']] = item_out
         return items_out
 
-    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+    async def upsert_internal(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> bool:
         client = await self._get_client()
-        encoded_item = self._marshal_item(kind, item)
+        encoded_item = self._marshal_item(kind, key, item)
         try:
             req = {
                 'TableName': self._table_name,
                 'Item': encoded_item,
                 'ConditionExpression': 'attribute_not_exists(#namespace) or attribute_not_exists(#key) or :version > #version',
                 'ExpressionAttributeNames': {'#namespace': self.PARTITION_KEY, '#key': self.SORT_KEY, '#version': self.VERSION_ATTRIBUTE},
-                'ExpressionAttributeValues': {':version': {'N': str(item['version'])}},
+                'ExpressionAttributeValues': {':version': {'N': str(item.version)}},
             }
             await client.put_item(**req)
         except client.exceptions.ConditionalCheckFailedException:
-            # The item was not updated because there's a newer item in the database. We must now
-            # read the item that's in the database and return it, so the wrapper can cache it.
-            return cast(dict, await self.get_internal(kind, item['key']))
-        return item
+            # The table has an item with the same or a newer version.
+            return False
+        return True
 
     async def initialized_internal(self) -> bool:
         client = await self._get_client()
@@ -197,18 +201,21 @@ class _AsyncDynamoDBFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCor
                     keys.add((namespace, key))
         return keys
 
-    def _marshal_item(self, kind: VersionedDataKind, item: dict) -> dict:
-        json_str = json.dumps(item)
-        ret = self._make_keys(self._namespace_for_kind(kind), item['key'])
-        ret[self.VERSION_ATTRIBUTE] = {'N': str(item['version'])}
-        ret[self.ITEM_JSON_ATTRIBUTE] = {'S': json_str}
+    def _marshal_item(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> dict:
+        ret = self._make_keys(self._namespace_for_kind(kind), key)
+        ret[self.VERSION_ATTRIBUTE] = {'N': str(item.version)}
+        ret[self.ITEM_JSON_ATTRIBUTE] = {'S': item.serialized_item}
         return ret
 
-    def _unmarshal_item(self, item: Optional[dict]) -> Optional[dict]:
+    def _unmarshal_item(self, item: Optional[dict]) -> Optional[SerializedItemDescriptor]:
         if item is None:
             return None
         json_attr = item.get(self.ITEM_JSON_ATTRIBUTE)
-        return None if json_attr is None else json.loads(json_attr['S'])
+        if json_attr is None:
+            return None
+        version_attr = item.get(self.VERSION_ATTRIBUTE)
+        version = 0 if version_attr is None else int(version_attr['N'])
+        return SerializedItemDescriptor(version=version, deleted=False, serialized_item=json_attr['S'])
 
 
 class _AsyncDynamoDBHelpers:

@@ -1,7 +1,6 @@
-import json
 
 from ldclient import log
-from ldclient.interfaces import FeatureStoreCore
+from ldclient.interfaces import FeatureStoreCore, SerializedItemDescriptor
 
 have_dynamodb = False
 try:
@@ -75,7 +74,7 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         # Insert or update every provided item
         for kind, items in all_data.items():
             for key, item in items.items():
-                encoded_item = self._marshal_item(kind, item)
+                encoded_item = self._marshal_item(kind, key, item)
                 requests.append({'PutRequest': {'Item': encoded_item}})
                 combined_key = (self._namespace_for_kind(kind), key)
                 unused_old_keys.discard(combined_key)
@@ -102,27 +101,27 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
         for resp in paginator.paginate(**self._make_query_for_kind(kind)):
             for item in resp['Items']:
                 item_out = self._unmarshal_item(item)
-                # Use the sort key that each item is stored under, not the key inside the item.
-                # A deleted item (a "tombstone") is not guaranteed to have a key of its own.
-                items_out[item[self.SORT_KEY]['S']] = item_out
+                if item_out is not None:
+                    # Use the sort key that each item is stored under. A deleted item (a
+                    # "tombstone") is not guaranteed to have a key of its own.
+                    items_out[item[self.SORT_KEY]['S']] = item_out
         return items_out
 
-    def upsert_internal(self, kind, item):
-        encoded_item = self._marshal_item(kind, item)
+    def upsert_internal(self, kind, key, item):
+        encoded_item = self._marshal_item(kind, key, item)
         try:
             req = {
                 'TableName': self._table_name,
                 'Item': encoded_item,
                 'ConditionExpression': 'attribute_not_exists(#namespace) or attribute_not_exists(#key) or :version > #version',
                 'ExpressionAttributeNames': {'#namespace': self.PARTITION_KEY, '#key': self.SORT_KEY, '#version': self.VERSION_ATTRIBUTE},
-                'ExpressionAttributeValues': {':version': {'N': str(item['version'])}},
+                'ExpressionAttributeValues': {':version': {'N': str(item.version)}},
             }
             self._client.put_item(**req)
         except self._client.exceptions.ConditionalCheckFailedException:
-            # The item was not updated because there's a newer item in the database. We must now
-            # read the item that's in the database and return it, so CachingStoreWrapper can cache it.
-            return self.get_internal(kind, item['key'])
-        return item
+            # The table has an item with the same or a newer version.
+            return False
+        return True
 
     def initialized_internal(self):
         resp = self._get_item_by_keys(self._inited_key(), self._inited_key())
@@ -167,18 +166,21 @@ class _DynamoDBFeatureStoreCore(FeatureStoreCore):
                     keys.add((namespace, key))
         return keys
 
-    def _marshal_item(self, kind, item):
-        json_str = json.dumps(item)
-        ret = self._make_keys(self._namespace_for_kind(kind), item['key'])
-        ret[self.VERSION_ATTRIBUTE] = {'N': str(item['version'])}
-        ret[self.ITEM_JSON_ATTRIBUTE] = {'S': json_str}
+    def _marshal_item(self, kind, key, item):
+        ret = self._make_keys(self._namespace_for_kind(kind), key)
+        ret[self.VERSION_ATTRIBUTE] = {'N': str(item.version)}
+        ret[self.ITEM_JSON_ATTRIBUTE] = {'S': item.serialized_item}
         return ret
 
     def _unmarshal_item(self, item):
         if item is None:
             return None
         json_attr = item.get(self.ITEM_JSON_ATTRIBUTE)
-        return None if json_attr is None else json.loads(json_attr['S'])
+        if json_attr is None:
+            return None
+        version_attr = item.get(self.VERSION_ATTRIBUTE)
+        version = 0 if version_attr is None else int(version_attr['N'])
+        return SerializedItemDescriptor(version=version, deleted=False, serialized_item=json_attr['S'])
 
 
 class _DynamoDBHelpers:

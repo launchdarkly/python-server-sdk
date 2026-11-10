@@ -7,7 +7,9 @@ from typing import Any, Dict, Mapping, Optional
 from ldclient.feature_store import CacheConfig
 from ldclient.feature_store_helpers import (
     _CachingStoreWrapperBase,
-    _ensure_encoded
+    _ensure_encoded,
+    _serialize,
+    _serialize_all
 )
 from ldclient.interfaces import (
     AsyncFeatureStore,
@@ -55,7 +57,7 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
 
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
         """ """
-        await self._core.init_internal(all_data)
+        await self._core.init_internal(_serialize_all(all_data))
         self._cache_init(all_data)
         self._inited = True
 
@@ -64,16 +66,16 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
         hit, value = self._cache_get_item(kind, key)
         if hit:
             return value
-        encoded_item = await self._core.get_internal(kind, key)
-        return self._cache_put_item(kind, key, encoded_item)
+        descriptor = await self._core.get_internal(kind, key)
+        return self._cache_put_item(kind, key, descriptor)
 
     async def all(self, kind: VersionedDataKind) -> Dict[str, Any]:
         """ """
         hit, value = self._cache_get_all(kind)
         if hit:
             return value
-        encoded_items = await self._core.get_all_internal(kind)
-        return self._cache_put_all(kind, encoded_items)
+        descriptors = await self._core.get_all_internal(kind)
+        return self._cache_put_all(kind, descriptors)
 
     async def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
         """ """
@@ -83,11 +85,14 @@ class AsyncCachingStoreWrapper(_CachingStoreWrapperBase, DiagnosticDescription, 
     async def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
         """ """
         encoded_item = _ensure_encoded(kind, item)
-        new_state = await self._core.upsert_internal(kind, encoded_item)
-        self._cache_put_upsert(kind, new_state)
-        # The core returns the item we passed in if the write was applied, or the existing item if it
-        # was rejected by the version check. Identity therefore tells us whether the store changed.
-        return new_state is encoded_item
+        key = encoded_item['key']
+        updated = await self._core.upsert_internal(kind, key, _serialize(encoded_item))
+        if updated:
+            self._cache_put_upsert(kind, key, encoded_item)
+        elif self._caching():
+            # The store has a newer item. Read it, so that the cache does not keep an older one.
+            self._cache_put_rejected_upsert(kind, key, await self._core.get_internal(kind, key))
+        return updated
 
     @property
     def initialized(self) -> bool:

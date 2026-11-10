@@ -1,9 +1,12 @@
-import json
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from ldclient.feature_store_helpers import CachingStoreWrapper
 from ldclient.impl.util import log, redact_password
-from ldclient.interfaces import AsyncFeatureStoreCore, DiagnosticDescription
+from ldclient.interfaces import (
+    AsyncFeatureStoreCore,
+    DiagnosticDescription,
+    SerializedItemDescriptor
+)
 from ldclient.versioned_data_kind import VersionedDataKind
 
 have_async_redis = False
@@ -45,39 +48,37 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
     def _items_key(self, kind: VersionedDataKind) -> str:
         return "{0}:{1}".format(self._prefix, kind.namespace)
 
-    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
+    async def init_internal(self, all_data: Mapping[VersionedDataKind, Mapping[str, SerializedItemDescriptor]]) -> None:
         all_count = 0
         async with self._client.pipeline() as pipe:
             for kind, items in all_data.items():
                 base_key = self._items_key(kind)
                 pipe.delete(base_key)
                 for key, item in items.items():
-                    pipe.hset(base_key, key, json.dumps(item))
+                    pipe.hset(base_key, key, item.serialized_item)
                 all_count = all_count + len(items)
             pipe.set(self._init_key, self._init_key)
             await pipe.execute()
         log.info("Initialized AsyncRedisFeatureStore with %d items", all_count)
 
-    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, dict]:
+    async def get_all_internal(self, kind: VersionedDataKind) -> Mapping[str, SerializedItemDescriptor]:
         all_items = await self._client.hgetall(self._items_key(kind))
         if not all_items:
             return {}
         results = {}
         for key, item_json in all_items.items():
-            results[key.decode('utf-8')] = json.loads(item_json.decode('utf-8'))
+            results[key.decode('utf-8')] = _descriptor(item_json)
         return results
 
-    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[dict]:
+    async def get_internal(self, kind: VersionedDataKind, key: str) -> Optional[SerializedItemDescriptor]:
         item_json = await self._client.hget(self._items_key(kind), key)
         if not item_json:
             log.debug("AsyncRedisFeatureStore: key %s not found in '%s'. Returning None.", key, kind.namespace)
             return None
-        return json.loads(item_json.decode('utf-8'))
+        return _descriptor(item_json)
 
-    async def upsert_internal(self, kind: VersionedDataKind, item: dict) -> dict:
+    async def upsert_internal(self, kind: VersionedDataKind, key: str, item: SerializedItemDescriptor) -> bool:
         base_key = self._items_key(kind)
-        key = item['key']
-        item_json = json.dumps(item)
 
         for _ in range(_MAX_UPSERT_RETRIES):
             async with self._client.pipeline() as pipe:
@@ -86,23 +87,24 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
                     old = await self.get_internal(kind, key)
                     if self.test_update_hook is not None:
                         self.test_update_hook(base_key, key)
-                    if old and old['version'] >= item['version']:
+                    old_version = None if old is None else kind.deserialize(old.serialized_item)['version']
+                    if old_version is not None and old_version >= item.version:
                         log.debug(
                             'AsyncRedisFeatureStore: Attempted to %s key: %s version %d with a version that is the same or older: %d in "%s"',
-                            'delete' if item.get('deleted') else 'update',
+                            'delete' if item.deleted else 'update',
                             key,
-                            old['version'],
-                            item['version'],
+                            old_version,
+                            item.version,
                             kind.namespace,
                         )
                         await pipe.unwatch()
-                        return old
+                        return False
                     pipe.multi()
-                    pipe.hset(base_key, key, item_json)
+                    pipe.hset(base_key, key, item.serialized_item)
                     # A concurrent change to the watched key makes execute() raise WatchError,
                     # rather than returning a null result as on some other platforms.
                     await pipe.execute()
-                    return item
+                    return True
                 except WatchError:
                     log.debug("AsyncRedisFeatureStore: concurrent modification detected, retrying")
                     continue
@@ -121,3 +123,9 @@ class _AsyncRedisFeatureStoreCore(DiagnosticDescription, AsyncFeatureStoreCore):
 
     def describe_configuration(self, config) -> str:
         return 'Redis'
+
+
+def _descriptor(item_json: bytes) -> SerializedItemDescriptor:
+    # The store keeps only the serialized item. The SDK reads the version and the deleted state
+    # from it.
+    return SerializedItemDescriptor(version=0, deleted=False, serialized_item=item_json.decode('utf-8'))
