@@ -2,6 +2,38 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.20.0](https://github.com/launchdarkly/python-server-sdk/compare/9.19.0...9.20.0) (2026-11-05)
+
+
+### Features
+
+* Replace the expiringdict dependency with an internal cache ([#563](https://github.com/launchdarkly/python-server-sdk/issues/563)) ([ca34aad](https://github.com/launchdarkly/python-server-sdk/commit/ca34aad162af51c6ff343a7ead1d3f2710efbcf9))
+
+
+### Bug Fixes
+
+* Ignore FDv2 objects with unrecognized kinds ([#541](https://github.com/launchdarkly/python-server-sdk/issues/541)) ([d5eeb80](https://github.com/launchdarkly/python-server-sdk/commit/d5eeb8064183705af6c93a727b13a0d26b0f6ce8))
+
+## [9.19.0](https://github.com/launchdarkly/python-server-sdk/compare/9.18.4...9.19.0) (2026-11-02)
+
+
+### Breaking changes to the experimental async client
+
+The async client is experimental, so these changes do not cause a major version bump. If you use `AsyncLDClient` with hooks or plugins, update your code:
+
+* Remove the experimental `AsyncHook` class. The async client now uses the same synchronous `Hook` class as the sync client. Change each `AsyncHook` subclass to subclass `Hook`, and change its `async def` stages to `def`. The stages run on the event loop, so they must not block. ([#548](https://github.com/launchdarkly/python-server-sdk/issues/548)) ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+* `AsyncPlugin.get_hooks` now returns a list of `Hook` instances. `AsyncPlugin.register` stays async. ([#548](https://github.com/launchdarkly/python-server-sdk/issues/548)) ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+
+
+### Features
+
+* Accept synchronous hooks on the async client ([#548](https://github.com/launchdarkly/python-server-sdk/issues/548)) ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+
+
+### Bug Fixes
+
+* Run after-evaluation hooks when an async evaluation is cancelled or raises ([2457311](https://github.com/launchdarkly/python-server-sdk/commit/2457311781966096c8553f054b03c7667b0b3996))
+
 ## [9.18.4](https://github.com/launchdarkly/python-server-sdk/compare/9.18.3...9.18.4) (2026-10-26)
 
 

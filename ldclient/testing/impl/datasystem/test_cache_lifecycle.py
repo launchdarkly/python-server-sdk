@@ -238,7 +238,7 @@ class TestCachingStoreWrapperDisable:
         assert wrapper._inited is True
 
     def test_disable_cache_drops_entries_from_old_cache(self):
-        """The old ExpiringDict must be empty after disable so its entries get GC'd."""
+        """The old cache must be empty after disable so its entries get GC'd."""
         core = RecordingCore()
         core.data = {FEATURES: {"flag-1": _flag("flag-1")}}
         wrapper = CachingStoreWrapper(core, CacheConfig.default())

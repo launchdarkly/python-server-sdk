@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional
 import requests
 from async_big_segment_store_fixture import AsyncBigSegmentStoreFixture
 from async_flag_change_listener import AsyncListenerRegistry
-from hook import AsyncPostingHook
+from hook import PostingHook
 
 from ldclient import Context
 from ldclient.async_client import AsyncLDClient
@@ -16,6 +16,7 @@ from ldclient.async_config import (
     AsyncConfig,
     AsyncDataSystemConfig
 )
+from ldclient.config import HTTPConfig
 from ldclient.feature_store import CacheConfig
 from ldclient.impl.datasourcev2.async_polling import (
     AsyncFallbackToFDv1PollingDataSourceBuilder,
@@ -55,6 +56,31 @@ class AsyncClientEntity:
                 'version': tags.get('applicationVersion', ''),
             }
 
+        wrapper = config_params.get('wrapper') or {}
+        if wrapper.get('name'):
+            opts['wrapper_name'] = wrapper['name']
+        if wrapper.get('version'):
+            opts['wrapper_version'] = wrapper['version']
+
+        http_opts = {}
+        tls = config_params.get('tls') or {}
+        if tls.get('skipVerifyPeer', False):
+            http_opts['disable_ssl_verification'] = True
+        proxy = config_params.get('proxy') or {}
+        if proxy.get('httpProxy'):
+            http_opts['http_proxy'] = proxy['httpProxy']
+        if http_opts:
+            opts['http'] = HTTPConfig(**http_opts)
+
+        # Per-component base URIs below take precedence over these.
+        endpoints = config_params.get('serviceEndpoints') or {}
+        if endpoints.get('streaming'):
+            opts['stream_uri'] = endpoints['streaming']
+        if endpoints.get('polling'):
+            opts['base_uri'] = endpoints['polling']
+        if endpoints.get('events'):
+            opts['events_uri'] = endpoints['events']
+
         datasystem_config = config_params.get('dataSystem')
         if datasystem_config is not None:
             opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
@@ -73,7 +99,9 @@ class AsyncClientEntity:
             if polling.get("filter") is not None:
                 opts["payload_filter_key"] = polling["filter"]
             _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-        else:
+        elif not endpoints.get('streaming') and not endpoints.get('polling'):
+            # No data source config and no streaming or polling endpoint means daemon mode.
+            # A config that sets only an endpoint gets the default streaming data source.
             opts['use_ldd'] = True
 
         if config_params.get("events") is not None:
@@ -91,10 +119,9 @@ class AsyncClientEntity:
         else:
             opts["send_events"] = False
 
-        hooks = []
         if config_params.get("hooks") is not None:
-            hooks = [
-                AsyncPostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}))
+            opts["hooks"] = [
+                PostingHook(h["name"], h["callbackUri"], h.get("data", {}), h.get("errors", {}))
                 for h in config_params["hooks"]["hooks"]
             ]
 
@@ -115,10 +142,6 @@ class AsyncClientEntity:
         sdk_config = AsyncConfig(**opts)
 
         self._client = AsyncLDClient(sdk_config)
-        # The async client accepts AsyncHook instances only; register the
-        # harness's async posting hooks via add_hook() before start().
-        for hook in hooks:
-            self._client.add_hook(hook)
         await self._client.start(start_wait / 1000.0)
         self._listeners = AsyncListenerRegistry(self._client.flag_tracker)
 
