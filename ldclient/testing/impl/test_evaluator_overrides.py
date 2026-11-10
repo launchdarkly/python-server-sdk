@@ -9,7 +9,7 @@ from typing import List, Optional
 import pytest
 
 from ldclient import Context
-from ldclient.impl.evaluator_common import EvalResult
+from ldclient.impl.evaluator_common import EvalResult, is_override_definition
 from ldclient.impl.events.types import EventFactory, EventInputEvaluation
 from ldclient.testing.builders import *
 from ldclient.testing.impl.evaluator_util import EvaluatorBuilder
@@ -314,3 +314,12 @@ def test_reason_indicator_is_absent_when_events_do_not_carry_reasons():
     flag = make_override_test_flag('feature').with_override_marker()
     result = EvaluatorBuilder().build().evaluate(flag, override_test_context, EventFactory(False, lambda: 0))
     assert_override_affected(True, result)
+
+
+def test_is_override_definition_reads_the_marker_and_never_fails():
+    flag = FlagBuilder('feature').on(False).off_variation(0).variations('off', 'on').build()
+    assert is_override_definition(flag.with_override_marker()) is True
+    assert is_override_definition(flag) is False
+    # An item without the marker attribute, such as a raw dict, reads as unmarked.
+    assert is_override_definition(flag.to_json_dict()) is False
+    assert is_override_definition(None) is False
