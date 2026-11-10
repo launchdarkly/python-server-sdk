@@ -106,12 +106,10 @@ async def test_async_client_fails_fast_in_polling_mode_with_401_error():
             await client.close()
 
 
-@pytest.mark.xfail(
-    reason='AsyncPollingDataSource.sync lets a requester exception escape, so a network error removes the synchronizer',
-    strict=True,
-)
 @pytest.mark.asyncio
-async def test_async_client_retries_poll_after_network_error():
+async def test_async_client_retries_poll_after_network_error(monkeypatch):
+    # Lower the minimum poll interval so that the retry happens before the start wait ends.
+    monkeypatch.setattr('ldclient.impl.datasourcev2.async_polling.DEFAULT_POLL_INTERVAL', 0.05)
     with start_server() as server:
         server.for_path('/sdk/poll', SequentialHandler(
             CauseNetworkError(), CauseNetworkError(), CauseNetworkError(), poll_response([always_true_flag])))
