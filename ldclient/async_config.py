@@ -136,6 +136,10 @@ class AsyncDataSystemConfig:
 
     When the client is offline, the source is not built or started: no overrides are served, and
     a configuration error in the source is not reported. The SDK logs a warning instead.
+
+    When the client uses a persistent data store, a change to an override notifies the flag change
+    listeners of the overridden flags, but not of LaunchDarkly flags that depend on them through a
+    prerequisite or a segment.
     """
 
 

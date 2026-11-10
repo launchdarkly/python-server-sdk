@@ -12,7 +12,9 @@ from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import custom, daemon
 from ldclient.evaluation import EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.impl.big_segments import BigSegmentStoreManager
 from ldclient.impl.datasystem.fdv1 import FDv1
+from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.integrations.files.filedata import make_flag_with_value
 from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import (
@@ -482,3 +484,44 @@ def test_failed_evaluation_reason_is_marked_only_when_the_flag_came_from_the_ove
         state = client.all_flags_state(user, with_reasons=True)
         assert state.get_flag_reason('overridden-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION', 'overrideAffected': True}
         assert state.get_flag_reason('plain-flag') == {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+
+
+def test_snapshot_with_a_definition_under_another_key_is_rejected_and_the_overrides_stay():
+    # Evaluation reads an override by its key in the snapshot, while the all-flags report and
+    # events use the definition's key. A definition keyed under another key would serve one
+    # flag's override under the other's key, so the snapshot is rejected and nothing changes.
+    ld_flags = {'a': single_value_flag('a', 'ld-a'), 'b': single_value_flag('b', 'ld-b')}
+    source = MockOverrideSource(flags={'a': single_value_flag('a', 'override-a')})
+    with make_initialized_client(ld_flags, source) as client:
+        with pytest.raises(ValueError):
+            source.set_overrides({'a': single_value_flag('b', 'override-b')})
+
+        assert client.variation('a', user, 'default') == 'override-a'
+        assert client.variation('b', user, 'default') == 'ld-b'
+        assert client.all_flags_state(user).to_values_map() == {'a': 'override-a', 'b': 'ld-b'}
+
+
+def test_failed_start_stops_every_component_and_raises_the_start_failure(monkeypatch, caplog):
+    # A component that fails to stop must not hide the start-up failure or keep the components
+    # after it from stopping.
+    stopped: List[str] = []
+
+    def failing_start(self, set_on_ready):
+        raise RuntimeError('start failed')
+
+    def failing_stop(self):
+        stopped.append('data system')
+        raise RuntimeError('stop failed')
+
+    monkeypatch.setattr(FDv2, 'start', failing_start)
+    monkeypatch.setattr(FDv2, 'stop', failing_stop)
+    monkeypatch.setattr(BigSegmentStoreManager, 'stop', lambda self: stopped.append('big segment store manager'))
+    monkeypatch.setattr(MockEventProcessor, 'stop', lambda self: stopped.append('event processor'))
+
+    datasystem = custom().synchronizers(HangingSynchronizer().builder).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+    with pytest.raises(RuntimeError, match='start failed'):
+        LDClient(config, start_wait=0)
+
+    assert stopped == ['data system', 'big segment store manager', 'event processor']
+    assert warnings_containing(caplog, 'Error stopping the data system after a failed start: stop failed') != []

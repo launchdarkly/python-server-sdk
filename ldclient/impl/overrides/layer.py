@@ -40,15 +40,25 @@ class OverrideLayer:
         Atomically replaces the entire layer contents. Empty mappings clear the layer.
 
         Values may be model objects or their JSON dictionary form. A dictionary is decoded with
-        the model constructor, which raises ``ValueError`` for an invalid definition, and nothing
-        is replaced in that case.
+        the model constructor, which raises ``ValueError`` for an invalid definition. A
+        definition whose key differs from its key in the mapping raises ``ValueError`` too.
+        Nothing is replaced in either case.
 
         :return: the previous and the new contents. The returned dictionaries must not be modified.
         """
-        replacement: LayerContents = {
-            FEATURES: {key: FEATURES.decode(item).with_override_marker() for key, item in flags.items()},
-            SEGMENTS: {key: SEGMENTS.decode(item).with_override_marker() for key, item in segments.items()},
+        decoded: Dict[VersionedDataKind, Dict[str, Any]] = {
+            FEATURES: {key: FEATURES.decode(item) for key, item in flags.items()},
+            SEGMENTS: {key: SEGMENTS.decode(item) for key, item in segments.items()},
         }
+        for kind, items in decoded.items():
+            for key, item in items.items():
+                # Evaluation reads an entry by its mapping key, while the all-flags report and
+                # analytics events use the definition's key. A mismatch would serve one key's
+                # override under another, so the whole snapshot is rejected.
+                if item.key != key:
+                    raise ValueError('the override %s entry "%s" has the key "%s"; the key of each definition must be its key in the snapshot'
+                                     % ("flag" if kind == FEATURES else "segment", key, item.key))
+        replacement: LayerContents = {kind: {key: item.with_override_marker() for key, item in items.items()} for kind, items in decoded.items()}
         count = len(replacement[FEATURES]) + len(replacement[SEGMENTS])
         dependencies = DependencyTracker()
         for kind, items in replacement.items():

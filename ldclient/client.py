@@ -292,11 +292,20 @@ class LDClient:
     def _close_components(self):
         """
         Stops the SDK components after a failed start-up. The event processor is last because
-        it may still be sending events the other components generated.
+        it may still be sending events the other components generated. A component that fails to
+        stop is logged and the others are still stopped, so the caller receives the start-up
+        failure rather than the failure to stop.
         """
-        self._data_system.stop()
-        self.__big_segment_store_manager.stop()
-        self._event_processor.stop()
+        components = (
+            ("data system", self._data_system.stop),
+            ("big segment store manager", self.__big_segment_store_manager.stop),
+            ("event processor", self._event_processor.stop),
+        )
+        for name, stop in components:
+            try:
+                stop()
+            except Exception as e:
+                log.warning("Error stopping the %s after a failed start: %s", name, e)
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):

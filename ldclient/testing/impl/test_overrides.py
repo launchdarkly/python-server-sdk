@@ -112,6 +112,25 @@ def test_layer_rejects_invalid_definitions_and_keeps_its_contents():
     assert layer.get(FEATURES, 'flag1') is not None
 
 
+@pytest.mark.parametrize(
+    'flags,segments',
+    [
+        ({'a': flag('b')}, {}),
+        ({'a': flag('b').to_json_dict()}, {}),
+        ({}, {'s': segment('t')}),
+        ({}, {'s': segment('t').to_json_dict()}),
+    ],
+    ids=['flag model', 'flag dict', 'segment model', 'segment dict'],
+)
+def test_layer_rejects_a_definition_whose_key_differs_from_its_mapping_key(flags, segments):
+    layer = OverrideLayer()
+    layer.set_all({'flag1': flag('flag1')}, {})
+    with pytest.raises(ValueError, match='the key of each definition must be its key in the snapshot'):
+        layer.set_all(flags, segments)
+    assert list(layer.all(FEATURES).keys()) == ['flag1']
+    assert layer.all(SEGMENTS) == {}
+
+
 def test_layer_replacement_semantics():
     layer = OverrideLayer()
     assert layer.is_empty is True
