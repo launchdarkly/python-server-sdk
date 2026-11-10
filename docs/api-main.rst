@@ -40,6 +40,13 @@ ldclient.datasystem module
     :members:
     :special-members: __init__
 
+ldclient.async_datasystem module
+--------------------------------
+
+.. automodule:: ldclient.async_datasystem
+    :members:
+    :special-members: __init__
+
 ldclient.hook module
 --------------------------
 
