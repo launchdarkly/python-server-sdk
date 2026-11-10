@@ -119,7 +119,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         self._stop.clear()
         try:
             while self._stop.is_set() is False:
-                result = await self._requester.fetch(ss.selector())
+                result = await self._fetch(ss)
                 decision = map_polling_result(result)
                 yield decision.update
 
@@ -138,6 +138,16 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         log.info("Stopping PollingDataSourceV2 synchronizer")
         self._interrupt_event.set()
         self._stop.set()
+
+    async def _fetch(self, ss: SelectorStore) -> PollingResult:
+        # A network error raises from the requester. Return it as a failure
+        # so that the synchronizer reports INTERRUPTED and tries again.
+        try:
+            return await self._requester.fetch(ss.selector())
+        except Exception as e:  # pylint: disable=broad-except
+            msg = f"Error: Exception encountered when polling for flags. {e}"
+            log.warning(msg)
+            return _Fail(error=msg, exception=e)
 
     async def _poll(self, ss: SelectorStore) -> BasisResult:
         try:

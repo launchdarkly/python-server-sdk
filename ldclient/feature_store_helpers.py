@@ -5,9 +5,8 @@ This submodule contains support code for writing feature store implementations.
 import json
 from typing import Any, Dict, Mapping, Optional
 
-from expiringdict import ExpiringDict
-
 from ldclient.feature_store import CacheConfig
+from ldclient.impl.expiring_cache import ExpiringCache
 from ldclient.impl.util import log
 from ldclient.interfaces import (
     DiagnosticDescription,
@@ -98,7 +97,7 @@ class _CachingStoreWrapperBase:
         :param cache_config: the caching parameters
         """
         if cache_config.enabled:
-            self._cache = ExpiringDict(max_len=cache_config.capacity, max_age_seconds=cache_config.expiration)
+            self._cache = ExpiringCache(max_len=cache_config.capacity, max_age_seconds=cache_config.expiration)
         else:
             self._cache = _NOOP_CACHE
         self._inited = False

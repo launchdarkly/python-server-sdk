@@ -85,6 +85,10 @@ def status():
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',
+            'service-endpoints',
+            'wrapper',
+            'http-proxy',
+            'tls:skip-verify-peer',
         ]
     }
     return json.dumps(body), 200, {'Content-type': 'application/json'}

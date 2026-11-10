@@ -1,8 +1,6 @@
 from threading import Lock
 from typing import Callable, Optional, Tuple
 
-from expiringdict import ExpiringDict
-
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
 from ldclient.impl.big_segments_common import (
@@ -10,6 +8,7 @@ from ldclient.impl.big_segments_common import (
     _hash_for_user_key,
     is_stale
 )
+from ldclient.impl.expiring_cache import ExpiringCache
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.repeating_task import RepeatingTask
 from ldclient.impl.util import log
@@ -68,7 +67,7 @@ class BigSegmentStoreManager:
         self.__poll_task = None  # type: Optional[RepeatingTask]
 
         if self.__store:
-            self.__cache = ExpiringDict(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
+            self.__cache = ExpiringCache(max_len=config.context_cache_size, max_age_seconds=config.context_cache_time)
             self.__poll_task = RepeatingTask.at_interval("ldclient.bigsegment.status-poll", config.status_poll_interval, 0, self.poll_store_and_update_status)
             self.__poll_task.start()
 

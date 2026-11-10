@@ -12,8 +12,8 @@ from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.hook import (
-    AsyncHook,
     EvaluationSeriesContext,
+    Hook,
     _EvaluationWithHookResult
 )
 from ldclient.impl import AnyNum
@@ -99,7 +99,7 @@ class AsyncLDClient:
         # drop events.
         self._event_processor: Any = AsyncNullEventProcessor()
 
-        self.__hooks: List = list(config.hooks)
+        self.__hooks: List[Hook] = list(config.hooks)
 
         self._event_factory_default = EventFactory(False)
         self._event_factory_with_reasons = EventFactory(True)
@@ -638,20 +638,17 @@ class AsyncLDClient:
         """
         return _secure_mode_hash(self._config, context)
 
-    def add_hook(self, hook: AsyncHook):
+    def add_hook(self, hook: Hook):
         """
         Add a hook to the client. In order to register a hook before the client starts, please use the `hooks` property of
         `AsyncConfig`.
 
         Hooks provide entrypoints which allow for observation of SDK functions.
 
-        The async client only accepts :class:`ldclient.hook.AsyncHook` instances;
-        passing a synchronous :class:`ldclient.hook.Hook` raises ``TypeError``.
-
         :param hook:
         """
-        if not isinstance(hook, AsyncHook):
-            raise TypeError("AsyncLDClient requires an AsyncHook; synchronous Hook instances are not supported")
+        if not isinstance(hook, Hook):
+            return
 
         self.__hooks.append(hook)
 
@@ -667,33 +664,38 @@ class AsyncLDClient:
         # :return:
         """
         # Snapshot the hook list to ensure hooks added during evaluation don't get called for the current evaluation.
-        hooks = list(self.__hooks)  # type: List[AsyncHook]
+        hooks = list(self.__hooks)
 
         if not hooks:
             return await block()
 
         series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
-        hook_data = await self.__execute_before_evaluation(hooks, series_context)
-        evaluation_result = await block()
-        await self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
+        hook_data = self.__execute_before_evaluation(hooks, series_context)
+        try:
+            evaluation_result = await block()
+        except BaseException:
+            # The after stages let hooks release what the before stages set up, for
+            # example an attached tracing context. They do not await, so they do not
+            # delay a cancellation.
+            error_detail = EvaluationDetail(default_value, None, error_reason('EXCEPTION'))
+            self.__execute_after_evaluation(hooks, series_context, hook_data, error_detail)
+            raise
+        self.__execute_after_evaluation(hooks, series_context, hook_data, evaluation_result.evaluation_detail)
 
         return evaluation_result
 
-    async def __execute_before_evaluation(self, hooks: List[AsyncHook], series_context: EvaluationSeriesContext) -> List[dict]:
-        return [await self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {})) for hook in hooks]
+    def __execute_before_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext) -> List[dict]:
+        return [self.__try_execute_stage("beforeEvaluation", hook.metadata.name, lambda: hook.before_evaluation(series_context, {})) for hook in hooks]
 
-    async def __execute_after_evaluation(self, hooks: List[AsyncHook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
+    def __execute_after_evaluation(self, hooks: List[Hook], series_context: EvaluationSeriesContext, hook_data: List[dict], evaluation_detail: EvaluationDetail) -> List[dict]:
         return [
-            await self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
+            self.__try_execute_stage("afterEvaluation", hook.metadata.name, lambda: hook.after_evaluation(series_context, data, evaluation_detail))
             for (hook, data) in reversed(list(zip(hooks, hook_data)))
         ]
 
-    async def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], Any]) -> dict:
+    def __try_execute_stage(self, method: str, hook_name: str, block: Callable[[], dict]) -> dict:
         try:
-            return await block()
-        except asyncio.CancelledError:
-            # Do not swallow cancellation; it must propagate for shutdown.
-            raise
+            return block()
         except BaseException as e:
             log.error(f"An error occurred in {method} of the hook {hook_name}: #{e}")
             return {}

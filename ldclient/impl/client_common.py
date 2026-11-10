@@ -14,7 +14,7 @@ from typing import List, Sequence, Union
 
 from ldclient.config import SdkIdentityConfig
 from ldclient.context import Context
-from ldclient.hook import AsyncHook, Hook
+from ldclient.hook import Hook
 from ldclient.impl.util import log
 from ldclient.plugin import (
     ApplicationMetadata,
@@ -48,8 +48,8 @@ def get_environment_metadata(config: SdkIdentityConfig, sdk_name: str) -> Enviro
     )
 
 
-def get_plugin_hooks(plugins: Sequence[Union[Plugin, AsyncPlugin]], environment_metadata: EnvironmentMetadata) -> List:
-    hooks: List = []
+def get_plugin_hooks(plugins: Sequence[Union[Plugin, AsyncPlugin]], environment_metadata: EnvironmentMetadata) -> List[Hook]:
+    hooks: List[Hook] = []
     for plugin in plugins:
         try:
             hooks.extend(plugin.get_hooks(environment_metadata))

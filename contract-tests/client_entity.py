@@ -18,7 +18,7 @@ from ldclient import (
     Operation,
     Stage
 )
-from ldclient.config import BigSegmentsConfig
+from ldclient.config import BigSegmentsConfig, HTTPConfig
 from ldclient.datasystem import (
     custom,
     fdv1_fallback_ds_builder,
@@ -42,6 +42,31 @@ class ClientEntity:
                 'id': tags.get('applicationId', ''),
                 'version': tags.get('applicationVersion', ''),
             }
+
+        wrapper = config.get('wrapper') or {}
+        if wrapper.get('name'):
+            opts['wrapper_name'] = wrapper['name']
+        if wrapper.get('version'):
+            opts['wrapper_version'] = wrapper['version']
+
+        http_opts = {}
+        tls = config.get('tls') or {}
+        if tls.get('skipVerifyPeer', False):
+            http_opts['disable_ssl_verification'] = True
+        proxy = config.get('proxy') or {}
+        if proxy.get('httpProxy'):
+            http_opts['http_proxy'] = proxy['httpProxy']
+        if http_opts:
+            opts['http'] = HTTPConfig(**http_opts)
+
+        # Per-component base URIs below take precedence over these.
+        endpoints = config.get('serviceEndpoints') or {}
+        if endpoints.get('streaming'):
+            opts['stream_uri'] = endpoints['streaming']
+        if endpoints.get('polling'):
+            opts['base_uri'] = endpoints['polling']
+        if endpoints.get('events'):
+            opts['events_uri'] = endpoints['events']
 
         datasystem_config = config.get('dataSystem')
         if datasystem_config is not None:

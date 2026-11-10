@@ -22,7 +22,7 @@ from ldclient.config import (
     HTTPConfig,
     PrivateAttributesConfig
 )
-from ldclient.hook import AsyncHook
+from ldclient.hook import Hook
 from ldclient.impl.util import (
     log,
     validate_application_info,
@@ -162,7 +162,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         http: HTTPConfig = HTTPConfig(),
         big_segments: Optional[AsyncBigSegmentsConfig] = None,
         application: Optional[dict] = None,
-        hooks: Optional[List[AsyncHook]] = None,
+        hooks: Optional[List[Hook]] = None,
         plugins: Optional[List[AsyncPlugin]] = None,
         enable_event_compression: bool = True,
         omit_anonymous_contexts: bool = False,
@@ -258,7 +258,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__http = http
         self.__big_segments = AsyncBigSegmentsConfig() if not big_segments else big_segments
         self.__application = validate_application_info(application or {}, log)
-        self.__hooks = [hook for hook in hooks if isinstance(hook, AsyncHook)] if hooks else []
+        self.__hooks = [hook for hook in hooks if isinstance(hook, Hook)] if hooks else []
         self.__plugins = [plugin for plugin in plugins if isinstance(plugin, AsyncPlugin)] if plugins else []
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
@@ -374,7 +374,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__application
 
     @property
-    def hooks(self) -> List[AsyncHook]:
+    def hooks(self) -> List[Hook]:
         """
         Initial set of hooks for the client.
 

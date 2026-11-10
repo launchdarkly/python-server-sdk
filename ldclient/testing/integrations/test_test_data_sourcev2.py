@@ -116,6 +116,8 @@ def verify_flag_builder_v2(desc: str, expected_props: dict, builder_actions: Cal
         pytest.param({'variations': ['a', 'b', 'c'], 'fallthrough': {'variation': 2}}, lambda f: f.variations('a', 'b', 'c').variation_for_all(2), id='set variation index for all'),
         pytest.param({'offVariation': 0}, lambda f: f.off_variation(True), id='set off variation boolean'),
         pytest.param({'variations': ['a', 'b', 'c'], 'offVariation': 2}, lambda f: f.variations('a', 'b', 'c').off_variation(2), id='set off variation index'),
+        pytest.param({'variations': ['x'], 'offVariation': 0}, lambda f: f.value_for_all('x'), id='value for all'),
+        pytest.param({'on': False, 'variations': ['x'], 'offVariation': 0}, lambda f: f.value_for_all('x').on(False), id='value for all with targeting off'),
         pytest.param(
             {
                 'targets': [

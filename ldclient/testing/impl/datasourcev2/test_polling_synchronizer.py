@@ -502,3 +502,37 @@ def test_synchronizer_generic_error_with_fallback_header_halts():
     assert updates[0].environment_id == 'test-env-generic'
     assert updates[0].error is not None
     assert updates[0].error.kind == DataSourceErrorKind.NETWORK_ERROR
+
+
+class RaisingThenListBasedRequester(ListBasedRequester):
+    """Raises on the first fetch, then returns the given results."""
+
+    def __init__(self, results: Iterator[PollingResult]):
+        super().__init__(results)
+        self._raised = False
+
+    def fetch(self, selector: Optional[Selector]) -> PollingResult:
+        if not self._raised:
+            self._raised = True
+            raise ConnectionError("connection refused")
+        return super().fetch(selector)
+
+
+def test_requester_exception_interrupts_and_recovers():
+    change_set = ChangeSetBuilder.no_changes()
+    synchronizer = PollingDataSource(
+        poll_interval=0.01,
+        requester=RaisingThenListBasedRequester(results=iter([_Success(value=(change_set, {}))])),
+    )
+    sync = synchronizer.sync(MockSelectorStore(Selector.no_selector()))
+
+    interrupted = next(sync)
+    valid = next(sync)
+
+    assert interrupted.state == DataSourceState.INTERRUPTED
+    assert interrupted.error is not None
+    assert interrupted.error.kind == DataSourceErrorKind.NETWORK_ERROR
+    assert interrupted.error.status_code == 0
+    assert "connection refused" in interrupted.error.message
+    assert interrupted.fallback_to_fdv1 is False
+    assert valid.state == DataSourceState.VALID

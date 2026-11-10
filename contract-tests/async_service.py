@@ -68,6 +68,10 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'migrations',
             'persistent-data-store-redis',
             'fdv1-fallback',
+            'service-endpoints',
+            'wrapper',
+            'http-proxy',
+            'tls:skip-verify-peer',
         ]
     }
     return aiohttp.web.Response(
