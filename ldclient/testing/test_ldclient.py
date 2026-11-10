@@ -1,16 +1,26 @@
 import pytest
 
+from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
+from ldclient.datasystem import DataStoreMode
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasource.polling import PollingUpdateProcessor
 from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.stubs import NullUpdateProcessor
-from ldclient.interfaces import UpdateProcessor
+from ldclient.impl.util import _Success
+from ldclient.interfaces import (
+    Basis,
+    BasisResult,
+    ChangeSetBuilder,
+    IntentCode,
+    ObjectKind,
+    Selector,
+    SelectorStore
+)
 from ldclient.testing.builders import *
 from ldclient.testing.stub_util import (
     CapturingFeatureStore,
-    MockEventProcessor,
-    MockUpdateProcessor
+    MockEventProcessor
 )
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -31,8 +41,7 @@ def make_client(store=InMemoryFeatureStore()):
             events_uri=unreachable_uri,
             stream_uri=unreachable_uri,
             event_processor_class=MockEventProcessor,
-            update_processor_class=MockUpdateProcessor,
-            feature_store=store,
+            datasystem_config=datasystem.daemon(store).build(),
         )
     )
 
@@ -42,7 +51,7 @@ def make_offline_client():
 
 
 def make_ldd_client():
-    return LDClient(config=Config(sdk_key="secret", use_ldd=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
+    return LDClient(config=Config(sdk_key="secret", datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(), base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
 
 
 def get_first_event(c):
@@ -63,7 +72,8 @@ def test_client_has_null_update_processor_in_offline_mode():
 
 
 def test_client_has_null_update_processor_in_ldd_mode():
-    with make_ldd_client() as client:
+    config = Config(sdk_key="secret", use_ldd=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri)
+    with LDClient(config=config) as client:
         assert isinstance(client._data_system._update_processor, NullUpdateProcessor)
 
 
@@ -98,8 +108,7 @@ def test_defaults_and_online():
             base_uri="http://localhost:3000",
             defaults={"foo": expected},
             event_processor_class=MockEventProcessor,
-            update_processor_class=MockUpdateProcessor,
-            feature_store=InMemoryFeatureStore(),
+            datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(),
         )
     )
     actual = my_client.variation('foo', user, default="originalDefault")
@@ -107,7 +116,7 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    my_client = LDClient(config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor))
+    my_client = LDClient(config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, event_processor_class=MockEventProcessor, datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build()))
     assert "jim" == my_client.variation('baz', user, default="jim")
 
 
@@ -125,34 +134,49 @@ def test_secure_mode_hash():
         assert client.secure_mode_hash(equivalent_user_to_hash) == expected_hash
 
 
+# Items carry the fields the in-memory store needs to decode them.
 dependency_ordering_test_data = {
     FEATURES: {
-        "a": {"key": "a", "prerequisites": [{"key": "b"}, {"key": "c"}]},
-        "b": {"key": "b", "prerequisites": [{"key": "c"}, {"key": "e"}]},
-        "c": {"key": "c"},
-        "d": {"key": "d"},
-        "e": {"key": "e"},
-        "f": {"key": "f"},
+        "a": {"key": "a", "version": 1, "prerequisites": [{"key": "b", "variation": 0}, {"key": "c", "variation": 0}]},
+        "b": {"key": "b", "version": 1, "prerequisites": [{"key": "c", "variation": 0}, {"key": "e", "variation": 0}]},
+        "c": {"key": "c", "version": 1},
+        "d": {"key": "d", "version": 1},
+        "e": {"key": "e", "version": 1},
+        "f": {"key": "f", "version": 1},
     },
-    SEGMENTS: {"o": {"key": "o"}},
+    SEGMENTS: {"o": {"key": "o", "version": 1}},
 }
 
 
-class DependencyOrderingDataUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, store, ready):
-        store.init(dependency_ordering_test_data)
-        ready.set()
+class DependencyOrderingDataInitializer:
+    # Returns the unordered test data set as a persistable full transfer.
+    @property
+    def name(self) -> str:
+        return "DependencyOrderingDataInitializer"
 
-    def start(self):
-        pass
+    def fetch(self, ss: SelectorStore) -> BasisResult:
+        builder = ChangeSetBuilder()
+        builder.start(IntentCode.TRANSFER_FULL)
+        for kind, object_kind in ((FEATURES, ObjectKind.FLAG), (SEGMENTS, ObjectKind.SEGMENT)):
+            for key, item in dependency_ordering_test_data[kind].items():
+                builder.add_put(object_kind, key, item['version'], item)
+        change_set = builder.finish(Selector.new_selector("state", 1))
+        return _Success(Basis(change_set=change_set, persist=True, environment_id=None))
 
-    def initialized(self):
-        return True
+
+class DependencyOrderingDataInitializerBuilder:
+    def build(self, config):
+        return DependencyOrderingDataInitializer()
 
 
 def test_store_data_set_ordering():
     store = CapturingFeatureStore()
-    config = Config(sdk_key='SDK_KEY', send_events=False, feature_store=store, update_processor_class=DependencyOrderingDataUpdateProcessor)
+    # The data system sorts the data set when it writes to a READ_WRITE store.
+    datasystem_config = datasystem.custom() \
+        .initializers([DependencyOrderingDataInitializerBuilder()]) \
+        .data_store(store, DataStoreMode.READ_WRITE) \
+        .build()
+    config = Config(sdk_key='SDK_KEY', send_events=False, datasystem_config=datasystem_config)
     LDClient(config=config)
 
     data = store.received_data

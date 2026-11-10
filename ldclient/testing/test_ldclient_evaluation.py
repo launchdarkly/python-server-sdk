@@ -1,6 +1,7 @@
 import logging
 import time
 
+from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus, EvaluationDetail
@@ -10,7 +11,7 @@ from ldclient.impl.evaluator import _make_big_segment_ref
 from ldclient.interfaces import FeatureStore
 from ldclient.testing.builders import *
 from ldclient.testing.mock_components import MockBigSegmentStore
-from ldclient.testing.stub_util import MockEventProcessor, MockUpdateProcessor
+from ldclient.testing.stub_util import MockEventProcessor
 from ldclient.testing.test_ldclient import make_client, unreachable_uri, user
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
@@ -167,7 +168,7 @@ def test_flag_using_big_segment():
     segstore = MockBigSegmentStore()
     segstore.setup_metadata_always_up_to_date()
     segstore.setup_membership(_hash_for_user_key(user['key']), {_make_big_segment_ref(segment): True})
-    config = Config(sdk_key='SDK_KEY', feature_store=store, big_segments=BigSegmentsConfig(store=segstore), event_processor_class=MockEventProcessor, update_processor_class=MockUpdateProcessor)
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem.daemon(store).build(), big_segments=BigSegmentsConfig(store=segstore), event_processor_class=MockEventProcessor)
     with LDClient(config) as client:
         detail = client.variation_detail(flag['key'], user, False)
         assert detail.value is True
@@ -446,12 +447,9 @@ def test_all_flags_state_degrades_per_flag_on_evaluator_error():
     assert 'prerequisites' not in metadata['bad-last']
 
 
-class UninitializedUpdateProcessor(MockUpdateProcessor):
-    def initialized(self):
-        return False
-
-
 def make_client_with_cached_data(store):
+    # Daemon mode never receives data from a data source, so the client serves
+    # cached values from the store.
     return LDClient(
         config=Config(
             sdk_key='SDK_KEY',
@@ -459,8 +457,7 @@ def make_client_with_cached_data(store):
             events_uri=unreachable_uri,
             stream_uri=unreachable_uri,
             event_processor_class=MockEventProcessor,
-            update_processor_class=UninitializedUpdateProcessor,
-            feature_store=store,
+            datasystem_config=datasystem.daemon(store).build(),
         )
     )
 
