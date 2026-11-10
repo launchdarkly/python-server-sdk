@@ -295,6 +295,51 @@ def test_override_source_that_supplies_a_snapshot_and_then_fails_to_start_leaves
         assert client.variation('overridden-flag', user, False) is False
 
 
+def deleted_flag(key: str) -> dict:
+    return {'key': key, 'version': 2, 'deleted': True}
+
+
+def flag_and_dependent() -> Dict[str, dict]:
+    """LaunchDarkly data: the flag "flag", and the flag "dependent", which has it as a prerequisite."""
+    return {
+        'flag': FlagBuilder('flag').version(1).on(True).variations('ld-value').fallthrough_variation(0).build().to_json_dict(),
+        'dependent': FlagBuilder('dependent').version(1).on(True).variations('dependent-on', 'dependent-off').fallthrough_variation(0).off_variation(1).prerequisite('flag', 0).build().to_json_dict(),
+    }
+
+
+DELETED_FLAG_REJECTED = 'Rejected an override snapshot; the overrides in effect stay: flag "flag" is marked as deleted'
+
+
+def test_override_source_that_supplies_a_deleted_flag_at_start_leaves_no_overrides(caplog):
+    # The sink rejects the whole snapshot, and the error propagates out of the source's start,
+    # which fails it as an invalid definition does. The client serves LaunchDarkly data.
+    source = MockOverrideSource(flags={'flag': deleted_flag('flag')})
+    with make_initialized_client(flag_and_dependent(), source) as client:
+        assert client.variation('flag', user, 'default') == 'ld-value'
+        assert client.variation_detail('flag', user, 'default') == EvaluationDetail('ld-value', 0, {'kind': 'FALLTHROUGH'})
+        assert client.variation_detail('dependent', user, 'default') == EvaluationDetail('dependent-on', 0, {'kind': 'FALLTHROUGH'})
+        assert errors_containing(caplog, DELETED_FLAG_REJECTED) != []
+        assert errors_containing(caplog, 'Unable to start the override source; the client runs without overrides') != []
+
+
+def test_snapshot_with_a_deleted_flag_is_rejected_and_the_overrides_in_effect_stay(caplog):
+    source = MockOverrideSource(flags={'flag': single_value_flag('flag', 'override-value')})
+    with make_initialized_client(flag_and_dependent(), source) as client:
+        changes: Queue = Queue()
+        client.flag_tracker.add_listener(lambda change: changes.put(change))
+
+        with pytest.raises(ValueError):
+            source.set_overrides({'flag': deleted_flag('flag'), 'other': single_value_flag('other', True)})
+
+        assert client.variation('flag', user, 'default') == 'override-value'
+        assert client.variation_detail('flag', user, 'default') == EvaluationDetail('override-value', 0, {'kind': 'FALLTHROUGH', 'overrideAffected': True})
+        assert client.variation_detail('dependent', user, 'default') == EvaluationDetail('dependent-on', 0, {'kind': 'FALLTHROUGH', 'overrideAffected': True})
+        assert client.variation('other', user, 'default') == 'default'
+        assert errors_containing(caplog, DELETED_FLAG_REJECTED) != []
+        with pytest.raises(Empty):
+            changes.get(timeout=0.3)
+
+
 def test_snapshot_supplied_after_the_client_is_closed_is_ignored():
     source = MockOverrideSource()
     client = make_uninitialized_client(source)

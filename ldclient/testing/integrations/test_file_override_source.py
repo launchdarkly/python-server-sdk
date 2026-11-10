@@ -15,6 +15,7 @@ import pytest
 from ldclient.client import Config, Context, LDClient
 from ldclient.config import Config as SDKConfig
 from ldclient.datasystem import custom
+from ldclient.evaluation import EvaluationDetail
 from ldclient.impl.integrations.files import filedata
 from ldclient.impl.integrations.overrides import file_override_source
 from ldclient.impl.integrations.overrides.file_override_source import (
@@ -547,6 +548,87 @@ def test_source_retries_a_failed_load_without_a_change_signal(tmp_path, sources,
         assert flag_values(sink.require_snapshot()) == {'flag1': False}
 
 
+# ---------------------------------------------------------------------------
+# Entries marked as deleted
+# ---------------------------------------------------------------------------
+
+def document_with_entry_marked(file_format: str, kind_name: str, deleted: str) -> str:
+    """
+    A document with the flag value flag1 set to "changed" and an entry "d" of the given kind
+    whose deleted property is given as it is written in the file.
+    """
+    member = 'flags' if kind_name == 'flag' else 'segments'
+    if file_format == 'json':
+        return '{"flagValues": {"flag1": "changed"}, "%s": {"d": {"key": "d", "deleted": %s}}}' % (member, deleted)
+    return 'flagValues:\n  flag1: changed\n%s:\n  d:\n    key: d\n    deleted: %s\n' % (member, deleted)
+
+
+def deleted_entry_failure(kind_name: str, path: str) -> str:
+    return 'Unable to load flag data: %s "d" in %s is marked as deleted; remove the entry to remove its override' % (kind_name, path)
+
+
+def error_lines(caplog) -> List[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+
+
+@pytest.mark.parametrize('kind_name', ['flag', 'segment'])
+@pytest.mark.parametrize('file_format', ['json', pytest.param('yaml', marks=yaml_required)])
+def test_source_initial_load_fails_for_a_file_with_an_entry_marked_as_deleted(tmp_path, sources, caplog, file_format, kind_name):
+    # The whole load fails, so the other file's overrides are not applied either.
+    other = os.path.join(str(tmp_path), 'other.json')
+    write_file(other, '{"flagValues": {"other": true}}')
+    path = os.path.join(str(tmp_path), 'overrides.' + file_format)
+    write_file(path, document_with_entry_marked(file_format, kind_name, 'true'))
+    with caplog.at_level(logging.ERROR):
+        _, sink = build_source(sources, [other, path])
+        sink.require_no_snapshot()
+    assert error_lines(caplog) == [deleted_entry_failure(kind_name, path)]
+
+
+@pytest.mark.parametrize('kind_name', ['flag', 'segment'])
+def test_source_reload_fails_for_an_entry_marked_as_deleted_keeps_the_overrides_and_retries(tmp_path, sources, caplog, kind_name):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{"flagValues": {"flag1": "original"}}')
+    with caplog.at_level(logging.ERROR):
+        _, sink = build_source(sources, [path], lambda b: b.poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
+        assert flag_values(sink.require_snapshot()) == {'flag1': 'original'}
+
+        # The edit also changes flag1, and none of it is applied: the sink is not called.
+        deleted = document_with_entry_marked('json', kind_name, 'true ')
+        fixed = document_with_entry_marked('json', kind_name, 'false')
+        assert len(deleted) == len(fixed)
+        write_file(path, deleted)
+        deadline = time.time() + TEST_TIMEOUT
+        while deleted_entry_failure(kind_name, path) not in error_lines(caplog):
+            assert time.time() < deadline, "the load failure was not logged"
+            time.sleep(0.01)
+        sink.require_no_snapshot()
+
+        # The fix keeps the file's size and modification time, so the poller sees no change and
+        # only the retry of the failed load picks it up. An entry marked as not deleted loads.
+        observed = os.stat(path)
+        write_file(path, fixed)
+        os.utime(path, ns=(observed.st_atime_ns, observed.st_mtime_ns))
+        flags, segments = sink.require_snapshot()
+        assert flags['flag1'].variations == ['changed']
+        assert 'd' in (flags if kind_name == 'flag' else segments)
+
+
+@pytest.mark.parametrize('file_format', ['json', pytest.param('yaml', marks=yaml_required)])
+def test_source_loads_entries_marked_as_not_deleted(tmp_path, sources, file_format):
+    path = os.path.join(str(tmp_path), 'overrides.' + file_format)
+    if file_format == 'json':
+        write_file(path, '{"flags": {"f": {"key": "f", "on": true, "variations": ["x"], "fallthrough": {"variation": 0}, "deleted": false}}, '
+                         '"segments": {"s": {"key": "s", "deleted": false}}}')
+    else:
+        write_file(path, 'flags:\n  f:\n    key: f\n    "on": true\n    variations: [x]\n    fallthrough: {variation: 0}\n    deleted: false\n'
+                         'segments:\n  s:\n    key: s\n    deleted: false\n')
+    _, sink = build_source(sources, [path])
+    snapshot = sink.require_snapshot()
+    assert flag_values(snapshot) == {'f': 'x'}
+    assert list(snapshot[1].keys()) == ['s']
+
+
 @pytest.mark.parametrize("mode", [ChangeDetection.POLLING, pytest.param(ChangeDetection.WATCHING, marks=watchdog_required)])
 def test_source_detects_an_edit_made_during_the_initial_load(tmp_path, sources, monkeypatch, mode):
     path = os.path.join(str(tmp_path), 'overrides.json')
@@ -797,3 +879,18 @@ def test_client_side_all_flags_state_includes_a_full_definition_with_client_side
         state = client.all_flags_state(user, client_side_only=True)
         assert state.valid
         assert state.to_values_map() == {'full-flag': True}
+
+
+def test_client_serves_no_override_from_a_file_with_an_entry_marked_as_deleted(tmp_path):
+    path = os.path.join(str(tmp_path), 'overrides.json')
+    write_file(path, '{"flagValues": {"value-flag": true}, "flags": {"deleted-flag": {"key": "deleted-flag", "deleted": true}}}')
+    source = FileOverrideSourceBuilder([path])
+    datasystem = custom().synchronizers(HangingSynchronizer().builder).overrides(source).build()
+    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem, event_processor_class=MockEventProcessor)
+
+    with LDClient(config, start_wait=0) as client:
+        user = Context.create('user-key')
+        not_ready = {'kind': 'ERROR', 'errorKind': 'CLIENT_NOT_READY'}
+        assert client.variation('deleted-flag', user, 'default') == 'default'
+        assert client.variation_detail('deleted-flag', user, 'default') == EvaluationDetail('default', None, not_ready)
+        assert client.variation_detail('value-flag', user, False) == EvaluationDetail(False, None, not_ready)

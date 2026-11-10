@@ -17,6 +17,19 @@ def _empty_contents() -> LayerContents:
     return {FEATURES: {}, SEGMENTS: {}}
 
 
+class DeletedItemError(ValueError):
+    """
+    Indicates that a snapshot holds a flag or segment marked as deleted. The layer never holds a
+    deleted item, so it rejects the whole snapshot. An override is removed by leaving it out of
+    the snapshot.
+    """
+
+    def __init__(self, kind_name: str, key: str):
+        super().__init__('%s "%s" is marked as deleted; an override is removed by leaving it out of the snapshot' % (kind_name, key))
+        self.kind_name = kind_name
+        self.key = key
+
+
 class OverrideLayer:
     """
     A thread-safe store of override entries, replaced wholesale on each update from an override
@@ -41,8 +54,9 @@ class OverrideLayer:
 
         Values may be model objects or their JSON dictionary form. A dictionary is decoded with
         the model constructor, which raises ``ValueError`` for an invalid definition. A
-        definition whose key differs from its key in the mapping raises ``ValueError`` too.
-        Nothing is replaced in either case.
+        definition whose key differs from its key in the mapping raises ``ValueError`` too, and a
+        flag or segment marked as deleted, in either form, raises :class:`DeletedItemError`,
+        which is a ``ValueError``. Nothing is replaced in any of these cases.
 
         :return: the previous and the new contents. The returned dictionaries must not be modified.
         """
@@ -52,6 +66,8 @@ class OverrideLayer:
         }
         for kind, items in decoded.items():
             for key, item in items.items():
+                if item.deleted:
+                    raise DeletedItemError("flag" if kind == FEATURES else "segment", key)
                 # Evaluation reads an entry by its mapping key, while the all-flags report and
                 # analytics events use the definition's key. A mismatch would serve one key's
                 # override under another, so the whole snapshot is rejected.

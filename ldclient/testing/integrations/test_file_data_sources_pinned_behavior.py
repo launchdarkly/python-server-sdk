@@ -3,8 +3,8 @@ Pins the behavior of the two existing file data sources, the FDv1 update process
 initializer and synchronizer. The file-based override source is built on separate code and
 behaves differently in several of these respects. These tests keep the existing sources
 observably unchanged: the flagValues expansion and its evaluation reason, the version fallback,
-the duplicate key and load failure messages, the FDv2 status and error kinds, and the polling
-and watching rules.
+the duplicate key and load failure messages, the FDv2 status and error kinds, the acceptance of
+entries marked as deleted, and the polling and watching rules.
 """
 import logging
 import os
@@ -289,6 +289,55 @@ def test_v2_sync_reports_invalid_data_when_a_file_becomes_malformed(tmp_path):
     finally:
         source.stop()
         thread.join(5)
+
+
+# ---------------------------------------------------------------------------
+# Entries marked as deleted. The override source rejects a file that holds one. These sources
+# accept it, and rejecting it here is a breaking change left to a later major version.
+# ---------------------------------------------------------------------------
+
+DOCUMENT_WITH_DELETED_ENTRIES = '''
+{
+  "flags": {
+    "deleted-flag": {"key": "deleted-flag", "version": 3, "deleted": true},
+    "flag1": {"key": "flag1", "on": false, "offVariation": 0, "variations": ["x"]}
+  },
+  "segments": {
+    "deleted-segment": {"key": "deleted-segment", "deleted": true}
+  }
+}
+'''
+
+
+def test_v1_loads_a_file_with_deleted_entries_and_stores_them_as_deleted(tmp_path, caplog):
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, DOCUMENT_WITH_DELETED_ENTRIES)
+    store = InMemoryFeatureStore()
+    source = make_v1_source(path, store)
+    with caplog.at_level(logging.ERROR):
+        source.start()
+    try:
+        assert store.initialized is True
+        assert [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR] == []
+        assert store.get(FEATURES, 'flag1') is not None
+        assert store.get(FEATURES, 'deleted-flag') is None
+        assert store.get(SEGMENTS, 'deleted-segment') is None
+        assert list(store.all(FEATURES, lambda x: x).keys()) == ['flag1']
+    finally:
+        source.stop()
+
+
+def test_v2_supplies_deleted_entries_as_they_are_in_the_file(tmp_path):
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, DOCUMENT_WITH_DELETED_ENTRIES)
+    result = make_v2_source(path).fetch(MockSelectorStore(Selector.no_selector()))
+    assert result.value is not None
+    changes = v2_changes_by_key(result.value.change_set)
+    assert set(changes.keys()) == {'deleted-flag', 'flag1', 'deleted-segment'}
+    assert changes['deleted-flag'].object == {'key': 'deleted-flag', 'version': 3, 'deleted': True}
+    assert changes['deleted-flag'].version == 3
+    assert changes['deleted-segment'].kind == ObjectKind.SEGMENT
+    assert changes['deleted-segment'].object == {'key': 'deleted-segment', 'version': 1, 'deleted': True}
 
 
 # ---------------------------------------------------------------------------

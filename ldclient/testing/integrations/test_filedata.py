@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
 
 from ldclient.impl.integrations.files import filedata
 from ldclient.impl.integrations.files.filedata import (
+    DeletedEntryError,
     Document,
     DuplicateKeyError,
     DuplicateKeysHandling,
@@ -386,6 +387,35 @@ def test_load_files_reports_parse_error_with_path(tmp_path):
     with pytest.raises(FileReadError) as excinfo:
         load_files([path], DuplicateKeysHandling.FAIL)
     assert excinfo.value.path == path
+
+
+@pytest.mark.parametrize('member, kind_name', [('flags', 'flag'), ('segments', 'segment')])
+def test_load_files_fails_for_an_entry_marked_as_deleted_and_names_the_file_and_the_key(tmp_path, member, kind_name):
+    good = os.path.join(str(tmp_path), 'good.json')
+    path = os.path.join(str(tmp_path), 'deleted.json')
+    write_file(good, '{"flagValues": {"flag1": true}}')
+    write_file(path, '{"%s": {"entry": {"key": "entry", "deleted": true}}}' % member)
+    expected = '%s "entry" in %s is marked as deleted; remove the entry to remove its override' % (kind_name, path)
+
+    with pytest.raises(DeletedEntryError) as excinfo:
+        load_files([good, path], DuplicateKeysHandling.FAIL)
+    # It is a per-file failure, like a file that cannot be parsed.
+    assert isinstance(excinfo.value, FileReadError)
+    assert excinfo.value.path == path
+    assert str(excinfo.value) == expected
+
+    with pytest.raises(DeletedEntryError) as excinfo:
+        read_file(path)
+    assert str(excinfo.value) == expected
+
+
+def test_load_files_accepts_entries_marked_as_not_deleted(tmp_path):
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, '{"flags": {"flag1": {"key": "flag1", "on": true, "deleted": false}}, "segments": {"seg1": {"key": "seg1", "deleted": false}}}')
+    result = load_files([path], DuplicateKeysHandling.FAIL)
+    assert list(result.flags.keys()) == ['flag1']
+    assert result.flags['flag1'].on is True
+    assert list(result.segments.keys()) == ['seg1']
 
 
 @pytest.mark.skipif(not have_yaml, reason="pyyaml is not installed")
