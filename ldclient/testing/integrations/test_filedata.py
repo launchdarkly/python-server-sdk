@@ -2456,6 +2456,60 @@ def test_watcher_detects_file_deletion(tmp_path, make_watcher):
     w.require_change()
 
 
+@watchdog_required
+def test_watcher_reports_a_change_within_a_fraction_of_a_second(tmp_path, make_watcher):
+    # watchdog 7 on Windows holds each notification for the observer's timeout, one second by
+    # default, before it delivers it. The watcher sets a shorter timeout.
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, 'a')
+    w = make_watcher([path])
+    w.require_no_change(0.15)
+    write_file(path, 'bb')
+    take(w.changes, timeout=0.5)
+
+
+@watchdog_required
+def test_watcher_reports_a_change_while_another_file_in_the_directory_keeps_changing(tmp_path, make_watcher):
+    # watchdog 7 on Windows delivers nothing while notifications for the directory keep arriving
+    # within the observer's timeout, so a file appended to five times a second, such as a log,
+    # would hold back the change to the watched file for as long as it is written.
+    path = os.path.join(str(tmp_path), 'data.json')
+    other = os.path.join(str(tmp_path), 'app.log')
+    write_file(path, 'a')
+    write_file(other, '')
+    w = make_watcher([path])
+    stop = threading.Event()
+
+    def append_to_other():
+        while not stop.is_set():
+            with open(other, 'a') as f:
+                f.write('line\n')
+            stop.wait(0.2)
+
+    writer = threading.Thread(target=append_to_other, daemon=True)
+    writer.start()
+    try:
+        w.require_no_change(0.5)
+        write_file(path, 'bb')
+        take(w.changes, timeout=2.0)
+    finally:
+        stop.set()
+        writer.join()
+
+
+@watchdog_required
+def test_watcher_reports_a_new_modification_time(tmp_path, make_watcher):
+    # A touch changes only the modification time. watchdog 7 reports it as an "attrib" event,
+    # where earlier versions report a modification.
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, 'a')
+    w = make_watcher([path])
+    w.require_no_change(0.15)
+    info = os.stat(path)
+    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+    w.require_change()
+
+
 def make_symlink(target: str, link: str, directory: bool = False) -> None:
     # Windows needs to know whether a link leads to a directory when the link is created.
     try:
