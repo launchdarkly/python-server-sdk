@@ -436,7 +436,7 @@ def rule_flag(td):
     return td.flag(key='test-flag').fallthrough_variation(False).if_match('firstName', 'Mike').and_not_match('country', 'gb').then_return(True)
 
 
-def test_evaluates_flag_from_test_data_v2():
+def test_evaluates_flag_from_test_data():
     td = TestData.data_source()
     td.update(rule_flag(td))
 
@@ -456,7 +456,7 @@ def test_evaluates_flag_from_test_data_v2():
         assert eval2.reason['kind'] == 'FALLTHROUGH'
 
 
-def test_evaluates_all_flags_from_test_data_v2():
+def test_evaluates_all_flags_from_test_data():
     td = TestData.data_source()
     td.update(rule_flag(td))
 

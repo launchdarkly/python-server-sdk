@@ -22,7 +22,7 @@ from ldclient.testing.http_util import (
     SequentialHandler,
     start_server
 )
-from ldclient.testing.test_ldclient_end_to_end_fdv2 import (
+from ldclient.testing.test_ldclient_end_to_end import (
     always_true_flag,
     poll_response,
     sdk_key,

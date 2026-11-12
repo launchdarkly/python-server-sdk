@@ -497,7 +497,7 @@ def test_initializer_does_not_allow_unsafe_yaml():
     # This extended syntax defined by pyyaml allows arbitrary code execution. The data source
     # must use yaml.safe_load(), which does not support it.
     unsafe_yaml = '''
-!!python/object/apply:ldclient.testing.integrations.test_file_data_sourcev2.arbitrary_method_called_from_yaml ["hi"]
+!!python/object/apply:ldclient.testing.integrations.test_file_data_source.arbitrary_method_called_from_yaml ["hi"]
 '''
     path = make_temp_file(unsafe_yaml)
     try:
