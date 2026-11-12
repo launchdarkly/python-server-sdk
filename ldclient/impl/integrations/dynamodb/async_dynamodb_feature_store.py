@@ -2,7 +2,7 @@ import asyncio
 from contextlib import AsyncExitStack
 from typing import Any, Mapping, Optional
 
-from ldclient.impl.util import log
+from ldclient import log
 from ldclient.interfaces import (
     AsyncFeatureStoreCore,
     DiagnosticDescription,

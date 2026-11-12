@@ -1,5 +1,7 @@
-import json
 import time
+from typing import List
+
+import pytest
 
 from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import (
     _DynamoDBBigSegmentStore
@@ -9,35 +11,23 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBHelpers
 )
 from ldclient.integrations import DynamoDB
-from ldclient.testing.integrations.big_segment_store_test_base import *
-from ldclient.testing.integrations.persistent_feature_store_test_base import *
+from ldclient.interfaces import BigSegmentStoreMetadata
+from ldclient.testhelpers.storetest import (
+    BigSegmentStoreTestSuite,
+    FeatureStoreCoreTestSuite
+)
 from ldclient.testing.test_util import skip_database_tests
 
 have_dynamodb = False
 try:
     import boto3
+    from botocore.config import Config
 
     have_dynamodb = True
 except ImportError:
     pass
 
 pytestmark = pytest.mark.skipif(not have_dynamodb, reason="skipping DynamoDB tests because boto3 module is not installed")
-
-
-@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
-def dynamodb_defaults_to_available():
-    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
-    assert dynamodb.is_monitoring_enabled() is True
-    assert dynamodb.is_available() is True
-
-
-@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
-def dynamodb_detects_nonexistent_store():
-    options = DynamoDBTestHelper.options
-    options['endpoint_url'] = 'http://i-mean-what-are-the-odds'
-    dynamodb = DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=options)
-    assert dynamodb.is_monitoring_enabled() is True
-    assert dynamodb.is_available() is False
 
 
 class DynamoDBTestHelper:
@@ -49,6 +39,7 @@ class DynamoDBTestHelper:
     def make_client():
         return boto3.client('dynamodb', **DynamoDBTestHelper.options)
 
+    @staticmethod
     def clear_data_for_prefix(prefix):
         client = DynamoDBTestHelper.make_client()
         delete_requests = []
@@ -95,43 +86,33 @@ class DynamoDBTestHelper:
                 time.sleep(0.5)
 
 
-class DynamoDBFeatureStoreTester(PersistentFeatureStoreTester):
-    def __init__(self):
-        super().__init__()
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+class TestDynamoDBFeatureStoreCore(FeatureStoreCoreTestSuite):
+    def create_core(self, prefix):
         DynamoDBTestHelper.ensure_table_created()
-
-    def create_persistent_feature_store(self, prefix, caching) -> FeatureStore:
-        return DynamoDB.new_feature_store(DynamoDBTestHelper.table_name, prefix=prefix, caching=caching, dynamodb_opts=DynamoDBTestHelper.options)
+        return _DynamoDBFeatureStoreCore(DynamoDBTestHelper.table_name, prefix, DynamoDBTestHelper.options)
 
     def clear_data(self, prefix):
+        DynamoDBTestHelper.ensure_table_created()
         DynamoDBTestHelper.clear_data_for_prefix(prefix)
 
-    def write_raw_item(self, prefix, kind, key, item):
-        client = DynamoDBTestHelper.make_client()
-        namespace = (prefix + ":" if prefix else "") + kind.namespace
-        client.put_item(
-            TableName=DynamoDBTestHelper.table_name,
-            Item={
-                _DynamoDBFeatureStoreCore.PARTITION_KEY: {'S': namespace},
-                _DynamoDBFeatureStoreCore.SORT_KEY: {'S': key},
-                _DynamoDBFeatureStoreCore.VERSION_ATTRIBUTE: {'N': str(item['version'])},
-                _DynamoDBFeatureStoreCore.ITEM_JSON_ATTRIBUTE: {'S': json.dumps(item)},
-            },
-        )
+    def create_error_core(self):
+        # Nothing listens on this port, so each operation fails. One attempt keeps the tests fast.
+        options = dict(DynamoDBTestHelper.options, endpoint_url='http://localhost:1', config=Config(retries={'total_max_attempts': 1}))
+        return _DynamoDBFeatureStoreCore(DynamoDBTestHelper.table_name, None, options)
 
 
-class DynamoDBBigSegmentTester(BigSegmentStoreTester):
-    def __init__(self):
-        super().__init__()
+@pytest.mark.skipif(skip_database_tests, reason="skipping database tests")
+class TestDynamoDBBigSegmentStore(BigSegmentStoreTestSuite):
+    def create_store(self, prefix):
         DynamoDBTestHelper.ensure_table_created()
-
-    def create_big_segment_store(self, prefix) -> BigSegmentStore:
         return DynamoDB.new_big_segment_store(DynamoDBTestHelper.table_name, prefix=prefix, dynamodb_opts=DynamoDBTestHelper.options)
 
     def clear_data(self, prefix):
+        DynamoDBTestHelper.ensure_table_created()
         DynamoDBTestHelper.clear_data_for_prefix(prefix)
 
-    def set_metadata(self, prefix: str, metadata: BigSegmentStoreMetadata):
+    def set_metadata(self, prefix, metadata: BigSegmentStoreMetadata):
         client = DynamoDBTestHelper.make_client()
         actual_prefix = prefix + ":" if prefix else ""
         key = actual_prefix + _DynamoDBBigSegmentStore.KEY_METADATA
@@ -144,7 +125,7 @@ class DynamoDBBigSegmentTester(BigSegmentStoreTester):
             },
         )
 
-    def set_segments(self, prefix: str, user_hash: str, includes: List[str], excludes: List[str]):
+    def set_segments(self, prefix, user_hash: str, includes: List[str], excludes: List[str]):
         client = DynamoDBTestHelper.make_client()
         actual_prefix = prefix + ":" if prefix else ""
         sets = {_DynamoDBBigSegmentStore.ATTR_INCLUDED: includes, _DynamoDBBigSegmentStore.ATTR_EXCLUDED: excludes}
@@ -156,15 +137,3 @@ class DynamoDBBigSegmentTester(BigSegmentStoreTester):
                     UpdateExpression="ADD %s :value" % attr_name,
                     ExpressionAttributeValues={":value": {"SS": values}},
                 )
-
-
-class TestDynamoDBFeatureStore(PersistentFeatureStoreTestBase):
-    @property
-    def tester_class(self):
-        return DynamoDBFeatureStoreTester
-
-
-class TestDynamoDBBigSegmentStore(BigSegmentStoreTestBase):
-    @property
-    def tester_class(self):
-        return DynamoDBBigSegmentTester

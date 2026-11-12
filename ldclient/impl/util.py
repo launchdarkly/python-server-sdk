@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Dict, Generic, Mapping, Optional, TypeVar, Union
-from urllib.parse import urlparse, urlunparse
 
 from ldclient.impl.http import SYNC_USER_AGENT, _base_headers
 
@@ -160,21 +159,6 @@ def stringify_attrs(attrdict, attrs):
                 newdict = attrdict.copy()
             newdict[attr] = str(val)
     return attrdict if newdict is None else newdict
-
-
-def redact_password(url: str) -> str:
-    """
-    Replace any embedded password in the provided URL with 'xxxx'. This is
-    useful for ensuring sensitive information included in a URL isn't logged.
-    """
-    parts = urlparse(url)
-    if parts.password is None:
-        return url
-
-    updated = parts.netloc.replace(parts.password, "xxxx")
-    parts = parts._replace(netloc=updated)
-
-    return urlunparse(parts)
 
 
 class Result:

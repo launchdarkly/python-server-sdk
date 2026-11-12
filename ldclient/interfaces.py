@@ -665,7 +665,7 @@ class BigSegmentStoreMetadata:
         return self.__last_up_to_date
 
 
-class BigSegmentStore:
+class BigSegmentStore(ABC):
     """
     Interface for a read-only data store that allows querying of user membership in Big Segments.
 

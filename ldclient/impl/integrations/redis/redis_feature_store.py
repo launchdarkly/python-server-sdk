@@ -1,8 +1,10 @@
 from typing import Any, Dict
 
 from ldclient import log
-from ldclient.feature_store_helpers import CachingStoreWrapper
-from ldclient.impl.util import redact_password
+from ldclient.impl.integrations.redis.redis_util import (
+    INITED_KEY,
+    redact_password
+)
 from ldclient.interfaces import (
     DiagnosticDescription,
     FeatureStoreCore,
@@ -26,7 +28,7 @@ class _RedisFeatureStoreCore(DiagnosticDescription, FeatureStoreCore):
         if not have_redis:
             raise NotImplementedError("Cannot use Redis feature store because redis package is not installed")
         self._prefix = prefix or 'launchdarkly'
-        self._init_key = "{0}:{1}".format(self._prefix, CachingStoreWrapper.__INITED_CACHE_KEY__)
+        self._init_key = "{0}:{1}".format(self._prefix, INITED_KEY)
         self._pool = redis.ConnectionPool.from_url(url=url, **redis_opts)
         self.test_update_hook = None  # exposed for testing
         log.info("Started RedisFeatureStore connected to URL: " + redact_password(url) + " using prefix: " + self._prefix)
