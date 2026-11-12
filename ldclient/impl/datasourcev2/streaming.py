@@ -249,7 +249,7 @@ class StreamingDataSource(Synchronizer, DiagnosticSource):
         """
         Stops the streaming synchronizer, closing any open connections.
         """
-        log.info("Stopping StreamingUpdateProcessor")
+        log.info("Stopping StreamingDataSourceV2 synchronizer")
         self._running = False
         if self._sse:
             self._sse.close()

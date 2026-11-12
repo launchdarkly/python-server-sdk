@@ -7,6 +7,7 @@ from typing import List
 
 import pytest
 
+from ldclient import async_datasystem
 from ldclient.async_client import AsyncLDClient
 from ldclient.async_config import AsyncConfig
 from ldclient.context import Context
@@ -18,10 +19,7 @@ from ldclient.plugin import (
     Plugin,
     PluginMetadata
 )
-from ldclient.testing.mock_async_components import (
-    MockAsyncFeatureStore,
-    MockAsyncUpdateProcessor
-)
+from ldclient.testing.mock_async_components import MockAsyncFeatureStore
 from ldclient.versioned_data_kind import FEATURES
 
 
@@ -146,8 +144,7 @@ async def test_context_variable_set_in_before_stage_is_kept_per_evaluation():
     store._initialized = True
     config = AsyncConfig(
         "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
+        datasystem_config=async_datasystem.daemon(store).build(),
         send_events=False,
         hooks=[ContextVarHook()],
     )
@@ -237,8 +234,7 @@ async def test_after_stage_runs_when_evaluation_is_cancelled():
     store._initialized = True
     config = AsyncConfig(
         "test-sdk-key",
-        feature_store=store,
-        update_processor_class=MockAsyncUpdateProcessor,
+        datasystem_config=async_datasystem.daemon(store).build(),
         send_events=False,
         hooks=[ContextVarHook()],
     )

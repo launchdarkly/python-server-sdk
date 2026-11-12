@@ -1,15 +1,8 @@
 import gzip
-import json
 from email.utils import formatdate
 
-from ldclient.impl.model import ModelEntity
-from ldclient.interfaces import (
-    EventProcessor,
-    FeatureRequester,
-    FeatureStore,
-    UpdateProcessor
-)
-from ldclient.testing.http_util import ChunkedResponse, JsonResponse
+from ldclient.interfaces import EventProcessor, FeatureStore
+from ldclient.testing.http_util import ChunkedResponse
 
 
 def decode_request_body(headers, body):
@@ -19,38 +12,6 @@ def decode_request_body(headers, body):
     return body
 
 
-def item_as_json(item):
-    return item.to_json_dict() if isinstance(item, ModelEntity) else item
-
-
-def make_items_map(items=[]):
-    ret = {}
-    for item in items:
-        ret[item['key']] = item_as_json(item)
-    return ret
-
-
-def make_put_event(flags=[], segments=[]):
-    data = {"data": {"flags": make_items_map(flags), "segments": make_items_map(segments)}}
-    return 'event:put\ndata: %s\n\n' % json.dumps(data)
-
-
-def make_invalid_put_event():
-    return 'event:put\ndata: {"data": {\n\n'
-
-
-def make_patch_event(kind, item):
-    path = '%s%s' % (kind.stream_api_path, item['key'])
-    data = {"path": path, "data": item_as_json(item)}
-    return 'event:patch\ndata: %s\n\n' % json.dumps(data)
-
-
-def make_delete_event(kind, key, version):
-    path = '%s%s' % (kind.stream_api_path, key)
-    data = {"path": path, "version": version}
-    return 'event:delete\ndata: %s\n\n' % json.dumps(data)
-
-
 def stream_content(event=None, headers=None):
     stream_headers = {'Content-Type': 'text/event-stream'}
     stream_headers.update(headers or {})
@@ -58,11 +19,6 @@ def stream_content(event=None, headers=None):
     if event:
         stream.push(event)
     return stream
-
-
-def poll_content(flags=[], segments=[], headers=None):
-    data = {"flags": make_items_map(flags), "segments": make_items_map(segments)}
-    return JsonResponse(data, headers)
 
 
 class MockEventProcessor(EventProcessor):
@@ -81,19 +37,6 @@ class MockEventProcessor(EventProcessor):
 
     def flush(self):
         pass
-
-
-class MockFeatureRequester(FeatureRequester):
-    def __init__(self):
-        self.all_data = {}
-        self.exception = None
-        self.request_count = 0
-
-    def get_all_data(self):
-        self.request_count += 1
-        if self.exception is not None:
-            raise self.exception
-        return self.all_data
 
 
 class _MockHTTPHeaderDict(dict):
@@ -176,20 +119,6 @@ class MockHttp:
 
     def reset(self):
         self._recorded_requests = []
-
-
-class MockUpdateProcessor(UpdateProcessor):
-    def __init__(self, config, store, ready):
-        ready.set()
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def initialized(self):
-        return True
 
 
 class CapturingFeatureStore(FeatureStore):

@@ -84,25 +84,6 @@ class AsyncClientEntity:
         datasystem_config = config_params.get('dataSystem')
         if datasystem_config is not None:
             opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
-        elif config_params.get("streaming") is not None:
-            streaming = config_params["streaming"]
-            if streaming.get("baseUri") is not None:
-                opts["stream_uri"] = streaming["baseUri"]
-            if streaming.get("filter") is not None:
-                opts["payload_filter_key"] = streaming["filter"]
-            _set_optional_time_prop(streaming, "initialRetryDelayMs", opts, "initial_reconnect_delay")
-        elif config_params.get("polling") is not None:
-            opts['stream'] = False
-            polling = config_params["polling"]
-            if polling.get("baseUri") is not None:
-                opts["base_uri"] = polling["baseUri"]
-            if polling.get("filter") is not None:
-                opts["payload_filter_key"] = polling["filter"]
-            _set_optional_time_prop(polling, "pollIntervalMs", opts, "poll_interval")
-        elif not endpoints.get('streaming') and not endpoints.get('polling'):
-            # No data source config and no streaming or polling endpoint means daemon mode.
-            # A config that sets only an endpoint gets the default streaming data source.
-            opts['use_ldd'] = True
 
         if config_params.get("events") is not None:
             events = config_params["events"]
@@ -134,9 +115,6 @@ class AsyncClientEntity:
             _set_optional_time_prop(big_params, "statusPollIntervalMs", big_config, "status_poll_interval")
             _set_optional_time_prop(big_params, "staleAfterMs", big_config, "stale_after")
             opts["big_segments"] = AsyncBigSegmentsConfig(**big_config)
-
-        if config_params.get("persistentDataStore") is not None:
-            opts["feature_store"] = _create_async_persistent_store(config_params["persistentDataStore"])
 
         start_wait = config_params.get("startWaitTimeMs") or 5000
         sdk_config = AsyncConfig(**opts)

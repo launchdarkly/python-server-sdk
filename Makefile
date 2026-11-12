@@ -81,8 +81,8 @@ start-async-contract-test-service-bg:
 
 .PHONY: run-contract-tests
 run-contract-tests:
-	@curl -s https://raw.githubusercontent.com/launchdarkly/sdk-test-harness/v2/downloader/run.sh \
-		| VERSION=v2 PARAMS="-url http://localhost:$(PORT) -debug -stop-service-at-end" sh
+	@curl -s https://raw.githubusercontent.com/launchdarkly/sdk-test-harness/v3/downloader/run.sh \
+		| VERSION=v3 PARAMS="-url http://localhost:$(PORT) -debug -stop-service-at-end" sh
 
 .PHONY: contract-tests
 contract-tests: #! Run the contract test harness

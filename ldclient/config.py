@@ -5,12 +5,9 @@ Note that the same class can also be imported from the ``ldclient.client`` submo
 """
 
 import copy
-import warnings
 from dataclasses import dataclass
-from threading import Event
 from typing import Callable, List, Optional, Protocol, Set, TypeVar
 
-from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import Hook
 from ldclient.impl.util import (
     log,
@@ -19,18 +16,13 @@ from ldclient.impl.util import (
 )
 from ldclient.interfaces import (
     BigSegmentStore,
-    DataSourceUpdateSink,
     DataStoreMode,
     EventProcessor,
     FeatureStore,
     Initializer,
-    Synchronizer,
-    UpdateProcessor
+    Synchronizer
 )
 from ldclient.plugin import Plugin
-
-GET_LATEST_FEATURES_PATH = '/sdk/latest-flags'
-STREAM_FLAGS_PATH = '/flags'
 
 DEFAULT_BASE_URI = 'https://app.launchdarkly.com'
 DEFAULT_EVENTS_URI = 'https://events.launchdarkly.com'
@@ -290,20 +282,16 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     def __init__(
         self,
         sdk_key: str,
+        *,
         base_uri: str = DEFAULT_BASE_URI,
         events_uri: str = DEFAULT_EVENTS_URI,
         events_max_pending: int = 10000,
         flush_interval: float = 5,
         stream_uri: str = DEFAULT_STREAM_URI,
-        stream: bool = True,
         initial_reconnect_delay: float = DEFAULT_INITIAL_RECONNECT_DELAY,
         defaults: dict = {},
         send_events: Optional[bool] = None,
-        update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]] = None,
         poll_interval: float = DEFAULT_POLL_INTERVAL,
-        use_ldd: bool = False,
-        feature_store: Optional[FeatureStore] = None,
-        feature_requester_class=None,
         event_processor_class: Optional[Callable[['Config'], EventProcessor]] = None,
         private_attributes: Set[str] = set(),
         all_attributes_private: bool = False,
@@ -321,7 +309,6 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         plugins: Optional[List[Plugin]] = None,
         enable_event_compression: bool = True,
         omit_anonymous_contexts: bool = False,
-        payload_filter_key: Optional[str] = None,
         datasystem_config: Optional[DataSystemConfig] = None,
     ):
         """
@@ -337,8 +324,6 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
           the flush interval means that the event buffer is less likely to reach capacity.
         :param stream_uri: The URL for the LaunchDarkly streaming events server. Most users should
           use the default value.
-        :param stream: Whether or not the streaming API should be used to receive flag updates. By
-          default, it is enabled. Streaming should only be disabled on the advice of LaunchDarkly support.
         :param initial_reconnect_delay: The initial reconnect delay (in seconds) for the streaming
           connection. The streaming service uses a backoff algorithm (with jitter) every time the connection needs
           to be reestablished. The delay for the first reconnection will start near this value, and then
@@ -350,27 +335,17 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
           default values are returned for all flags and no remote network requests are made. By default,
           this is false.
         :param poll_interval: The number of seconds between polls for flag updates if streaming is off.
-        :param use_ldd: Whether you are using the LaunchDarkly Relay Proxy in daemon mode. In this
-          configuration, the client will not use a streaming connection to listen for updates, but instead
-          will get feature state from a Redis instance. The ``stream`` and ``poll_interval`` options will be
-          ignored if this option is set to true. By default, this is false.
-          For more information, read the LaunchDarkly
-          documentation: https://docs.launchdarkly.com/home/relay-proxy/using#using-daemon-mode
         :param array private_attributes: Marks a set of attributes private. Any users sent to LaunchDarkly
           with this configuration active will have these attributes removed. Each item can be either the
           name of an attribute ("email"), or a slash-delimited path ("/address/street") to mark a
           property within a JSON object value as private.
         :param all_attributes_private: If true, all user attributes (other than the key) will be
           private, not just the attributes specified in ``private_attributes``.
-        :param feature_store: A FeatureStore implementation
         :param context_keys_capacity: The number of context keys that the event processor can remember at any
           one time, so that duplicate context details will not be sent in analytics events.
         :param context_keys_flush_interval: The interval in seconds at which the event processor will
           reset its set of known context keys.
-        :param feature_requester_class: A factory for a FeatureRequester implementation taking the sdk key and config
         :param event_processor_class: A factory for an EventProcessor implementation taking the config
-        :param update_processor_class: A factory for an UpdateProcessor implementation taking the config, a FeatureStore
-            implementation, and a threading `Event` to signal readiness.
         :param diagnostic_opt_out: Unless this field is set to True, the client will send
           some diagnostics data to the LaunchDarkly servers in order to assist in the development of future SDK
           improvements. These diagnostics consist of an initial payload containing some details of SDK in use,
@@ -396,22 +371,18 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
           set this to False to prevent extra CPU use, because the Relay Proxy decompresses and recompresses
           the payloads.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
-        :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload. Payload filtering is not supported with the FDv2 data system, so this has no effect on FDv2 requests.
-        :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and segment data. When set, it overrides ``feature_store``, ``update_processor_class``, ``stream``, and ``use_ldd``.
+        :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and
+          segment data. Build it with the functions in :mod:`ldclient.datasystem`. If it is not set, the SDK
+          uses :func:`ldclient.datasystem.default`.
         """
         self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
         self.__base_uri = base_uri.rstrip('/')
         self.__events_uri = events_uri.rstrip('/')
         self.__stream_uri = stream_uri.rstrip('/')
-        self.__update_processor_class = update_processor_class
-        self.__stream = stream
         self.__initial_reconnect_delay = initial_reconnect_delay
         self.__poll_interval = max(poll_interval, DEFAULT_POLL_INTERVAL)
-        self.__use_ldd = use_ldd
-        self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
-        self.__feature_requester_class = feature_requester_class
         self.__events_max_pending = events_max_pending
         self.__flush_interval = flush_interval
         self.__defaults = defaults
@@ -434,49 +405,8 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__plugins = [plugin for plugin in plugins if isinstance(plugin, Plugin)] if plugins else []
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
-        self.__payload_filter_key = payload_filter_key
-        self._data_source_update_sink: Optional[DataSourceUpdateSink] = None
         self._instance_id: Optional[str] = None
         self._datasystem_config = datasystem_config
-
-    def copy_with_new_sdk_key(self, new_sdk_key: str) -> 'Config':
-        """Returns a new ``Config`` instance that is the same as this one, except for having a different SDK key.
-        The key will not be updated if the provided key contains invalid characters.
-
-        DEPRECATED: This method is deprecated and will be removed in a future version.
-
-        :param new_sdk_key: the new SDK key
-        """
-        warnings.warn("copy_with_new_sdk_key is deprecated and will be removed in a future version", DeprecationWarning, stacklevel=2)
-        return Config(
-            sdk_key=new_sdk_key,
-            base_uri=self.__base_uri,
-            events_uri=self.__events_uri,
-            events_max_pending=self.__events_max_pending,
-            flush_interval=self.__flush_interval,
-            stream_uri=self.__stream_uri,
-            stream=self.__stream,
-            initial_reconnect_delay=self.__initial_reconnect_delay,
-            defaults=self.__defaults,
-            send_events=self.__send_events,
-            update_processor_class=self.__update_processor_class,
-            poll_interval=self.__poll_interval,
-            use_ldd=self.__use_ldd,
-            feature_store=self.__feature_store,
-            feature_requester_class=self.__feature_requester_class,
-            event_processor_class=self.__event_processor_class,
-            private_attributes=self.__private_attributes,
-            all_attributes_private=self.__all_attributes_private,
-            offline=self.__offline,
-            context_keys_capacity=self.__context_keys_capacity,
-            context_keys_flush_interval=self.__context_keys_flush_interval,
-            diagnostic_opt_out=self.__diagnostic_opt_out,
-            diagnostic_recording_interval=self.__diagnostic_recording_interval,
-            wrapper_name=self.__wrapper_name,
-            wrapper_version=self.__wrapper_version,
-            http=self.__http,
-            big_segments=self.__big_segments,
-        )
 
     def with_wrapper_information(self, wrapper_name: Optional[str], wrapper_version: Optional[str] = None) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having different wrapper information.
@@ -485,7 +415,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         identify themselves rather than the application that configured the client.
 
         The new instance is a shallow copy: it shares the objects the original configuration references, such as the
-        feature store, the logger, and the HTTP configuration. Mutating one of those objects affects both
+        data system configuration, the hooks, and the HTTP configuration. Mutating one of those objects affects both
         configurations.
 
         :param wrapper_name: an identifying name for the wrapper being used; see :py:attr:`~wrapper_name`
@@ -509,11 +439,6 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     def base_uri(self) -> str:
         return self.__base_uri
 
-    # for internal use only - also no longer used, will remove
-    @property
-    def get_latest_flags_uri(self):
-        return self.__base_uri + GET_LATEST_FEATURES_PATH
-
     # for internal use only
     @property
     def events_base_uri(self):
@@ -529,19 +454,6 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     def stream_base_uri(self):
         return self.__stream_uri
 
-    # for internal use only - should construct the URL path in the streaming code, not here
-    @property
-    def stream_uri(self):
-        return self.__stream_uri + STREAM_FLAGS_PATH
-
-    @property
-    def update_processor_class(self) -> Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]]:
-        return self.__update_processor_class
-
-    @property
-    def stream(self) -> bool:
-        return self.__stream
-
     @property
     def initial_reconnect_delay(self) -> float:
         return self.__initial_reconnect_delay
@@ -551,20 +463,8 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__poll_interval
 
     @property
-    def use_ldd(self) -> bool:
-        return self.__use_ldd
-
-    @property
-    def feature_store(self) -> FeatureStore:
-        return self.__feature_store
-
-    @property
     def event_processor_class(self) -> Optional[Callable[['Config'], EventProcessor]]:
         return self.__event_processor_class
-
-    @property
-    def feature_requester_class(self) -> Optional[Callable]:
-        return self.__feature_requester_class
 
     @property
     def send_events(self) -> bool:
@@ -668,43 +568,6 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         Determines whether or not anonymous contexts will be omitted from index and identify events.
         """
         return self.__omit_anonymous_contexts
-
-    @property
-    def payload_filter_key(self) -> Optional[str]:
-        """
-       LaunchDarkly Server SDKs historically downloaded all flag configuration
-       and segments for a particular environment during initialization.
-
-       For some customers, this is an unacceptably large amount of data, and
-       has contributed to performance issues within their products.
-
-       Filtered environments aim to solve this problem. By allowing customers
-       to specify subsets of an environment's flags using a filter key, SDKs
-       will initialize faster and use less memory.
-
-       This payload filter key only applies to the default streaming and
-       polling data sources. It will not affect TestData or FileData data
-       sources, nor will it be applied to any data source provided through the
-       {#data_source} config property.
-
-       Payload filtering is not supported with the FDv2 data system, so this
-       key has no effect on requests made by FDv2 data sources.
-        """
-        return self.__payload_filter_key
-
-    @property
-    def data_source_update_sink(self) -> Optional[DataSourceUpdateSink]:
-        """
-        Returns the component that allows a data source to push data into the SDK.
-
-        This property should only be set by the SDK. Long term access of this
-        property is not supported; it is temporarily being exposed to maintain
-        backwards compatibility while the SDK structure is updated.
-
-        Custom data source implementations should integrate with this sink if
-        they want to provide support for data source status listeners.
-        """
-        return self._data_source_update_sink
 
     @property
     def datasystem_config(self) -> Optional[DataSystemConfig]:

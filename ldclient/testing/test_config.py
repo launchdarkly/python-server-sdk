@@ -1,5 +1,6 @@
 import pytest
 
+from ldclient import datasystem
 from ldclient.async_config import AsyncConfig
 from ldclient.config import DEFAULT_POLL_INTERVAL, Config
 
@@ -9,28 +10,15 @@ CONFIG_CLASSES = [Config, AsyncConfig]
 CONFIG_IDS = ["Config", "AsyncConfig"]
 
 
-def test_copy_config():
-    old_sdk_key = "OLD_SDK_KEY"
-    new_sdk_key = "NEW_SDK_KEY"
-
-    old_config = Config(sdk_key=old_sdk_key, stream=False)
-
-    assert old_config.sdk_key is old_sdk_key
-    assert old_config.stream is False
-
-    new_config = old_config.copy_with_new_sdk_key(new_sdk_key)
-    assert new_config.sdk_key is new_sdk_key
-    assert new_config.stream is False
-
-
 def test_with_wrapper_information():
-    config = Config(sdk_key="SDK_KEY", stream=False, wrapper_name="original", wrapper_version="1.0.0")
+    dsc = datasystem.polling().build()
+    config = Config(sdk_key="SDK_KEY", datasystem_config=dsc, wrapper_name="original", wrapper_version="1.0.0")
 
     wrapped = config.with_wrapper_information("wrapper", "2.0.0")
     assert wrapped.wrapper_name == "wrapper"
     assert wrapped.wrapper_version == "2.0.0"
     assert wrapped.sdk_key == "SDK_KEY"
-    assert wrapped.stream is False
+    assert wrapped.datasystem_config is dsc
 
     assert config.wrapper_name == "original"
     assert config.wrapper_version == "1.0.0"
@@ -156,17 +144,6 @@ def test_sdk_key_validation_max_length():
     invalid_key = "a" * 8193
     config = Config(sdk_key=invalid_key)
     assert config.sdk_key == ''
-
-
-def test_copy_with_new_sdk_key_validation():
-    """Test that copy_with_new_sdk_key validates the new key"""
-    original_config = Config(sdk_key="valid-key")
-
-    new_config = original_config.copy_with_new_sdk_key("another-valid-key")
-    assert new_config.sdk_key == "another-valid-key"
-
-    invalid_config = original_config.copy_with_new_sdk_key("invalid key with spaces")
-    assert invalid_config.sdk_key == ''
 
 
 def application_can_be_set_and_read():

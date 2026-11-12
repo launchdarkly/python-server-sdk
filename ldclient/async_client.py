@@ -7,8 +7,8 @@ import traceback
 from typing import Any, Callable, List, Optional, Tuple
 from uuid import uuid4
 
-from ldclient.async_config import AsyncConfig
-from ldclient.async_feature_store import AsyncInMemoryFeatureStore
+from ldclient import async_datasystem
+from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail, FeatureFlagsState
 from ldclient.hook import (
@@ -52,6 +52,18 @@ from ldclient.plugin import EnvironmentMetadata
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 
+def _is_daemon_mode(datasystem_config: AsyncDataSystemConfig) -> bool:
+    """
+    Return true if the data system has a persistent store and no data sources. The SDK then reads
+    flags only from the store, which another process such as the Relay Proxy keeps up to date.
+    """
+    return _has_no_data_sources(datasystem_config) and datasystem_config.data_store is not None
+
+
+def _has_no_data_sources(datasystem_config: AsyncDataSystemConfig) -> bool:
+    return not datasystem_config.initializers and not datasystem_config.synchronizers
+
+
 class AsyncLDClient:
     """Async LaunchDarkly SDK client.
 
@@ -76,6 +88,7 @@ class AsyncLDClient:
 
         self._config = config
         self._config._instance_id = str(uuid4())
+        self._datasystem_config = config.datasystem_config or async_datasystem.default().build()
         self._lifecycle_lock = asyncio.Lock()
 
         self._started = False
@@ -202,17 +215,17 @@ class AsyncLDClient:
         # Start the big-segment status poll now that a loop is running.
         self.__big_segment_store_manager.start()
 
-        # FDv2 builds its data sources from builders; wire the shared session into
-        # them before starting (FDv1 pulls the session itself via its provider).
-        datasystem_config = self._config.datasystem_config
-        if datasystem_config is not None and not self._config.offline:
-            self._wire_data_source_sessions(datasystem_config)
+        # The data system builds its data sources from builders. Give the shared
+        # session to the builders before the data system starts.
+        if not self._config.offline:
+            self._wire_data_source_sessions(self._datasystem_config)
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
-
-        if self._config.use_ldd:
-            log.info("Started LaunchDarkly Client in LDD mode")
+        elif _is_daemon_mode(self._datasystem_config):
+            log.info("Started LaunchDarkly Client in daemon mode")
+        elif _has_no_data_sources(self._datasystem_config):
+            log.warning("The data system has no data sources and no persistent store. All evaluations will return default values.")
 
         diagnostic_accumulator = self._set_event_processor(self._config)
 
@@ -224,7 +237,7 @@ class AsyncLDClient:
         update_processor_ready = AsyncEvent()
         self._data_system.start(update_processor_ready)
 
-        if not self._config.offline and not self._config.use_ldd:
+        if not self._config.offline and not _is_daemon_mode(self._datasystem_config):
             if start_wait > 60:
                 log.warning(f"Client was configured to block for up to {start_wait} seconds when initializing. We recommend blocking no longer than 60.")
 
@@ -239,7 +252,7 @@ class AsyncLDClient:
 
     def _get_session(self):
         """Return the shared aiohttp session, creating it on first use inside the
-        event loop. Nothing creates it in offline/LDD mode, because no network
+        event loop. Nothing creates it in offline or daemon mode, because no network
         component asks for it. Uses the same factory as the async transport so
         SSL/cert setup and proxy handling stay consistent (proxies are resolved
         per request, so the session itself has trust_env=False)."""
@@ -248,23 +261,9 @@ class AsyncLDClient:
         return self._session
 
     def _make_data_system(self) -> AsyncDataSystem:
-        datasystem_config = self._config.datasystem_config
-        if datasystem_config is None:
-            from ldclient.impl.datasystem.async_fdv1 import AsyncFDv1
-
-            return AsyncFDv1(self._config, self._select_feature_store(), self._get_session)
-
         from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
 
-        return AsyncFDv2(self._config, datasystem_config)
-
-    def _select_feature_store(self) -> AsyncFeatureStore:
-        """Choose the async feature store for the v1 data system based on the
-        configured store."""
-        feature_store = self._config.feature_store
-        if feature_store is None:
-            return AsyncInMemoryFeatureStore()
-        return feature_store
+        return AsyncFDv2(self._config, self._datasystem_config)
 
     def _wire_data_source_sessions(self, data_system_config) -> None:
         """Provide the client's aiohttp session to any async data source
@@ -394,7 +393,7 @@ class AsyncLDClient:
 
         This is a coroutine because determining readiness may query a persistent store.
         """
-        if self.is_offline() or self._config.use_ldd:
+        if self.is_offline():
             return True
 
         return (await self._data_system.data_availability()).at_least(DataAvailability.CACHED)
@@ -499,7 +498,7 @@ class AsyncLDClient:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
         availability = await self._data_system.data_availability()
-        if availability != DataAvailability.REFRESHED:
+        if not availability.at_least(self._data_system.target_availability):
             if availability == DataAvailability.CACHED:
                 if not self._eval_cached_data_warned:
                     self._eval_cached_data_warned = True
@@ -573,7 +572,7 @@ class AsyncLDClient:
             return FeatureFlagsState(False)
 
         availability = await self._data_system.data_availability()
-        if availability != DataAvailability.REFRESHED:
+        if not availability.at_least(self._data_system.target_availability):
             if availability == DataAvailability.CACHED:
                 if not self._all_flags_cached_data_warned:
                     self._all_flags_cached_data_warned = True

@@ -1,6 +1,6 @@
 import time
 from queue import Queue
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
@@ -68,6 +68,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__store_update_sink = store_update_sink
         self.__monitoring_enabled = self.is_monitoring_enabled()
 
+        # Held for each write and by close(). A write that starts after
+        # close() does nothing, and close() waits for a write in progress.
+        self.__write_lock = Lock()
+
         # Covers the following variables
         self.__lock = ReadWriteLock()
         self.__last_available = True
@@ -75,7 +79,7 @@ class _FeatureStoreClientWrapper(FeatureStore):
         self.__closed = False
 
     def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, Dict[Any, Any]]]):
-        return self.__wrapper(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+        self.__write(lambda: self.store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)), None)
 
     def get(self, kind, key, callback):
         return self.__wrapper(lambda: self.store.get(kind, key, callback))
@@ -84,10 +88,10 @@ class _FeatureStoreClientWrapper(FeatureStore):
         return self.__wrapper(lambda: self.store.all(kind, callback))
 
     def delete(self, kind, key, version) -> bool:
-        return self.__wrapper(lambda: self.store.delete(kind, key, version))
+        return self.__write(lambda: self.store.delete(kind, key, version), False)
 
     def upsert(self, kind, item) -> bool:
-        return self.__wrapper(lambda: self.store.upsert(kind, item))
+        return self.__write(lambda: self.store.upsert(kind, item), False)
 
     @property
     def initialized(self) -> bool:
@@ -107,6 +111,19 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def __wrapper(self, fn: Callable):
         try:
             return fn()
+        except BaseException:
+            if self.__monitoring_enabled:
+                self.__update_availability(False)
+            raise
+
+    def __write(self, fn: Callable, result_if_closed: Any):
+        # The failure is reported after the lock is released. A status listener can then
+        # write or close the client without a deadlock.
+        try:
+            with self.__write_lock:
+                if self.__closed:
+                    return result_if_closed
+                return fn()
         except BaseException:
             if self.__monitoring_enabled:
                 self.__update_availability(False)
@@ -165,15 +182,17 @@ class _FeatureStoreClientWrapper(FeatureStore):
     def close(self):
         """
         Closes the wrapper. Stops the availability poller if it runs, then closes the wrapped store.
+        Waits for a write in progress. Later writes do nothing.
         """
         poller_to_stop = None
 
-        with self.__lock.write():
-            if self.__closed:
-                return
-            self.__closed = True
-            poller_to_stop = self.__poller
-            self.__poller = None
+        with self.__write_lock:
+            with self.__lock.write():
+                if self.__closed:
+                    return
+                self.__closed = True
+                poller_to_stop = self.__poller
+                self.__poller = None
 
         if poller_to_stop is not None:
             poller_to_stop.stop()
@@ -206,9 +225,6 @@ class FDv2(_FDv2Base, DataSystem):
 
         self._config = config
         self._data_system_config = data_system_config
-
-        if config.payload_filter_key is not None:
-            log.warning("Payload filtering is not supported with the FDv2 data system; the configured payload filter has no effect on FDv2 requests")
 
         self._synchronizers: List[DataSourceBuilder[Synchronizer]] = list(data_system_config.synchronizers) if data_system_config.synchronizers else []
         self._fdv1_fallback_synchronizer_builder = data_system_config.fdv1_fallback_synchronizer

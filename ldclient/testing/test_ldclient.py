@@ -1,13 +1,18 @@
+import logging
+
 import pytest
 
 from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import DataStoreMode
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.impl.datasource.polling import PollingUpdateProcessor
-from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
-from ldclient.impl.stubs import NullUpdateProcessor
+from ldclient.impl.datasourcev2.polling import (
+    FallbackToFDv1PollingDataSourceBuilder,
+    PollingDataSourceBuilder
+)
+from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder
 from ldclient.impl.util import _Success
+from ldclient.integrations.test_datav2 import TestDataV2
 from ldclient.interfaces import (
     Basis,
     BasisResult,
@@ -50,8 +55,26 @@ def make_offline_client():
     return LDClient(config=Config(sdk_key="secret", offline=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
 
 
-def make_ldd_client():
-    return LDClient(config=Config(sdk_key="secret", datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(), base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri))
+def make_daemon_client(store=None, **kwargs):
+    config = Config(
+        sdk_key="secret",
+        datasystem_config=datasystem.daemon(store or InMemoryFeatureStore()).build(),
+        base_uri=unreachable_uri,
+        events_uri=unreachable_uri,
+        stream_uri=unreachable_uri,
+        diagnostic_opt_out=True,
+        **kwargs,
+    )
+    return LDClient(config=config)
+
+
+class _ClosableStore(InMemoryFeatureStore):
+    def __init__(self):
+        super().__init__()
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
 
 def get_first_event(c):
@@ -66,27 +89,70 @@ def count_events(c):
     return n
 
 
-def test_client_has_null_update_processor_in_offline_mode():
-    with make_offline_client() as client:
-        assert isinstance(client._data_system._update_processor, NullUpdateProcessor)
-
-
-def test_client_has_null_update_processor_in_ldd_mode():
-    config = Config(sdk_key="secret", use_ldd=True, base_uri=unreachable_uri, events_uri=unreachable_uri, stream_uri=unreachable_uri)
-    with LDClient(config=config) as client:
-        assert isinstance(client._data_system._update_processor, NullUpdateProcessor)
-
-
-def test_client_has_streaming_processor_by_default():
+def test_client_uses_the_default_data_system_when_none_is_set():
     config = Config(sdk_key="secret", base_uri=unreachable_uri, stream_uri=unreachable_uri, send_events=False)
     with LDClient(config=config, start_wait=0) as client:
-        assert isinstance(client._data_system._update_processor, StreamingUpdateProcessor)
+        dsc = client._datasystem_config
+        assert [type(b) for b in dsc.initializers] == [PollingDataSourceBuilder]
+        assert [type(b) for b in dsc.synchronizers] == [StreamingDataSourceBuilder, PollingDataSourceBuilder]
+        assert isinstance(dsc.fdv1_fallback_synchronizer, FallbackToFDv1PollingDataSourceBuilder)
+        assert dsc.data_store is None
 
 
-def test_client_has_polling_processor_if_streaming_is_disabled():
-    config = Config(sdk_key="secret", stream=False, base_uri=unreachable_uri, stream_uri=unreachable_uri, send_events=False)
+def test_client_uses_the_configured_data_system():
+    dsc = datasystem.polling().build()
+    config = Config(sdk_key="secret", base_uri=unreachable_uri, send_events=False, datasystem_config=dsc)
     with LDClient(config=config, start_wait=0) as client:
-        assert isinstance(client._data_system._update_processor, PollingUpdateProcessor)
+        assert client._datasystem_config is dsc
+
+
+def test_daemon_mode_client_is_initialized_with_an_empty_store():
+    with make_daemon_client(send_events=False) as client:
+        assert client.is_initialized()
+
+
+def test_daemon_mode_logs_daemon_mode(caplog):
+    caplog.set_level(logging.INFO)
+    with make_daemon_client(send_events=False):
+        pass
+    assert "Started LaunchDarkly Client in daemon mode" in caplog.text
+
+
+def test_offline_mode_with_a_daemon_config_logs_only_offline_mode(caplog):
+    caplog.set_level(logging.INFO)
+    with make_daemon_client(send_events=False, offline=True):
+        pass
+    assert "Started LaunchDarkly Client in offline mode" in caplog.text
+    assert "daemon mode" not in caplog.text
+
+
+def test_data_system_with_no_sources_and_no_store_logs_a_warning(caplog):
+    config = Config(sdk_key="secret", send_events=False, datasystem_config=datasystem.custom().build())
+    with LDClient(config=config, start_wait=0):
+        pass
+    assert "daemon mode" not in caplog.text
+    assert any(
+        r.levelname == "WARNING" and "no data sources and no persistent store" in r.message
+        for r in caplog.records
+    )
+
+
+def test_close_closes_the_persistent_store_in_daemon_mode():
+    store = _ClosableStore()
+    client = make_daemon_client(store, send_events=False)
+    client.close()
+    assert store.closed
+
+
+def test_close_closes_the_persistent_store_with_a_synchronizer():
+    store = _ClosableStore()
+    dsc = datasystem.custom() \
+        .synchronizers(TestDataV2.data_source().builder) \
+        .data_store(store, DataStoreMode.READ_WRITE) \
+        .build()
+    client = LDClient(config=Config(sdk_key="secret", send_events=False, datasystem_config=dsc))
+    client.close()
+    assert store.closed
 
 
 def test_toggle_offline():

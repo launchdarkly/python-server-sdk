@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import pytest
 
-from ldclient.impl.datasystem.async_fdv1 import _AsyncReadOnlyFeatureStoreView
+from ldclient.impl.datasystem.async_fdv2 import _AsyncReadOnlyStoreView
 from ldclient.versioned_data_kind import FEATURES, VersionedDataKind
 
 
@@ -31,10 +31,24 @@ class FakeAsyncStore:
         return dict(self._data)
 
 
+class FakeDataSystemStore:
+    """Data system store shape: reads go to the active store."""
+
+    def __init__(self, active: FakeAsyncStore):
+        self._active = active
+
+    def get_active_store(self) -> FakeAsyncStore:
+        return self._active
+
+
+def _view(data: Dict[str, Any]) -> _AsyncReadOnlyStoreView:
+    return _AsyncReadOnlyStoreView(FakeDataSystemStore(FakeAsyncStore(data)))  # type: ignore[arg-type]
+
+
 @pytest.mark.asyncio
-async def test_async_feature_store_view_get_decodes_dict():
+async def test_async_store_view_get_decodes_dict():
     raw = _flag_dict("flag-a", 1)
-    view = _AsyncReadOnlyFeatureStoreView(FakeAsyncStore({"flag-a": raw}))
+    view = _view({"flag-a": raw})
 
     result = await view.get(FEATURES, "flag-a")
 
@@ -43,9 +57,9 @@ async def test_async_feature_store_view_get_decodes_dict():
 
 
 @pytest.mark.asyncio
-async def test_async_feature_store_view_get_passes_through_model():
+async def test_async_store_view_get_passes_through_model():
     decoded = FEATURES.decode(_flag_dict("flag-a", 1))
-    view = _AsyncReadOnlyFeatureStoreView(FakeAsyncStore({"flag-a": decoded}))
+    view = _view({"flag-a": decoded})
 
     result = await view.get(FEATURES, "flag-a")
 
@@ -53,16 +67,16 @@ async def test_async_feature_store_view_get_passes_through_model():
 
 
 @pytest.mark.asyncio
-async def test_async_feature_store_view_get_missing_returns_none():
-    view = _AsyncReadOnlyFeatureStoreView(FakeAsyncStore({}))
+async def test_async_store_view_get_missing_returns_none():
+    view = _view({})
     assert await view.get(FEATURES, "missing") is None
 
 
 @pytest.mark.asyncio
-async def test_async_feature_store_view_all_decodes_each_value():
+async def test_async_store_view_all_decodes_each_value():
     raw_a = _flag_dict("flag-a", 1)
     decoded_b = FEATURES.decode(_flag_dict("flag-b", 1))
-    view = _AsyncReadOnlyFeatureStoreView(FakeAsyncStore({"flag-a": raw_a, "flag-b": decoded_b}))
+    view = _view({"flag-a": raw_a, "flag-b": decoded_b})
 
     result = await view.all(FEATURES)
 

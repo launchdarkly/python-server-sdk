@@ -9,7 +9,6 @@ from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBHelpers
 )
 from ldclient.integrations import DynamoDB
-from ldclient.interfaces import UpdateProcessor
 from ldclient.testing.integrations.big_segment_store_test_base import *
 from ldclient.testing.integrations.persistent_feature_store_test_base import *
 from ldclient.testing.test_util import skip_database_tests

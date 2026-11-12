@@ -45,6 +45,30 @@ def _daemon_config(store, **kwargs):
     )
 
 
+class _SilentAsyncSynchronizer:
+    """An async synchronizer that sends no data until it stops."""
+
+    def __init__(self):
+        self._stopped = asyncio.Event()
+
+    @property
+    def name(self) -> str:
+        return 'silent'
+
+    async def sync(self, ss):
+        await self._stopped.wait()
+        return
+        yield
+
+    async def stop(self):
+        self._stopped.set()
+
+
+class _SilentAsyncSynchronizerBuilder:
+    def build(self, config):
+        return _SilentAsyncSynchronizer()
+
+
 def _make_flag(key: str, value, version: int = 1) -> dict:
     """Build a minimal feature flag dict usable with AsyncInMemoryFeatureStore."""
     return {
@@ -461,10 +485,18 @@ async def test_all_flags_state_degrades_gracefully_when_evaluator_raises():
 async def test_cached_data_warnings_are_logged_once_per_client(caplog):
     caplog.set_level(logging.WARNING, logger='ldclient.util')
     store = MockAsyncFeatureStore()
-    await store.force_set(FEATURES, _make_flag('my-flag', 'hello'))
-    # Daemon mode reports cached data, so every evaluation reads last known values.
-    client = AsyncLDClient(_daemon_config(store, send_events=False))
-    await client.start(start_wait=1.0)
+    await store.init({FEATURES: {'my-flag': _make_flag('my-flag', 'hello')}})
+    # The data source never sends data, so the client serves cached values from the store.
+    client = AsyncLDClient(AsyncConfig(
+        "test-sdk-key",
+        send_events=False,
+        datasystem_config=AsyncDataSystemConfig(
+            synchronizers=[_SilentAsyncSynchronizerBuilder()],
+            data_store=store,
+            data_store_mode=DataStoreMode.READ_ONLY,
+        ),
+    ))
+    await client.start(start_wait=0)
     assert await client.is_initialized()
     context = Context.create('user-1')
 
@@ -482,3 +514,72 @@ async def test_cached_data_warnings_are_logged_once_per_client(caplog):
     assert all_flags_warnings[0].endswith('This message is logged once.')
 
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_daemon_mode_does_not_log_cached_data_warnings(caplog):
+    caplog.set_level(logging.WARNING, logger='ldclient.util')
+    store = MockAsyncFeatureStore()
+    await store.force_set(FEATURES, _make_flag('my-flag', 'hello'))
+    client = AsyncLDClient(_daemon_config(store, send_events=False))
+    await client.start(start_wait=1.0)
+    context = Context.create('user-1')
+
+    assert await client.variation('my-flag', context, 'default') == 'hello'
+    assert (await client.all_flags_state(context)).valid
+    await client.close()
+
+    warnings = [r.message for r in caplog.records if r.levelname == 'WARNING']
+    assert [m for m in warnings if m.startswith('Feature Flag evaluation attempted') or m.startswith('all_flags_state() called before')] == []
+
+
+@pytest.mark.asyncio
+async def test_data_system_with_no_sources_and_no_store_logs_a_warning(caplog):
+    caplog.set_level(logging.INFO)
+    client = AsyncLDClient(AsyncConfig("test-sdk-key", send_events=False, datasystem_config=AsyncDataSystemConfig()))
+    await client.start(start_wait=0)
+    await client.close()
+
+    assert "daemon mode" not in caplog.text
+    assert any(
+        r.levelname == "WARNING" and "no data sources and no persistent store" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_offline_mode_with_a_daemon_config_logs_only_offline_mode(caplog):
+    caplog.set_level(logging.INFO)
+    client = AsyncLDClient(_daemon_config(MockAsyncFeatureStore(), send_events=False, offline=True))
+    await client.start(start_wait=0)
+    await client.close()
+
+    assert "Started LaunchDarkly Client in offline mode" in caplog.text
+    assert "daemon mode" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_daemon_mode_logs_daemon_mode(caplog):
+    caplog.set_level(logging.INFO)
+    client = AsyncLDClient(_daemon_config(MockAsyncFeatureStore(), send_events=False))
+    await client.start(start_wait=0)
+    await client.close()
+
+    assert "Started LaunchDarkly Client in daemon mode" in caplog.text
+
+
+def test_client_uses_the_default_data_system_when_none_is_set():
+    from ldclient.impl.datasourcev2.async_polling import (
+        AsyncFallbackToFDv1PollingDataSourceBuilder,
+        AsyncPollingDataSourceBuilder
+    )
+    from ldclient.impl.datasourcev2.async_streaming import (
+        AsyncStreamingDataSourceBuilder
+    )
+
+    client = AsyncLDClient(AsyncConfig("test-sdk-key", send_events=False))
+    dsc = client._datasystem_config
+    assert [type(b) for b in dsc.initializers] == [AsyncPollingDataSourceBuilder]
+    assert [type(b) for b in dsc.synchronizers] == [AsyncStreamingDataSourceBuilder, AsyncPollingDataSourceBuilder]
+    assert isinstance(dsc.fdv1_fallback_synchronizer, AsyncFallbackToFDv1PollingDataSourceBuilder)
+    assert dsc.data_store is None

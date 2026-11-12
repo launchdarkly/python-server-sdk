@@ -30,6 +30,13 @@ try:
 except ImportError:
     pass
 
+have_watchdog = False
+try:
+    import watchdog
+    have_watchdog = True
+except ImportError:
+    pass
+
 
 all_properties_json = '''
 {
@@ -472,4 +479,70 @@ def test_accepts_single_path_string():
         assert isinstance(result, _Success)
         assert len(result.value.change_set.changes) == 1
     finally:
+        os.remove(path)
+
+
+unsafe_yaml_caused_method_to_be_called = False
+
+
+def arbitrary_method_called_from_yaml(x):
+    global unsafe_yaml_caused_method_to_be_called
+    unsafe_yaml_caused_method_to_be_called = True
+
+
+def test_initializer_does_not_allow_unsafe_yaml():
+    if not have_yaml:
+        pytest.skip("skipping YAML test because pyyaml isn't available")
+
+    # This extended syntax defined by pyyaml allows arbitrary code execution. The data source
+    # must use yaml.safe_load(), which does not support it.
+    unsafe_yaml = '''
+!!python/object/apply:ldclient.testing.integrations.test_file_data_sourcev2.arbitrary_method_called_from_yaml ["hi"]
+'''
+    path = make_temp_file(unsafe_yaml)
+    try:
+        initializer = Files.new_data_source_v2(paths=[path]).build(Config(sdk_key="dummy"))
+        result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
+        assert isinstance(result, _Fail)
+    finally:
+        os.remove(path)
+    assert unsafe_yaml_caused_method_to_be_called is False
+
+
+def test_synchronizer_detects_file_changes_with_watchdog():
+    """Test that the synchronizer detects a file change through the native file watcher."""
+    if not have_watchdog:
+        pytest.skip("skipping watchdog test because watchdog isn't available")
+
+    def has_segment(update):
+        return update.change_set is not None and any(c.kind == ObjectKind.SEGMENT for c in update.change_set.changes)
+
+    path = make_temp_file(flag_only_json)
+    synchronizer = Files.new_data_source_v2(paths=[path]).build(Config(sdk_key="dummy"))
+    try:
+        initial = threading.Event()
+        reloaded = threading.Event()
+
+        def collect_updates():
+            # The watcher can see the file while it is partly written, so an error update
+            # can come before the update that has the new data.
+            for update in synchronizer.sync(MockSelectorStore(Selector.no_selector())):
+                initial.set()
+                if has_segment(update):
+                    reloaded.set()
+                    break
+
+        sync_thread = threading.Thread(target=collect_updates)
+        sync_thread.start()
+
+        assert initial.wait(timeout=2), "Did not receive initial update"
+        time.sleep(0.5)
+        replace_file(path, segment_only_json)
+
+        assert reloaded.wait(timeout=20), "Did not receive the new data after the file change"
+
+        synchronizer.stop()
+        sync_thread.join(timeout=2)
+    finally:
+        synchronizer.stop()
         os.remove(path)
