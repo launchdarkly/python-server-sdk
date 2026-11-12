@@ -6,13 +6,13 @@ from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import DataStoreMode
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
     PollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder
+from ldclient.impl.datasource.streaming import StreamingDataSourceBuilder
 from ldclient.impl.util import _Success
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     Basis,
     BasisResult,
@@ -46,7 +46,7 @@ def make_client(store=InMemoryFeatureStore()):
             events_uri=unreachable_uri,
             stream_uri=unreachable_uri,
             event_processor_class=MockEventProcessor,
-            datasystem_config=datasystem.daemon(store).build(),
+            data_system=datasystem.daemon(store).build(),
         )
     )
 
@@ -58,7 +58,7 @@ def make_offline_client():
 def make_daemon_client(store=None, **kwargs):
     config = Config(
         sdk_key="secret",
-        datasystem_config=datasystem.daemon(store or InMemoryFeatureStore()).build(),
+        data_system=datasystem.daemon(store or InMemoryFeatureStore()).build(),
         base_uri=unreachable_uri,
         events_uri=unreachable_uri,
         stream_uri=unreachable_uri,
@@ -92,7 +92,7 @@ def count_events(c):
 def test_client_uses_the_default_data_system_when_none_is_set():
     config = Config(sdk_key="secret", base_uri=unreachable_uri, stream_uri=unreachable_uri, send_events=False)
     with LDClient(config=config, start_wait=0) as client:
-        dsc = client._datasystem_config
+        dsc = client._data_system_config
         assert [type(b) for b in dsc.initializers] == [PollingDataSourceBuilder]
         assert [type(b) for b in dsc.synchronizers] == [StreamingDataSourceBuilder, PollingDataSourceBuilder]
         assert isinstance(dsc.fdv1_fallback_synchronizer, FallbackToFDv1PollingDataSourceBuilder)
@@ -101,9 +101,9 @@ def test_client_uses_the_default_data_system_when_none_is_set():
 
 def test_client_uses_the_configured_data_system():
     dsc = datasystem.polling().build()
-    config = Config(sdk_key="secret", base_uri=unreachable_uri, send_events=False, datasystem_config=dsc)
+    config = Config(sdk_key="secret", base_uri=unreachable_uri, send_events=False, data_system=dsc)
     with LDClient(config=config, start_wait=0) as client:
-        assert client._datasystem_config is dsc
+        assert client._data_system_config is dsc
 
 
 def test_daemon_mode_client_is_initialized_with_an_empty_store():
@@ -127,7 +127,7 @@ def test_offline_mode_with_a_daemon_config_logs_only_offline_mode(caplog):
 
 
 def test_data_system_with_no_sources_and_no_store_logs_a_warning(caplog):
-    config = Config(sdk_key="secret", send_events=False, datasystem_config=datasystem.custom().build())
+    config = Config(sdk_key="secret", send_events=False, data_system=datasystem.custom().build())
     with LDClient(config=config, start_wait=0):
         pass
     assert "daemon mode" not in caplog.text
@@ -147,10 +147,10 @@ def test_close_closes_the_persistent_store_in_daemon_mode():
 def test_close_closes_the_persistent_store_with_a_synchronizer():
     store = _ClosableStore()
     dsc = datasystem.custom() \
-        .synchronizers(TestDataV2.data_source().builder) \
+        .synchronizers(TestData.data_source().builder) \
         .data_store(store, DataStoreMode.READ_WRITE) \
         .build()
-    client = LDClient(config=Config(sdk_key="secret", send_events=False, datasystem_config=dsc))
+    client = LDClient(config=Config(sdk_key="secret", send_events=False, data_system=dsc))
     client.close()
     assert store.closed
 
@@ -174,7 +174,7 @@ def test_defaults_and_online():
             base_uri="http://localhost:3000",
             defaults={"foo": expected},
             event_processor_class=MockEventProcessor,
-            datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(),
+            data_system=datasystem.daemon(InMemoryFeatureStore()).build(),
         )
     )
     actual = my_client.variation('foo', user, default="originalDefault")
@@ -182,7 +182,7 @@ def test_defaults_and_online():
 
 
 def test_defaults_and_online_no_default():
-    my_client = LDClient(config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, event_processor_class=MockEventProcessor, datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build()))
+    my_client = LDClient(config=Config("SDK_KEY", base_uri="http://localhost:3000", defaults={"foo": "bar"}, event_processor_class=MockEventProcessor, data_system=datasystem.daemon(InMemoryFeatureStore()).build()))
     assert "jim" == my_client.variation('baz', user, default="jim")
 
 
@@ -242,7 +242,7 @@ def test_store_data_set_ordering():
         .initializers([DependencyOrderingDataInitializerBuilder()]) \
         .data_store(store, DataStoreMode.READ_WRITE) \
         .build()
-    config = Config(sdk_key='SDK_KEY', send_events=False, datasystem_config=datasystem_config)
+    config = Config(sdk_key='SDK_KEY', send_events=False, data_system=datasystem_config)
     LDClient(config=config)
 
     data = store.received_data

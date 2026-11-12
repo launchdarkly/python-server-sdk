@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     PollingDataSource,
     PollingResult,
     Selector,
@@ -37,7 +37,7 @@ def test_polling_has_a_name():
     mock_requester = MockPollingRequester(_Fail(error="failure message"))
     ds = PollingDataSource(poll_interval=1.0, requester=mock_requester)
 
-    assert ds.name == "PollingDataSourceV2"
+    assert ds.name == "PollingDataSource"
 
 
 def test_error_is_returned_on_failure():

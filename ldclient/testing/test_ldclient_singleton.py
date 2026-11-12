@@ -20,7 +20,7 @@ def make_fdv2_full_transfer_events() -> str:
 
 
 def make_streaming_config(key: str, stream_uri: str) -> Config:
-    return Config(key, stream_uri=stream_uri, send_events=False, datasystem_config=datasystem.streaming().build())
+    return Config(key, stream_uri=stream_uri, send_events=False, data_system=datasystem.streaming().build())
 
 
 def test_set_sdk_key_before_init():

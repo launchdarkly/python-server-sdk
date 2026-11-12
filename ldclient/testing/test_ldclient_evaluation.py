@@ -169,7 +169,7 @@ def test_flag_using_big_segment():
     segstore = MockBigSegmentStore()
     segstore.setup_metadata_always_up_to_date()
     segstore.setup_membership(_hash_for_user_key(user['key']), {_make_big_segment_ref(segment): True})
-    config = Config(sdk_key='SDK_KEY', datasystem_config=datasystem.daemon(store).build(), big_segments=BigSegmentsConfig(store=segstore), event_processor_class=MockEventProcessor)
+    config = Config(sdk_key='SDK_KEY', data_system=datasystem.daemon(store).build(), big_segments=BigSegmentsConfig(store=segstore), event_processor_class=MockEventProcessor)
     with LDClient(config) as client:
         detail = client.variation_detail(flag['key'], user, False)
         assert detail.value is True
@@ -480,7 +480,7 @@ def make_client_with_data_system(datasystem_config):
             events_uri=unreachable_uri,
             stream_uri=unreachable_uri,
             event_processor_class=MockEventProcessor,
-            datasystem_config=datasystem_config,
+            data_system=datasystem_config,
         ),
         start_wait=0,
     )

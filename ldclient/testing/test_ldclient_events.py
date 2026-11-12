@@ -41,7 +41,7 @@ def test_client_has_null_event_processor_if_offline():
 
 
 def test_client_has_null_event_processor_if_send_events_off():
-    config = Config(sdk_key="secret", base_uri=unreachable_uri, datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(), send_events=False)
+    config = Config(sdk_key="secret", base_uri=unreachable_uri, data_system=datasystem.daemon(InMemoryFeatureStore()).build(), send_events=False)
     with LDClient(config=config) as client:
         assert isinstance(client._event_processor, NullEventProcessor)
 

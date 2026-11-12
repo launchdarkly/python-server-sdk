@@ -7,7 +7,7 @@ from ldclient.client import Context
 from ldclient.config import Config, DataSystemConfig
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import DataStoreMode, FeatureStore, FlagChange
 from ldclient.testing.test_ldclient import make_client
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
@@ -143,7 +143,7 @@ def test_persistent_store_read_only_mode():
     persistent_store = StubFeatureStore(initial_data)
 
     # Create synchronizer that will provide new data
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("new-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -190,7 +190,7 @@ def test_persistent_store_read_write_mode():
     persistent_store.reset_operation_tracking()  # Reset tracking after initial setup
 
     # Create synchronizer that will provide new data
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("new-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -223,7 +223,7 @@ def test_persistent_store_delta_updates_read_write():
     persistent_store = StubFeatureStore()
 
     # Create synchronizer
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -278,7 +278,7 @@ def test_persistent_store_delta_updates_read_only():
     persistent_store = StubFeatureStore()
 
     # Create synchronizer
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -326,11 +326,11 @@ def test_persistent_store_with_initializer_and_synchronizer():
     persistent_store = StubFeatureStore()
 
     # Create initializer with one flag
-    td_initializer = TestDataV2.data_source()
+    td_initializer = TestData.data_source()
     td_initializer.update(td_initializer.flag("init-flag").on(True))
 
     # Create synchronizer with another flag
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("sync-flag").on(False))
 
     data_system_config = DataSystemConfig(
@@ -452,7 +452,7 @@ def test_data_store_status_provider():
     """Test that data store status provider is correctly initialized"""
     persistent_store = StubFeatureStore()
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -484,7 +484,7 @@ def test_data_store_status_monitoring_not_enabled_by_default():
     """Test that monitoring is not enabled by default"""
     persistent_store = StubFeatureStore()
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -506,7 +506,7 @@ def test_data_store_status_monitoring_enabled_when_supported():
     persistent_store = StubFeatureStore()
     persistent_store.enable_monitoring()
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -525,7 +525,7 @@ def test_data_store_status_monitoring_enabled_when_supported():
 
 def test_no_persistent_store_status_provider_without_store():
     """Test that data store status provider exists even without a persistent store"""
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -556,7 +556,7 @@ def test_persistent_store_outage_recovery_flushes_on_recovery():
     persistent_store = StubFeatureStore()
 
     # Create synchronizer with initial data
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -610,7 +610,7 @@ def test_persistent_store_outage_recovery_no_flush_when_not_stale():
 
     persistent_store = StubFeatureStore()
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -644,7 +644,7 @@ def test_persistent_store_outage_recovery_no_flush_when_unavailable():
 
     persistent_store = StubFeatureStore()
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -822,7 +822,7 @@ def test_variation_does_not_throw_when_persistent_store_errors_during_warm_start
         data_store_mode=DataStoreMode.READ_ONLY,
         data_store=persistent_store,
         initializers=None,
-        synchronizers=[TestDataV2.data_source().builder],
+        synchronizers=[TestData.data_source().builder],
     )
     fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
 

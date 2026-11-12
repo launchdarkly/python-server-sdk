@@ -89,7 +89,7 @@ def _create_diagnostic_platform_object():
 
 
 def _persistent_store(config):
-    datasystem_config = config.datasystem_config
+    datasystem_config = config.data_system
     return datasystem_config.data_store if datasystem_config is not None else None
 
 

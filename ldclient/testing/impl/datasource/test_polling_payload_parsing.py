@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     fdv1_polling_payload_to_changeset,
     polling_payload_to_changeset
 )

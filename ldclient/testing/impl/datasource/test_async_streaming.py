@@ -10,8 +10,8 @@ from ld_eventsource.http import HTTPStatusError
 from ld_eventsource.sse_client import Event, Fault
 
 from ldclient.config import Config
-from ldclient.impl.datasourcev2 import async_streaming
-from ldclient.impl.datasourcev2.async_streaming import (
+from ldclient.impl.datasource import async_streaming
+from ldclient.impl.datasource.async_streaming import (
     STREAMING_ENDPOINT,
     AsyncStreamingDataSource,
     create_sse_client

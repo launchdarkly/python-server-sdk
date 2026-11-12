@@ -4,11 +4,11 @@ from typing import Any, Dict, Mapping, Optional
 
 from ldclient.async_config import AsyncDataSystemConfig
 from ldclient.config import DataSystemConfig
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncFallbackToFDv1PollingDataSourceBuilder,
     AsyncPollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.async_streaming import (
+from ldclient.impl.datasource.async_streaming import (
     AsyncStreamingDataSourceBuilder
 )
 from ldclient.interfaces import AsyncFeatureStore, DataStoreMode

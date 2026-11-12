@@ -284,7 +284,7 @@ class FDv2(_FDv2Base, DataSystem):
         main_thread = Thread(
             target=self._run_main_loop,
             args=(set_on_ready,),
-            name="FDv2-main",
+            name="ldclient.datasystem.main",
             daemon=True
         )
         main_thread.start()
@@ -346,7 +346,7 @@ class FDv2(_FDv2Base, DataSystem):
             self._run_synchronizers(set_on_ready)
 
         except Exception as e:
-            log.error("Error in FDv2 main loop: %s", e)
+            log.error("Error in data system main loop: %s", e)
             # Ensure ready event is set even on error
             if not set_on_ready.is_set():
                 set_on_ready.set()
@@ -511,7 +511,7 @@ class FDv2(_FDv2Base, DataSystem):
 
         sync_thread = Thread(
             target=synchronizer_loop,
-            name="FDv2-synchronizers",
+            name="ldclient.datasystem.synchronizers",
             args=(self,),
             daemon=True
         )
@@ -532,7 +532,7 @@ class FDv2(_FDv2Base, DataSystem):
         action_queue: Queue = Queue()
         state_age = _StateAgeTracker()
         timer = RepeatingTask.at_interval(
-            label="FDv2-sync-cond-timer",
+            label="ldclient.datasystem.sync_condition",
             interval=10,
             initial_delay=10,
             callable=lambda: action_queue.put("check")
@@ -547,7 +547,7 @@ class FDv2(_FDv2Base, DataSystem):
 
         sync_reader = Thread(
             target=reader,
-            name="FDv2-sync-reader",
+            name="ldclient.datasystem.sync_reader",
             args=(self,),
             daemon=True
         )

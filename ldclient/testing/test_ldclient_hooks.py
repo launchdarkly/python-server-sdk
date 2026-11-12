@@ -3,7 +3,7 @@ from typing import Callable
 from ldclient import Config, Context, LDClient, datasystem
 from ldclient.evaluation import EvaluationDetail
 from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.migrations import Stage
 
 
@@ -30,7 +30,7 @@ class MockHook(Hook):
         return self.__after_evaluation(series_context, data, detail)
 
 
-def datasystem_config(td: TestDataV2):
+def datasystem_config(td: TestData):
     return datasystem.custom().synchronizers(td.builder).build()
 
 
@@ -45,7 +45,7 @@ def test_verify_hook_execution_order():
     clientHook1 = MockHook(before_evaluation=record('clientHook1::before', calls), after_evaluation=record('clientHook1::after', calls))
     clientHook2 = MockHook(before_evaluation=record('clientHook2::before', calls), after_evaluation=record('clientHook2::after', calls))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(TestDataV2.data_source()), send_events=False, hooks=[configHook1, configHook2])
+    config = Config('SDK_KEY', data_system=datasystem_config(TestData.data_source()), send_events=False, hooks=[configHook1, configHook2])
     client = LDClient(config=config)
     client.add_hook(clientHook1)
     client.add_hook(clientHook2)
@@ -59,7 +59,7 @@ def test_ignores_invalid_hooks():
     calls = []
     hook = MockHook(before_evaluation=record('before', calls), after_evaluation=record('after', calls))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(TestDataV2.data_source()), send_events=False, hooks=[True, hook, 42])
+    config = Config('SDK_KEY', data_system=datasystem_config(TestData.data_source()), send_events=False, hooks=[True, hook, 42])
     client = LDClient(config=config)
     client.add_hook("Hook, Hook, give us the Hook!")
     client.add_hook(hook)
@@ -74,10 +74,10 @@ def test_after_evaluation_receives_evaluation_detail():
     details = []
     hook = MockHook(before_evaluation=record('before', []), after_evaluation=lambda series_context, data, detail: details.append(detail))
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag-key').variation_for_all(True))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(td), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(td), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.variation('flag-key', user, False)
 
@@ -90,7 +90,7 @@ def test_passing_data_from_before_to_after():
     calls = []
     hook = MockHook(before_evaluation=lambda series_context, data: "from before", after_evaluation=lambda series_context, data, detail: calls.append(data))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(TestDataV2.data_source()), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(TestData.data_source()), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.variation('flag-key', user, False)
 
@@ -105,7 +105,7 @@ def test_exception_in_before_passes_empty_dict():
     calls = []
     hook = MockHook(before_evaluation=raise_exception, after_evaluation=lambda series_context, data, detail: calls.append(data))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(TestDataV2.data_source()), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(TestData.data_source()), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.variation('flag-key', user, False)
 
@@ -122,7 +122,7 @@ def test_exceptions_do_not_affect_data_passing_order():
     hook2 = MockHook(before_evaluation=raise_exception, after_evaluation=lambda series_context, data, detail: calls.append(data))
     hook3 = MockHook(before_evaluation=lambda series_context, data: "third hook", after_evaluation=lambda series_context, data, detail: calls.append(data))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(TestDataV2.data_source()), send_events=False, hooks=[hook1, hook2, hook3])
+    config = Config('SDK_KEY', data_system=datasystem_config(TestData.data_source()), send_events=False, hooks=[hook1, hook2, hook3])
     client = LDClient(config=config)
     client.variation('flag-key', user, False)
 
@@ -138,10 +138,10 @@ def test_migration_evaluation_detail_contains_stage_value():
     details = []
     hook = MockHook(before_evaluation=record('before', []), after_evaluation=lambda series_context, data, detail: details.append(detail))
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag-key').variations("off").variation_for_all(0))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(td), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(td), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.migration_variation('flag-key', user, Stage.LIVE)
 
@@ -154,10 +154,10 @@ def test_migration_evaluation_detail_gets_default_if_flag_isnt_migration_flag():
     details = []
     hook = MockHook(before_evaluation=record('before', []), after_evaluation=lambda series_context, data, detail: details.append(detail))
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag-key').variations("nonstage").variation_for_all(0))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(td), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(td), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.migration_variation('flag-key', user, Stage.LIVE)
 
@@ -170,10 +170,10 @@ def test_migration_evaluation_detail_default_converts_to_off_if_invalid():
     details = []
     hook = MockHook(before_evaluation=record('before', []), after_evaluation=lambda series_context, data, detail: details.append(detail))
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag-key').variations("nonstage").variation_for_all(0))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(td), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(td), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.migration_variation('flag-key', user, "invalid")
 
@@ -186,10 +186,10 @@ def test_series_context_environment_id_is_none_without_environment_id():
     contexts = []
     hook = MockHook(before_evaluation=lambda series_context, data: contexts.append(series_context), after_evaluation=record('after', []))
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag-key').variation_for_all(True))
 
-    config = Config('SDK_KEY', datasystem_config=datasystem_config(td), send_events=False, hooks=[hook])
+    config = Config('SDK_KEY', data_system=datasystem_config(td), send_events=False, hooks=[hook])
     client = LDClient(config=config)
     client.variation('flag-key', user, False)
 

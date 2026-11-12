@@ -11,9 +11,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from ldclient.impl.datasourcev2 import async_streaming, streaming
-from ldclient.impl.datasourcev2.async_streaming import AsyncStreamingDataSource
-from ldclient.impl.datasourcev2.streaming import StreamingDataSource
+from ldclient.impl.datasource import async_streaming, streaming
+from ldclient.impl.datasource.async_streaming import AsyncStreamingDataSource
+from ldclient.impl.datasource.streaming import StreamingDataSource
 
 _CASES = [
     pytest.param(streaming, StreamingDataSource, id="sync"),

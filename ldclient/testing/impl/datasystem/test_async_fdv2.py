@@ -17,7 +17,7 @@ from ldclient.impl.datasystem.async_fdv2 import (
     _AsyncFeatureStoreClientWrapper
 )
 from ldclient.impl.util import _LD_FD_FALLBACK_HEADER, _Fail, _Success
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     AsyncFeatureStore,
     Basis,
@@ -116,7 +116,7 @@ def _make_valid_update() -> Update:
 
 @pytest.mark.asyncio
 async def test_async_fdv2_basic_start_stop():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
         synchronizers=[td.async_builder],
@@ -134,7 +134,7 @@ async def test_async_fdv2_basic_start_stop():
 
 @pytest.mark.asyncio
 async def test_async_fdv2_synchronizer_receives_updates():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -162,7 +162,7 @@ async def test_async_fdv2_synchronizer_receives_updates():
 
 @pytest.mark.asyncio
 async def test_async_fdv2_flag_change_listener():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -198,10 +198,10 @@ async def test_async_fdv2_flag_change_listener():
 
 @pytest.mark.asyncio
 async def test_async_fdv2_two_phase_init():
-    td_initializer = TestDataV2.data_source()
+    td_initializer = TestData.data_source()
     td_initializer.update(td_initializer.flag("feature-flag").on(True))
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(True))
     td_synchronizer.update(td_synchronizer.flag("feature-flag").on(False))
 
@@ -249,7 +249,7 @@ async def test_async_fdv2_initializer_async():
 @pytest.mark.asyncio
 async def test_async_fdv2_fallsback_to_secondary_synchronizer():
     """When primary synchronizer yields nothing, should move to secondary."""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     # An async synchronizer that immediately stops (produces no updates)
@@ -275,7 +275,7 @@ async def test_async_fdv2_fallsback_to_secondary_synchronizer():
 @pytest.mark.asyncio
 async def test_async_fdv2_falls_back_to_fdv1_on_synchronizer_signal():
     """Synchronizer yielding fallback_to_fdv1=True triggers FDv1 fallback."""
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     # Primary synchronizer signals FDv1 fallback
@@ -323,7 +323,7 @@ async def test_async_fdv2_data_availability_defaults_when_no_sources():
 
 @pytest.mark.asyncio
 async def test_async_fdv2_data_availability_refreshed_with_data():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
         synchronizers=[td.async_builder],
@@ -342,7 +342,7 @@ async def test_async_fdv2_data_availability_refreshed_with_data():
 
 @pytest.mark.asyncio
 async def test_async_fdv2_disabled_immediately_signals_ready():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
         synchronizers=[td.async_builder],
@@ -448,7 +448,7 @@ async def test_async_fdv2_initializer_header_fallback_engages_fdv1():
     # This FDv2 synchronizer must never run because we fell back during init.
     fdv2_sync = ListAsyncSynchronizer("fdv2-should-not-run", [])
 
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -513,7 +513,7 @@ async def test_async_fdv2_interrupted_without_header_falls_back_to_secondary():
         [Update(state=DataSourceState.VALID, fallback_to_fdv1=False)],
     )
 
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-should-not-appear").on(True))
 
     data_system_config = DataSystemConfig(

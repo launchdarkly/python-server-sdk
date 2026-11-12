@@ -12,13 +12,13 @@ CONFIG_IDS = ["Config", "AsyncConfig"]
 
 def test_with_wrapper_information():
     dsc = datasystem.polling().build()
-    config = Config(sdk_key="SDK_KEY", datasystem_config=dsc, wrapper_name="original", wrapper_version="1.0.0")
+    config = Config(sdk_key="SDK_KEY", data_system=dsc, wrapper_name="original", wrapper_version="1.0.0")
 
     wrapped = config.with_wrapper_information("wrapper", "2.0.0")
     assert wrapped.wrapper_name == "wrapper"
     assert wrapped.wrapper_version == "2.0.0"
     assert wrapped.sdk_key == "SDK_KEY"
-    assert wrapped.datasystem_config is dsc
+    assert wrapped.data_system is dsc
 
     assert config.wrapper_name == "original"
     assert config.wrapper_version == "1.0.0"

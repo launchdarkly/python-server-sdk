@@ -18,11 +18,11 @@ from ldclient.interfaces import (
 )
 
 
-class _TestDataSourceV2:
+class _TestDataSource:
     """
-    Internal implementation of both Initializer and Synchronizer protocols for TestDataV2.
+    Internal implementation of both Initializer and Synchronizer protocols for TestData.
 
-    This component bridges the test data management in TestDataV2 with the FDv2 protocol
+    This component bridges the test data management in TestData with the FDv2 protocol
     interfaces. Each instance implements both Initializer and Synchronizer protocols
     and receives change notifications for dynamic updates.
     """
@@ -45,7 +45,7 @@ class _TestDataSourceV2:
     @property
     def name(self) -> str:
         """Return the name of this data source."""
-        return "TestDataV2"
+        return "TestData"
 
     def fetch(self, ss: SelectorStore) -> BasisResult:
         """
@@ -56,7 +56,7 @@ class _TestDataSourceV2:
         try:
             with self._lock:
                 if self._closed:
-                    return _Fail("TestDataV2 source has been closed")
+                    return _Fail("TestData source has been closed")
 
                 # Get all current flags from test data
                 init_data = self._test_data._make_init_data()
@@ -148,7 +148,7 @@ class _TestDataSourceV2:
 
     def upsert_flag(self, flag_data: dict):
         """
-        Called by TestDataV2 when a flag is updated.
+        Called by TestData when a flag is updated.
 
         This method converts the flag update into an FDv2 changeset and
         queues it for delivery through the sync() generator.

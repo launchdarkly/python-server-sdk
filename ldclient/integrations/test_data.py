@@ -5,11 +5,11 @@ from typing import Any, Dict, List, Optional, Set, Union
 
 from ldclient.config import Config, DataSourceBuilder, DataSourceBuilderConfig
 from ldclient.context import Context
-from ldclient.impl.integrations.test_datav2.async_test_data_sourcev2 import (
-    _AsyncTestDataSourceV2
+from ldclient.impl.integrations.test_data.async_test_data_source import (
+    _AsyncTestDataSource
 )
-from ldclient.impl.integrations.test_datav2.test_data_sourcev2 import (
-    _TestDataSourceV2
+from ldclient.impl.integrations.test_data.test_data_source import (
+    _TestDataSource
 )
 from ldclient.impl.rwlock import ReadWriteLock
 
@@ -21,34 +21,34 @@ def _variation_for_boolean(variation):
     return TRUE_VARIATION_INDEX if variation else FALSE_VARIATION_INDEX
 
 
-class FlagRuleBuilderV2:
+class FlagRuleBuilder:
     """
-    A builder for feature flag rules to be used with :class:`ldclient.integrations.test_datav2.FlagBuilderV2`.
+    A builder for feature flag rules to be used with :class:`ldclient.integrations.test_data.FlagBuilder`.
 
     In the LaunchDarkly model, a flag can have any number of rules, and a rule can have any number of
     clauses. A clause is an individual test such as \"name is 'X'\". A rule matches a user if all of the
     rule's clauses match the user.
 
     To start defining a rule, use one of the flag builder's matching methods such as
-    :meth:`ldclient.integrations.test_datav2.FlagBuilderV2.if_match()`.
+    :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`.
     This defines the first clause for the rule.  Optionally, you may add more
     clauses with the rule builder's methods such as
-    :meth:`ldclient.integrations.test_datav2.FlagRuleBuilderV2.and_match()` or
-    :meth:`ldclient.integrations.test_datav2.FlagRuleBuilderV2.and_not_match()`.
-    Finally, call :meth:`ldclient.integrations.test_datav2.FlagRuleBuilderV2.then_return()`
+    :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_match()` or
+    :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_not_match()`.
+    Finally, call :meth:`ldclient.integrations.test_data.FlagRuleBuilder.then_return()`
     to finish defining the rule.
     """
 
-    def __init__(self, flag_builder: FlagBuilderV2):
+    def __init__(self, flag_builder: FlagBuilder):
         self._flag_builder = flag_builder
         self._clauses: List[dict] = []
         self._variation: Optional[int] = None
 
-    def and_match(self, attribute: str, *values) -> FlagRuleBuilderV2:
+    def and_match(self, attribute: str, *values) -> FlagRuleBuilder:
         """
         Adds another clause, using the \"is one of\" operator.
 
-        This is a shortcut for calling :meth:`ldclient.integrations.test_datav2.FlagRuleBuilderV2.and_match_context()`
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_match_context()`
         with \"user\" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is \"Patsy\" and the country is \"gb\"
@@ -65,7 +65,7 @@ class FlagRuleBuilderV2:
         """
         return self.and_match_context(Context.DEFAULT_KIND, attribute, *values)
 
-    def and_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilderV2:
+    def and_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilder:
         """
         Adds another clause, using the \"is one of\" operator. This matching expression only
         applies to contexts of a specific kind.
@@ -87,11 +87,11 @@ class FlagRuleBuilderV2:
         self._clauses.append({'contextKind': context_kind, 'attribute': attribute, 'op': 'in', 'values': list(values), 'negate': False})
         return self
 
-    def and_not_match(self, attribute: str, *values) -> FlagRuleBuilderV2:
+    def and_not_match(self, attribute: str, *values) -> FlagRuleBuilder:
         """
         Adds another clause, using the \"is not one of\" operator.
 
-        This is a shortcut for calling :meth:`ldclient.integrations.test_datav2.FlagRuleBuilderV2.and_not_match_context()`
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagRuleBuilder.and_not_match_context()`
         with \"user\" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is \"Patsy\" and the country is not \"gb\"
@@ -108,7 +108,7 @@ class FlagRuleBuilderV2:
         """
         return self.and_not_match_context(Context.DEFAULT_KIND, attribute, *values)
 
-    def and_not_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilderV2:
+    def and_not_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilder:
         """
         Adds another clause, using the \"is not one of\" operator. This matching expression only
         applies to contexts of a specific kind.
@@ -130,7 +130,7 @@ class FlagRuleBuilderV2:
         self._clauses.append({'contextKind': context_kind, 'attribute': attribute, 'op': 'in', 'values': list(values), 'negate': True})
         return self
 
-    def then_return(self, variation: Union[bool, int]) -> FlagBuilderV2:
+    def then_return(self, variation: Union[bool, int]) -> FlagBuilder:
         """
         Finishes defining the rule, specifying the result as either a boolean
         or a variation index.
@@ -151,7 +151,7 @@ class FlagRuleBuilderV2:
         return self._flag_builder
 
     # Note that _build is private by convention, because we don't want developers to
-    # consider it part of the public API, but it is still called from FlagBuilderV2.
+    # consider it part of the public API, but it is still called from FlagBuilder.
     def _build(self, id: str) -> dict:
         """
         Creates a dictionary representation of the rule
@@ -162,12 +162,12 @@ class FlagRuleBuilderV2:
         return {'id': 'rule' + id, 'variation': self._variation, 'clauses': self._clauses}
 
 
-class FlagBuilderV2:
+class FlagBuilder:
     """
-    A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_datav2.TestDataV2`.
+    A builder for feature flag configurations to be used with :class:`ldclient.integrations.test_data.TestData`.
 
-    :see: :meth:`ldclient.integrations.test_datav2.TestDataV2.flag()`
-    :see: :meth:`ldclient.integrations.test_datav2.TestDataV2.update()`
+    :see: :meth:`ldclient.integrations.test_data.TestData.flag()`
+    :see: :meth:`ldclient.integrations.test_data.TestData.update()`
     """
 
     def __init__(self, key: str):
@@ -178,18 +178,18 @@ class FlagBuilderV2:
         self._off_variation: Optional[int] = None
         self._fallthrough_variation: Optional[int] = None
         self._targets: Dict[str, Dict[int, Set[str]]] = {}
-        self._rules: List[FlagRuleBuilderV2] = []
+        self._rules: List[FlagRuleBuilder] = []
 
     # Note that _copy is private by convention, because we don't want developers to
-    # consider it part of the public API, but it is still called from TestDataV2.
-    def _copy(self) -> FlagBuilderV2:
+    # consider it part of the public API, but it is still called from TestData.
+    def _copy(self) -> FlagBuilder:
         """
         Creates a deep copy of the flag builder. Subsequent updates to the
-        original ``FlagBuilderV2`` object will not update the copy and vice versa.
+        original ``FlagBuilder`` object will not update the copy and vice versa.
 
         :return: a copy of the flag builder object
         """
-        to = FlagBuilderV2(self._key)
+        to = FlagBuilder(self._key)
 
         to._on = self._on
         to._variations = copy.copy(self._variations)
@@ -202,13 +202,13 @@ class FlagBuilderV2:
 
         return to
 
-    def on(self, on: bool) -> FlagBuilderV2:
+    def on(self, on: bool) -> FlagBuilder:
         """
         Sets targeting to be on or off for this flag.
 
         The effect of this depends on the rest of the flag configuration, just as it does on the
         real LaunchDarkly dashboard. In the default configuration that you get from calling
-        :meth:`ldclient.integrations.test_datav2.TestDataV2.flag()` with a new flag key,
+        :meth:`ldclient.integrations.test_data.TestData.flag()` with a new flag key,
         the flag will return ``False`` whenever targeting is off, and ``True`` when
         targeting is on.
 
@@ -218,7 +218,7 @@ class FlagBuilderV2:
         self._on = on
         return self
 
-    def fallthrough_variation(self, variation: Union[bool, int]) -> FlagBuilderV2:
+    def fallthrough_variation(self, variation: Union[bool, int]) -> FlagBuilder:
         """
         Specifies the fallthrough variation. The fallthrough is the value
         that is returned if targeting is on and the user was not matched by a more specific
@@ -238,7 +238,7 @@ class FlagBuilderV2:
         self._fallthrough_variation = variation
         return self
 
-    def off_variation(self, variation: Union[bool, int]) -> FlagBuilderV2:
+    def off_variation(self, variation: Union[bool, int]) -> FlagBuilder:
         """
         Specifies the fallthrough variation. This is the variation that is returned
         whenever targeting is off.
@@ -257,12 +257,12 @@ class FlagBuilderV2:
         self._off_variation = variation
         return self
 
-    def boolean_flag(self) -> FlagBuilderV2:
+    def boolean_flag(self) -> FlagBuilder:
         """
         A shortcut for setting the flag to use the standard boolean configuration.
 
         This is the default for all new flags created with
-        :meth:`ldclient.integrations.test_datav2.TestDataV2.flag()`.
+        :meth:`ldclient.integrations.test_data.TestData.flag()`.
 
         The flag will have two variations, ``True`` and ``False`` (in that order);
         it will return ``False`` whenever targeting is off, and ``True`` when targeting is on
@@ -278,7 +278,7 @@ class FlagBuilderV2:
     def _is_boolean_flag(self):
         return len(self._variations) == 2 and self._variations[TRUE_VARIATION_INDEX] is True and self._variations[FALSE_VARIATION_INDEX] is False
 
-    def variations(self, *variations) -> FlagBuilderV2:
+    def variations(self, *variations) -> FlagBuilder:
         """
         Changes the allowable variation values for the flag.
 
@@ -303,7 +303,7 @@ class FlagBuilderV2:
 
         return self
 
-    def variation_for_all(self, variation: Union[bool, int]) -> FlagBuilderV2:
+    def variation_for_all(self, variation: Union[bool, int]) -> FlagBuilder:
         """
         Sets the flag to always return the specified variation for all contexts.
 
@@ -322,7 +322,7 @@ class FlagBuilderV2:
 
         return self.clear_rules().clear_targets().on(True).fallthrough_variation(variation)
 
-    def value_for_all(self, value: Any) -> FlagBuilderV2:
+    def value_for_all(self, value: Any) -> FlagBuilder:
         """
         Sets the flag to always return the specified variation value for all users.
 
@@ -336,7 +336,7 @@ class FlagBuilderV2:
         """
         return self.variations(value).variation_for_all(0).off_variation(0)
 
-    def variation_for_user(self, user_key: str, variation: Union[bool, int]) -> FlagBuilderV2:
+    def variation_for_user(self, user_key: str, variation: Union[bool, int]) -> FlagBuilder:
         """
         Sets the flag to return the specified variation for a specific user key when targeting
         is on.
@@ -353,7 +353,7 @@ class FlagBuilderV2:
         """
         return self.variation_for_key(Context.DEFAULT_KIND, user_key, variation)
 
-    def variation_for_key(self, context_kind: str, context_key: str, variation: Union[bool, int]) -> FlagBuilderV2:
+    def variation_for_key(self, context_kind: str, context_key: str, variation: Union[bool, int]) -> FlagBuilder:
         """
         Sets the flag to return the specified variation for a specific context, identified
         by context kind and key, when targeting is on.
@@ -397,14 +397,14 @@ class FlagBuilderV2:
 
         return self
 
-    def _add_rule(self, flag_rule_builder: FlagRuleBuilderV2):
+    def _add_rule(self, flag_rule_builder: FlagRuleBuilder):
         self._rules.append(flag_rule_builder)
 
-    def if_match(self, attribute: str, *values) -> FlagRuleBuilderV2:
+    def if_match(self, attribute: str, *values) -> FlagRuleBuilder:
         """
         Starts defining a flag rule, using the \"is one of\" operator.
 
-        This is a shortcut for calling :meth:`ldclient.integrations.test_datav2.FlagBuilderV2.if_match_context()`
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagBuilder.if_match_context()`
         with \"user\" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is \"Patsy\" or \"Edina\"
@@ -420,7 +420,7 @@ class FlagBuilderV2:
         """
         return self.if_match_context(Context.DEFAULT_KIND, attribute, *values)
 
-    def if_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilderV2:
+    def if_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilder:
         """
         Starts defining a flag rule, using the \"is one of\" operator. This matching expression only
         applies to contexts of a specific kind.
@@ -438,14 +438,14 @@ class FlagBuilderV2:
         :param values: values to compare to
         :return: the flag rule builder
         """
-        flag_rule_builder = FlagRuleBuilderV2(self)
+        flag_rule_builder = FlagRuleBuilder(self)
         return flag_rule_builder.and_match_context(context_kind, attribute, *values)
 
-    def if_not_match(self, attribute: str, *values) -> FlagRuleBuilderV2:
+    def if_not_match(self, attribute: str, *values) -> FlagRuleBuilder:
         """
         Starts defining a flag rule, using the \"is not one of\" operator.
 
-        This is a shortcut for calling :meth:`ldclient.integrations.test_datav2.FlagBuilderV2.if_not_match_context()`
+        This is a shortcut for calling :meth:`ldclient.integrations.test_data.FlagBuilder.if_not_match_context()`
         with \"user\" as the context kind.
 
         **Example:** create a rule that returns ``True`` if the name is neither \"Saffron\" nor \"Bubble\"
@@ -461,7 +461,7 @@ class FlagBuilderV2:
         """
         return self.if_not_match_context(Context.DEFAULT_KIND, attribute, *values)
 
-    def if_not_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilderV2:
+    def if_not_match_context(self, context_kind: str, attribute: str, *values) -> FlagRuleBuilder:
         """
         Starts defining a flag rule, using the \"is not one of\" operator. This matching expression only
         applies to contexts of a specific kind.
@@ -479,25 +479,25 @@ class FlagBuilderV2:
         :param values: values to compare to
         :return: the flag rule builder
         """
-        flag_rule_builder = FlagRuleBuilderV2(self)
+        flag_rule_builder = FlagRuleBuilder(self)
         return flag_rule_builder.and_not_match_context(context_kind, attribute, *values)
 
-    def clear_rules(self) -> FlagBuilderV2:
+    def clear_rules(self) -> FlagBuilder:
         """
         Removes any existing rules from the flag.
         This undoes the effect of methods like
-        :meth:`ldclient.integrations.test_datav2.FlagBuilderV2.if_match()`.
+        :meth:`ldclient.integrations.test_data.FlagBuilder.if_match()`.
 
         :return: the same flag builder
         """
         self._rules = []
         return self
 
-    def clear_targets(self) -> FlagBuilderV2:
+    def clear_targets(self) -> FlagBuilder:
         """
         Removes any existing targets from the flag.
         This undoes the effect of methods like
-        :meth:`ldclient.integrations.test_datav2.FlagBuilderV2.variation_for_user()`.
+        :meth:`ldclient.integrations.test_data.FlagBuilder.variation_for_user()`.
 
         :return: the same flag builder
         """
@@ -505,7 +505,7 @@ class FlagBuilderV2:
         return self
 
     # Note that _build is private by convention, because we don't want developers to
-    # consider it part of the public API, but it is still called from TestDataV2.
+    # consider it part of the public API, but it is still called from TestData.
     def _build(self, version: int) -> dict:
         """
         Creates a dictionary representation of the flag
@@ -538,30 +538,30 @@ class FlagBuilderV2:
         return base_flag_object
 
 
-class TestDataV2:
+class TestData:
     """
     A mechanism for providing dynamically updatable feature flag state in a
-    simplified form to an SDK client in test scenarios using the FDv2 protocol.
+    simplified form to an SDK client in test scenarios.
 
     Unlike ``Files``, this mechanism does not use any external resources. It provides only
     the data that the application has put into it using the ``update`` method.
     ::
 
         from ldclient import datasystem
-        from ldclient.integrations.test_datav2 import TestDataV2
+        from ldclient.integrations.test_data import TestData
 
 
-        td = TestDataV2.data_source()
+        td = TestData.data_source()
         td.update(td.flag('flag-key-1').variation_for_all(True))
 
-        # Configure the data system with TestDataV2 as both initializer and synchronizer
+        # Configure the data system with TestData as both initializer and synchronizer
         data_config = datasystem.custom()
         data_config.initializers([td.builder])
         data_config.synchronizers(td.builder)
 
         config = Config(
             sdk_key,
-            datasystem_config=data_config.build(),
+            data_system=data_config.build(),
         )
 
         # flags can be updated at any time:
@@ -570,11 +570,11 @@ class TestDataV2:
             fallthrough_variation(False))
 
     The above example uses a simple boolean flag, but more complex configurations are possible using
-    the methods of the ``FlagBuilderV2`` that is returned by ``flag``. ``FlagBuilderV2``
+    the methods of the ``FlagBuilder`` that is returned by ``flag``. ``FlagBuilder``
     supports many of the ways a flag can be configured on the LaunchDarkly dashboard, but does not
     currently support 1. rule operators other than "in" and "not in", or 2. percentage rollouts.
 
-    If the same ``TestDataV2`` instance is used to configure multiple ``LDClient`` instances,
+    If the same ``TestData`` instance is used to configure multiple ``LDClient`` instances,
     any changes made to the data will propagate to all of the ``LDClient`` instances.
     """
 
@@ -589,25 +589,25 @@ class TestDataV2:
         self._version = 0
 
     @staticmethod
-    def data_source() -> TestDataV2:
+    def data_source() -> TestData:
         """
         Creates a new instance of the test data source.
 
         :return: a new configurable test data source
         """
-        return TestDataV2()
+        return TestData()
 
-    def flag(self, key: str) -> FlagBuilderV2:
+    def flag(self, key: str) -> FlagBuilder:
         """
-        Creates or copies a ``FlagBuilderV2`` for building a test flag configuration.
+        Creates or copies a ``FlagBuilder`` for building a test flag configuration.
 
-        If this flag key has already been defined in this ``TestDataV2`` instance, then the builder
+        If this flag key has already been defined in this ``TestData`` instance, then the builder
         starts with the same configuration that was last provided for this flag.
 
         Otherwise, it starts with a new default configuration in which the flag has ``True`` and
         ``False`` variations, is ``True`` for all users when targeting is turned on and
         ``False`` otherwise, and currently has targeting turned on. You can change any of those
-        properties, and provide more complex behavior, using the ``FlagBuilderV2`` methods.
+        properties, and provide more complex behavior, using the ``FlagBuilder`` methods.
 
         Once you have set the desired configuration, pass the builder to ``update``.
 
@@ -618,23 +618,23 @@ class TestDataV2:
             if key in self._flag_builders and self._flag_builders[key]:
                 return self._flag_builders[key]._copy()
 
-            return FlagBuilderV2(key).boolean_flag()
+            return FlagBuilder(key).boolean_flag()
 
-    def update(self, flag_builder: FlagBuilderV2) -> TestDataV2:
+    def update(self, flag_builder: FlagBuilder) -> TestData:
         """
         Updates the test data with the specified flag configuration.
 
         This has the same effect as if a flag were added or modified on the LaunchDarkly dashboard.
         It immediately propagates the flag change to any ``LDClient`` instance(s) that you have
-        already configured to use this ``TestDataV2``. If no ``LDClient`` has been started yet,
+        already configured to use this ``TestData``. If no ``LDClient`` has been started yet,
         it simply adds this flag to the test data which will be provided to any ``LDClient`` that
         you subsequently configure.
 
-        Any subsequent changes to this ``FlagBuilderV2`` instance do not affect the test data,
+        Any subsequent changes to this ``FlagBuilder`` instance do not affect the test data,
         unless you call ``update`` again.
 
         :param flag_builder: a flag configuration builder
-        :return: self (the TestDataV2 object)
+        :return: self (the TestData object)
         """
         instances_copy = []
         with self._lock.write():
@@ -679,7 +679,7 @@ class TestDataV2:
     @property
     def builder(self) -> DataSourceBuilder:
         """
-        Creates a builder that can be used with the FDv2 data system.
+        Creates a builder that can be used with the data system.
 
         :return: a test data data source builder
         """
@@ -688,7 +688,7 @@ class TestDataV2:
     @property
     def async_builder(self) -> DataSourceBuilder:
         """
-        Creates a builder that can be used with the async FDv2 data system.
+        Creates a builder that can be used with the async data system.
 
         .. caution::
             This feature is experimental and should NOT be considered ready for production
@@ -700,20 +700,20 @@ class TestDataV2:
         return AsyncTestDataSourceBuilder(self)
 
 
-class TestDataSourceBuilder(DataSourceBuilder[_TestDataSourceV2]):  # pylint: disable=too-few-public-methods
-    """Builder for TestDataV2 data sources that implements the DataSourceBuilder protocol."""
+class TestDataSourceBuilder(DataSourceBuilder[_TestDataSource]):  # pylint: disable=too-few-public-methods
+    """Builder for TestData data sources that implements the DataSourceBuilder protocol."""
 
-    def __init__(self, test_data: TestDataV2):
+    def __init__(self, test_data: TestData):
         self._test_data = test_data
 
-    def build(self, config: DataSourceBuilderConfig) -> _TestDataSourceV2:  # pylint: disable=unused-argument
-        """Builds the TestDataSourceV2 instance."""
-        return _TestDataSourceV2(self._test_data)
+    def build(self, config: DataSourceBuilderConfig) -> _TestDataSource:  # pylint: disable=unused-argument
+        """Builds the TestDataSource instance."""
+        return _TestDataSource(self._test_data)
 
 
-class AsyncTestDataSourceBuilder(DataSourceBuilder[_AsyncTestDataSourceV2]):  # pylint: disable=too-few-public-methods
+class AsyncTestDataSourceBuilder(DataSourceBuilder[_AsyncTestDataSource]):  # pylint: disable=too-few-public-methods
     """
-    Builder for async TestDataV2 data sources that implements the DataSourceBuilder protocol.
+    Builder for async TestData data sources that implements the DataSourceBuilder protocol.
 
     .. caution::
         This feature is experimental and should NOT be considered ready for production
@@ -721,9 +721,9 @@ class AsyncTestDataSourceBuilder(DataSourceBuilder[_AsyncTestDataSourceV2]):  # 
         compatibility guarantees.
     """
 
-    def __init__(self, test_data: TestDataV2):
+    def __init__(self, test_data: TestData):
         self._test_data = test_data
 
-    def build(self, config: DataSourceBuilderConfig) -> _AsyncTestDataSourceV2:  # pylint: disable=unused-argument
-        """Builds the async TestDataSourceV2 instance."""
-        return _AsyncTestDataSourceV2(self._test_data)
+    def build(self, config: DataSourceBuilderConfig) -> _AsyncTestDataSource:  # pylint: disable=unused-argument
+        """Builds the async TestDataSource instance."""
+        return _AsyncTestDataSource(self._test_data)

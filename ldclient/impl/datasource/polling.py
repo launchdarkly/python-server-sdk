@@ -18,7 +18,7 @@ from ldclient.config import (
     DataSourceBuilderConfig,
     HTTPConfig
 )
-from ldclient.impl.datasourcev2.polling_common import (
+from ldclient.impl.datasource.polling_common import (
     FDV1_POLLING_ENDPOINT,
     PollAction,
     fdv1_polling_payload_to_changeset,
@@ -93,7 +93,7 @@ class PollingDataSource(Initializer, Synchronizer):
     @property
     def name(self) -> str:
         """Returns the name of the initializer."""
-        return "PollingDataSourceV2"
+        return "PollingDataSource"
 
     def fetch(self, ss: SelectorStore) -> BasisResult:
         """
@@ -107,7 +107,7 @@ class PollingDataSource(Initializer, Synchronizer):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        log.info("Starting PollingDataSourceV2 synchronizer")
+        log.info("Starting PollingDataSource synchronizer")
         self._interrupt_event.clear()
         self._stop.clear()
         while self._stop.is_set() is False:
@@ -125,7 +125,7 @@ class PollingDataSource(Initializer, Synchronizer):
 
     def stop(self):
         """Stops the synchronizer."""
-        log.info("Stopping PollingDataSourceV2 synchronizer")
+        log.info("Stopping PollingDataSource synchronizer")
         self._interrupt_event.set()
         self._stop.set()
 

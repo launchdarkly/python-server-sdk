@@ -166,7 +166,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         plugins: Optional[List[AsyncPlugin]] = None,
         enable_event_compression: bool = True,
         omit_anonymous_contexts: bool = False,
-        datasystem_config: Optional[AsyncDataSystemConfig] = None,
+        data_system: Optional[AsyncDataSystemConfig] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -228,7 +228,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
           set this to False to prevent extra CPU use, because the Relay Proxy decompresses and recompresses
           the payloads.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
-        :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and
+        :param data_system: Configuration for the data system, which controls how the SDK gets flag and
           segment data. Build it with the functions in :mod:`ldclient.async_datasystem`. If it is not set, the
           SDK uses :func:`ldclient.async_datasystem.default`.
         """
@@ -263,7 +263,7 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self.__instance_id: Optional[str] = None
-        self._datasystem_config = datasystem_config
+        self._data_system = data_system
 
     # for internal use only - probably should be part of the client logic
     def get_default(self, key, default):
@@ -416,12 +416,12 @@ class AsyncConfig(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__instance_id = value
 
     @property
-    def datasystem_config(self) -> Optional[AsyncDataSystemConfig]:
+    def data_system(self) -> Optional[AsyncDataSystemConfig]:
         """
         Configuration for the data system, which controls how the SDK gets
         flag and segment data.
         """
-        return self._datasystem_config
+        return self._data_system
 
     def _validate(self):
         if self.offline is False and self.sdk_key == '':

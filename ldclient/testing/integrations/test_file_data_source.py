@@ -126,10 +126,10 @@ def replace_file(path, content):
 
 
 def test_creates_valid_initializer():
-    """Test that FileDataSourceV2 creates a working initializer."""
+    """Test that FileDataSource creates a working initializer."""
     path = make_temp_file(all_properties_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -158,7 +158,7 @@ def test_creates_valid_initializer():
 
 def test_initializer_handles_missing_file():
     """Test that initializer returns error for missing file."""
-    file_source = Files.new_data_source_v2(paths=['no-such-file.json'])
+    file_source = Files.new_data_source(paths=['no-such-file.json'])
     initializer = file_source.build(Config(sdk_key="dummy"))
 
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -170,7 +170,7 @@ def test_initializer_handles_invalid_json():
     """Test that initializer returns error for invalid JSON."""
     path = make_temp_file('{"flagValues":{')
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -185,7 +185,7 @@ def test_initializer_handles_duplicate_keys():
     path1 = make_temp_file(flag_only_json)
     path2 = make_temp_file(flag_only_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path1, path2])
+        file_source = Files.new_data_source(paths=[path1, path2])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -201,7 +201,7 @@ def test_initializer_loads_multiple_files():
     path1 = make_temp_file(flag_only_json)
     path2 = make_temp_file(segment_only_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path1, path2])
+        file_source = Files.new_data_source(paths=[path1, path2])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -225,7 +225,7 @@ def test_initializer_loads_yaml():
 
     path = make_temp_file(all_properties_yaml)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -241,7 +241,7 @@ def test_initializer_handles_flag_values():
     """Test that initializer properly converts flagValues to flags."""
     path = make_temp_file(flag_values_only_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -262,10 +262,10 @@ def test_initializer_handles_flag_values():
 
 
 def test_creates_valid_synchronizer():
-    """Test that FileDataSourceV2 creates a working synchronizer."""
+    """Test that FileDataSource creates a working synchronizer."""
     path = make_temp_file(all_properties_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
+        file_source = Files.new_data_source(paths=[path], force_polling=True, poll_interval=0.1)
         synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
@@ -309,7 +309,7 @@ def test_synchronizer_detects_file_changes():
     """Test that synchronizer detects and reports file changes."""
     path = make_temp_file(flag_only_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
+        file_source = Files.new_data_source(paths=[path], force_polling=True, poll_interval=0.1)
         synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
@@ -357,7 +357,7 @@ def test_synchronizer_reports_error_on_invalid_file_update():
     """Test that synchronizer reports error when file becomes invalid."""
     path = make_temp_file(flag_only_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path], force_polling=True, poll_interval=0.1)
+        file_source = Files.new_data_source(paths=[path], force_polling=True, poll_interval=0.1)
         synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
@@ -402,7 +402,7 @@ def test_synchronizer_can_be_stopped():
     """Test that synchronizer stops cleanly."""
     path = make_temp_file(all_properties_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         synchronizer = file_source.build(Config(sdk_key="dummy"))
 
         updates = []
@@ -436,7 +436,7 @@ def test_fetch_after_stop_returns_error():
     """Test that fetch returns error after synchronizer is stopped."""
     path = make_temp_file(all_properties_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         # First fetch should work
@@ -458,10 +458,10 @@ def test_source_name_property():
     """Test that the data source has the correct name."""
     path = make_temp_file(all_properties_json)
     try:
-        file_source = Files.new_data_source_v2(paths=[path])
+        file_source = Files.new_data_source(paths=[path])
         source = file_source.build(Config(sdk_key="dummy"))
 
-        assert source.name == "FileDataV2"
+        assert source.name == "FileData"
     finally:
         source.stop()
         os.remove(path)
@@ -472,7 +472,7 @@ def test_accepts_single_path_string():
     path = make_temp_file(flag_only_json)
     try:
         # Pass a single string instead of a list
-        file_source = Files.new_data_source_v2(paths=path)
+        file_source = Files.new_data_source(paths=path)
         initializer = file_source.build(Config(sdk_key="dummy"))
 
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -497,11 +497,11 @@ def test_initializer_does_not_allow_unsafe_yaml():
     # This extended syntax defined by pyyaml allows arbitrary code execution. The data source
     # must use yaml.safe_load(), which does not support it.
     unsafe_yaml = '''
-!!python/object/apply:ldclient.testing.integrations.test_file_data_sourcev2.arbitrary_method_called_from_yaml ["hi"]
+!!python/object/apply:ldclient.testing.integrations.test_file_data_source.arbitrary_method_called_from_yaml ["hi"]
 '''
     path = make_temp_file(unsafe_yaml)
     try:
-        initializer = Files.new_data_source_v2(paths=[path]).build(Config(sdk_key="dummy"))
+        initializer = Files.new_data_source(paths=[path]).build(Config(sdk_key="dummy"))
         result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
         assert isinstance(result, _Fail)
     finally:
@@ -518,7 +518,7 @@ def test_synchronizer_detects_file_changes_with_watchdog():
         return update.change_set is not None and any(c.kind == ObjectKind.SEGMENT for c in update.change_set.changes)
 
     path = make_temp_file(flag_only_json)
-    synchronizer = Files.new_data_source_v2(paths=[path]).build(Config(sdk_key="dummy"))
+    synchronizer = Files.new_data_source(paths=[path]).build(Config(sdk_key="dummy"))
     try:
         initial = threading.Event()
         reloaded = threading.Event()

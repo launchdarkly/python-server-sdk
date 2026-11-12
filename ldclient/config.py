@@ -309,7 +309,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         plugins: Optional[List[Plugin]] = None,
         enable_event_compression: bool = True,
         omit_anonymous_contexts: bool = False,
-        datasystem_config: Optional[DataSystemConfig] = None,
+        data_system: Optional[DataSystemConfig] = None,
     ):
         """
         :param sdk_key: The SDK key for your LaunchDarkly account. This is always required.
@@ -371,7 +371,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
           set this to False to prevent extra CPU use, because the Relay Proxy decompresses and recompresses
           the payloads.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
-        :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and
+        :param data_system: Configuration for the data system, which controls how the SDK gets flag and
           segment data. Build it with the functions in :mod:`ldclient.datasystem`. If it is not set, the SDK
           uses :func:`ldclient.datasystem.default`.
         """
@@ -406,7 +406,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__enable_event_compression = enable_event_compression
         self.__omit_anonymous_contexts = omit_anonymous_contexts
         self._instance_id: Optional[str] = None
-        self._datasystem_config = datasystem_config
+        self._data_system = data_system
 
     def with_wrapper_information(self, wrapper_name: Optional[str], wrapper_version: Optional[str] = None) -> 'Config':
         """Returns a new ``Config`` instance that is the same as this one, except for having different wrapper information.
@@ -570,12 +570,12 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         return self.__omit_anonymous_contexts
 
     @property
-    def datasystem_config(self) -> Optional[DataSystemConfig]:
+    def data_system(self) -> Optional[DataSystemConfig]:
         """
         Configuration for the data system, which controls how the SDK gets
         flag and segment data.
         """
-        return self._datasystem_config
+        return self._data_system
 
     def _validate(self):
         if self.offline is False and self.sdk_key == '':

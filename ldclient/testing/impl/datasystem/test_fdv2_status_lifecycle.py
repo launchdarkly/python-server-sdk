@@ -15,7 +15,7 @@ from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
 from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
 from ldclient.impl.datasystem.fdv2 import FDv2
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceErrorKind,
@@ -72,8 +72,8 @@ def _failing_synchronizer() -> Mock:
     return synchronizer
 
 
-def _test_data() -> TestDataV2:
-    td = TestDataV2.data_source()
+def _test_data() -> TestData:
+    td = TestData.data_source()
     td.update(td.flag('flag').on(True))
     return td
 

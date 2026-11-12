@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import pytest
 
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncPollingDataSource,
     PollingResult
 )
@@ -72,7 +72,7 @@ def _ss() -> MockSelectorStore:
 
 def test_name():
     src = _make_source([_Fail(error="failure message")])
-    assert src.name == "PollingDataSourceV2"
+    assert src.name == "PollingDataSource"
 
 
 @pytest.mark.asyncio

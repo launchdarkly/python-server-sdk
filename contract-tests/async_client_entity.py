@@ -18,11 +18,11 @@ from ldclient.async_config import (
 )
 from ldclient.config import HTTPConfig
 from ldclient.feature_store import CacheConfig
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncFallbackToFDv1PollingDataSourceBuilder,
     AsyncPollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.async_streaming import (
+from ldclient.impl.datasource.async_streaming import (
     AsyncStreamingDataSourceBuilder
 )
 from ldclient.impl.util import Result
@@ -83,7 +83,7 @@ class AsyncClientEntity:
 
         datasystem_config = config_params.get('dataSystem')
         if datasystem_config is not None:
-            opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
+            opts["data_system"] = _build_async_data_system(datasystem_config, opts)
 
         if config_params.get("events") is not None:
             events = config_params["events"]

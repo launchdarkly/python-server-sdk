@@ -21,7 +21,7 @@ from ldclient.impl.datasystem.async_fdv2 import (
 )
 from ldclient.impl.datasystem.async_store import AsyncStore
 from ldclient.impl.listeners import Listeners
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     AsyncFeatureStore,
     DataStoreMode,
@@ -139,7 +139,7 @@ async def _wait_for(event: asyncio.Event, timeout: float = 2.0):
 async def test_async_persistent_store_read_write_mode():
     persistent_store = StubAsyncFeatureStore()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("new-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -173,7 +173,7 @@ async def test_async_persistent_store_read_only_mode():
     persistent_store = StubAsyncFeatureStore(initial)
     persistent_store.reset_operation_tracking()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("new-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -204,7 +204,7 @@ async def test_async_persistent_store_read_only_mode():
 async def test_async_persistent_store_delta_updates_read_write():
     persistent_store = StubAsyncFeatureStore()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -247,7 +247,7 @@ async def test_async_persistent_store_delta_updates_read_write():
 async def test_async_persistent_store_outage_recovery_flushes_on_recovery():
     persistent_store = StubAsyncFeatureStore()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -300,7 +300,7 @@ async def test_async_persistent_store_outage_recovery_flushes_on_recovery():
 async def test_async_persistent_store_outage_recovery_no_flush_when_not_stale():
     persistent_store = StubAsyncFeatureStore()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -329,7 +329,7 @@ async def test_async_persistent_store_outage_recovery_no_flush_when_not_stale():
 async def test_async_persistent_store_outage_recovery_no_flush_when_unavailable():
     persistent_store = StubAsyncFeatureStore()
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
 
     data_system_config = AsyncDataSystemConfig(
@@ -409,7 +409,7 @@ async def test_async_store_view_reads_from_in_memory_after_swap():
 
 
 async def _started_fdv2_with_store(store):
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
     cfg = AsyncDataSystemConfig(
         data_store_mode=DataStoreMode.READ_WRITE,
@@ -440,7 +440,7 @@ async def test_recovery_skipped_and_no_write_after_stop():
 
     assert store.init_called_count == 0
     assert store.init_after_close is False
-    assert not any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert not any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
 
 @pytest.mark.asyncio
@@ -463,10 +463,10 @@ async def test_recovery_task_spawned_before_stop_is_drained_by_stop():
     fdv2._persistent_store_outage_recovery(DataStoreStatus(available=True, stale=True))
     await asyncio.wait_for(started.wait(), timeout=2)
 
-    assert any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
     await fdv2.stop()
-    assert not any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert not any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
 
 @pytest.mark.asyncio

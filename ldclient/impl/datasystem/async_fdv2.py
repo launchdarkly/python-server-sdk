@@ -289,7 +289,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             if err is not None:
                 log.error("Failed to reinitialize data store", exc_info=err)
 
-        self._runner.spawn("AsyncFDv2-store-recovery", _commit)
+        self._runner.spawn("ldclient.datasystem.store_recovery", _commit)
 
     def start(self, set_on_ready: AsyncEvent):
         """
@@ -305,7 +305,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         self._stop_event.clear()
 
         # Start the main coordination loop
-        self._runner.spawn("AsyncFDv2-main", lambda: self._run_main_loop(set_on_ready))
+        self._runner.spawn("ldclient.datasystem.main", lambda: self._run_main_loop(set_on_ready))
 
     async def stop(self):
         """Stop the AsyncFDv2 data system and all the work it is coordinating."""
@@ -359,7 +359,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             await self._run_synchronizers(set_on_ready)
 
         except Exception as e:
-            log.error("Error in AsyncFDv2 main loop: %s", e)
+            log.error("Error in data system main loop: %s", e)
             # Ensure ready event is set even on error
             if not set_on_ready.is_set():
                 set_on_ready.set()
@@ -442,7 +442,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             return
 
         self._runner.spawn(
-            "AsyncFDv2-synchronizers",
+            "ldclient.datasystem.synchronizers",
             lambda: self._synchronizer_loop(set_on_ready),
         )
 
@@ -539,7 +539,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         action_queue: AsyncQueue = AsyncQueue()
         state_age = _StateAgeTracker()
         timer = AsyncRepeatingTask.at_interval(
-            label="AsyncFDv2-sync-cond-timer",
+            label="ldclient.datasystem.sync_condition",
             interval=10,
             initial_delay=10,
             callable=lambda: action_queue.put("check")
@@ -556,7 +556,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
         try:
             timer.start()
-            sync_reader = spawn_handle("AsyncFDv2-sync-reader", reader)
+            sync_reader = spawn_handle("ldclient.datasystem.sync_reader", reader)
 
             while True:
                 # Honor a stop request every iteration so a queue that always has
