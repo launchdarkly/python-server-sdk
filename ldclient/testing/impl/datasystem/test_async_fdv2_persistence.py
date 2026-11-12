@@ -440,7 +440,7 @@ async def test_recovery_skipped_and_no_write_after_stop():
 
     assert store.init_called_count == 0
     assert store.init_after_close is False
-    assert not any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert not any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
 
 @pytest.mark.asyncio
@@ -463,10 +463,10 @@ async def test_recovery_task_spawned_before_stop_is_drained_by_stop():
     fdv2._persistent_store_outage_recovery(DataStoreStatus(available=True, stale=True))
     await asyncio.wait_for(started.wait(), timeout=2)
 
-    assert any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
     await fdv2.stop()
-    assert not any(t.get_name() == "AsyncFDv2-store-recovery" for t in fdv2._runner._tasks)
+    assert not any(t.get_name() == "ldclient.datasystem.store_recovery" for t in fdv2._runner._tasks)
 
 
 @pytest.mark.asyncio

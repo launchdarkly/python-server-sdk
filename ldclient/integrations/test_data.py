@@ -541,7 +541,7 @@ class FlagBuilder:
 class TestData:
     """
     A mechanism for providing dynamically updatable feature flag state in a
-    simplified form to an SDK client in test scenarios using the FDv2 protocol.
+    simplified form to an SDK client in test scenarios.
 
     Unlike ``Files``, this mechanism does not use any external resources. It provides only
     the data that the application has put into it using the ``update`` method.
@@ -679,7 +679,7 @@ class TestData:
     @property
     def builder(self) -> DataSourceBuilder:
         """
-        Creates a builder that can be used with the FDv2 data system.
+        Creates a builder that can be used with the data system.
 
         :return: a test data data source builder
         """
@@ -688,7 +688,7 @@ class TestData:
     @property
     def async_builder(self) -> DataSourceBuilder:
         """
-        Creates a builder that can be used with the async FDv2 data system.
+        Creates a builder that can be used with the async data system.
 
         .. caution::
             This feature is experimental and should NOT be considered ready for production

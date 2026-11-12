@@ -100,7 +100,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
     @property
     def name(self) -> str:
         """Returns the name of the initializer."""
-        return "PollingDataSourceV2"
+        return "PollingDataSource"
 
     async def fetch(self, ss: SelectorStore) -> BasisResult:
         """
@@ -114,7 +114,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         Update objects until the connection is closed or an unrecoverable error
         occurs.
         """
-        log.info("Starting PollingDataSourceV2 synchronizer")
+        log.info("Starting PollingDataSource synchronizer")
         self._interrupt_event.clear()
         self._stop.clear()
         try:
@@ -135,7 +135,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
 
     async def stop(self):
         """Signals the synchronizer to stop."""
-        log.info("Stopping PollingDataSourceV2 synchronizer")
+        log.info("Stopping PollingDataSource synchronizer")
         self._interrupt_event.set()
         self._stop.set()
 

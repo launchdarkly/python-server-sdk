@@ -461,7 +461,7 @@ def test_source_name_property():
         file_source = Files.new_data_source(paths=[path])
         source = file_source.build(Config(sdk_key="dummy"))
 
-        assert source.name == "FileDataV2"
+        assert source.name == "FileData"
     finally:
         source.stop()
         os.remove(path)

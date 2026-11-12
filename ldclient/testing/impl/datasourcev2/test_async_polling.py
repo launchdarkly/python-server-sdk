@@ -72,7 +72,7 @@ def _ss() -> MockSelectorStore:
 
 def test_name():
     src = _make_source([_Fail(error="failure message")])
-    assert src.name == "PollingDataSourceV2"
+    assert src.name == "PollingDataSource"
 
 
 @pytest.mark.asyncio

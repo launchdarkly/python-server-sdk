@@ -79,7 +79,7 @@ class _FileDataSource:
     @property
     def name(self) -> str:
         """Return the name of this data source."""
-        return "FileDataV2"
+        return "FileData"
 
     def fetch(self, ss: SelectorStore) -> BasisResult:
         """
@@ -93,7 +93,7 @@ class _FileDataSource:
         try:
             with self._lock:
                 if self._closed:
-                    return _Fail("FileDataV2 source has been closed")
+                    return _Fail("FileData source has been closed")
 
                 # Load all files and build changeset
                 result = self._load_all_to_changeset()

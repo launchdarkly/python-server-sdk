@@ -64,10 +64,8 @@ class Consul:
           `python-consul API <https://python-consul.readthedocs.io/en/latest/#consul>`_
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``data_system``
-          on :class:`ldclient.config.Config`), the cache is automatically disabled
-          once the in-memory store has been initialized, so these settings only
-          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
+          The SDK disables the cache once the in-memory store has been initialized,
+          so these settings only affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         """
         core = _ConsulFeatureStoreCore(host, port, prefix, consul_opts)
         return CachingStoreWrapper(core, caching)
@@ -110,10 +108,8 @@ class DynamoDB:
           the `boto3 API <https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client>`_
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``data_system``
-          on :class:`ldclient.config.Config`), the cache is automatically disabled
-          once the in-memory store has been initialized, so these settings only
-          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
+          The SDK disables the cache once the in-memory store has been initialized,
+          so these settings only affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         """
         core = _DynamoDBFeatureStoreCore(table_name, prefix, dynamodb_opts)
         return CachingStoreWrapper(core, caching)
@@ -245,10 +241,8 @@ class Redis:
           the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``data_system``
-          on :class:`ldclient.config.Config`), the cache is automatically disabled
-          once the in-memory store has been initialized, so these settings only
-          affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
+          The SDK disables the cache once the in-memory store has been initialized,
+          so these settings only affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
         :param redis_opts: extra options for initializing Redis connection from the url,
           see `redis.connection.ConnectionPool.from_url` for more details.
         """
@@ -390,13 +384,13 @@ class Files:
 
     @staticmethod
     def new_data_source(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
-        """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
+        """Provides a way to use local files as a source of feature flag state.
 
-        This returns a builder that can be used with the FDv2 data system configuration as both an
+        This returns a builder that can be used with the data system configuration as both an
         Initializer and a Synchronizer. When used as an Initializer, it reads files once. When used
         as a Synchronizer, it watches for file changes and automatically updates when files are modified.
 
-        To use this component with the FDv2 data system, call ``new_data_source`` and use the returned
+        To use this component, call ``new_data_source`` and use the returned
         builder with the custom data system configuration:
         ::
 
