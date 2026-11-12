@@ -1,12 +1,12 @@
 Test fixtures
 =============
 
-ldclient.integrations.test_datav2 module
-----------------------------------------
+ldclient.integrations.test_data module
+--------------------------------------
 
-The entry point for this feature is :class:`ldclient.integrations.test_datav2.TestDataV2`.
+The entry point for this feature is :class:`ldclient.integrations.test_data.TestData`.
 
-.. automodule:: ldclient.integrations.test_datav2
+.. automodule:: ldclient.integrations.test_data
     :members:
     :special-members: __init__
     :show-inheritance:

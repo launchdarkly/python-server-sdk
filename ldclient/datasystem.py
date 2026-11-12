@@ -5,13 +5,13 @@ Configuration for LaunchDarkly's data acquisition strategy.
 from typing import List, Optional
 
 from ldclient.config import DataSourceBuilder, DataSystemConfig
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
     PollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder
-from ldclient.impl.integrations.files.file_data_sourcev2 import (
-    FileDataSourceV2Builder
+from ldclient.impl.datasource.streaming import StreamingDataSourceBuilder
+from ldclient.impl.integrations.files.file_data_source import (
+    FileDataSourceBuilder
 )
 from ldclient.interfaces import (
     DataStoreMode,
@@ -114,11 +114,11 @@ def streaming_ds_builder() -> StreamingDataSourceBuilder:
     return StreamingDataSourceBuilder()
 
 
-def file_ds_builder(paths: List[str]) -> FileDataSourceV2Builder:
+def file_ds_builder(paths: List[str]) -> FileDataSourceBuilder:
     """
     Returns a builder for a file-based data source.
     """
-    return FileDataSourceV2Builder(paths)
+    return FileDataSourceBuilder(paths)
 
 
 def default() -> ConfigBuilder:

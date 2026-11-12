@@ -6,13 +6,13 @@ from ldclient import datasystem
 from ldclient.client import Config, Context, LDClient
 from ldclient.datasystem import DataStoreMode
 from ldclient.feature_store import InMemoryFeatureStore
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
     PollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.streaming import StreamingDataSourceBuilder
+from ldclient.impl.datasource.streaming import StreamingDataSourceBuilder
 from ldclient.impl.util import _Success
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     Basis,
     BasisResult,
@@ -147,7 +147,7 @@ def test_close_closes_the_persistent_store_in_daemon_mode():
 def test_close_closes_the_persistent_store_with_a_synchronizer():
     store = _ClosableStore()
     dsc = datasystem.custom() \
-        .synchronizers(TestDataV2.data_source().builder) \
+        .synchronizers(TestData.data_source().builder) \
         .data_store(store, DataStoreMode.READ_WRITE) \
         .build()
     client = LDClient(config=Config(sdk_key="secret", send_events=False, data_system=dsc))

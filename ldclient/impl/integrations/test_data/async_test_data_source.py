@@ -17,11 +17,11 @@ from ldclient.interfaces import (
 )
 
 
-class _AsyncTestDataSourceV2:
+class _AsyncTestDataSource:
     """
-    Async implementation of both the Initializer and Synchronizer protocols for TestDataV2.
+    Async implementation of both the Initializer and Synchronizer protocols for TestData.
 
-    The async twin of :class:`_TestDataSourceV2`: it shares the same TestDataV2 flag
+    The async twin of :class:`_TestDataSource`: it shares the same TestData flag
     management but exposes ``async`` ``fetch``/``sync``/``stop`` and delivers updates
     through an :class:`asyncio.Queue` so it can drive the async data system.
     """
@@ -40,7 +40,7 @@ class _AsyncTestDataSourceV2:
     @property
     def name(self) -> str:
         """Return the name of this data source."""
-        return "TestDataV2"
+        return "TestData"
 
     async def fetch(self, ss: SelectorStore) -> BasisResult:
         """Implementation of the AsyncInitializer.fetch method."""
@@ -86,7 +86,7 @@ class _AsyncTestDataSourceV2:
     def _enqueue(self, item) -> None:
         """Put an item on the update queue safely from any thread.
 
-        Flag updates can arrive on any thread (TestDataV2.update may be called
+        Flag updates can arrive on any thread (TestData.update may be called
         from user code), but an asyncio.Queue must only be touched from its own
         event loop. So schedule the put on the loop captured when sync() started.
         Before sync() runs there is no consumer and no loop to cross into, so put
@@ -102,7 +102,7 @@ class _AsyncTestDataSourceV2:
             pass
 
     def upsert_flag(self, flag_data: dict):
-        """Called by TestDataV2 when a flag is updated; queues the change for
+        """Called by TestData when a flag is updated; queues the change for
         delivery through the sync() generator."""
         if self._closed:
             return
@@ -142,7 +142,7 @@ class _AsyncTestDataSourceV2:
         fetch() and the initial yield of sync()."""
         try:
             if self._closed:
-                return _Fail("TestDataV2 source has been closed")
+                return _Fail("TestData source has been closed")
 
             init_data = self._test_data._make_init_data()
             version = self._test_data._get_version()

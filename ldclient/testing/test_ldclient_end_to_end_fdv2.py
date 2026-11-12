@@ -15,7 +15,7 @@ from ldclient.client import Context, LDClient
 from ldclient.config import Config, HTTPConfig
 from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.testing.http_util import (
     BasicResponse,
     CauseNetworkError,
@@ -221,7 +221,7 @@ def test_client_retries_stream_after_recoverable_error():
 
 def test_client_retries_poll_after_network_error(monkeypatch):
     # Lower the minimum poll interval so that the retry happens before the start wait ends.
-    monkeypatch.setattr('ldclient.impl.datasourcev2.polling.DEFAULT_POLL_INTERVAL', 0.05)
+    monkeypatch.setattr('ldclient.impl.datasource.polling.DEFAULT_POLL_INTERVAL', 0.05)
     with start_server() as server:
         # The requester retries once per poll, so two errors fail the whole first poll.
         server.for_path('/sdk/poll', SequentialHandler(
@@ -437,7 +437,7 @@ def rule_flag(td):
 
 
 def test_evaluates_flag_from_test_data_v2():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(rule_flag(td))
 
     with make_test_data_client(td) as client:
@@ -457,7 +457,7 @@ def test_evaluates_flag_from_test_data_v2():
 
 
 def test_evaluates_all_flags_from_test_data_v2():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(rule_flag(td))
 
     with make_test_data_client(td) as client:

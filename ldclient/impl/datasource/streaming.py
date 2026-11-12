@@ -20,7 +20,7 @@ from ldclient.config import (
     DataSourceBuilderConfig,
     HTTPConfig
 )
-from ldclient.impl.datasourcev2.streaming_common import (
+from ldclient.impl.datasource.streaming_common import (
     classify_stream_error,
     process_message,
     with_fallback_signal

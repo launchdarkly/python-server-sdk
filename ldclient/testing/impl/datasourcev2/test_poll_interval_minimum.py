@@ -7,11 +7,11 @@ import pytest
 
 from ldclient.async_config import AsyncConfig
 from ldclient.config import Config
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncFallbackToFDv1PollingDataSourceBuilder,
     AsyncPollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     FallbackToFDv1PollingDataSourceBuilder,
     PollingDataSourceBuilder
 )

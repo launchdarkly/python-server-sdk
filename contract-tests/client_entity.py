@@ -26,7 +26,7 @@ from ldclient.datasystem import (
     streaming_ds_builder
 )
 from ldclient.feature_store import CacheConfig
-from ldclient.impl.datasourcev2.polling import PollingDataSourceBuilder
+from ldclient.impl.datasource.polling import PollingDataSourceBuilder
 from ldclient.integrations import Consul, DynamoDB, Redis
 from ldclient.interfaces import DataStoreMode
 

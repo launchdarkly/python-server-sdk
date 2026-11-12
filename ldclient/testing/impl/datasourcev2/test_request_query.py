@@ -9,12 +9,12 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from ldclient.config import Config
-from ldclient.impl.datasourcev2 import async_streaming, streaming
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource import async_streaming, streaming
+from ldclient.impl.datasource.async_polling import (
     AiohttpFDv1PollingRequester,
     AiohttpPollingRequester
 )
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     Urllib3FDv1PollingRequester,
     Urllib3PollingRequester
 )

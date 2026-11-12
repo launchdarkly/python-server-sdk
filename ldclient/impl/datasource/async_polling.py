@@ -17,7 +17,7 @@ from ldclient.config import (
 )
 from ldclient.impl.aio.concurrency import AsyncEvent
 from ldclient.impl.aio.transport import AsyncHTTPTransport
-from ldclient.impl.datasourcev2.polling_common import (
+from ldclient.impl.datasource.polling_common import (
     FDV1_POLLING_ENDPOINT,
     PollAction,
     fdv1_polling_payload_to_changeset,

@@ -19,14 +19,14 @@ from ldclient.async_datasystem import (
 )
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.context import Context
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncFallbackToFDv1PollingDataSourceBuilder,
     AsyncPollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.async_streaming import (
+from ldclient.impl.datasource.async_streaming import (
     AsyncStreamingDataSourceBuilder
 )
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import DataStoreMode
 
 
@@ -153,7 +153,7 @@ def test_client_gives_its_session_to_every_builder_of_the_default_config():
 
 @pytest.mark.asyncio
 async def test_client_evaluates_flags_from_a_custom_config():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('flag').on(True))
     data_system = custom().synchronizers(td.async_builder).build()
     config = AsyncConfig('sdk-key', send_events=False, data_system=data_system)

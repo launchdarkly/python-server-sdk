@@ -4,7 +4,7 @@ from typing import Iterator, Optional
 import pytest
 from ld_eventsource.sse_client import Event
 
-from ldclient.impl.datasourcev2.polling import PollingDataSource, PollingResult
+from ldclient.impl.datasource.polling import PollingDataSource, PollingResult
 from ldclient.impl.datasystem.protocolv2 import (
     DeleteObject,
     Error,

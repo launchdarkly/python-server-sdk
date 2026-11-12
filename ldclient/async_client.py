@@ -268,11 +268,11 @@ class AsyncLDClient:
     def _wire_data_source_sessions(self, data_system_config) -> None:
         """Provide the client's aiohttp session to any async data source
         builders so the sources they build share the client's connection pool."""
-        from ldclient.impl.datasourcev2.async_polling import (
+        from ldclient.impl.datasource.async_polling import (
             AsyncFallbackToFDv1PollingDataSourceBuilder,
             AsyncPollingDataSourceBuilder
         )
-        from ldclient.impl.datasourcev2.async_streaming import (
+        from ldclient.impl.datasource.async_streaming import (
             AsyncStreamingDataSourceBuilder
         )
 

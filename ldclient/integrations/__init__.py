@@ -18,8 +18,8 @@ from ldclient.impl.integrations.dynamodb.dynamodb_big_segment_store import (
 from ldclient.impl.integrations.dynamodb.dynamodb_feature_store import (
     _DynamoDBFeatureStoreCore
 )
-from ldclient.impl.integrations.files.file_data_sourcev2 import (
-    FileDataSourceV2Builder
+from ldclient.impl.integrations.files.file_data_source import (
+    FileDataSourceBuilder
 )
 from ldclient.impl.integrations.redis.redis_big_segment_store import (
     _RedisBigSegmentStore
@@ -389,21 +389,21 @@ class Files:
     """Provides factory methods for integrations with filesystem data."""
 
     @staticmethod
-    def new_data_source_v2(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
+    def new_data_source(paths: str | List[str], poll_interval: float = 1, force_polling: bool = False) -> DataSourceBuilder:
         """Provides a way to use local files as a source of feature flag state using the FDv2 protocol.
 
         This returns a builder that can be used with the FDv2 data system configuration as both an
         Initializer and a Synchronizer. When used as an Initializer, it reads files once. When used
         as a Synchronizer, it watches for file changes and automatically updates when files are modified.
 
-        To use this component with the FDv2 data system, call ``new_data_source_v2`` and use the returned
+        To use this component with the FDv2 data system, call ``new_data_source`` and use the returned
         builder with the custom data system configuration:
         ::
 
             from ldclient.integrations import Files
             from ldclient.datasystem import custom
 
-            file_source = Files.new_data_source_v2(paths=['my_flags.json'])
+            file_source = Files.new_data_source(paths=['my_flags.json'])
 
             # Use as initializer only
             data_system = custom().initializers([file_source]).build()
@@ -440,7 +440,7 @@ class Files:
         :return: a builder that creates the file data source
         """
         return (
-            FileDataSourceV2Builder(paths)
+            FileDataSourceBuilder(paths)
             .poll_interval(poll_interval)
             .force_polling(force_polling)
         )

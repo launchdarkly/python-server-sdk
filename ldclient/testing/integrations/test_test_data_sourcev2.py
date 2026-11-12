@@ -6,7 +6,7 @@ import pytest
 
 from ldclient.config import Config
 from ldclient.impl.util import _Fail, _Success
-from ldclient.integrations.test_datav2 import FlagBuilderV2, TestDataV2
+from ldclient.integrations.test_data import FlagBuilder, TestData
 from ldclient.interfaces import (
     ChangeType,
     DataSourceState,
@@ -20,8 +20,8 @@ from ldclient.testing.mock_components import MockSelectorStore
 
 
 def test_creates_valid_initializer():
-    """Test that TestDataV2 creates a working initializer"""
-    td = TestDataV2.data_source()
+    """Test that TestData creates a working initializer"""
+    td = TestData.data_source()
     initializer = td.builder.build(Config(sdk_key="dummy"))
 
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
@@ -35,8 +35,8 @@ def test_creates_valid_initializer():
 
 
 def test_creates_valid_synchronizer():
-    """Test that TestDataV2 creates a working synchronizer"""
-    td = TestDataV2.data_source()
+    """Test that TestData creates a working synchronizer"""
+    td = TestData.data_source()
     synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
@@ -72,7 +72,7 @@ def test_creates_valid_synchronizer():
     assert len(updates) == 1
 
 
-def verify_flag_builder_v2(desc: str, expected_props: dict, builder_actions: Callable[[FlagBuilderV2], FlagBuilderV2]):
+def verify_flag_builder_v2(desc: str, expected_props: dict, builder_actions: Callable[[FlagBuilder], FlagBuilder]):
     """Helper function to verify flag builder behavior"""
     all_expected_props = {
         'key': 'test-flag',
@@ -89,7 +89,7 @@ def verify_flag_builder_v2(desc: str, expected_props: dict, builder_actions: Cal
     }
     all_expected_props.update(expected_props)
 
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     flag_builder = builder_actions(td.flag(key='test-flag'))
     built_flag = flag_builder._build(1)
     assert built_flag == all_expected_props, f"did not get expected flag properties for '{desc}' test"
@@ -234,13 +234,13 @@ def verify_flag_builder_v2(desc: str, expected_props: dict, builder_actions: Cal
         pytest.param({}, lambda f: f.if_match_context('kind1', 'attr1', 'a').then_return(1).clear_rules(), id='clear rules'),
     ],
 )
-def test_flag_configs_parameterized_v2(expected_props: dict, builder_actions: Callable[[FlagBuilderV2], FlagBuilderV2]):
+def test_flag_configs_parameterized_v2(expected_props: dict, builder_actions: Callable[[FlagBuilder], FlagBuilder]):
     verify_flag_builder_v2('x', expected_props, builder_actions)
 
 
 def test_initializer_fetches_flag_data():
     """Test that initializer returns flag data correctly"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('some-flag').variation_for_all(True))
 
     initializer = td.builder.build(Config(sdk_key="dummy"))
@@ -260,7 +260,7 @@ def test_initializer_fetches_flag_data():
 
 def test_synchronizer_yields_initial_data():
     """Test that synchronizer yields initial data correctly"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('initial-flag').variation_for_all(False))
 
     synchronizer = td.builder.build(Config(sdk_key="dummy"))
@@ -281,7 +281,7 @@ def test_synchronizer_yields_initial_data():
 
 def test_synchronizer_receives_updates():
     """Test that synchronizer receives flag updates"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
@@ -325,7 +325,7 @@ def test_synchronizer_receives_updates():
 
 def test_multiple_synchronizers_receive_updates():
     """Test that multiple synchronizers receive the same updates"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     sync1 = td.builder.build(Config(sdk_key="dummy"))
     sync2 = td.builder.build(Config(sdk_key="dummy"))
 
@@ -371,7 +371,7 @@ def test_multiple_synchronizers_receive_updates():
 
 def test_closed_synchronizer_stops_yielding():
     """Test that closed synchronizer stops yielding updates"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     synchronizer = td.builder.build(Config(sdk_key="dummy"))
 
     updates = []
@@ -396,12 +396,12 @@ def test_closed_synchronizer_stops_yielding():
     # Should get exactly one error update indicating the synchronizer is closed
     assert len(additional_updates) == 1
     assert additional_updates[0].state == DataSourceState.OFF
-    assert "TestDataV2 source has been closed" in additional_updates[0].error.message
+    assert "TestData source has been closed" in additional_updates[0].error.message
 
 
 def test_initializer_can_sync():
     """Test that an initializer can call sync() and get initial data"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('test-flag').variation_for_all(True))
 
     initializer = td.builder.build(Config(sdk_key="dummy"))
@@ -418,7 +418,7 @@ def test_initializer_can_sync():
 
 def test_value_for_all():
     """Test value_for_all method creates single-variation flag"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     flag = td.flag('value-flag').value_for_all('custom-value')
     built_flag = flag._build(1)
 
@@ -428,7 +428,7 @@ def test_value_for_all():
 
 def test_version_increment():
     """Test that versions increment correctly"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
 
     flag1 = td.flag('flag1').variation_for_all(True)
     td.update(flag1)
@@ -443,7 +443,7 @@ def test_version_increment():
 
 def test_error_handling_in_fetch():
     """Test error handling in the fetch method"""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     initializer = td.builder.build(Config(sdk_key="dummy"))
 
     # Close the initializer to trigger error condition
@@ -451,4 +451,4 @@ def test_error_handling_in_fetch():
 
     result = initializer.fetch(MockSelectorStore(Selector.no_selector()))
     assert isinstance(result, _Fail)
-    assert "TestDataV2 source has been closed" in result.error
+    assert "TestData source has been closed" in result.error

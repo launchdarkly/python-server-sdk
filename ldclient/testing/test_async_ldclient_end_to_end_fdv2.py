@@ -10,10 +10,10 @@ import pytest
 from ldclient.async_client import AsyncLDClient
 from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.client import Context
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncPollingDataSourceBuilder
 )
-from ldclient.impl.datasourcev2.async_streaming import (
+from ldclient.impl.datasource.async_streaming import (
     AsyncStreamingDataSourceBuilder
 )
 from ldclient.testing.http_util import (
@@ -109,7 +109,7 @@ async def test_async_client_fails_fast_in_polling_mode_with_401_error():
 @pytest.mark.asyncio
 async def test_async_client_retries_poll_after_network_error(monkeypatch):
     # Lower the minimum poll interval so that the retry happens before the start wait ends.
-    monkeypatch.setattr('ldclient.impl.datasourcev2.async_polling.DEFAULT_POLL_INTERVAL', 0.05)
+    monkeypatch.setattr('ldclient.impl.datasource.async_polling.DEFAULT_POLL_INTERVAL', 0.05)
     with start_server() as server:
         server.for_path('/sdk/poll', SequentialHandler(
             CauseNetworkError(), CauseNetworkError(), CauseNetworkError(), poll_response([always_true_flag])))

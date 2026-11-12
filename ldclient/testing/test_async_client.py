@@ -11,7 +11,7 @@ import pytest
 from ldclient.async_client import AsyncLDClient
 from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.context import Context
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import DataStoreMode
 from ldclient.testing.mock_async_components import (
     MockAsyncEventProcessor,
@@ -26,9 +26,9 @@ def _offline_config(**kwargs):
 
 
 def _test_data_config(td=None, **kwargs):
-    """Return an AsyncConfig whose FDv2 data system syncs from TestDataV2."""
+    """Return an AsyncConfig whose FDv2 data system syncs from TestData."""
     if td is None:
-        td = TestDataV2.data_source()
+        td = TestData.data_source()
     return AsyncConfig(
         "test-sdk-key",
         data_system=AsyncDataSystemConfig(synchronizers=[td.async_builder]),
@@ -101,10 +101,10 @@ async def test_default_variation_returns_default_when_not_started():
 async def test_variation_returns_flag_value_when_initialized():
     """After start(), variation() returns the flag value from the data source.
 
-    TestDataV2 supplies the flag without any network connection, so the
+    TestData supplies the flag without any network connection, so the
     client initializes as soon as the synchronizer delivers its basis.
     """
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('my-flag').value_for_all('hello'))
 
     client = AsyncLDClient(_test_data_config(td, send_events=False))
@@ -261,7 +261,7 @@ async def test_flag_tracker_available_before_start():
 @pytest.mark.asyncio
 async def test_variation_detail_returns_reason():
     """variation_detail() returns an EvaluationDetail with a non-None reason."""
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag('detail-flag').value_for_all('hello'))
 
     async with AsyncLDClient(_test_data_config(td, send_events=False)) as client:
@@ -569,11 +569,11 @@ async def test_daemon_mode_logs_daemon_mode(caplog):
 
 
 def test_client_uses_the_default_data_system_when_none_is_set():
-    from ldclient.impl.datasourcev2.async_polling import (
+    from ldclient.impl.datasource.async_polling import (
         AsyncFallbackToFDv1PollingDataSourceBuilder,
         AsyncPollingDataSourceBuilder
     )
-    from ldclient.impl.datasourcev2.async_streaming import (
+    from ldclient.impl.datasource.async_streaming import (
         AsyncStreamingDataSourceBuilder
     )
 

@@ -22,7 +22,7 @@ from ldclient.impl.util import (
     _Fail,
     _Success
 )
-from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.integrations.test_data import TestData
 from ldclient.interfaces import (
     Basis,
     BasisResult,
@@ -77,10 +77,10 @@ class _InitializerBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-
 
 
 def test_two_phase_init():
-    td_initializer = TestDataV2.data_source()
+    td_initializer = TestData.data_source()
     td_initializer.update(td_initializer.flag("feature-flag").on(True))
 
-    td_synchronizer = TestDataV2.data_source()
+    td_synchronizer = TestData.data_source()
     # Set this to true, and then to false to ensure the version number exceeded
     # the initializer version number. Otherwise, they start as the same version
     # and the latest value is ignored.
@@ -124,7 +124,7 @@ def test_two_phase_init():
 
 
 def test_can_stop_fdv2():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
         synchronizers=[td.builder],
@@ -153,7 +153,7 @@ def test_can_stop_fdv2():
 
 
 def test_fdv2_data_availability_is_refreshed_with_data():
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     data_system_config = DataSystemConfig(
         initializers=None,
         synchronizers=[td.builder],
@@ -172,7 +172,7 @@ def test_fdv2_data_availability_is_refreshed_with_data():
 def test_fdv2_fallsback_to_secondary_synchronizer():
     mock: Synchronizer = Mock()
     mock.sync.return_value = iter([])  # Empty iterator to simulate no data
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
     data_system_config = DataSystemConfig(
         initializers=[td.builder],
@@ -207,7 +207,7 @@ def test_fdv2_fallsback_to_secondary_synchronizer():
 def test_fdv2_shutdown_down_if_both_synchronizers_fail():
     mock: Synchronizer = Mock()
     mock.sync.return_value = iter([])  # Empty iterator to simulate no data
-    td = TestDataV2.data_source()
+    td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
     data_system_config = DataSystemConfig(
         initializers=[td.builder],
@@ -249,7 +249,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_error_with_header():
     ])
 
     # Create FDv1 fallback data source with actual data
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -299,7 +299,7 @@ def test_fdv2_falls_back_to_fdv1_on_polling_success_with_header():
     ])
 
     # Create FDv1 fallback data source
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-fallback-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -337,7 +337,7 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
     and that the FDv1 data replaces the initialized data.
     """
     # Initialize with some data
-    td_initializer = TestDataV2.data_source()
+    td_initializer = TestData.data_source()
     td_initializer.update(td_initializer.flag("initial-flag").on(True))
 
     # Create mock primary that signals fallback
@@ -353,7 +353,7 @@ def test_fdv2_falls_back_to_fdv1_with_initializer():
     ])
 
     # Create FDv1 fallback with different data
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-replacement-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -413,7 +413,7 @@ def test_fdv2_no_fallback_without_header():
     ])
 
     # Create FDv1 fallback (should not be used)
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-should-not-appear").on(True))
 
     data_system_config = DataSystemConfig(
@@ -456,7 +456,7 @@ def test_fdv2_stays_on_fdv1_after_fallback():
     ])
 
     # Create FDv1 fallback
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -509,11 +509,11 @@ def test_fdv2_initializer_should_run_until_success():
         os.write(f, initial_flag_data.encode("utf-8"))
         os.close(f)
 
-        td_initializer = TestDataV2.data_source()
+        td_initializer = TestData.data_source()
         td_initializer.update(td_initializer.flag("feature-flag").on(True))
 
         # We actually do not care what this synchronizer does.
-        td_synchronizer = TestDataV2.data_source()
+        td_synchronizer = TestData.data_source()
 
         data_system_config = DataSystemConfig(
             initializers=[file_ds_builder([path]), td_initializer.builder],
@@ -565,11 +565,11 @@ def test_fdv2_should_finish_initialization_on_first_successful_initializer():
         os.write(f, initial_flag_data.encode("utf-8"))
         os.close(f)
 
-        td_initializer = TestDataV2.data_source()
+        td_initializer = TestData.data_source()
         td_initializer.update(td_initializer.flag("feature-flag").on(True))
 
         # We actually do not care what this synchronizer does.
-        td_synchronizer = TestDataV2.data_source()
+        td_synchronizer = TestData.data_source()
 
         data_system_config = DataSystemConfig(
             initializers=[td_initializer.builder, file_ds_builder([path])],
@@ -631,7 +631,7 @@ def test_fdv2_initializer_fallback_with_payload_engages_fdv1_synchronizer():
     fdv2_sync_mock.stop = Mock()
     fdv2_sync_mock.sync.return_value = iter([])
 
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     data_system_config = DataSystemConfig(
@@ -733,7 +733,7 @@ def test_fdv2_synchronizer_fallback_on_success_with_payload():
         )
     ])
 
-    td_fdv1 = TestDataV2.data_source()
+    td_fdv1 = TestData.data_source()
     td_fdv1.update(td_fdv1.flag("fdv1-flag").on(True))
 
     data_system_config = DataSystemConfig(

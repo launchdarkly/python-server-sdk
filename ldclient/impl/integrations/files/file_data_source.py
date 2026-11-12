@@ -46,7 +46,7 @@ def _sanitize_json_item(item):
         item["version"] = 1
 
 
-class _FileDataSourceV2:
+class _FileDataSource:
     """
     Internal implementation of both Initializer and Synchronizer protocols for file-based data.
 
@@ -311,9 +311,9 @@ class _FileDataSourceV2:
                 )
 
         if have_watchdog and not self._force_polling:
-            return _WatchdogAutoUpdaterV2(resolved_paths, self._on_file_change)
+            return _WatchdogAutoUpdater(resolved_paths, self._on_file_change)
         else:
-            return _PollingAutoUpdaterV2(
+            return _PollingAutoUpdater(
                 resolved_paths, self._on_file_change, self._poll_interval
             )
 
@@ -367,7 +367,7 @@ class _FileDataSourceV2:
 
 # Watch for changes to data files using the watchdog package. This uses native OS filesystem notifications
 # if available for the current platform.
-class _WatchdogAutoUpdaterV2:
+class _WatchdogAutoUpdater:
     def __init__(self, resolved_paths, on_change_callback):
         watched_files = set(resolved_paths)
 
@@ -393,7 +393,7 @@ class _WatchdogAutoUpdaterV2:
 
 # Watch for changes to data files by polling their modification times. This is used if auto-update is
 # on but the watchdog package is not installed.
-class _PollingAutoUpdaterV2:
+class _PollingAutoUpdater:
     def __init__(self, resolved_paths, on_change_callback, interval):
         self._paths = resolved_paths
         self._on_change = on_change_callback
@@ -433,7 +433,7 @@ class _PollingAutoUpdaterV2:
         return ret
 
 
-class FileDataSourceV2Builder(DataSourceBuilder):  # pylint: disable=too-few-public-methods
+class FileDataSourceBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-methods
     DEFAULT_POLL_INTERVAL = 1
 
     def __init__(self, paths: str | list[str]):
@@ -441,17 +441,17 @@ class FileDataSourceV2Builder(DataSourceBuilder):  # pylint: disable=too-few-pub
         self.__poll_interval: Optional[float] = None
         self.__force_polling = False
 
-    def poll_interval(self, interval: float) -> 'FileDataSourceV2Builder':
+    def poll_interval(self, interval: float) -> 'FileDataSourceBuilder':
         self.__poll_interval = interval
         return self
 
-    def force_polling(self, force: bool) -> 'FileDataSourceV2Builder':
+    def force_polling(self, force: bool) -> 'FileDataSourceBuilder':
         self.__force_polling = force
         return self
 
-    def build(self, config: DataSourceBuilderConfig) -> _FileDataSourceV2:  # pylint: disable=unused-argument
-        """Builds the FileDataSourceV2 instance."""
-        return _FileDataSourceV2(
+    def build(self, config: DataSourceBuilderConfig) -> _FileDataSource:  # pylint: disable=unused-argument
+        """Builds the FileDataSource instance."""
+        return _FileDataSource(
             self.__paths,
             self.__poll_interval or self.DEFAULT_POLL_INTERVAL,
             self.__force_polling

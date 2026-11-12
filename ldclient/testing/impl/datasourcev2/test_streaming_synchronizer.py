@@ -11,7 +11,7 @@ from ld_eventsource.http import HTTPStatusError
 from ld_eventsource.sse_client import Event, Fault
 
 from ldclient.config import Config, DataSourceBuilderConfig, HTTPConfig
-from ldclient.impl.datasourcev2.streaming import (
+from ldclient.impl.datasource.streaming import (
     STREAMING_ENDPOINT,
     SseClientBuilder,
     StreamingDataSource

@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import pytest
 
-from ldclient.impl.datasourcev2.async_polling import (
+from ldclient.impl.datasource.async_polling import (
     AsyncPollingDataSource,
     PollingResult
 )

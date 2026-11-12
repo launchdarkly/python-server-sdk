@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 
-from ldclient.impl.datasourcev2.polling import (
+from ldclient.impl.datasource.polling import (
     PollingDataSource,
     PollingResult,
     Selector,
