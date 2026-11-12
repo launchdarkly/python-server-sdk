@@ -144,7 +144,7 @@ async def test_context_variable_set_in_before_stage_is_kept_per_evaluation():
     store._initialized = True
     config = AsyncConfig(
         "test-sdk-key",
-        datasystem_config=async_datasystem.daemon(store).build(),
+        data_system=async_datasystem.daemon(store).build(),
         send_events=False,
         hooks=[ContextVarHook()],
     )
@@ -234,7 +234,7 @@ async def test_after_stage_runs_when_evaluation_is_cancelled():
     store._initialized = True
     config = AsyncConfig(
         "test-sdk-key",
-        datasystem_config=async_datasystem.daemon(store).build(),
+        data_system=async_datasystem.daemon(store).build(),
         send_events=False,
         hooks=[ContextVarHook()],
     )

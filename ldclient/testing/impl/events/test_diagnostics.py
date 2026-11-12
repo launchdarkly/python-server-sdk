@@ -78,7 +78,7 @@ def test_create_diagnostic_config_custom():
         flush_interval=1,
         stream_uri='https://test.com',
         poll_interval=60,
-        datasystem_config=datasystem.daemon(test_store).build(),
+        data_system=datasystem.daemon(test_store).build(),
         all_attributes_private=True,
         context_keys_capacity=10,
         context_keys_flush_interval=60,

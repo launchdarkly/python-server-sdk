@@ -73,7 +73,7 @@ def make_config(uri, builder, **kwargs):
         base_uri=uri,
         stream_uri=uri,
         send_events=False,
-        datasystem_config=builder.build(),
+        data_system=builder.build(),
         **kwargs,
     )
 
@@ -113,7 +113,7 @@ def test_client_sends_event_without_diagnostics():
             server.for_path('/sdk/poll', poll_response([always_true_flag]))
             events_server.for_path('/bulk', BasicResponse(202))
             config = Config(sdk_key, base_uri=server.uri, events_uri=events_server.uri, diagnostic_opt_out=True,
-                            datasystem_config=datasystem.polling().build())
+                            data_system=datasystem.polling().build())
 
             with LDClient(config=config) as client:
                 assert client.is_initialized()
@@ -133,7 +133,7 @@ def test_client_sends_diagnostics():
             server.for_path('/sdk/poll', poll_response([always_true_flag]))
             events_server.for_path('/diagnostic', BasicResponse(202))
             config = Config(sdk_key, base_uri=server.uri, events_uri=events_server.uri,
-                            datasystem_config=datasystem.polling().build())
+                            data_system=datasystem.polling().build())
 
             with LDClient(config=config) as client:
                 assert client.is_initialized()
@@ -405,7 +405,7 @@ def make_temp_file(content):
 
 def file_client(path):
     builder = datasystem.custom().synchronizers(datasystem.file_ds_builder([path]))
-    return LDClient(config=Config(sdk_key, send_events=False, datasystem_config=builder.build()))
+    return LDClient(config=Config(sdk_key, send_events=False, data_system=builder.build()))
 
 
 def test_evaluates_full_flag_from_file_data_source():
@@ -429,7 +429,7 @@ def test_evaluates_simplified_flag_from_file_data_source():
 
 def make_test_data_client(td):
     builder = datasystem.custom().synchronizers(td.builder)
-    return LDClient(config=Config(sdk_key, send_events=False, datasystem_config=builder.build()))
+    return LDClient(config=Config(sdk_key, send_events=False, data_system=builder.build()))
 
 
 def rule_flag(td):

@@ -89,7 +89,7 @@ class LDClient:
         self._config = config
         self._config._instance_id = str(uuid4())
         self._config._validate()
-        self._datasystem_config = config.datasystem_config or datasystem.default().build()
+        self._data_system_config = config.data_system or datasystem.default().build()
 
         self._event_processor = None
         self._event_factory_default = EventFactory(False)
@@ -166,7 +166,7 @@ class LDClient:
         """
         if self._config.offline:
             return False
-        if _is_daemon_mode(self._datasystem_config) and not self._config.send_events:
+        if _is_daemon_mode(self._data_system_config) and not self._config.send_events:
             return False
         return True
 
@@ -177,7 +177,7 @@ class LDClient:
         self.__hooks_lock = ReadWriteLock()
         self.__hooks = self._config.hooks + plugin_hooks  # type: List[Hook]
 
-        self._data_system: DataSystem = FDv2(self._config, self._datasystem_config)
+        self._data_system: DataSystem = FDv2(self._config, self._data_system_config)
 
         self.__flag_tracker = FlagTrackerImpl(
             self._data_system.flag_change_listeners,
@@ -201,9 +201,9 @@ class LDClient:
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
-        elif _is_daemon_mode(self._datasystem_config):
+        elif _is_daemon_mode(self._data_system_config):
             log.info("Started LaunchDarkly Client in daemon mode")
-        elif _has_no_data_sources(self._datasystem_config):
+        elif _has_no_data_sources(self._data_system_config):
             log.warning("The data system has no data sources and no persistent store. All evaluations will return default values.")
 
         diagnostic_accumulator = self._set_event_processor(self._config)
@@ -216,7 +216,7 @@ class LDClient:
         update_processor_ready = threading.Event()
         self._data_system.start(update_processor_ready)
 
-        if not self._config.offline and not _is_daemon_mode(self._datasystem_config):
+        if not self._config.offline and not _is_daemon_mode(self._data_system_config):
             if start_wait > 60:
                 log.warning(f"Client was configured to block for up to {start_wait} seconds when initializing. We recommend blocking no longer than 60.")
 

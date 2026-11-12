@@ -38,7 +38,7 @@ def make_config(uri, synchronizer):
         base_uri=uri,
         stream_uri=uri,
         send_events=False,
-        datasystem_config=AsyncDataSystemConfig(synchronizers=[synchronizer]),
+        data_system=AsyncDataSystemConfig(synchronizers=[synchronizer]),
     )
 
 

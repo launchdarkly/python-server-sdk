@@ -47,14 +47,14 @@ class Consul:
         To use this method, you must first install the ``python-consul`` package. Then, pass the object
         returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
         :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
-        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
+        result as the ``data_system`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
             from ldclient import datasystem
             from ldclient.config import Config
             from ldclient.integrations import Consul
             store = Consul.new_feature_store()
-            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
+            config = Config('sdk-key', data_system=datasystem.persistent_store(store).build())
 
         :param host: hostname of the Consul server (uses ``localhost`` if omitted)
         :param port: port of the Consul server (uses 8500 if omitted)
@@ -64,7 +64,7 @@ class Consul:
           `python-consul API <https://python-consul.readthedocs.io/en/latest/#consul>`_
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          When the SDK is configured to use FDv2 (by setting ``data_system``
           on :class:`ldclient.config.Config`), the cache is automatically disabled
           once the in-memory store has been initialized, so these settings only
           affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
@@ -86,14 +86,14 @@ class DynamoDB:
         Then, pass the object
         returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
         :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
-        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
+        result as the ``data_system`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
             from ldclient import datasystem
             from ldclient.config import Config
             from ldclient.integrations import DynamoDB
             store = DynamoDB.new_feature_store("my-table-name")
-            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
+            config = Config('sdk-key', data_system=datasystem.persistent_store(store).build())
 
         Note that the DynamoDB table must already exist; the LaunchDarkly SDK does not create the table
         automatically, because it has no way of knowing what additional properties (such as permissions
@@ -110,7 +110,7 @@ class DynamoDB:
           the `boto3 API <https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client>`_
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          When the SDK is configured to use FDv2 (by setting ``data_system``
           on :class:`ldclient.config.Config`), the cache is automatically disabled
           once the in-memory store has been initialized, so these settings only
           affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
@@ -168,7 +168,7 @@ class DynamoDB:
         To use this method, you must first install the ``aioboto3`` package. Then, pass the object
         returned by this method to :func:`ldclient.async_datasystem.persistent_store`, or to
         :func:`ldclient.async_datasystem.daemon` if another process keeps the store up to date, and set
-        the result as the ``datasystem_config`` of your client configuration
+        the result as the ``data_system`` of your client configuration
         (:class:`ldclient.async_config.AsyncConfig`).
         ::
 
@@ -176,7 +176,7 @@ class DynamoDB:
             from ldclient.async_config import AsyncConfig
             from ldclient.integrations import DynamoDB
             store = DynamoDB.async_feature_store("my-table-name")
-            config = AsyncConfig('sdk-key', datasystem_config=async_datasystem.persistent_store(store).build())
+            config = AsyncConfig('sdk-key', data_system=async_datasystem.persistent_store(store).build())
 
         The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
         one DynamoDB table.
@@ -229,14 +229,14 @@ class Redis:
         To use this method, you must first install the ``redis`` package. Then, pass the object
         returned by this method to :func:`ldclient.datasystem.persistent_store`, or to
         :func:`ldclient.datasystem.daemon` if another process keeps the store up to date, and set the
-        result as the ``datasystem_config`` of your client configuration (:class:`ldclient.config.Config`).
+        result as the ``data_system`` of your client configuration (:class:`ldclient.config.Config`).
         ::
 
             from ldclient import datasystem
             from ldclient.config import Config
             from ldclient.integrations import Redis
             store = Redis.new_feature_store()
-            config = Config('sdk-key', datasystem_config=datasystem.persistent_store(store).build())
+            config = Config('sdk-key', data_system=datasystem.persistent_store(store).build())
 
         :param url: the URL of the Redis host; defaults to ``DEFAULT_URL``
         :param prefix: a namespace prefix to be prepended to all Redis keys; defaults to
@@ -245,7 +245,7 @@ class Redis:
           the maximum number of connections, use ``redis_opts={'max_connections': N}`` instead.
         :param caching: specifies whether local caching should be enabled and if so,
           sets the cache properties; defaults to :func:`ldclient.feature_store.CacheConfig.default()`.
-          When the SDK is configured to use FDv2 (by setting ``datasystem_config``
+          When the SDK is configured to use FDv2 (by setting ``data_system``
           on :class:`ldclient.config.Config`), the cache is automatically disabled
           once the in-memory store has been initialized, so these settings only
           affect the brief bootstrap window. See :class:`ldclient.feature_store.CacheConfig`.
@@ -318,7 +318,7 @@ class Redis:
         To use this method, you must first install the ``redis`` package (version >=5.0.1). Then, pass
         the object returned by this method to :func:`ldclient.async_datasystem.persistent_store`, or to
         :func:`ldclient.async_datasystem.daemon` if another process keeps the store up to date, and set
-        the result as the ``datasystem_config`` of your client configuration
+        the result as the ``data_system`` of your client configuration
         (:class:`ldclient.async_config.AsyncConfig`).
         ::
 
@@ -326,7 +326,7 @@ class Redis:
             from ldclient.async_config import AsyncConfig
             from ldclient.integrations import Redis
             store = Redis.async_feature_store()
-            config = AsyncConfig('sdk-key', datasystem_config=async_datasystem.persistent_store(store).build())
+            config = AsyncConfig('sdk-key', data_system=async_datasystem.persistent_store(store).build())
 
         The data layout matches :func:`new_feature_store`, so an async and a synchronous SDK can share
         one Redis instance.
@@ -407,15 +407,15 @@ class Files:
 
             # Use as initializer only
             data_system = custom().initializers([file_source]).build()
-            config = Config('sdk-key', datasystem_config=data_system)
+            config = Config('sdk-key', data_system=data_system)
 
             # Use as synchronizer only
             data_system = custom().synchronizers(file_source).build()
-            config = Config('sdk-key', datasystem_config=data_system)
+            config = Config('sdk-key', data_system=data_system)
 
             # Use as both initializer and synchronizer
             data_system = custom().initializers([file_source]).synchronizers(file_source).build()
-            config = Config('sdk-key', datasystem_config=data_system)
+            config = Config('sdk-key', data_system=data_system)
 
         This will cause the client not to connect to LaunchDarkly to get feature flags. The
         client may still make network connections to send analytics events, unless you have disabled

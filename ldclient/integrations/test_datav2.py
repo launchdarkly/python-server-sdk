@@ -561,7 +561,7 @@ class TestDataV2:
 
         config = Config(
             sdk_key,
-            datasystem_config=data_config.build(),
+            data_system=data_config.build(),
         )
 
         # flags can be updated at any time:

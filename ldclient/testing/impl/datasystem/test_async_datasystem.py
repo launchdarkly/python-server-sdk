@@ -156,7 +156,7 @@ async def test_client_evaluates_flags_from_a_custom_config():
     td = TestDataV2.data_source()
     td.update(td.flag('flag').on(True))
     data_system = custom().synchronizers(td.async_builder).build()
-    config = AsyncConfig('sdk-key', send_events=False, datasystem_config=data_system)
+    config = AsyncConfig('sdk-key', send_events=False, data_system=data_system)
 
     async with AsyncLDClient(config) as client:
         assert await client.is_initialized()

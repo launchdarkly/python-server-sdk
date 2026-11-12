@@ -31,7 +31,7 @@ def _test_data_config(td=None, **kwargs):
         td = TestDataV2.data_source()
     return AsyncConfig(
         "test-sdk-key",
-        datasystem_config=AsyncDataSystemConfig(synchronizers=[td.async_builder]),
+        data_system=AsyncDataSystemConfig(synchronizers=[td.async_builder]),
         **kwargs,
     )
 
@@ -40,7 +40,7 @@ def _daemon_config(store, **kwargs):
     """Return an AsyncConfig whose FDv2 data system reads only from the given store."""
     return AsyncConfig(
         "test-sdk-key",
-        datasystem_config=AsyncDataSystemConfig(data_store=store, data_store_mode=DataStoreMode.READ_ONLY),
+        data_system=AsyncDataSystemConfig(data_store=store, data_store_mode=DataStoreMode.READ_ONLY),
         **kwargs,
     )
 
@@ -490,7 +490,7 @@ async def test_cached_data_warnings_are_logged_once_per_client(caplog):
     client = AsyncLDClient(AsyncConfig(
         "test-sdk-key",
         send_events=False,
-        datasystem_config=AsyncDataSystemConfig(
+        data_system=AsyncDataSystemConfig(
             synchronizers=[_SilentAsyncSynchronizerBuilder()],
             data_store=store,
             data_store_mode=DataStoreMode.READ_ONLY,
@@ -536,7 +536,7 @@ async def test_daemon_mode_does_not_log_cached_data_warnings(caplog):
 @pytest.mark.asyncio
 async def test_data_system_with_no_sources_and_no_store_logs_a_warning(caplog):
     caplog.set_level(logging.INFO)
-    client = AsyncLDClient(AsyncConfig("test-sdk-key", send_events=False, datasystem_config=AsyncDataSystemConfig()))
+    client = AsyncLDClient(AsyncConfig("test-sdk-key", send_events=False, data_system=AsyncDataSystemConfig()))
     await client.start(start_wait=0)
     await client.close()
 
@@ -578,7 +578,7 @@ def test_client_uses_the_default_data_system_when_none_is_set():
     )
 
     client = AsyncLDClient(AsyncConfig("test-sdk-key", send_events=False))
-    dsc = client._datasystem_config
+    dsc = client._data_system_config
     assert [type(b) for b in dsc.initializers] == [AsyncPollingDataSourceBuilder]
     assert [type(b) for b in dsc.synchronizers] == [AsyncStreamingDataSourceBuilder, AsyncPollingDataSourceBuilder]
     assert isinstance(dsc.fdv1_fallback_synchronizer, AsyncFallbackToFDv1PollingDataSourceBuilder)

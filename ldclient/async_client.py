@@ -88,7 +88,7 @@ class AsyncLDClient:
 
         self._config = config
         self._config._instance_id = str(uuid4())
-        self._datasystem_config = config.datasystem_config or async_datasystem.default().build()
+        self._data_system_config = config.data_system or async_datasystem.default().build()
         self._lifecycle_lock = asyncio.Lock()
 
         self._started = False
@@ -218,13 +218,13 @@ class AsyncLDClient:
         # The data system builds its data sources from builders. Give the shared
         # session to the builders before the data system starts.
         if not self._config.offline:
-            self._wire_data_source_sessions(self._datasystem_config)
+            self._wire_data_source_sessions(self._data_system_config)
 
         if self._config.offline:
             log.info("Started LaunchDarkly Client in offline mode")
-        elif _is_daemon_mode(self._datasystem_config):
+        elif _is_daemon_mode(self._data_system_config):
             log.info("Started LaunchDarkly Client in daemon mode")
-        elif _has_no_data_sources(self._datasystem_config):
+        elif _has_no_data_sources(self._data_system_config):
             log.warning("The data system has no data sources and no persistent store. All evaluations will return default values.")
 
         diagnostic_accumulator = self._set_event_processor(self._config)
@@ -237,7 +237,7 @@ class AsyncLDClient:
         update_processor_ready = AsyncEvent()
         self._data_system.start(update_processor_ready)
 
-        if not self._config.offline and not _is_daemon_mode(self._datasystem_config):
+        if not self._config.offline and not _is_daemon_mode(self._data_system_config):
             if start_wait > 60:
                 log.warning(f"Client was configured to block for up to {start_wait} seconds when initializing. We recommend blocking no longer than 60.")
 
@@ -263,7 +263,7 @@ class AsyncLDClient:
     def _make_data_system(self) -> AsyncDataSystem:
         from ldclient.impl.datasystem.async_fdv2 import AsyncFDv2
 
-        return AsyncFDv2(self._config, self._datasystem_config)
+        return AsyncFDv2(self._config, self._data_system_config)
 
     def _wire_data_source_sessions(self, data_system_config) -> None:
         """Provide the client's aiohttp session to any async data source

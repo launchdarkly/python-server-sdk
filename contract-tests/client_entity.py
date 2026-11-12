@@ -129,7 +129,7 @@ class ClientEntity:
 
                     datasystem.data_store(store, store_mode)
 
-            opts["datasystem_config"] = datasystem.build()
+            opts["data_system"] = datasystem.build()
 
         if config.get("events") is not None:
             events = config["events"]

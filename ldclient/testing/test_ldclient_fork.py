@@ -34,7 +34,7 @@ def make_config(**kwargs) -> Config:
         events_uri=unreachable_uri,
         stream_uri=unreachable_uri,
         event_processor_class=MockEventProcessor,
-        datasystem_config=datasystem.custom().synchronizers(TestDataV2.data_source().builder).build(),
+        data_system=datasystem.custom().synchronizers(TestDataV2.data_source().builder).build(),
     )
     params.update(kwargs)
     return Config(**params)
@@ -45,7 +45,7 @@ def make_client(**kwargs) -> LDClient:
 
 
 def make_daemon_client(**kwargs) -> LDClient:
-    return make_client(datasystem_config=datasystem.daemon(InMemoryFeatureStore()).build(), **kwargs)
+    return make_client(data_system=datasystem.daemon(InMemoryFeatureStore()).build(), **kwargs)
 
 
 def fork_warnings(caplog) -> list:

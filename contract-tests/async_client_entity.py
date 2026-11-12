@@ -83,7 +83,7 @@ class AsyncClientEntity:
 
         datasystem_config = config_params.get('dataSystem')
         if datasystem_config is not None:
-            opts["datasystem_config"] = _build_async_data_system(datasystem_config, opts)
+            opts["data_system"] = _build_async_data_system(datasystem_config, opts)
 
         if config_params.get("events") is not None:
             events = config_params["events"]
