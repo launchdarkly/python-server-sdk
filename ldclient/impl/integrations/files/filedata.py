@@ -62,7 +62,15 @@ YAML_EXTENSIONS = frozenset([".yaml", ".yml"])
 
 # The watchdog event types that can change a file's content or presence. Opening or reading a
 # file also produces events, and a reload reads the files, so those must not count as changes.
-_CHANGE_EVENT_TYPES = frozenset(["created", "modified", "moved", "deleted", "closed"])
+# watchdog 7 reports a change of a file's metadata, such as a new modification time from a
+# touch, as "attrib", where earlier versions reported "modified". A read does not produce it.
+_CHANGE_EVENT_TYPES = frozenset(["created", "modified", "moved", "deleted", "closed", "attrib"])
+
+# How long, in seconds, the watchdog observer waits for further notifications before it delivers
+# the ones it has. watchdog 7 on Windows keeps waiting while notifications arrive, so a change is
+# reported this late, and not at all while another file in the same directory changes more often
+# than this. The watchdog default is one second.
+_OBSERVER_TIMEOUT = 0.1
 
 
 class DuplicateKeysHandling(str, Enum):
@@ -1016,7 +1024,7 @@ class Watcher:
                 watcher._handle_event(event)
 
         self._handler = _Handler()
-        self._observer = watchdog.observers.Observer()
+        self._observer = watchdog.observers.Observer(timeout=_OBSERVER_TIMEOUT)
 
         # Guards the state below. It is never held while the observer is called, because the
         # observer holds its own lock while it dispatches an event to the handler.
@@ -1100,6 +1108,11 @@ class Watcher:
         except Exception as e:
             self._log_unwatchable(directory, 'Cannot watch directory "%s" for changes yet: %s' % (directory, e))
             return None
+        # watchdog 6 on Windows starts a watch's reader thread and returns before the thread has
+        # asked for its first notification, and a change made before then is not reported.
+        # Yielding lets the thread make that request before the setup goes on, for example to
+        # the initial load.
+        time.sleep(0)
         with self._lock:
             self._unwatchable_messages.pop(directory, None)
         return watch
