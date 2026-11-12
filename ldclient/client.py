@@ -28,6 +28,7 @@ from ldclient.impl.datasource.streaming import StreamingUpdateProcessor
 from ldclient.impl.datasystem import DataAvailability, DataSystem
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.evaluator import Evaluator, error_reason
+from ldclient.impl.evaluator_common import is_override_definition
 from ldclient.impl.events.diagnostics import (
     _DiagnosticAccumulator,
     create_diagnostic_id
@@ -89,6 +90,7 @@ class LDClient:
         self._cached_data_warning_lock = threading.Lock()
         self._eval_cached_data_warned = False
         self._all_flags_cached_data_warned = False
+        self._all_flags_overrides_only_warned = False
 
         self._owner_pid = os.getpid()
         self._fork_warned_pids: Dict[int, object] = {}
@@ -211,7 +213,13 @@ class LDClient:
         self.__register_plugins(environment_metadata)
 
         update_processor_ready = threading.Event()
-        self._data_system.start(update_processor_ready)
+        try:
+            self._data_system.start(update_processor_ready)
+        except BaseException:
+            # A data system that fails to start fails the constructor. The components that
+            # are already running stop here, so the failure leaves no threads behind.
+            self._close_components()
+            raise
 
         if not self._config.offline and not self._config.use_ldd:
             if start_wait > 60:
@@ -280,6 +288,24 @@ class LDClient:
         self._event_processor.stop()
         self._data_system.stop()
         self.__big_segment_store_manager.stop()
+
+    def _close_components(self):
+        """
+        Stops the SDK components after a failed start-up. The event processor is last because
+        it may still be sending events the other components generated. A component that fails to
+        stop is logged and the others are still stopped, so the caller receives the start-up
+        failure rather than the failure to stop.
+        """
+        components = (
+            ("data system", self._data_system.stop),
+            ("big segment store manager", self.__big_segment_store_manager.stop),
+            ("event processor", self._event_processor.stop),
+        )
+        for name, stop in components:
+            try:
+                stop()
+            except Exception as e:
+                log.warning("Error stopping the %s after a failed start: %s", name, e)
 
     # These magic methods allow a client object to be automatically cleaned up by the "with" scope operator
     def __enter__(self):
@@ -455,7 +481,12 @@ class LDClient:
                     tracker = OpTracker(key, flag, context, detail, default_stage)
                     return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': stage, 'tracker': tracker})
 
-            detail = EvaluationDetail(default_stage.value, None, error_reason('WRONG_TYPE'))
+            # The type mismatch replaces the reason. The evaluation read the same definitions,
+            # so the new reason keeps the override-affected marking.
+            reason = error_reason('WRONG_TYPE')
+            if detail.reason.get('overrideAffected') is True:
+                reason['overrideAffected'] = True
+            detail = EvaluationDetail(default_stage.value, None, reason)
             tracker = OpTracker(key, flag, context, detail, default_stage)
             return _EvaluationWithHookResult(evaluation_detail=detail, results={'default_stage': default_stage, 'tracker': tracker})
 
@@ -468,6 +499,13 @@ class LDClient:
         if self._config.offline:
             return EvaluationDetail(default, None, error_reason('CLIENT_NOT_READY')), None
 
+        def not_ready() -> Tuple[EvaluationDetail, Optional[FeatureFlag]]:
+            log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
+            reason = error_reason('CLIENT_NOT_READY')
+            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+            return EvaluationDetail(default, None, reason), None
+
+        flag: Any = None
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -477,23 +515,28 @@ class LDClient:
                             self._eval_cached_data_warned = True
                             log.warning("Feature Flag evaluation attempted before client has initialized - using last known values from feature store for feature key: " + key + ". This message is logged once.")
             else:
-                log.warning("Feature Flag evaluation attempted before client has initialized! Feature store unavailable - returning default: " + str(default) + " for feature key: " + key)
-                reason = error_reason('CLIENT_NOT_READY')
-                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-                return EvaluationDetail(default, None, reason), None
+                # No data from LaunchDarkly is available. A flag that the override layer holds
+                # is served anyway. A flag the layer does not hold gets the not-ready default,
+                # as it does without an override source.
+                layer = self._data_system.override_layer
+                if layer is not None:
+                    flag = layer.get(FEATURES, key)
+                if flag is None:
+                    return not_ready()
 
         if not context.valid:
             log.warning("Context was invalid for flag evaluation (%s); returning default value" % context.error)
             return EvaluationDetail(default, None, error_reason('USER_NOT_SPECIFIED')), None
 
-        try:
-            flag = self._data_system.store.get(FEATURES, key)
-        except Exception as e:
-            log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
-            log.debug(traceback.format_exc())
-            reason = error_reason('EXCEPTION')
-            self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
-            return EvaluationDetail(default, None, reason), None
+        if flag is None:
+            try:
+                flag = self._data_system.store.get(FEATURES, key)
+            except Exception as e:
+                log.error("Unexpected error while retrieving feature flag \"%s\": %s" % (key, repr(e)))
+                log.debug(traceback.format_exc())
+                reason = error_reason('EXCEPTION')
+                self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
+                return EvaluationDetail(default, None, reason), None
         if not flag:
             reason = error_reason('FLAG_NOT_FOUND')
             self._send_event(event_factory.new_unknown_flag_event(key, context, default, reason))
@@ -506,13 +549,19 @@ class LDClient:
                 detail = result.detail
                 if detail.is_default_value():
                     detail = EvaluationDetail(default, None, detail.reason)
-                self._send_event(event_factory.new_eval_event(flag, context, detail, default))
+                self._send_event(event_factory.new_eval_event(flag, context, detail, default, None, result.override_affected))
                 return detail, flag
             except Exception as e:
                 log.error("Unexpected error while evaluating feature flag \"%s\": %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
                 reason = error_reason('EXCEPTION')
-                self._send_event(event_factory.new_default_event(flag, context, default, reason))
+                # The evaluation read the flag definition before it failed. A definition from
+                # the override layer marks the result, so the failure is reported in the
+                # summary counters only, like any other override-affected evaluation.
+                override_affected = is_override_definition(flag)
+                if override_affected:
+                    reason['overrideAffected'] = True
+                self._send_event(event_factory.new_default_event(flag, context, default, reason, override_affected))
                 return EvaluationDetail(default, None, reason), flag
 
     def all_flags_state(self, context: Context, **kwargs) -> FeatureFlagsState:
@@ -546,6 +595,7 @@ class LDClient:
 
         self._check_forked()
 
+        override_flags: Optional[Dict[str, Any]] = None
         availability = self._data_system.data_availability
         if availability != DataAvailability.REFRESHED:
             if availability == DataAvailability.CACHED:
@@ -555,25 +605,51 @@ class LDClient:
                             self._all_flags_cached_data_warned = True
                             log.warning("all_flags_state() called before client has finished initializing! Using last known values from feature store. This message is logged once.")
             else:
-                log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
-                return FeatureFlagsState(False)
+                # No data from LaunchDarkly is available. When the override layer holds flags,
+                # the state contains only those, read from the layer itself: a store that is not
+                # initialized can still hold LaunchDarkly data, which the state must not include.
+                # Without override flags the state is unavailable, as it is without an override
+                # source.
+                layer = self._data_system.override_layer
+                override_flags = layer.all(FEATURES) if layer is not None else {}
+                if len(override_flags) == 0:
+                    log.warning("all_flags_state() called before client has finished initializing! Feature store unavailable - returning empty state")
+                    return FeatureFlagsState(False)
 
         if not context.valid:
             log.warning("Context was invalid for all_flags_state (%s); returning default value" % context.error)
             return FeatureFlagsState(False)
 
-        state = FeatureFlagsState(True)
+        valid = True
         client_only = kwargs.get('client_side_only', False)
         with_reasons = kwargs.get('with_reasons', False)
         details_only_if_tracked = kwargs.get('details_only_for_tracked_flags', False)
-        try:
-            flags_map = self._data_system.store.all(FEATURES, lambda x: x)
-            if flags_map is None:
-                raise ValueError("feature store error")
-        except Exception as e:
-            log.error("Unable to read flags for all_flag_state: %s" % repr(e))
-            return FeatureFlagsState(False)
+        if override_flags is not None:
+            if not self._all_flags_overrides_only_warned:
+                with self._cached_data_warning_lock:
+                    if not self._all_flags_overrides_only_warned:
+                        self._all_flags_overrides_only_warned = True
+                        log.warning("all_flags_state() called before client has finished initializing! Returning only flags from the override layer. This message is logged once.")
+            flags_map = override_flags
+        else:
+            try:
+                flags_map = self._data_system.store.all(FEATURES, lambda x: x)
+                if flags_map is None:
+                    raise ValueError("feature store error")
+            except Exception as e:
+                log.error("Unable to read flags for all_flag_state: %s" % repr(e))
+                # Overrides only add to the state. Without them the state is invalid and empty
+                # here, so it holds the override layer's flags and stays invalid. A client-side
+                # SDK bootstrapped from the state uses its flags whatever $valid says (the
+                # JavaScript client SDKs 3.x and 4.x only warn), so the overridden values still
+                # reach it.
+                layer = self._data_system.override_layer
+                flags_map = layer.all(FEATURES) if layer is not None else {}
+                if len(flags_map) == 0:
+                    return FeatureFlagsState(False)
+                valid = False
 
+        state = FeatureFlagsState(valid)
         for key, flag in flags_map.items():
             if client_only and not flag.get('clientSide', False):
                 continue
@@ -581,14 +657,30 @@ class LDClient:
                 result = self._evaluator.evaluate(flag, context, self._event_factory_default)
                 detail = result.detail
                 prerequisites = result.prerequisites
+                override_affected = result.override_affected
             except Exception as e:
                 log.error("Error evaluating flag \"%s\" in all_flags_state: %s" % (key, repr(e)))
                 log.debug(traceback.format_exc())
-                reason = {'kind': 'ERROR', 'errorKind': 'EXCEPTION'}
+                reason = error_reason('EXCEPTION')
+                # The evaluation read the flag definition before it failed, so a definition from
+                # the override layer marks the result.
+                override_affected = is_override_definition(flag)
+                if override_affected:
+                    reason['overrideAffected'] = True
                 detail = EvaluationDetail(None, None, reason)
                 prerequisites = []
 
             requires_experiment_data = EventFactory.is_experiment(flag, detail.reason)
+            track_events = flag.get('trackEvents', False) or requires_experiment_data
+            track_reason = requires_experiment_data
+            debug_events_until_date = flag.get('debugEventsUntilDate', None)
+            if override_affected:
+                # A consumer of this state sends individual events according to these fields.
+                # An override-affected evaluation produces no individual events, so the state
+                # turns them off for this flag. The flag, its value, and its reason stay.
+                track_events = False
+                track_reason = False
+                debug_events_until_date = None
             flag_state = {
                 'key': flag['key'],
                 'value': detail.value,
@@ -596,9 +688,9 @@ class LDClient:
                 'reason': detail.reason,
                 'version': flag['version'],
                 'prerequisites': prerequisites,
-                'trackEvents': flag.get('trackEvents', False) or requires_experiment_data,
-                'trackReason': requires_experiment_data,
-                'debugEventsUntilDate': flag.get('debugEventsUntilDate', None),
+                'trackEvents': track_events,
+                'trackReason': track_reason,
+                'debugEventsUntilDate': debug_events_until_date,
             }
 
             state.add_flag(flag_state, with_reasons, details_only_if_tracked)

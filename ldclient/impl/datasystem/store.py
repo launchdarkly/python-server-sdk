@@ -10,7 +10,11 @@ import threading
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
+from ldclient.impl.dependency_tracker import (
+    DependencyTracker,
+    ExternalDependencies,
+    KindAndKey
+)
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.model.entity import ModelEntity
 from ldclient.impl.rwlock import ReadWriteLock
@@ -182,6 +186,10 @@ class _StoreBase:
         # Used to track dependencies between items in the store
         self._dependency_tracker = DependencyTracker()
 
+        # A second dependency graph, such as the override layer's, whose items may depend on
+        # items in this store. Set once at construction of the data system, before any data.
+        self._external_dependencies: Optional[ExternalDependencies] = None
+
         # Listeners for events
         self._flag_change_listeners = flag_change_listeners
         self._change_set_listeners = change_set_listeners
@@ -194,6 +202,40 @@ class _StoreBase:
 
         # Thread synchronization
         self._lock = threading.RLock()
+
+    def set_external_dependencies(self, dependencies: Optional[ExternalDependencies]) -> None:
+        """
+        Registers a second dependency graph whose items may depend on items in this store. A
+        change to an item in this store then also notifies the external items that depend on
+        it, directly or through any chain of dependencies in either graph.
+        """
+        with self._lock:
+            self._external_dependencies = dependencies
+
+    def _add_affected_items(self, items_out: Set[KindAndKey], initial_modified_item: KindAndKey) -> None:
+        """
+        Adds the item and everything that depends on it to the set, following this store's
+        dependency graph and the external one. Every item reached through either graph is
+        expanded through both, so a dependency chain may cross between them any number of times.
+        """
+        external = self._external_dependencies
+        if external is None:
+            self._dependency_tracker.add_affected_items(items_out, initial_modified_item)
+            return
+
+        pending: List[KindAndKey] = [initial_modified_item]
+        while pending:
+            current = pending.pop()
+            # Each graph gets its own working set: a tracker does not expand an item that is
+            # already present, so sharing one set would stop the second graph at the start.
+            via_store: Set[KindAndKey] = set()
+            self._dependency_tracker.add_affected_items(via_store, current)
+            via_external: Set[KindAndKey] = set()
+            external.add_affected_items(via_external, current)
+            for reached in via_store | via_external:
+                if reached not in items_out:
+                    items_out.add(reached)
+                    pending.append(reached)
 
     def selector(self) -> Selector:
         """Returns the current selector."""
@@ -282,7 +324,7 @@ class _StoreBase:
                     kind, key, item
                 )
                 if has_listeners:
-                    self._dependency_tracker.add_affected_items(
+                    self._add_affected_items(
                         affected_items, KindAndKey(kind=kind, key=key)
                     )
 
@@ -353,11 +395,11 @@ class _StoreBase:
 
                 # If either is missing or versions differ, it's a change
                 if old_item is None or new_item is None:
-                    self._dependency_tracker.add_affected_items(
+                    self._add_affected_items(
                         affected_items, KindAndKey(kind=kind, key=key)
                     )
                 elif old_item.get("version", 0) != new_item.get("version", 0):
-                    self._dependency_tracker.add_affected_items(
+                    self._add_affected_items(
                         affected_items, KindAndKey(kind=kind, key=key)
                     )
 

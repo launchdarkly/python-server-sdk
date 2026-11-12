@@ -86,6 +86,7 @@ def status():
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',
+            'flag-overrides',
             'retry-conformance-fdv1-streaming',
             'retry-conformance-fdv1-polling',
             'service-endpoints',
