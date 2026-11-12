@@ -527,8 +527,11 @@ def test_source_retains_last_good_data_across_malformed_edit(tmp_path, sources, 
 def test_source_retries_a_failed_load_without_a_change_signal(tmp_path, sources, caplog):
     # The fixed content has the same size as the malformed content and the file keeps its
     # modification time, so the poller sees no change. Only the automatic retry can recover.
+    # The initial content has a different size from the malformed content, so the poller sees
+    # the malformed write even where file times are coarse, as on Windows, and the two writes
+    # can share a modification time.
     path = os.path.join(str(tmp_path), 'overrides.json')
-    write_file(path, '{"flagValues": {"flag1": true}}')
+    write_file(path, '{"flagValues": {"flag1": true, "flag2": true}}')
     with caplog.at_level(logging.ERROR):
         _, sink = build_source(sources, [path], lambda b: b.poll_interval(FileOverrideSourceBuilder.MINIMUM_POLL_INTERVAL))
         sink.require_snapshot()
