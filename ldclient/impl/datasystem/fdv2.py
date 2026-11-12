@@ -1,6 +1,6 @@
 import time
 from queue import Queue
-from threading import Event, Thread
+from threading import Event, Thread, current_thread
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from ldclient.config import Config, DataSourceBuilder, DataSystemConfig
@@ -367,8 +367,11 @@ class FDv2(_FDv2Base, DataSystem):
                 except Exception as e:
                     log.error("Error stopping active data source: %s", e)
 
-        # Wait for all threads to complete
+        # Wait for all threads to complete. A listener can call stop on one of these threads,
+        # and a thread cannot join itself. That thread sees the stop event and exits on its own.
         for thread in self._threads:
+            if thread is current_thread():
+                continue
             if thread.is_alive():
                 thread.join(timeout=5.0)  # 5 second timeout
                 if thread.is_alive():

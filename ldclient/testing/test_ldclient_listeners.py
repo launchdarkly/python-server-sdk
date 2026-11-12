@@ -1,8 +1,14 @@
+import time
 from queue import Queue
+from threading import Event
+from typing import List
 
+from ldclient import datasystem
 from ldclient.client import Config, LDClient
 from ldclient.config import BigSegmentsConfig
-from ldclient.interfaces import DataSourceState
+from ldclient.feature_store import InMemoryFeatureStore
+from ldclient.integrations.test_datav2 import TestDataV2
+from ldclient.interfaces import DataSourceState, DataStoreMode
 from ldclient.testing.http_util import start_server
 from ldclient.testing.mock_components import MockBigSegmentStore
 from ldclient.testing.stub_util import (
@@ -61,3 +67,45 @@ def test_data_source_status_updates():
             with LDClient(config=config) as client:
                 assert client.data_source_status_provider.status.state == DataSourceState.VALID
                 assert client.data_source_status_provider.status.error is None
+
+
+def test_client_can_be_closed_from_a_flag_change_listener():
+    td = TestDataV2.data_source()
+    td.update(td.flag('flag').on(True))
+    store = _CloseTrackingStore()
+    data_system = datasystem.custom().synchronizers(td.builder).data_store(store, DataStoreMode.READ_WRITE).build()
+    client = LDClient(Config('SDK_KEY', send_events=False, datasystem_config=data_system), start_wait=5)
+    assert client.is_initialized()
+
+    closed = Event()
+    errors: List[Exception] = []
+
+    def listener(flag_change):
+        try:
+            client.close()
+        except Exception as e:
+            errors.append(e)
+        finally:
+            closed.set()
+
+    client.flag_tracker.add_listener(listener)
+    td.update(td.flag('flag').on(False))
+
+    assert closed.wait(5), "Flag change listener was not called in time"
+    assert errors == []
+    assert store.closed
+
+    # The listener's own thread sets the OFF status after the listener returns.
+    deadline = time.monotonic() + 5
+    while client.data_source_status_provider.status.state != DataSourceState.OFF and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert client.data_source_status_provider.status.state == DataSourceState.OFF
+
+
+class _CloseTrackingStore(InMemoryFeatureStore):
+    def __init__(self):
+        super().__init__()
+        self.closed = False
+
+    def close(self):
+        self.closed = True
