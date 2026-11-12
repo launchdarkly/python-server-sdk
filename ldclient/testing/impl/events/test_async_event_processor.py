@@ -272,6 +272,31 @@ async def test_two_events_for_same_context_only_produce_one_index_event():
         assert output[3]['kind'] == 'summary'
 
 
+@pytest.mark.parametrize(
+    "event,expected_kinds",
+    [
+        pytest.param(EventInputIdentify(timestamp, context), ['identify', 'identify'], id='identify'),
+        pytest.param(EventInputCustom(timestamp, context, 'eventkey', {'thing': 'stuff'}, 1.5), ['index', 'custom', 'index', 'custom'], id='custom'),
+        pytest.param(
+            EventInputEvaluation(timestamp, context, flag.key, flag, 1, 'value', None, 'default', None, True),
+            ['index', 'feature', 'index', 'feature', 'summary'],
+            id='feature',
+        ),
+    ],
+)
+async def test_events_are_delivered_with_zero_context_keys_capacity(event, expected_kinds):
+    mock_http = MockAioHttp()
+    async with make_processor(mock_http, context_keys_capacity=0) as ep:
+        ep.send_event(event)
+        ep.send_event(event)
+
+        output = await flush_and_get_events(ep, mock_http)
+        assert [item['kind'] for item in output] == expected_kinds
+        for item in output:
+            if item['kind'] != 'summary':
+                assert item['context'] == context.to_dict()
+
+
 async def test_nontracked_events_are_summarized():
     mock_http = MockAioHttp()
     async with make_processor(mock_http) as ep:
