@@ -7,7 +7,11 @@ import threading
 from typing import Any, Callable, Dict, Optional, Set
 
 from ldclient.impl.dependency_tracker import DependencyTracker, KindAndKey
-from ldclient.impl.overrides.layer import LayerContents, OverrideLayer
+from ldclient.impl.overrides.layer import (
+    DeletedItemError,
+    LayerContents,
+    OverrideLayer
+)
 from ldclient.impl.util import log
 from ldclient.interfaces import OverrideSink, ReadOnlyStore
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
@@ -51,7 +55,13 @@ class OverrideSinkImpl(OverrideSink):
             if self._closed:
                 log.debug("Ignoring an override snapshot supplied after the override source was closed")
                 return
-            self._apply(flags, segments)
+            try:
+                self._apply(flags, segments)
+            except DeletedItemError as e:
+                # The layer rejected the whole snapshot before changing anything, so nothing is
+                # notified. The error also reaches the source, as for an invalid definition.
+                log.error("Rejected an override snapshot; the overrides in effect stay: %s", e)
+                raise
 
     def close(self) -> None:
         """

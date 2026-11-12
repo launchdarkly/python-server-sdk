@@ -2,6 +2,7 @@
 Tests for the override layer, the overlay at the store read boundary, and the sink that applies
 snapshots and notifies flag change listeners.
 """
+import logging
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -129,6 +130,49 @@ def test_layer_rejects_a_definition_whose_key_differs_from_its_mapping_key(flags
         layer.set_all(flags, segments)
     assert list(layer.all(FEATURES).keys()) == ['flag1']
     assert layer.all(SEGMENTS) == {}
+
+
+def snapshot_with_deleted_item(kind, as_model: bool):
+    """
+    A snapshot that changes the entries flag1 and segment1 to version 2 and adds an item of the
+    given kind, named deleted-key, that is marked as deleted, as a model object or in its JSON
+    dictionary form. Because the snapshot changes the other entries too, applying any part of it
+    would show.
+    """
+    data = {'key': 'deleted-key', 'version': 2, 'deleted': True}
+    deleted = {'deleted-key': kind.decode(data) if as_model else data}
+    flags = {'flag1': flag('flag1', 2), **(deleted if kind == FEATURES else {})}
+    segments = {'segment1': segment('segment1', 2), **(deleted if kind == SEGMENTS else {})}
+    return flags, segments
+
+
+def deleted_item_message(kind) -> str:
+    return '%s "deleted-key" is marked as deleted; an override is removed by leaving it out of the snapshot' % ('flag' if kind == FEATURES else 'segment')
+
+
+@pytest.mark.parametrize('as_model', [False, True], ids=['dict', 'model'])
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS], ids=['flag', 'segment'])
+def test_layer_rejects_a_snapshot_that_holds_a_deleted_item_and_keeps_its_contents(kind, as_model):
+    layer = OverrideLayer()
+    layer.set_all({'flag1': flag('flag1')}, {'segment1': segment('segment1')})
+    flags, segments = snapshot_with_deleted_item(kind, as_model)
+
+    with pytest.raises(ValueError) as e:
+        layer.set_all(flags, segments)
+
+    assert str(e.value) == deleted_item_message(kind)
+    assert layer.get(FEATURES, 'flag1').version == 1
+    assert layer.get(SEGMENTS, 'segment1').version == 1
+    assert layer.get(kind, 'deleted-key') is None
+
+
+def test_layer_accepts_definitions_marked_as_not_deleted():
+    layer = OverrideLayer()
+    layer.set_all({'flag1': dict(flag('flag1').to_json_dict(), deleted=False)}, {'segment1': dict(segment('segment1').to_json_dict(), deleted=False)})
+    stored_flag = layer.get(FEATURES, 'flag1')
+    assert stored_flag is not None
+    assert stored_flag.on is True
+    assert layer.get(SEGMENTS, 'segment1') is not None
 
 
 def test_layer_replacement_semantics():
@@ -475,3 +519,35 @@ def test_sink_invalid_snapshot_raises_and_changes_nothing():
         f.sink.set_overrides({'flag1': {'key': 'flag1', 'version': 'bad'}}, {})
     assert f.layer.get(FEATURES, 'flag1').version == 1
     assert f.take_notified() == []
+
+
+@pytest.mark.parametrize('listening', [True, False], ids=['listening', 'not-listening'])
+@pytest.mark.parametrize('as_model', [False, True], ids=['dict', 'model'])
+@pytest.mark.parametrize('kind', [FEATURES, SEGMENTS], ids=['flag', 'segment'])
+def test_sink_rejects_a_snapshot_that_holds_a_deleted_item_logs_it_and_notifies_nothing(kind, as_model, listening, caplog):
+    dependent = FlagBuilder('dependent').version(1).on(True).variations(True, False).fallthrough_variation(1).rules(
+        FlagRuleBuilder().variation(0).clauses(make_clause_matching_segment_key('segment1')).build()
+    ).build()
+    f = SinkFixture(FakeBaseStore(flags={'dependent': dependent}))
+    f.sink.set_overrides({'flag1': flag('flag1')}, {'segment1': segment('segment1')})
+    f.take_notified()
+    f.listening = listening
+    caplog.clear()
+    flags, segments = snapshot_with_deleted_item(kind, as_model)
+
+    with pytest.raises(ValueError) as e:
+        f.sink.set_overrides(flags, segments)
+
+    assert str(e.value) == deleted_item_message(kind)
+    assert f.layer.get(FEATURES, 'flag1').version == 1
+    assert f.layer.get(SEGMENTS, 'segment1').version == 1
+    assert f.layer.get(kind, 'deleted-key') is None
+    assert f.take_notified() == []
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert errors == ['Rejected an override snapshot; the overrides in effect stay: ' + deleted_item_message(kind)]
+
+    # The sink still accepts the next snapshot.
+    f.listening = True
+    f.sink.set_overrides({'flag1': flag('flag1', 3)}, {})
+    assert f.layer.get(FEATURES, 'flag1').version == 3
+    assert f.take_notified() == ['dependent', 'flag1']

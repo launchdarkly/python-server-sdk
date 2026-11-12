@@ -4,10 +4,11 @@ local files. The file-based override source is built on it. The existing file da
 keep their own implementation and behavior.
 
 A data file is a JSON or YAML document with optional ``flags``, ``flagValues``, and
-``segments`` members. ``flags`` and ``segments`` hold full definitions keyed by key.
-``flagValues`` maps a flag key to a single value. It expands into a full flag definition
-that returns that value for every context. The file name extension decides the format: a
-file whose name ends in ``.yaml`` or ``.yml`` is YAML, and any other file is JSON.
+``segments`` members. ``flags`` and ``segments`` hold full definitions keyed by key, and a
+definition marked as deleted fails the load of its file. ``flagValues`` maps a flag key to a
+single value. It expands into a full flag definition that returns that value for every
+context. The file name extension decides the format: a file whose name ends in ``.yaml`` or
+``.yml`` is YAML, and any other file is JSON.
 """
 
 import codecs
@@ -92,6 +93,19 @@ class FileReadError(FileDataError):
         self.path = path
 
 
+class DeletedEntryError(FileReadError):
+    """
+    Indicates that a file holds a flag or segment entry marked as deleted. An override is removed
+    by removing its entry, so such a file fails to load like one that cannot be parsed.
+    """
+
+    def __init__(self, path: str, kind_name: str, key: str):
+        FileDataError.__init__(self, '%s "%s" in %s is marked as deleted; remove the entry to remove its override' % (kind_name, key, path))
+        self.path = path
+        self.kind_name = kind_name
+        self.key = key
+
+
 class DuplicateKeyError(FileDataError):
     """Indicates that the same key appears in more than one file and the handling is FAIL."""
 
@@ -170,9 +184,11 @@ def read_file(path: str) -> Document:
     except OSError as e:
         raise FileReadError(path, "unable to read file: %s" % e)
     try:
-        return parse_document(raw, is_yaml_path(path))
+        document = parse_document(raw, is_yaml_path(path))
     except Exception as e:
         raise FileReadError(path, "error parsing file: %s" % e)
+    _reject_deleted_entries(path, document)
+    return document
 
 
 def has_content(raw: bytes) -> bool:
@@ -336,9 +352,25 @@ def _parse_file(path: str, raw: bytes) -> Optional[Document]:
     """Parses what was read from a file that exists. Returns None when the parser read nothing."""
     is_yaml = is_yaml_path(path)
     try:
-        return _parse_content(raw, is_yaml)
+        document = _parse_content(raw, is_yaml)
     except Exception as e:
         raise FileReadError(path, "error parsing file as %s, the format of its name: %s" % ("YAML" if is_yaml else "JSON", e))
+    if document is not None:
+        _reject_deleted_entries(path, document)
+    return document
+
+
+def _reject_deleted_entries(path: str, document: Document) -> None:
+    """
+    Raises :class:`DeletedEntryError` for the first flag or segment entry of a parsed file that is
+    marked as deleted. The override layer never holds a deleted item, and an override is removed
+    by removing its entry, so such an entry is a mistake in the file that fails its load. The file
+    data sources do not use this module and keep accepting such entries.
+    """
+    for kind_name, items in (("flag", document.flags), ("segment", document.segments)):
+        for key, item in items.items():
+            if item.deleted:
+                raise DeletedEntryError(path, kind_name, key)
 
 
 def _parse_files(contents: List[_FileRead], duplicate_keys_handling: DuplicateKeysHandling) -> Tuple[MergeResult, bytes]:

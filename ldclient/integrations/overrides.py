@@ -72,7 +72,8 @@ class FileOverrideSourceBuilder(OverrideSourceBuilder):
     overrides, and deleting every file removes them all. A file that exists but cannot be read
     or parsed makes that whole reload fail. The previously loaded overrides stay in effect, the
     source logs the failure, retries after a short delay, and recovers on its own once the file
-    is readable again.
+    is readable again. A file that contains an entry marked as deleted fails to load, and the
+    overrides in effect stay; to remove an override, remove its entry or delete the file.
 
     Files can be rewritten in place: if the source finds a file empty while it is being
     rewritten, it keeps the overrides in effect until the new content is written. To remove a

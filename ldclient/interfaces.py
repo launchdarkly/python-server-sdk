@@ -2149,8 +2149,10 @@ class OverrideSink(Protocol):  # pylint: disable=too-few-public-methods
         either a :class:`ldclient.impl.model.FeatureFlag` or :class:`ldclient.impl.model.Segment`
         model object or its JSON dictionary form, whose own key is the key it has in the mapping.
         A dictionary that is not a valid definition, or a definition whose key differs from its
-        key in the mapping, raises ``ValueError``, and the layer is left unchanged. The SDK itself
-        marks the entries as overrides.
+        key in the mapping, raises ``ValueError``, and the layer is left unchanged. A snapshot
+        that contains a flag or segment marked as deleted is rejected with ``ValueError``, and
+        the overrides in effect stay; to remove an override, leave it out of the snapshot. The
+        SDK itself marks the entries as overrides.
 
         This method is safe to call from any thread. Calls are serialized by the SDK.
 
