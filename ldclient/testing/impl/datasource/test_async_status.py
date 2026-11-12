@@ -333,3 +333,35 @@ async def test_upsert_records_store_error_on_failure():
 
     assert len(status_capture.statuses) == 1
     assert status_capture.statuses[0].error.kind == DataSourceErrorKind.STORE_ERROR
+
+
+@pytest.mark.asyncio
+async def test_update_status_off_is_terminal():
+    sink, status_listeners, _ = make_sink()
+    status_capture = StatusCapture()
+    status_listeners.add(status_capture)
+
+    sink.update_status(DataSourceState.VALID, None)
+    sink.update_status(DataSourceState.OFF, None)
+
+    # A poll or stream connection still in flight when the data source stopped.
+    sink.update_status(DataSourceState.VALID, None)
+    sink.update_status(DataSourceState.INTERRUPTED, DataSourceErrorInfo(DataSourceErrorKind.NETWORK_ERROR, 0, 1000, 'late'))
+
+    assert sink.status.state == DataSourceState.OFF
+    assert sink.status.error is None
+    assert [status.state for status in status_capture.statuses] == [DataSourceState.VALID, DataSourceState.OFF]
+
+
+@pytest.mark.asyncio
+async def test_store_error_after_off_reports_nothing():
+    sink, status_listeners, _ = make_sink(_FailingStore())
+    status_capture = StatusCapture()
+    status_listeners.add(status_capture)
+    sink.update_status(DataSourceState.OFF, None)
+
+    with pytest.raises(RuntimeError):
+        await sink.upsert(FEATURES, make_flag('flag-a').to_json_dict())
+
+    assert sink.status.state == DataSourceState.OFF
+    assert [status.state for status in status_capture.statuses] == [DataSourceState.OFF]

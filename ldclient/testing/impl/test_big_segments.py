@@ -1,5 +1,6 @@
 import time
 from queue import Queue
+from threading import Event
 
 from ldclient.config import BigSegmentsConfig
 from ldclient.evaluation import BigSegmentsStatus
@@ -185,3 +186,32 @@ def test_status_polling_detects_stale_status():
         assert status3.stale is False
     finally:
         manager.stop()
+
+
+def test_status_query_reuses_a_poll_that_is_already_in_flight():
+    # The polling task queries the store as soon as it starts. A status request
+    # that arrives while that query is still in flight reuses it rather than
+    # sending a second one, which is what the SDK does at startup.
+    metadata_queries = []
+    poll_started = Event()
+
+    def slow_metadata():
+        metadata_queries.append(True)
+        poll_started.set()
+        time.sleep(0.25)
+        return BigSegmentStoreMetadata(time.time() * 1000)
+
+    store = MockBigSegmentStore()
+    store.setup_metadata(slow_metadata)
+
+    manager = BigSegmentStoreManager(BigSegmentsConfig(store=store, status_poll_interval=10))
+    try:
+        assert poll_started.wait(1.0), "polling task never queried the store"
+        # The task's query is in flight now, so this request must wait for it
+        # instead of starting its own.
+        assert manager.status_provider.status.available is True
+        time.sleep(0.1)  # let a second query show up, if the fix is not working
+    finally:
+        manager.stop()
+
+    assert len(metadata_queries) == 1

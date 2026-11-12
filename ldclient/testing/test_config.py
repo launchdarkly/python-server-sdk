@@ -1,6 +1,12 @@
 import pytest
 
-from ldclient.config import Config
+from ldclient.async_config import AsyncConfig
+from ldclient.config import DEFAULT_POLL_INTERVAL, Config
+
+# Both classes handle these options identically, so every case runs against
+# both rather than being duplicated and left to drift.
+CONFIG_CLASSES = [Config, AsyncConfig]
+CONFIG_IDS = ["Config", "AsyncConfig"]
 
 
 def test_copy_config():
@@ -38,14 +44,32 @@ def test_with_wrapper_information_defaults_the_version():
     assert wrapped.wrapper_version is None
 
 
-def test_can_set_valid_poll_interval():
-    config = Config(sdk_key="SDK_KEY", poll_interval=31)
-    assert config.poll_interval == 31
+@pytest.mark.parametrize("config_class", CONFIG_CLASSES, ids=CONFIG_IDS)
+@pytest.mark.parametrize(
+    "configured,expected",
+    [
+        (5, DEFAULT_POLL_INTERVAL),
+        (29, DEFAULT_POLL_INTERVAL),
+        (30, 30),
+        (31, 31),
+        (60, 60),
+    ],
+    ids=["below-the-minimum", "just-below", "at-the-minimum", "just-above", "above"],
+)
+def test_a_poll_interval_below_the_minimum_is_raised_to_it(config_class, configured, expected):
+    config = config_class(sdk_key="SDK_KEY", poll_interval=configured)
+
+    assert config.poll_interval == expected
 
 
-def test_minimum_poll_interval_is_enforced():
-    config = Config(sdk_key="SDK_KEY", poll_interval=29)
-    assert config.poll_interval == 30
+@pytest.mark.parametrize("config_class", CONFIG_CLASSES, ids=CONFIG_IDS)
+@pytest.mark.parametrize("configured", [0.001, 0.5, 1, 30, 600], ids=["tiny", "fraction", "default", "thirty", "long"])
+def test_a_configured_initial_reconnect_delay_is_reported_as_given(config_class, configured):
+    """This option has no minimum, so a sub-second value survives as given.
+    The spec ceilings are applied by ``for_streaming``, not here."""
+    config = config_class(sdk_key="SDK_KEY", initial_reconnect_delay=configured)
+
+    assert config.initial_reconnect_delay == configured
 
 
 def test_can_set_valid_diagnostic_interval():

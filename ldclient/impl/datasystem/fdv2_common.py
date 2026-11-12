@@ -9,13 +9,13 @@ enum.
 import time
 from copy import copy
 from enum import Enum
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 from ldclient.impl.datasystem import DataAvailability, DiagnosticAccumulator
 from ldclient.impl.datasystem.store import _StoreBase
 from ldclient.impl.listeners import Listeners
 from ldclient.impl.rwlock import ReadWriteLock
-from ldclient.impl.util import log
+from ldclient.impl.util import log, monotonic_seconds
 from ldclient.interfaces import (
     DataSourceErrorInfo,
     DataSourceState,
@@ -135,37 +135,69 @@ class ConditionDirective(str, Enum):
     """
 
 
-def fallback_condition(status: DataSourceStatus) -> bool:
+class _StateAgeTracker:
+    """
+    Measures how long the data source has been in its current state, on the
+    monotonic timeline, by observing statuses as they are sampled.
+
+    The identity key is ``(state, since)``: a real transition changes ``since``
+    even when the state repeats (an interrupted-valid-interrupted flap between
+    two samples), while a same-state error update preserves it, so a stream of
+    error reports cannot keep resetting the measured age. ``since`` is used
+    only for equality, never arithmetic, so wall-clock steps cannot distort
+    the measurement.
+
+    Ages are measured from first observation, so they under-count the true
+    time in state by up to one sampling period.
+    """
+
+    def __init__(self) -> None:
+        self.__key: Optional[Tuple[DataSourceState, float]] = None
+        self.__observed_at = 0.0
+
+    def seconds_in_state(self, status: DataSourceStatus) -> float:
+        key = (status.state, status.since)
+        if key != self.__key:
+            self.__key = key
+            self.__observed_at = monotonic_seconds()
+        return monotonic_seconds() - self.__observed_at
+
+
+def fallback_condition(status: DataSourceStatus, seconds_in_state: float) -> bool:
     """
     Determine if we should fallback to the next synchronizer in the list.
     This applies at any position in the synchronizers list.
 
     :param status: Current data source status
+    :param seconds_in_state: monotonic seconds spent in ``status.state``, as
+        measured by a :class:`_StateAgeTracker`
     :return: True if fallback condition is met
     """
     interrupted_at_runtime = (
         status.state == DataSourceState.INTERRUPTED
-        and time.time() - status.since > 60  # 1 minute
+        and seconds_in_state > 60  # 1 minute
     )
     cannot_initialize = (
         status.state == DataSourceState.INITIALIZING
-        and time.time() - status.since > 10  # 10 seconds
+        and seconds_in_state > 10  # 10 seconds
     )
 
     return interrupted_at_runtime or cannot_initialize
 
 
-def recovery_condition(status: DataSourceStatus) -> bool:
+def recovery_condition(status: DataSourceStatus, seconds_in_state: float) -> bool:
     """
     Determine if we should try to recover to the first (preferred) synchronizer.
     This only applies when not already at the first synchronizer (index > 0).
 
     :param status: Current data source status
+    :param seconds_in_state: monotonic seconds spent in ``status.state``, as
+        measured by a :class:`_StateAgeTracker`
     :return: True if recovery condition is met
     """
     healthy_for_too_long = (
         status.state == DataSourceState.VALID
-        and time.time() - status.since > 300  # 5 minutes
+        and seconds_in_state > 300  # 5 minutes
     )
 
     return healthy_for_too_long

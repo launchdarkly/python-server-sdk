@@ -72,6 +72,11 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
 
         old_status = self.__status
 
+        # OFF is terminal. A poll or stream connection that was still in
+        # flight when the data source stopped must not report after it.
+        if old_status.state == DataSourceState.OFF:
+            return
+
         if new_state == DataSourceState.INTERRUPTED and old_status.state == DataSourceState.INITIALIZING:
             new_state = DataSourceState.INITIALIZING
 

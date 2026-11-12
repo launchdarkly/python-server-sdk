@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import timedelta
 from random import Random
 from typing import (
     TYPE_CHECKING,
@@ -15,7 +15,7 @@ from typing import (
 )
 
 from ldclient.impl.sampler import Sampler
-from ldclient.impl.util import Result, log
+from ldclient.impl.util import Result, log, monotonic_seconds
 from ldclient.migrations.tracker import OpTracker
 from ldclient.migrations.types import (
     ExecutionOrder,
@@ -419,7 +419,7 @@ class AsyncExecutor:
         """
         Execute the configured operation and track any available measurements.
         """
-        start = datetime.now()
+        start = monotonic_seconds()
 
         try:
             result = await self.__fn(self.__payload)
@@ -428,7 +428,7 @@ class AsyncExecutor:
 
         # Record required tracker measurements
         if self.__measure_latency:
-            self.__tracker.latency(self.__origin, datetime.now() - start)
+            self.__tracker.latency(self.__origin, timedelta(seconds=monotonic_seconds() - start))
 
         if self.__measure_errors and not result.is_success():
             self.__tracker.error(self.__origin)

@@ -14,6 +14,14 @@ def current_time_millis() -> int:
     return int(time.time() * 1000)
 
 
+def monotonic_seconds() -> float:
+    """
+    Seconds on the monotonic clock. Use this for measuring intervals and
+    durations; use the wall clock for functionality tied to time outside the process.
+    """
+    return time.monotonic()
+
+
 def timedelta_millis(delta: timedelta) -> float:
     return delta / timedelta(milliseconds=1)
 
@@ -134,6 +142,9 @@ def throw_if_unsuccessful_response(resp):
 
 
 def is_http_error_recoverable(status):
+    """
+    Deprecated. Use :func:`ldclient.impl.retry.classify_http_status` instead.
+    """
     if status >= 400 and status < 500:
         return status in _RETRYABLE_STATUSES  # all other 4xx besides these are unrecoverable
     return True  # all other errors are recoverable
@@ -144,6 +155,10 @@ def http_error_description(status):
 
 
 def http_error_message(status, context, retryable_message="will retry"):
+    """
+    Deprecated. The FDv1 data sources build their own message, so that it can
+    report the real retry delay.
+    """
     return "Received %s for %s - %s" % (http_error_description(status), context, retryable_message if is_http_error_recoverable(status) else "giving up permanently")
 
 

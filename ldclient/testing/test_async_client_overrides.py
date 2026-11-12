@@ -16,7 +16,7 @@ from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
 from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.context import Context
 from ldclient.evaluation import EvaluationDetail
-from ldclient.hook import AsyncHook, EvaluationSeriesContext, Metadata
+from ldclient.hook import EvaluationSeriesContext, Hook, Metadata
 from ldclient.impl.aio.concurrency import AsyncEvent
 from ldclient.impl.events.async_event_processor import (
     DefaultAsyncEventProcessor
@@ -597,15 +597,15 @@ async def test_overridden_prerequisite_marks_the_dependent_evaluation_records():
 async def test_wrong_type_result_of_overridden_flag_stays_marked():
     details = []
 
-    class CapturingHook(AsyncHook):
+    class CapturingHook(Hook):
         @property
         def metadata(self) -> Metadata:
             return Metadata(name='capturing-hook')
 
-        async def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
+        def before_evaluation(self, series_context: EvaluationSeriesContext, data: dict) -> dict:
             return data
 
-        async def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
+        def after_evaluation(self, series_context: EvaluationSeriesContext, data: dict, detail: EvaluationDetail) -> dict:
             details.append(detail)
             return data
 

@@ -37,6 +37,11 @@ DEFAULT_BASE_URI = 'https://app.launchdarkly.com'
 DEFAULT_EVENTS_URI = 'https://events.launchdarkly.com'
 DEFAULT_STREAM_URI = 'https://stream.launchdarkly.com'
 
+# Defaults, in seconds, for the two configurable data source intervals. The
+# poll interval is also its own minimum.
+DEFAULT_INITIAL_RECONNECT_DELAY = 1
+DEFAULT_POLL_INTERVAL = 30
+
 
 class BigSegmentsConfig:
     """Configuration options related to Big Segments.
@@ -323,11 +328,11 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         flush_interval: float = 5,
         stream_uri: str = DEFAULT_STREAM_URI,
         stream: bool = True,
-        initial_reconnect_delay: float = 1,
+        initial_reconnect_delay: float = DEFAULT_INITIAL_RECONNECT_DELAY,
         defaults: dict = {},
         send_events: Optional[bool] = None,
         update_processor_class: Optional[Callable[['Config', FeatureStore, Event], UpdateProcessor]] = None,
-        poll_interval: float = 30,
+        poll_interval: float = DEFAULT_POLL_INTERVAL,
         use_ldd: bool = False,
         feature_store: Optional[FeatureStore] = None,
         feature_requester_class=None,
@@ -420,7 +425,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         :param enable_event_compression: Whether or not to enable GZIP compression for outgoing events.
         :param omit_anonymous_contexts: Sets whether anonymous contexts should be omitted from index and identify events.
         :param payload_filter_key: The payload filter is used to selectively limited the flags and segments delivered in the data source payload. Payload filtering is not supported with the FDv2 data system, so this has no effect on FDv2 requests.
-        :param datasystem_config: Configuration for the upcoming enhanced data system design. This is experimental and should not be set without direction from LaunchDarkly support.
+        :param datasystem_config: Configuration for the data system, which controls how the SDK gets flag and segment data. When set, it overrides ``feature_store``, ``update_processor_class``, ``stream``, and ``use_ldd``.
         """
         self.__sdk_key = validate_sdk_key_format(sdk_key, log)
 
@@ -430,7 +435,7 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
         self.__update_processor_class = update_processor_class
         self.__stream = stream
         self.__initial_reconnect_delay = initial_reconnect_delay
-        self.__poll_interval = max(poll_interval, 30.0)
+        self.__poll_interval = max(poll_interval, DEFAULT_POLL_INTERVAL)
         self.__use_ldd = use_ldd
         self.__feature_store = InMemoryFeatureStore() if not feature_store else feature_store
         self.__event_processor_class = event_processor_class
@@ -732,9 +737,8 @@ class Config(DataSourceBuilderConfig, PrivateAttributesConfig):
     @property
     def datasystem_config(self) -> Optional[DataSystemConfig]:
         """
-        Configuration for the upcoming enhanced data system design. This is
-        experimental and should not be set without direction from LaunchDarkly
-        support.
+        Configuration for the data system, which controls how the SDK gets
+        flag and segment data.
         """
         return self._datasystem_config
 

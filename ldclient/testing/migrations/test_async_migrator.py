@@ -291,7 +291,11 @@ class TestTrackingLatency:
         assert len(origins) == len(event.latencies)
         for o in origins:
             assert o in event.latencies
-            assert event.latencies[o] >= timedelta(milliseconds=100)
+            # The callable sleeps 0.1s; assert a substantial measured latency
+            # with margin for monotonic-clock granularity, which is coarse on
+            # some platforms (e.g. Windows before Python 3.13, ~16ms) and can
+            # under-measure a 100ms sleep.
+            assert event.latencies[o] >= timedelta(milliseconds=50)
 
     @pytest.mark.parametrize(
         "stage,origins",
@@ -322,7 +326,11 @@ class TestTrackingLatency:
         assert len(origins) == len(event.latencies)
         for o in origins:
             assert o in event.latencies
-            assert event.latencies[o] >= timedelta(milliseconds=100)
+            # The callable sleeps 0.1s; assert a substantial measured latency
+            # with margin for monotonic-clock granularity, which is coarse on
+            # some platforms (e.g. Windows before Python 3.13, ~16ms) and can
+            # under-measure a 100ms sleep.
+            assert event.latencies[o] >= timedelta(milliseconds=50)
 
 
 @pytest.mark.asyncio

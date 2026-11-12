@@ -1,4 +1,4 @@
-from threading import Event, Thread
+from threading import TIMEOUT_MAX, Event, Thread
 from typing import Any, Callable
 
 from ldclient.impl.delay import DelaySource, FixedDelay
@@ -66,7 +66,7 @@ class RepeatingTask:
 
     def _run(self):
         if self.__initial_delay > 0:
-            if self.__stop.wait(self.__initial_delay):
+            if self.__stop.wait(min(self.__initial_delay, TIMEOUT_MAX)):
                 return
         stopped = self.__stop.is_set()
         while not stopped:
@@ -77,4 +77,4 @@ class RepeatingTask:
             # The wait starts when the callback returns, so a slow callback
             # never shortens it.
             delay = self.__delays.next_delay
-            stopped = self.__stop.wait(delay) if delay > 0 else self.__stop.is_set()
+            stopped = self.__stop.wait(min(delay, TIMEOUT_MAX)) if delay > 0 else self.__stop.is_set()

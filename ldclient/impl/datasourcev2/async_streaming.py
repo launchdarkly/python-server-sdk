@@ -24,7 +24,13 @@ from ldclient.impl.datasourcev2.streaming_common import (
     with_fallback_signal
 )
 from ldclient.impl.datasystem import DiagnosticAccumulator, DiagnosticSource
-from ldclient.impl.util import _LD_ENVID_HEADER, _LD_FD_FALLBACK_HEADER, log
+from ldclient.impl.util import (
+    _LD_ENVID_HEADER,
+    _LD_FD_FALLBACK_HEADER,
+    current_time_millis,
+    log,
+    monotonic_seconds
+)
 from ldclient.interfaces import (
     AsyncSynchronizer,
     ChangeSetBuilder,
@@ -150,7 +156,7 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
 
         change_set_builder = ChangeSetBuilder()
         self._running = True
-        self._connection_attempt_start_time = time()
+        self._connection_attempt_start_time = monotonic_seconds()
 
         envid = None
         # A Start action with the X-LD-FD-Fallback: true header sets fallback_requested.
@@ -253,9 +259,9 @@ class AsyncStreamingDataSource(AsyncSynchronizer, DiagnosticSource):
             self._owned_session = None
 
     def _record_stream_init(self, failed: bool):
-        if self._diagnostic_accumulator and self._connection_attempt_start_time:
-            current_time = int(time() * 1000)
-            elapsed = current_time - int(self._connection_attempt_start_time * 1000)
+        if self._diagnostic_accumulator and self._connection_attempt_start_time is not None:
+            current_time = current_time_millis()
+            elapsed = int(monotonic_seconds() * 1000) - int(self._connection_attempt_start_time * 1000)
             self._diagnostic_accumulator.record_stream_init(current_time, elapsed if elapsed >= 0 else 0, failed)
 
     async def _handle_error(self, error: Exception, envid: Optional[str]) -> Tuple[Optional[Update], bool]:

@@ -63,6 +63,8 @@ def verify_flag_builder(desc: str, expected_props: dict, builder_actions: Callab
         pytest.param({'variations': ['a', 'b', 'c'], 'fallthrough': {'variation': 2}}, lambda f: f.variations('a', 'b', 'c').variation_for_all(2), id='set variation index for all'),
         pytest.param({'offVariation': 0}, lambda f: f.off_variation(True), id='set off variation boolean'),
         pytest.param({'variations': ['a', 'b', 'c'], 'offVariation': 2}, lambda f: f.variations('a', 'b', 'c').off_variation(2), id='set off variation index'),
+        pytest.param({'variations': ['x'], 'offVariation': 0}, lambda f: f.value_for_all('x'), id='value for all'),
+        pytest.param({'on': False, 'variations': ['x'], 'offVariation': 0}, lambda f: f.value_for_all('x').on(False), id='value for all with targeting off'),
         pytest.param(
             {
                 'targets': [
@@ -278,6 +280,21 @@ def test_flag_evaluation_with_client():
     assert eval2.value is False
     assert eval2.variation_index == 1
     assert eval2.reason['kind'] == 'FALLTHROUGH'
+
+
+def test_value_for_all_evaluates_to_value_when_targeting_is_off():
+    td = TestData.data_source()
+    store = InMemoryFeatureStore()
+
+    client = LDClient(config=Config('SDK_KEY', update_processor_class=td, send_events=False, feature_store=store))
+
+    td.update(td.flag(key='test-flag').value_for_all('x').on(False))
+
+    detail = client.variation_detail('test-flag', Context.create('user1'), default='default')
+
+    assert detail.value == 'x'
+    assert detail.variation_index == 0
+    assert detail.reason['kind'] == 'OFF'
 
 
 def test_flag_can_evaluate_all_flags():

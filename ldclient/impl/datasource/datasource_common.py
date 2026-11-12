@@ -5,10 +5,15 @@ Pure helpers shared by the FDv1 polling and streaming data sources.
 # currently excluded from documentation - see docs/README.md
 
 from collections import namedtuple
-from typing import Mapping, Optional, Protocol, runtime_checkable
+from typing import Mapping, Optional, Protocol, Union, runtime_checkable
 
 from ldclient.impl.util import _LD_ENVID_HEADER
-from ldclient.interfaces import DataSourceUpdateSink, FeatureStore
+from ldclient.interfaces import (
+    AsyncDataSourceUpdateSink,
+    AsyncFeatureStore,
+    DataSourceUpdateSink,
+    FeatureStore
+)
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS
 
 STREAM_ALL_PATH = '/all'
@@ -17,7 +22,24 @@ FDV1_POLLING_ENDPOINT = '/sdk/latest-all'
 ParsedPath = namedtuple('ParsedPath', ['kind', 'key'])
 
 
-def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore):
+class StreamClosedError(Exception):
+    """The stream connection closed cleanly, and the SDK did not ask for it.
+
+    The service normally leaves the connection open, so a close the SDK did
+    not ask for is a connection failure. The SDK backs off before it
+    reconnects, rather than reconnecting at once.
+
+    It is a NORMAL failure, not an UNEXPECTED one. A load balancer draining
+    during a rolling deploy closes streams cleanly, and putting that in the
+    extended regime would take a whole fleet out of service for up to an
+    hour.
+    """
+
+    def __init__(self):
+        super().__init__("the server closed the stream connection")
+
+
+def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore) -> Union[DataSourceUpdateSink, FeatureStore]:
     """
     The original implementation of the data sources relied on the feature store
     directly, which we are trying to move away from. Customers who might have
@@ -28,6 +50,18 @@ def sink_or_store(sink: Optional[DataSourceUpdateSink], store: FeatureStore):
     The next major release should be able to simplify this structure and
     remove the need for fall back to the data store because the update sink
     should always be present.
+    """
+    if sink is None:
+        return store
+
+    return sink
+
+
+def async_sink_or_store(sink: Optional[AsyncDataSourceUpdateSink], store: AsyncFeatureStore) -> Union[AsyncDataSourceUpdateSink, AsyncFeatureStore]:
+    """
+    The async counterpart of :func:`sink_or_store`, kept separate so each side
+    names its own sink and store types. One shared generic function accepted a
+    sync sink beside an async store without complaint.
     """
     if sink is None:
         return store
