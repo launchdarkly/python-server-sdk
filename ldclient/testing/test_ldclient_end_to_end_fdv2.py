@@ -228,7 +228,9 @@ def test_client_retries_poll_after_network_error(monkeypatch):
             CauseNetworkError(), CauseNetworkError(), CauseNetworkError(), poll_response([always_true_flag])))
         builder = datasystem.custom().synchronizers(datasystem.polling_ds_builder().poll_interval(0.05))
 
-        with LDClient(config=make_config(server.uri, builder)) as client:
+        # A network error closes the connection, so each retry opens a new one. On Windows, a new
+        # connection to localhost can take about 2 seconds, so wait longer than the default.
+        with LDClient(config=make_config(server.uri, builder), start_wait=20) as client:
             assert client.is_initialized()
             assert client.variation(always_true_flag['key'], user, False) is True
 
