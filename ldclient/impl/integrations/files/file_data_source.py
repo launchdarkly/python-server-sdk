@@ -2,6 +2,7 @@ import json
 import os
 import time
 import traceback
+from threading import current_thread
 from typing import Optional
 
 from ldclient.impl.repeating_task import RepeatingTask
@@ -174,7 +175,10 @@ class _FileDataSource(UpdateProcessor):
 
         def stop(self):
             self._observer.stop()
-            self._observer.join()
+            # A listener can stop the client on the observer thread, and a thread cannot join
+            # itself. That thread sees the stop request and exits on its own.
+            if self._observer is not current_thread():
+                self._observer.join()
 
     # Watch for changes to data files by polling their modification times. This is used if auto-update is
     # on but the watchdog package is not installed.
