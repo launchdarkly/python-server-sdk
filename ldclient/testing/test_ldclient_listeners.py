@@ -1,7 +1,7 @@
 import time
 from queue import Queue
 from threading import Event
-from typing import List
+from typing import Any, Callable, List, Tuple
 
 from ldclient import datasystem
 from ldclient.client import Config, LDClient
@@ -73,14 +73,44 @@ def test_client_can_be_closed_from_a_flag_change_listener():
     td = TestDataV2.data_source()
     td.update(td.flag('flag').on(True))
     store = _CloseTrackingStore()
+    client = _make_client(td, store)
+    try:
+        closed, errors = _close_from_listener(client, client.flag_tracker.add_listener)
+        td.update(td.flag('flag').on(False))
+        _assert_closed_from_listener(client, store, closed, errors)
+    finally:
+        client.close()
+
+
+def test_client_can_be_closed_from_a_data_store_status_listener():
+    td = TestDataV2.data_source()
+    td.update(td.flag('flag').on(True))
+    store = _CloseTrackingStore()
+    client = _make_client(td, store)
+    try:
+        closed, errors = _close_from_listener(client, client.data_store_status_provider.add_listener)
+        # A failed write reports the store as unavailable on the thread that applies the update.
+        store.fail_writes = True
+        td.update(td.flag('flag').on(False))
+        _assert_closed_from_listener(client, store, closed, errors)
+    finally:
+        client.close()
+
+
+def _make_client(td: TestDataV2, store: '_CloseTrackingStore') -> LDClient:
     data_system = datasystem.custom().synchronizers(td.builder).data_store(store, DataStoreMode.READ_WRITE).build()
     client = LDClient(Config('SDK_KEY', send_events=False, datasystem_config=data_system), start_wait=5)
     assert client.is_initialized()
+    return client
 
+
+def _close_from_listener(client: LDClient, add_listener: Callable[[Callable[[Any], None]], None]) -> Tuple[Event, List[Exception]]:
     closed = Event()
     errors: List[Exception] = []
 
-    def listener(flag_change):
+    def listener(_):
+        if closed.is_set():
+            return
         try:
             client.close()
         except Exception as e:
@@ -88,10 +118,12 @@ def test_client_can_be_closed_from_a_flag_change_listener():
         finally:
             closed.set()
 
-    client.flag_tracker.add_listener(listener)
-    td.update(td.flag('flag').on(False))
+    add_listener(listener)
+    return closed, errors
 
-    assert closed.wait(5), "Flag change listener was not called in time"
+
+def _assert_closed_from_listener(client: LDClient, store: '_CloseTrackingStore', closed: Event, errors: List[Exception]):
+    assert closed.wait(5), "Listener was not called in time"
     assert errors == []
     assert store.closed
 
@@ -101,11 +133,36 @@ def test_client_can_be_closed_from_a_flag_change_listener():
         time.sleep(0.01)
     assert client.data_source_status_provider.status.state == DataSourceState.OFF
 
+    # The update that called the listener is not written to the closed store.
+    assert store.writes_after_close == []
+
 
 class _CloseTrackingStore(InMemoryFeatureStore):
     def __init__(self):
         super().__init__()
         self.closed = False
+        self.fail_writes = False
+        self.writes_after_close: List[str] = []
+
+    def init(self, all_data):
+        self._record_write('init')
+        super().init(all_data)
+
+    def upsert(self, kind, item):
+        self._record_write('upsert')
+        super().upsert(kind, item)
+
+    def _record_write(self, operation: str):
+        if self.closed:
+            self.writes_after_close.append(operation)
+        if self.fail_writes:
+            raise Exception("simulated store failure")
+
+    def is_monitoring_enabled(self) -> bool:
+        return True
+
+    def is_available(self) -> bool:
+        return not self.fail_writes
 
     def close(self):
         self.closed = True
