@@ -33,6 +33,7 @@ from ldclient.interfaces import (
     DataStoreStatus,
     FeatureStore,
     FlagChange,
+    Initializer,
     OverrideSource,
     ReadOnlyStore,
     Synchronizer
@@ -260,6 +261,7 @@ class FDv2(_FDv2Base, DataSystem):
         self._stop_event = Event()
         self._lock = ReadWriteLock()
         self._active_synchronizer: Optional[Synchronizer] = None
+        self._active_initializer: Optional[Initializer] = None
         self._threads: List[Thread] = []
         self._environment_id: Optional[str] = None
 
@@ -361,6 +363,13 @@ class FDv2(_FDv2Base, DataSystem):
         self._stop_event.set()
 
         with self._lock.write():
+            # An initializer can match the protocol without the stop method.
+            stop_initializer = getattr(self._active_initializer, "stop", None)
+            if stop_initializer is not None:
+                try:
+                    stop_initializer()
+                except Exception as e:
+                    log.error("Error stopping active initializer: %s", e)
             if self._active_synchronizer is not None:
                 try:
                     self._active_synchronizer.stop()
@@ -386,6 +395,10 @@ class FDv2(_FDv2Base, DataSystem):
 
             # Run initializers first
             fallback_requested = self._run_initializers(set_on_ready)
+
+            # Stop can interrupt an initializer. The synchronizers then do not start.
+            if self._stop_event.is_set():
+                return
 
             # If an initializer asked the SDK to fall back to FDv1, halt the
             # configured FDv2 chain and switch terminally to the FDv1 Fallback
@@ -436,7 +449,20 @@ class FDv2(_FDv2Base, DataSystem):
                 initializer = initializer_builder.build(self._config)
                 log.info("Attempting to initialize via %s", initializer.name)
 
-                basis_result = initializer.fetch(self._store)
+                # Stop sets the stop event before it takes the lock. So stop either sees this
+                # initializer and stops it, or this check sees the stop event.
+                with self._lock.write():
+                    if self._stop_event.is_set():
+                        return False
+                    self._active_initializer = initializer
+                try:
+                    basis_result = initializer.fetch(self._store)
+                finally:
+                    with self._lock.write():
+                        self._active_initializer = None
+
+                if self._stop_event.is_set():
+                    return False
 
                 if isinstance(basis_result, _Fail):
                     log.warning("Initializer %s failed: %s", initializer.name, basis_result.error)
