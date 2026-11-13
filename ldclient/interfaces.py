@@ -2073,6 +2073,12 @@ class Initializer(Protocol):  # pylint: disable=too-few-public-methods
         """
         raise NotImplementedError
 
+    def stop(self) -> None:
+        """
+        stop is called from another thread when the SDK shuts down while fetch is in progress.
+        It should make fetch return as soon as possible. The default implementation does nothing.
+        """
+
 
 @dataclass(frozen=True)
 class Update:
