@@ -514,6 +514,8 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
                     return False
             except Exception as e:
                 log.error("Initializer failed with exception: %s", e)
+        if self._store.is_memory_initialized():
+            set_on_ready.set()
         return False
 
     async def _run_synchronizers(self, set_on_ready: AsyncEvent):
