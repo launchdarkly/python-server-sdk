@@ -393,6 +393,11 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         # Wait for the coordinator's background work to complete
         await self._runner.stop_all(timeout=5.0)
 
+        # The data source stops here, whichever synchronizer was active.
+        self._data_source_status_provider.update_status(
+            DataSourceState.OFF, self._data_source_status_provider.status.error
+        )
+
         # Close the store
         await self._store.close()
 
@@ -548,6 +553,10 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
                     directive = await self._consume_synchronizer_results(
                         synchronizer, set_on_ready, current_index != 0
                     )
+
+                    # Stop ends the synchronizer. That is not a failure, so the directive is ignored.
+                    if self._stop_event.is_set():
+                        break
 
                     if directive == ConditionDirective.FDV1:
                         # Abandon all synchronizers and use only fdv1 fallback

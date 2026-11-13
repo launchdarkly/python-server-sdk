@@ -116,8 +116,7 @@ class AsyncPollingDataSource(AsyncInitializer, AsyncSynchronizer):
         occurs.
         """
         log.info("Starting PollingDataSourceV2 synchronizer")
-        self._interrupt_event.clear()
-        self._stop.clear()
+        # The flags are not cleared here. Stop can occur before sync starts, and sync then ends at once.
         try:
             while self._stop.is_set() is False:
                 result = await self._fetch(ss)

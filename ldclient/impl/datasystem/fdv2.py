@@ -374,6 +374,11 @@ class FDv2(_FDv2Base, DataSystem):
                 if thread.is_alive():
                     log.warning("Thread %s did not terminate in time", thread.name)
 
+        # The data source stops here, whichever synchronizer was active.
+        self._data_source_status_provider.update_status(
+            DataSourceState.OFF, self._data_source_status_provider.status.error
+        )
+
         # Close the store
         self._store.close()
 
@@ -514,6 +519,10 @@ class FDv2(_FDv2Base, DataSystem):
                         directive = self._consume_synchronizer_results(
                             synchronizer, set_on_ready, current_index != 0
                         )
+
+                        # Stop ends the synchronizer. That is not a failure, so the directive is ignored.
+                        if self._stop_event.is_set():
+                            break
 
                         if directive == ConditionDirective.FDV1:
                             # Abandon all synchronizers and use only fdv1 fallback
