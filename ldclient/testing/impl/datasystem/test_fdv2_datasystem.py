@@ -6,6 +6,7 @@ import tempfile
 from threading import Event
 from typing import List
 
+import pytest
 from mock import Mock
 
 from ldclient.config import (
@@ -15,6 +16,7 @@ from ldclient.config import (
     DataSystemConfig
 )
 from ldclient.datasystem import file_ds_builder
+from ldclient.feature_store import InMemoryFeatureStore
 from ldclient.impl.datasystem import DataAvailability
 from ldclient.impl.datasystem.fdv2 import FDv2
 from ldclient.impl.util import (
@@ -75,6 +77,66 @@ class _InitializerBuilder(DataSourceBuilder):  # pylint: disable=too-few-public-
 
     def build(self, config: DataSourceBuilderConfig) -> Initializer:  # pylint: disable=unused-argument
         return self._initializer
+
+
+@pytest.mark.parametrize("with_flag", [False, True])
+def test_selectorless_initializer_signals_ready_after_exhaustion(with_flag):
+    ready = Event()
+    failed_poll_called = Event()
+    stopped = Event()
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    if with_flag:
+        builder.add_put(ObjectKind.FLAG, "flag", 1, {"key": "flag", "version": 1})
+    basis = Basis(builder.finish(Selector.no_selector()), False, None)
+    poll = _StaticInitializer("selectorless-poll", _Success(value=basis))
+
+    class FailingPoll(_StaticInitializer):
+        def fetch(self, ss):
+            assert not ready.is_set()
+            failed_poll_called.set()
+            return super().fetch(ss)
+
+    failed_poll = FailingPoll("failing-poll", _Fail(error="poll failed", exception=None))
+
+    def never_responds(ss):
+        stopped.wait()
+        yield from ()
+
+    synchronizer = Mock(spec=Synchronizer)
+    synchronizer.name = "pending-synchronizer"
+    synchronizer.sync.side_effect = never_responds
+    synchronizer.stop.side_effect = stopped.set
+    data_system = FDv2(Config(sdk_key="dummy"), DataSystemConfig(
+        initializers=[_InitializerBuilder(poll), _InitializerBuilder(failed_poll)],
+        synchronizers=[MockDataSourceBuilder(synchronizer)],
+    ))
+    data_system.start(ready)
+    try:
+        assert ready.wait(1), "Selectorless initializer data did not signal readiness at exhaustion"
+        assert failed_poll_called.is_set()
+        assert data_system._store.is_initialized()
+    finally:
+        data_system.stop()
+
+
+def test_initializer_exhaustion_does_not_signal_ready_from_persistent_data():
+    persistent_store = InMemoryFeatureStore()
+    persistent_store.init({FEATURES: {}})
+    failed_poll = _StaticInitializer("failing-poll", _Fail(error="poll failed", exception=None))
+    data_system = FDv2(Config(sdk_key="dummy"), DataSystemConfig(
+        initializers=[_InitializerBuilder(failed_poll)],
+        synchronizers=[],
+        data_store=persistent_store,
+    ))
+    ready = Event()
+    try:
+        data_system._run_initializers(ready)
+        assert data_system._store.is_initialized()
+        assert not data_system._store.is_memory_initialized()
+        assert not ready.is_set()
+    finally:
+        data_system.stop()
 
 
 def test_two_phase_init():

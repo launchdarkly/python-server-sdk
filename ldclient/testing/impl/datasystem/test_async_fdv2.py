@@ -6,7 +6,8 @@ from typing import Any, AsyncGenerator, Dict, List, Mapping, Optional
 
 import pytest
 
-from ldclient.async_config import AsyncConfig
+from ldclient.async_config import AsyncConfig, AsyncDataSystemConfig
+from ldclient.async_feature_store import AsyncInMemoryFeatureStore
 from ldclient.config import (
     DataSourceBuilder,
     DataSourceBuilderConfig,
@@ -95,6 +96,58 @@ class MockAsyncInitializerBuilder(DataSourceBuilder):
 
     def build(self, config: DataSourceBuilderConfig):
         return self._init
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_flag", [False, True])
+async def test_selectorless_initializer_signals_ready_after_exhaustion(with_flag):
+    ready = asyncio.Event()
+    failed_poll_called = asyncio.Event()
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    if with_flag:
+        builder.add_put(ObjectKind.FLAG, "flag", 1, {"key": "flag", "version": 1})
+    basis = Basis(builder.finish(Selector.no_selector()), False, None)
+    poll = MockAsyncInitializer(_Success(value=basis))
+
+    class FailingPoll(MockAsyncInitializer):
+        async def fetch(self, ss):
+            assert not ready.is_set()
+            failed_poll_called.set()
+            return await super().fetch(ss)
+
+    failed_poll = FailingPoll(_Fail(error="poll failed", exception=None))
+    synchronizer = MockAsyncSynchronizer()
+    data_system = AsyncFDv2(AsyncConfig(sdk_key="dummy"), DataSystemConfig(
+        initializers=[MockAsyncInitializerBuilder(poll), MockAsyncInitializerBuilder(failed_poll)],
+        synchronizers=[MockAsyncSynchronizerBuilder(synchronizer)],
+    ))
+    data_system.start(ready)
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=1)
+        assert failed_poll_called.is_set()
+        assert await data_system._store.is_ready()
+    finally:
+        await data_system.stop()
+
+
+@pytest.mark.asyncio
+async def test_initializer_exhaustion_does_not_signal_ready_from_persistent_data():
+    persistent_store = AsyncInMemoryFeatureStore()
+    await persistent_store.init({FEATURES: {}})
+    failed_poll = MockAsyncInitializer(_Fail(error="poll failed", exception=None))
+    data_system = AsyncFDv2(AsyncConfig(sdk_key="dummy"), AsyncDataSystemConfig(
+        initializers=[MockAsyncInitializerBuilder(failed_poll)],
+        data_store=persistent_store,
+    ))
+    ready = asyncio.Event()
+    try:
+        await data_system._run_initializers(ready)
+        assert await data_system._store.is_ready()
+        assert not data_system._store.is_memory_initialized()
+        assert not ready.is_set()
+    finally:
+        await data_system.stop()
 
 
 def _make_valid_basis() -> Basis:

@@ -414,6 +414,10 @@ class _StoreBase:
         """Check if the active store is initialized."""
         return self.get_active_store().initialized
 
+    def is_memory_initialized(self) -> bool:
+        """Check if data has been applied to the in-memory store."""
+        return self._memory_store.initialized
+
 
 class Store(_StoreBase):
     """
