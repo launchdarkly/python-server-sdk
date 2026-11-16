@@ -459,6 +459,11 @@ class Files:
         If the data source encounters any error in any file-- malformed content, a missing file, or a
         duplicate key-- it will not load flags from any of the files.
 
+        File data has no LaunchDarkly selector, so the SDK reports it as cached data, not as data
+        refreshed from LaunchDarkly. When no other source supplies data from LaunchDarkly, the first
+        flag evaluation logs this warning once: "Feature Flag evaluation attempted before client has
+        initialized - using last known values from feature store". The evaluation uses the file data.
+
         :param paths: the paths of the source files for loading flag data. These may be absolute paths
           or relative to the current working directory. Files will be parsed as JSON unless the ``pyyaml``
           package is installed, in which case YAML is also allowed.
