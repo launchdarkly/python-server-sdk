@@ -280,6 +280,20 @@ async def test_delete_event_removes_item_from_store():
 
 
 @pytest.mark.asyncio
+async def test_delete_event_with_version_that_is_not_an_integer_restarts_stream():
+    put_data = _make_put_data()
+    delete_data = _make_delete_data(FEATURES, 'f1', 'no')
+    actions = [_start(), _event('put', put_data), _event('delete', delete_data)]
+
+    # Run the processor until it handles the delete.
+    proc, store, ready, factory = await _run_with_actions(actions, retry_state=_fast_retry_state())
+    # The processor drops the stream.
+    await _wait_until(lambda: factory.created[0].interrupted)
+
+    await proc.stop()
+
+
+@pytest.mark.asyncio
 async def test_fault_with_error_does_not_set_ready_by_itself():
     """A Fault that arrives before any put must not mark the processor as initialized."""
     from ld_eventsource.errors import HTTPStatusError

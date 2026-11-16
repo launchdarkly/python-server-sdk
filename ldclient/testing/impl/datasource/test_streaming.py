@@ -234,6 +234,38 @@ def test_receives_delete_events():
                 expect_delete(store, SEGMENTS, segmentv1['key'])
 
 
+def test_restarts_stream_if_delete_event_version_is_not_an_integer():
+    store = InMemoryFeatureStore()
+    ready = Event()
+    flagv1 = FlagBuilder('flagkey').version(1).build()
+
+    with start_server() as server:
+        with stream_content(make_put_event()) as stream1, stream_content(make_put_event([flagv1])) as stream2:
+            config = Config(sdk_key='sdk-key', stream_uri=server.uri, initial_reconnect_delay=brief_delay)
+
+            listeners = Listeners()
+
+            def listener(s):
+                # The test server serves one request at a time, so end the first stream when the SDK reports an error.
+                if s.error is not None:
+                    stream1.close()
+
+            listeners.add(listener)
+
+            config._data_source_update_sink = DataSourceUpdateSinkImpl(store, listeners, Listeners())
+            server.for_path('/all', SequentialHandler(stream1, stream2))
+
+            with StreamingUpdateProcessor(config, store, ready, None) as sp:
+                sp.start()
+                ready.wait(start_wait)
+                assert sp.initialized()
+
+                # Send a delete whose version is a string.
+                stream1.push(make_delete_event(FEATURES, flagv1['key'], 'no'))
+                # The SDK drops the stream and gets the data again on a new connection.
+                expect_update(store, FEATURES, flagv1)
+
+
 def test_reconnects_if_stream_is_broken():
     store = InMemoryFeatureStore()
     ready = Event()
