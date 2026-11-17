@@ -175,3 +175,29 @@ def test_store_data_set_ordering():
             if prereq_index > item_index:
                 all_keys = (f["key"] for f in flags_list)
                 raise Exception("%s depends on %s, but %s was listed first; keys in order are [%s]" % (item["key"], prereq["key"], item["key"], ", ".join(all_keys)))
+
+
+def test_store_data_set_ordering_treats_null_prerequisites_as_empty():
+    data = {
+        FEATURES: {
+            "a": {"key": "a", "prerequisites": [{"key": "b"}]},
+            "b": {"key": "b", "prerequisites": None},
+        },
+        SEGMENTS: {},
+    }
+
+    class NullPrerequisitesDataUpdateProcessor(DependencyOrderingDataUpdateProcessor):
+        def __init__(self, config, store, ready):
+            store.init(data)
+            ready.set()
+
+    store = CapturingFeatureStore()
+    config = Config(sdk_key='SDK_KEY', send_events=False, feature_store=store, update_processor_class=NullPrerequisitesDataUpdateProcessor)
+
+    # Initialize the store with a flag whose prerequisites are null.
+    with LDClient(config=config):
+        pass
+
+    # The store receives every flag, and the prerequisite comes first.
+    assert store.received_data is not None
+    assert list(store.received_data[FEATURES].keys()) == ["b", "a"]
