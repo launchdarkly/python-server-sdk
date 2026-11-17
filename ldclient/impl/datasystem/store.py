@@ -440,6 +440,10 @@ class Store(_StoreBase):
         # store. Set on each successful apply from its persist flag.
         self._persist = False
 
+        # True after close. A listener can close the store while apply notifies it. The
+        # change set that apply is processing is then not written to the closed persistent store.
+        self._closed = False
+
     def with_persistence(
         self,
         persistent_store: FeatureStore,
@@ -518,7 +522,8 @@ class Store(_StoreBase):
     def _should_persist(self) -> bool:
         """Returns whether data should be persisted to the persistent store."""
         return (
-            self._persist
+            not self._closed
+            and self._persist
             and self._persistent_store is not None
             and self._persistent_store_writable
         )
@@ -566,6 +571,7 @@ class Store(_StoreBase):
     def close(self) -> None:
         """Close the store and any persistent store if configured."""
         with self._lock:
+            self._closed = True
             if self._persistent_store is not None:
                 try:
                     # Most FeatureStore implementations don't have close methods

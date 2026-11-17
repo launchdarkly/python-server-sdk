@@ -24,8 +24,9 @@ _DIFF_KINDS = (FEATURES, SEGMENTS)
 class OverrideSinkImpl(OverrideSink):
     """
     Applies override layer replacements supplied by an override source, then notifies flag
-    change listeners of every flag whose merged-view evaluation may have changed. Calls are
-    serialized, so overlapping updates from a source cannot interleave.
+    change listeners of every flag whose merged-view evaluation may have changed. Layer updates
+    are serialized, so overlapping updates from a source cannot interleave. Listeners are
+    notified after the lock is released, so a listener can close the client.
     """
 
     def __init__(
@@ -56,12 +57,13 @@ class OverrideSinkImpl(OverrideSink):
                 log.debug("Ignoring an override snapshot supplied after the override source was closed")
                 return
             try:
-                self._apply(flags, segments)
+                affected = self._apply(flags, segments)
             except DeletedItemError as e:
                 # The layer rejected the whole snapshot before changing anything, so nothing is
                 # notified. The error also reaches the source, as for an invalid definition.
                 log.error("Rejected an override snapshot; the overrides in effect stay: %s", e)
                 raise
+        self._notify_all(affected)
 
     def close(self) -> None:
         """
@@ -79,13 +81,14 @@ class OverrideSinkImpl(OverrideSink):
         """
         with self._lock:
             self._closed = True
-            self._apply({}, {})
+            affected = self._apply({}, {})
+        self._notify_all(affected)
 
-    def _apply(self, flags: Dict[str, Any], segments: Dict[str, Any]) -> None:
-        # Called with _lock held.
+    def _apply(self, flags: Dict[str, Any], segments: Dict[str, Any]) -> Set[str]:
+        # Called with _lock held. Returns the keys of the affected flags.
         if not self._has_listeners():
             self._layer.set_all(flags, segments)
-            return
+            return set()
 
         previous, current = self._layer.set_all(flags, segments)
         old_merged = snapshot_merged_view(self._base, previous)
@@ -93,6 +96,10 @@ class OverrideSinkImpl(OverrideSink):
         affected = compute_affected_flags(previous, current, old_merged, new_merged)
         if len(affected) > 0:
             log.debug("Override update affected %d flag(s)", len(affected))
+        return affected
+
+    def _notify_all(self, affected: Set[str]) -> None:
+        # Called without _lock held. A listener can then close the client, which closes this sink.
         for key in sorted(affected):
             self._notify(key)
 

@@ -153,6 +153,42 @@ def test_can_stop_fdv2():
     assert len(changes) == 0
 
 
+def test_fdv2_can_be_stopped_from_a_flag_change_listener():
+    td = TestDataV2.data_source()
+    td.update(td.flag("feature-flag").on(True))
+    data_system_config = DataSystemConfig(
+        initializers=None,
+        synchronizers=[td.builder],
+    )
+
+    set_on_ready = Event()
+    fdv2 = FDv2(Config(sdk_key="dummy"), data_system_config)
+
+    stopped = Event()
+    errors: List[Exception] = []
+
+    def listener(flag_change: FlagChange):
+        try:
+            fdv2.stop()
+        except Exception as e:
+            errors.append(e)
+        finally:
+            stopped.set()
+
+    fdv2.flag_change_listeners.add(listener)
+
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    td.update(td.flag("feature-flag").on(False))
+    assert stopped.wait(1), "Flag change listener was not called in time"
+    assert errors == []
+
+    for thread in fdv2._threads:
+        thread.join(timeout=1)
+        assert not thread.is_alive(), "Thread %s did not exit" % thread.name
+
+
 def test_fdv2_data_availability_is_refreshed_with_data():
     td = TestDataV2.data_source()
     data_system_config = DataSystemConfig(

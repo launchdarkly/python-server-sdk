@@ -285,6 +285,39 @@ def test_reloads_modified_file_in_polling_mode():
     do_auto_update_test({'auto_update': True, 'force_polling': True, 'poll_interval': 0.1})
 
 
+@pytest.mark.parametrize('options', [
+    pytest.param({'auto_update': True}, id='watchdog'),
+    pytest.param({'auto_update': True, 'force_polling': True, 'poll_interval': 0.1}, id='polling'),
+])
+def test_client_can_be_closed_from_a_flag_change_listener_on_reload(options):
+    path = make_temp_file(flag_only_json)
+    factory = Files.new_data_source(paths=path, **options)
+    client = LDClient(config=Config('SDK_KEY', update_processor_class=factory, send_events=False))
+    try:
+        closed = threading.Event()
+        errors: List[Exception] = []
+
+        def listener(_):
+            if closed.is_set():
+                return
+            try:
+                client.close()
+            except Exception as e:
+                errors.append(e)
+            finally:
+                closed.set()
+
+        client.flag_tracker.add_listener(listener)
+        time.sleep(0.5)
+        replace_file(path, segment_only_json)
+
+        assert closed.wait(20), "Flag change listener was not called in time"
+        assert errors == []
+    finally:
+        client.close()
+        os.remove(path)
+
+
 def test_evaluates_full_flag_with_client_as_expected():
     path = make_temp_file(all_properties_json)
     try:

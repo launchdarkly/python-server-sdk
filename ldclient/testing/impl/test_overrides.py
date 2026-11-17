@@ -3,6 +3,7 @@ Tests for the override layer, the overlay at the store read boundary, and the si
 snapshots and notifies flag change listeners.
 """
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -499,6 +500,28 @@ def test_sink_close_and_clear_clears_the_layer_and_ignores_later_snapshots():
     # A snapshot after closing changes nothing.
     f.sink.set_overrides({'flag1': flag('flag1')}, {})
     assert f.layer.is_empty is True
+    assert f.take_notified() == []
+
+
+def test_sink_listener_can_close_the_sink():
+    # A listener that closes the client closes the sink. The sink must not hold its lock while
+    # it notifies, or the close waits forever.
+    f = SinkFixture(FakeBaseStore())
+    f.sink.set_overrides({'flag1': flag('flag1')}, {})
+    f.take_notified()
+
+    def notify(key: str):
+        f.notified.append(key)
+        f.sink.close()
+
+    f.sink._notify = notify
+    worker = threading.Thread(target=lambda: f.sink.set_overrides({'flag1': flag('flag1', 2)}, {}), daemon=True)
+    worker.start()
+    worker.join(5)
+
+    assert not worker.is_alive(), "Closing the sink from a listener did not return"
+    assert f.take_notified() == ['flag1']
+    f.sink.set_overrides({'flag2': flag('flag2')}, {})
     assert f.take_notified() == []
 
 
