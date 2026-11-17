@@ -218,6 +218,8 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
             path = payload['path']
             # noinspection PyShadowingNames
             version = payload['version']
+            if isinstance(version, bool) or not isinstance(version, int):
+                raise ValueError("delete event for %s has a version that is not an integer" % path)
             log.debug("Received delete event for %s, New version: [%d]", path, version)
             parsed = parse_path(path)
             if parsed is not None:
