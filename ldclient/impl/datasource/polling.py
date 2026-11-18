@@ -108,10 +108,12 @@ class PollingDataSource(Initializer, Synchronizer):
         occurs.
         """
         log.info("Starting PollingDataSource synchronizer")
-        self._interrupt_event.clear()
-        self._stop.clear()
+        # The flags are not cleared here. Stop can occur before sync starts, and sync then ends at once.
         while self._stop.is_set() is False:
             result = self._fetch(ss)
+            if self._stop.is_set():
+                # Stop can occur while the request is in progress. The result is not reported.
+                break
             decision = map_polling_result(result)
             yield decision.update
 
@@ -136,7 +138,10 @@ class PollingDataSource(Initializer, Synchronizer):
             return self._requester.fetch(ss.selector())
         except Exception as e:  # pylint: disable=broad-except
             msg = f"Error: Exception encountered when polling for flags. {e}"
-            log.warning(msg)
+            if self._stop.is_set():
+                log.debug(msg)
+            else:
+                log.warning(msg)
             return _Fail(error=msg, exception=e)
 
     def _poll(self, ss: SelectorStore) -> BasisResult:
@@ -145,7 +150,11 @@ class PollingDataSource(Initializer, Synchronizer):
             return polling_result_to_basis(result)
         except Exception as e:  # pylint: disable=broad-except
             msg = f"Error: Exception encountered when updating flags. {e}"
-            log.exception(msg)
+            if self._stop.is_set():
+                # The SDK is shutting down, so the error is not reported.
+                log.debug(msg)
+            else:
+                log.exception(msg)
 
             return _Fail(error=msg, exception=e)
 

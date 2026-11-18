@@ -1,6 +1,7 @@
-from typing import Dict, List, NamedTuple, Optional, Set, Union
+from typing import Dict, List, NamedTuple, Optional, Protocol, Set, Union
 
 from ldclient.impl.model.clause import Clause
+from ldclient.impl.model.entity import ModelEntity
 from ldclient.impl.model.feature_flag import FeatureFlag
 from ldclient.impl.model.segment import Segment
 from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
@@ -9,6 +10,20 @@ from ldclient.versioned_data_kind import FEATURES, SEGMENTS, VersionedDataKind
 class KindAndKey(NamedTuple):
     kind: VersionedDataKind
     key: str
+
+
+class ExternalDependencies(Protocol):
+    """
+    A second dependency graph whose items may depend on items held elsewhere, such as the
+    override layer, whose entries may depend on LaunchDarkly data. A store that is handed one
+    extends its change notifications to the external items that depend on a changed item.
+    """
+
+    def add_affected_items(self, items_out: Set[KindAndKey], initial_modified_item: KindAndKey) -> None:
+        """
+        Adds the given item and every item in this graph that directly or indirectly depends on
+        it to the set. Items already in the set are not expanded again.
+        """
 
 
 class DependencyTracker:
@@ -23,7 +38,7 @@ class DependencyTracker:
         self.__children: Dict[KindAndKey, Set[KindAndKey]] = {}
         self.__parents: Dict[KindAndKey, Set[KindAndKey]] = {}
 
-    def update_dependencies_from(self, from_kind: VersionedDataKind, from_key: str, from_item: Optional[Union[dict, FeatureFlag, Segment]]):
+    def update_dependencies_from(self, from_kind: VersionedDataKind, from_key: str, from_item: Optional[Union[dict, ModelEntity]]):
         """
         Updates the dependency graph when an item has changed.
 
@@ -83,7 +98,7 @@ class DependencyTracker:
         self.__parents.clear()
 
     @staticmethod
-    def compute_dependencies_from(from_kind: VersionedDataKind, from_item: Optional[Union[dict, FeatureFlag, Segment]]) -> Set[KindAndKey]:
+    def compute_dependencies_from(from_kind: VersionedDataKind, from_item: Optional[Union[dict, ModelEntity]]) -> Set[KindAndKey]:
         """
         @param from_kind [String]
         @param from_item [LaunchDarkly::Impl::Model::FeatureFlag, LaunchDarkly::Impl::Model::Segment]

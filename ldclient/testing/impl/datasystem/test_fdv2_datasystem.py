@@ -2,9 +2,10 @@
 
 import os
 import tempfile
-from threading import Event
+from threading import Event, Timer
 from typing import List
 
+import pytest
 from mock import Mock
 
 from ldclient.config import (
@@ -150,6 +151,24 @@ def test_can_stop_fdv2():
     td.update(td.flag("feature-flag").on(False))
     assert changed.wait(1) is False, "Flag change listener was erroneously called"
     assert len(changes) == 0
+
+
+@pytest.mark.parametrize("synchronizer_count", [1, 2])
+def test_stop_reports_off_without_a_synchronizer_failure_warning(caplog, synchronizer_count):
+    td = TestData.data_source()
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=None, synchronizers=[td.builder] * synchronizer_count),
+    )
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    fdv2.stop()
+
+    assert fdv2.data_source_status_provider.status.state == DataSourceState.OFF
+    # Stop ends the synchronizer. That is not a failure, so it is not reported.
+    assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
 
 def test_fdv2_data_availability_is_refreshed_with_data():
@@ -846,3 +865,80 @@ def test_environment_id_is_not_recorded_from_non_valid_updates():
 
     assert fdv2.environment_id == "env-from-sync"
     fdv2.stop()
+
+
+class _BlockingInitializer(Initializer):
+    """An initializer whose fetch waits until stop is called, then returns data."""
+
+    def __init__(self):
+        self.fetching = Event()
+        self.stopped = Event()
+
+    @property
+    def name(self) -> str:
+        return "blocking"
+
+    def fetch(self, ss: SelectorStore) -> BasisResult:
+        self.fetching.set()
+        self.stopped.wait(5)
+        builder = ChangeSetBuilder()
+        builder.start(IntentCode.TRANSFER_FULL)
+        change_set = builder.finish(Selector(state="blocking-state", version=1))
+        return _Success(value=Basis(change_set=change_set, persist=False, environment_id=None))
+
+    def stop(self):
+        self.stopped.set()
+
+
+def test_stop_stops_the_initializer_in_progress_and_ignores_its_result():
+    initializer = _BlockingInitializer()
+    td = TestData.data_source()
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=[_InitializerBuilder(initializer)], synchronizers=[td.builder]),
+    )
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert initializer.fetching.wait(5), "The initializer did not start"
+
+    fdv2.stop()
+
+    assert initializer.stopped.is_set()
+    # The initializer returned data after stop. The data system does not apply it.
+    assert not set_on_ready.is_set()
+    assert not fdv2.store.initialized
+
+
+class _InitializerWithoutStop:
+    """An initializer that matches the protocol but does not inherit from it, so it has no stop."""
+
+    def __init__(self):
+        self.fetching = Event()
+        self.release = Event()
+
+    @property
+    def name(self) -> str:
+        return "without-stop"
+
+    def fetch(self, ss: SelectorStore) -> BasisResult:
+        self.fetching.set()
+        self.release.wait(5)
+        return _Fail(error="released")
+
+
+def test_stop_accepts_an_initializer_in_progress_without_a_stop_method(caplog):
+    initializer = _InitializerWithoutStop()
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=[_InitializerBuilder(initializer)], synchronizers=None),
+    )
+    fdv2.start(Event())
+    assert initializer.fetching.wait(5), "The initializer did not start"
+
+    # The initializer cannot be stopped, so release it shortly after stop begins.
+    release = Timer(0.2, initializer.release.set)
+    release.start()
+    fdv2.stop()
+    release.join()
+
+    assert not any(record.levelno >= logging.ERROR for record in caplog.records)

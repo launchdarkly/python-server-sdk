@@ -22,10 +22,16 @@ class EventSummaryCounter:
         return "EventSummaryCounter(%d, %s)" % (self.count, self.value)
 
 
+# A counter is keyed by variation index, flag version, and whether the evaluations it counts
+# were override-affected. The marker is part of the key, so override-affected and ordinary
+# evaluations of the same flag, variation, and version accumulate into separate counters.
+CounterKey = Tuple[Optional[int], Optional[int], bool]
+
+
 class EventSummaryFlag:
     __slots__ = ['context_kinds', 'default', 'counters']
 
-    def __init__(self, context_kinds: Set[str], default: Any, counters: Dict[Tuple[Optional[int], Optional[int]], EventSummaryCounter]):
+    def __init__(self, context_kinds: Set[str], default: Any, counters: Dict[CounterKey, EventSummaryCounter]):
         self.context_kinds = context_kinds
         self.counters = counters
         self.default = default
@@ -71,7 +77,7 @@ class EventSummarizer:
             if c is not None:
                 flag_data.context_kinds.add(c.kind)
 
-        counter_key = (event.variation, None if event.flag is None else event.flag.version)
+        counter_key = (event.variation, None if event.flag is None else event.flag.version, event.override_affected)
         counter = flag_data.counters.get(counter_key)
         if counter is None:
             counter = EventSummaryCounter(1, event.value)

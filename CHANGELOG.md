@@ -2,6 +2,21 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.21.0](https://github.com/launchdarkly/python-server-sdk/compare/9.20.0...9.21.0) (2026-11-12)
+
+
+### Features
+
+* Add experimental support for flag overrides, read from local JSON or YAML files or supplied by a custom override source ([6e05c04](https://github.com/launchdarkly/python-server-sdk/commit/6e05c048fe7c1d6ba33559fa0a0a7d80cda54d5f))
+* Mark evaluations that a flag override affected with `overrideAffected` in the evaluation reason, and count them under separate summary counters ([6e05c04](https://github.com/launchdarkly/python-server-sdk/commit/6e05c048fe7c1d6ba33559fa0a0a7d80cda54d5f))
+
+
+### Bug Fixes
+
+* Keep FDv2 polling running after a network error ([#569](https://github.com/launchdarkly/python-server-sdk/issues/569)) ([ad37b18](https://github.com/launchdarkly/python-server-sdk/commit/ad37b188eba7b8ea9c8b2fd7ba12ca829ccd84ca))
+* Make TestData value_for_all return its value when targeting is off ([#567](https://github.com/launchdarkly/python-server-sdk/issues/567)) ([70565bb](https://github.com/launchdarkly/python-server-sdk/commit/70565bb70c4bd25033d64c3d12a92672dd386f24))
+* Stop the components that already started when the client fails to start ([6e05c04](https://github.com/launchdarkly/python-server-sdk/commit/6e05c048fe7c1d6ba33559fa0a0a7d80cda54d5f))
+
 ## [9.20.0](https://github.com/launchdarkly/python-server-sdk/compare/9.19.0...9.20.0) (2026-11-05)
 
 

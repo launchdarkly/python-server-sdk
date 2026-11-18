@@ -85,6 +85,7 @@ def status():
             'flag-change-listeners',
             'flag-value-change-listeners',
             'fdv1-fallback',
+            'flag-overrides',
             'service-endpoints',
             'wrapper',
             'http-proxy',

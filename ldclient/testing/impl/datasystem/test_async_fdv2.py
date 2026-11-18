@@ -133,6 +133,25 @@ async def test_async_fdv2_basic_start_stop():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("synchronizer_count", [1, 2])
+async def test_async_fdv2_stop_reports_off_without_a_synchronizer_failure_warning(caplog, synchronizer_count):
+    td = TestData.data_source()
+    fdv2 = AsyncFDv2(
+        AsyncConfig(sdk_key="dummy"),
+        DataSystemConfig(initializers=None, synchronizers=[td.async_builder] * synchronizer_count),
+    )
+    ready_event = asyncio.Event()
+    fdv2.start(ready_event)
+    await asyncio.wait_for(ready_event.wait(), timeout=2)
+
+    await fdv2.stop()
+
+    assert fdv2.data_source_status_provider.status.state == DataSourceState.OFF
+    # Stop ends the synchronizer. That is not a failure, so it is not reported.
+    assert not any(record.levelno >= logging.WARNING for record in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_async_fdv2_synchronizer_receives_updates():
     td = TestData.data_source()
     td.update(td.flag("feature-flag").on(True))
