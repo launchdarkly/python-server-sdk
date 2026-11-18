@@ -536,3 +536,13 @@ def test_requester_exception_interrupts_and_recovers():
     assert "connection refused" in interrupted.error.message
     assert interrupted.fallback_to_fdv1 is False
     assert valid.state == DataSourceState.VALID
+
+
+def test_sync_does_not_poll_when_stopped_before_it_starts():
+    requester = ListBasedRequester(results=iter([]))
+    synchronizer = PollingDataSource(poll_interval=0.01, requester=requester)
+
+    synchronizer.stop()
+
+    # The requester has no results, so a poll would yield an INTERRUPTED update.
+    assert next(synchronizer.sync(MockSelectorStore(Selector.no_selector())), None) is None

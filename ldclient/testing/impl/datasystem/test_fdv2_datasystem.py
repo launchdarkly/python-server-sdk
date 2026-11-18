@@ -6,6 +6,7 @@ import tempfile
 from threading import Event
 from typing import List
 
+import pytest
 from mock import Mock
 
 from ldclient.config import (
@@ -151,6 +152,24 @@ def test_can_stop_fdv2():
     td.update(td.flag("feature-flag").on(False))
     assert changed.wait(1) is False, "Flag change listener was erroneously called"
     assert len(changes) == 0
+
+
+@pytest.mark.parametrize("synchronizer_count", [1, 2])
+def test_stop_reports_off_without_a_synchronizer_failure_warning(caplog, synchronizer_count):
+    td = TestDataV2.data_source()
+    fdv2 = FDv2(
+        Config(sdk_key="dummy"),
+        DataSystemConfig(initializers=None, synchronizers=[td.builder] * synchronizer_count),
+    )
+    set_on_ready = Event()
+    fdv2.start(set_on_ready)
+    assert set_on_ready.wait(1), "Data system did not become ready in time"
+
+    fdv2.stop()
+
+    assert fdv2.data_source_status_provider.status.state == DataSourceState.OFF
+    # Stop ends the synchronizer. That is not a failure, so it is not reported.
+    assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
 
 def test_fdv2_data_availability_is_refreshed_with_data():

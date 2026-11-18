@@ -346,3 +346,17 @@ async def test_sync_requester_exception_interrupts_and_recovers():
     assert "connection refused" in interrupted.error.message
     assert interrupted.fallback_to_fdv1 is False
     assert valid.state == DataSourceState.VALID
+
+
+@pytest.mark.asyncio
+async def test_sync_does_not_poll_when_stopped_before_it_starts():
+    requester = MockPollingRequester([_Success(value=(_valid_change_set(), {}))])
+    src = AsyncPollingDataSource(poll_interval=0.01, requester=requester)
+
+    await src.stop()
+
+    async def collect():
+        return [update async for update in src.sync(_ss())]
+
+    assert await asyncio.wait_for(collect(), timeout=1) == []
+    assert requester.call_times == []

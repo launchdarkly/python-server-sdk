@@ -107,8 +107,7 @@ class PollingDataSource(Initializer, Synchronizer):
         occurs.
         """
         log.info("Starting PollingDataSourceV2 synchronizer")
-        self._interrupt_event.clear()
-        self._stop.clear()
+        # The flags are not cleared here. Stop can occur before sync starts, and sync then ends at once.
         while self._stop.is_set() is False:
             result = self._fetch(ss)
             decision = map_polling_result(result)
