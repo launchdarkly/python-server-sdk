@@ -82,12 +82,16 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
         self._status_sink = status_sink
         self._monitoring_enabled = self.is_monitoring_enabled()
 
+        # Held for each write and by close(). A write that starts after
+        # close() does nothing, and close() waits for a write in progress.
+        self._write_lock = AsyncLock()
+
         self._last_available = True
         self._poller: Optional[AsyncRepeatingTask] = None
         self._closed = False
 
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
-        await self._wrap(lambda: self._store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)))
+        await self._write(lambda: self._store.init(_FeatureStoreDataSetSorter.sort_all_collections(all_data)), None)
 
     async def get(self, kind: VersionedDataKind, key: str) -> Optional[Any]:
         return await self._wrap(lambda: self._store.get(kind, key))
@@ -96,10 +100,10 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
         return await self._wrap(lambda: self._store.all(kind))
 
     async def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
-        return await self._wrap(lambda: self._store.upsert(kind, item))
+        return await self._write(lambda: self._store.upsert(kind, item), False)
 
     async def delete(self, kind: VersionedDataKind, key: str, version: int) -> bool:
-        return await self._wrap(lambda: self._store.delete(kind, key, version))
+        return await self._write(lambda: self._store.delete(kind, key, version), False)
 
     @property
     def initialized(self) -> bool:
@@ -130,6 +134,18 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
     async def _wrap(self, fn: Callable):
         try:
             return await fn()
+        except BaseException:
+            if self._monitoring_enabled:
+                self._update_availability(False)
+            raise
+
+    async def _write(self, fn: Callable, result_if_closed: Any):
+        # The failure is reported after the lock is released, as in the sync wrapper.
+        try:
+            async with self._write_lock:
+                if self._closed:
+                    return result_if_closed
+                return await fn()
         except BaseException:
             if self._monitoring_enabled:
                 self._update_availability(False)
@@ -173,11 +189,13 @@ class _AsyncFeatureStoreClientWrapper(AsyncFeatureStore):
     async def close(self) -> None:
         """Stops the availability poller and closes the inner store.
 
-        Does nothing on a later call, so closing more than once is safe.
+        Waits for a write in progress. Later writes do nothing. Does nothing on
+        a later call, so closing more than once is safe.
         """
-        if self._closed:
-            return
-        self._closed = True
+        async with self._write_lock:
+            if self._closed:
+                return
+            self._closed = True
 
         poller_to_stop = self._poller
         self._poller = None
