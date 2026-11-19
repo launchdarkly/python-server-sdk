@@ -189,6 +189,47 @@ async def test_commit_writes_memory_to_store():
 
 
 @pytest.mark.asyncio
+async def test_commit_writes_deleted_items_to_store():
+    async_store = FakeAsyncFeatureStore()
+    store = AsyncStore(Listeners(), Listeners())
+    store.with_async_persistence(async_store, True, None)
+
+    await store.apply(
+        ChangeSet(
+            intent_code=IntentCode.TRANSFER_FULL,
+            changes=[
+                Change(action=ChangeType.PUT, kind=ObjectKind.FLAG, key="flag-a", version=1, object=_flag("flag-a", 1, True)),
+                Change(action=ChangeType.PUT, kind=ObjectKind.FLAG, key="flag-b", version=1, object=_flag("flag-b", 1, True)),
+                Change(action=ChangeType.PUT, kind=ObjectKind.SEGMENT, key="segment-a", version=1, object={"key": "segment-a", "version": 1}),
+            ],
+            selector=Selector.no_selector(),
+        ),
+        True,
+    )
+    await store.apply(
+        ChangeSet(
+            intent_code=IntentCode.TRANSFER_CHANGES,
+            changes=[
+                Change(action=ChangeType.DELETE, kind=ObjectKind.FLAG, key="flag-b", version=2),
+                Change(action=ChangeType.DELETE, kind=ObjectKind.SEGMENT, key="segment-a", version=2),
+            ],
+            selector=Selector.no_selector(),
+        ),
+        True,
+    )
+
+    # Write the memory store back to the async store.
+    err = await store.commit()
+
+    # The async store holds the kept flag and a tombstone for each deleted item.
+    assert err is None
+    snapshot = async_store.snapshot()
+    assert snapshot[FEATURES]["flag-a"]["version"] == 1
+    assert snapshot[FEATURES].get("flag-b") == {"key": "flag-b", "deleted": True, "version": 2}
+    assert snapshot[SEGMENTS].get("segment-a") == {"key": "segment-a", "deleted": True, "version": 2}
+
+
+@pytest.mark.asyncio
 async def test_commit_returns_error_on_failure():
     class FailingStore(FakeAsyncFeatureStore):
         async def init(self, all_data):

@@ -173,9 +173,12 @@ class AsyncStore(_StoreBase):
                 all_data: Optional[Collections] = None
                 with self._lock:
                     if self._should_persist():
+                        # Include the deleted items, so that the store keeps the
+                        # version of each deletion and an older update cannot add
+                        # the item again.
                         all_data = {}
                         for kind in [FEATURES, SEGMENTS]:
-                            all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
+                            all_data[kind] = self._memory_store.all_including_deleted(kind, __mapping_from_kind(kind))
 
                 if all_data is None:
                     return None
