@@ -770,3 +770,56 @@ async def test_successful_ops_pass_through():
     assert got is not None and got["key"] == "flag-a"
     allf = await wrapper.all(FEATURES)
     assert "flag-a" in allf
+
+
+@pytest.mark.asyncio
+async def test_writes_after_close_do_not_reach_the_store():
+    store = FakeAsyncStore()
+    statuses: List[DataStoreStatus] = []
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda s: statuses.append(s))
+    await wrapper.close()
+
+    await wrapper.init({FEATURES: {"flag-a": {"key": "flag-a", "version": 1}}})
+    assert await wrapper.upsert(FEATURES, {"key": "flag-b", "version": 1}) is False
+    assert await wrapper.delete(FEATURES, "flag-c", 2) is False
+
+    assert store.init_calls == []
+    assert store._data == {FEATURES: {}, SEGMENTS: {}}
+    assert store.closed is True
+    assert statuses == []
+
+
+class SlowUpsertStore(FakeAsyncStore):
+    """A store whose upsert waits until the test releases it."""
+
+    def __init__(self):
+        super().__init__()
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+        self.calls: List[str] = []
+
+    async def upsert(self, kind: VersionedDataKind, item: dict) -> bool:
+        self.entered.set()
+        await self.release.wait()
+        self.calls.append("upsert")
+        return True
+
+    async def close(self) -> None:
+        self.calls.append("close")
+
+
+@pytest.mark.asyncio
+async def test_close_waits_for_a_write_in_progress():
+    store = SlowUpsertStore()
+    wrapper = _AsyncFeatureStoreClientWrapper(store, lambda _s: None)
+
+    writer = asyncio.create_task(wrapper.upsert(FEATURES, {"key": "flag-a", "version": 1}))
+    await asyncio.wait_for(store.entered.wait(), timeout=2)
+
+    closer = asyncio.create_task(wrapper.close())
+    await asyncio.sleep(0.2)
+    assert not closer.done()
+
+    store.release.set()
+    await asyncio.wait_for(asyncio.gather(writer, closer), timeout=2)
+    assert store.calls == ["upsert", "close"]
