@@ -56,6 +56,7 @@ async def handle_status(request: aiohttp.web.Request) -> aiohttp.web.Response:
             'tags',
             'event-gzip',
             'optional-event-gzip',
+            'diagnostic-events',
             'event-sampling',
             'polling-gzip',
             'inline-context-all',
