@@ -2,6 +2,23 @@
 
 All notable changes to the LaunchDarkly Python SDK will be documented in this file. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [9.21.1](https://github.com/launchdarkly/python-server-sdk/compare/9.21.0...9.21.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* Prevent a false synchronizer failure warning when an FDv2 client closes ([#584](https://github.com/launchdarkly/python-server-sdk/issues/584)) ([5721c67](https://github.com/launchdarkly/python-server-sdk/commit/5721c6733e7902b9c0589d1ba6e996142596ec43))
+* Prevent a null prerequisites list from stopping the client from initializing ([#587](https://github.com/launchdarkly/python-server-sdk/issues/587)) ([298e2a3](https://github.com/launchdarkly/python-server-sdk/commit/298e2a35e23ab453e8877342aa06329ededbe6ed))
+* Prevent an FDv2 initializer result from being applied after close ([#583](https://github.com/launchdarkly/python-server-sdk/issues/583)) ([85e948c](https://github.com/launchdarkly/python-server-sdk/commit/85e948cc6624d660e20de29c6df9b19cef33ff0c))
+* Report the FDv2 data source status as OFF after close when more ([5721c67](https://github.com/launchdarkly/python-server-sdk/commit/5721c6733e7902b9c0589d1ba6e996142596ec43))
+* Restart the stream when a delete event has a version that is not an integer ([#585](https://github.com/launchdarkly/python-server-sdk/issues/585)) ([cf8b84a](https://github.com/launchdarkly/python-server-sdk/commit/cf8b84ac5675cd962d440769100277041fb849ab))
+* Signal readiness when selectorless initializers are exhausted ([#582](https://github.com/launchdarkly/python-server-sdk/issues/582)) ([fa654b0](https://github.com/launchdarkly/python-server-sdk/commit/fa654b08d2f2a9fc7b0940981dce587e950ccff0))
+
+
+### Documentation
+
+* Explain the cached data warning from the FDv2 file data source ([#591](https://github.com/launchdarkly/python-server-sdk/issues/591)) ([5cc96b0](https://github.com/launchdarkly/python-server-sdk/commit/5cc96b00a14e3498693fb3b5b4080f1a2618ae01))
+
 ## [9.21.0](https://github.com/launchdarkly/python-server-sdk/compare/9.20.0...9.21.0) (2026-11-12)
 
 
