@@ -215,7 +215,10 @@ dependency_ordering_test_data = {
 
 
 class DependencyOrderingDataInitializer:
-    # Returns the unordered test data set as a persistable full transfer.
+    # Returns an unordered data set as a persistable full transfer.
+    def __init__(self, data):
+        self._data = data
+
     @property
     def name(self) -> str:
         return "DependencyOrderingDataInitializer"
@@ -224,15 +227,18 @@ class DependencyOrderingDataInitializer:
         builder = ChangeSetBuilder()
         builder.start(IntentCode.TRANSFER_FULL)
         for kind, object_kind in ((FEATURES, ObjectKind.FLAG), (SEGMENTS, ObjectKind.SEGMENT)):
-            for key, item in dependency_ordering_test_data[kind].items():
+            for key, item in self._data[kind].items():
                 builder.add_put(object_kind, key, item['version'], item)
         change_set = builder.finish(Selector.new_selector("state", 1))
         return _Success(Basis(change_set=change_set, persist=True, environment_id=None))
 
 
 class DependencyOrderingDataInitializerBuilder:
+    def __init__(self, data=dependency_ordering_test_data):
+        self._data = data
+
     def build(self, config):
-        return DependencyOrderingDataInitializer()
+        return DependencyOrderingDataInitializer(self._data)
 
 
 def test_store_data_set_ordering():
@@ -265,3 +271,28 @@ def test_store_data_set_ordering():
             if prereq_index > item_index:
                 all_keys = (f["key"] for f in flags_list)
                 raise Exception("%s depends on %s, but %s was listed first; keys in order are [%s]" % (item["key"], prereq["key"], item["key"], ", ".join(all_keys)))
+
+
+def test_store_data_set_ordering_treats_null_prerequisites_as_empty():
+    data = {
+        FEATURES: {
+            "a": {"key": "a", "version": 1, "prerequisites": [{"key": "b", "variation": 0}]},
+            "b": {"key": "b", "version": 1, "prerequisites": None},
+        },
+        SEGMENTS: {},
+    }
+
+    store = CapturingFeatureStore()
+    datasystem_config = datasystem.custom() \
+        .initializers([DependencyOrderingDataInitializerBuilder(data)]) \
+        .data_store(store, DataStoreMode.READ_WRITE) \
+        .build()
+    config = Config(sdk_key='SDK_KEY', send_events=False, data_system=datasystem_config)
+
+    # Initialize the store with a flag whose prerequisites are null.
+    with LDClient(config=config):
+        pass
+
+    # The store receives every flag, and the prerequisite comes first.
+    assert store.received_data is not None
+    assert list(store.received_data[FEATURES].keys()) == ["b", "a"]

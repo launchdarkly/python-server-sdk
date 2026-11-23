@@ -90,7 +90,8 @@ FEATURES = VersionedDataKindWithOrdering(
     stream_api_path="/flags/",
     decoder=FeatureFlag,
     priority=1,
-    get_dependency_keys=lambda flag: (p.get('key') for p in flag.get('prerequisites', [])),
+    # A null prerequisites list is the same as an omitted list.
+    get_dependency_keys=lambda flag: (p.get('key') for p in (flag.get('prerequisites') or [])),
 )
 
 SEGMENTS = VersionedDataKindWithOrdering(namespace="segments", request_api_path="/sdk/latest-segments", stream_api_path="/segments/", decoder=Segment, priority=0, get_dependency_keys=None)

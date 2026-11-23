@@ -155,6 +155,9 @@ def streaming_ds_builder() -> StreamingDataSourceBuilder:
 def file_ds_builder(paths: List[str]) -> FileDataSourceBuilder:
     """
     Returns a builder for a file-based data source.
+
+    File data has no LaunchDarkly selector, so the SDK reports it as cached data. Refer to
+    :func:`ldclient.integrations.Files.new_data_source` for the warning that this causes.
     """
     return FileDataSourceBuilder(paths)
 

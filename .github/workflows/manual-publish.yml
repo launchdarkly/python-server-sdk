@@ -19,11 +19,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.11"
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets/v1
         name: "Get PyPI token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}
@@ -33,7 +33,7 @@ jobs:
 
       - name: Publish package distributions to PyPI
         if: ${{ format('{0}', inputs.dry_run) == 'false' }}
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           password: ${{env.PYPI_AUTH_TOKEN}}
 

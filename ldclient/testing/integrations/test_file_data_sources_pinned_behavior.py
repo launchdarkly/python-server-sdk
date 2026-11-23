@@ -5,6 +5,7 @@ observably unchanged: the flagValues expansion and its evaluation reason, the ve
 the duplicate key and load failure messages, the FDv2 status and error kinds, the acceptance of
 entries marked as deleted, and the polling and watching rules.
 """
+import logging
 import os
 import threading
 import time
@@ -106,6 +107,36 @@ def test_flag_values_evaluate_with_a_fallthrough_reason(tmp_path):
         assert detail.value == 'value2'
         assert detail.variation_index == 0
         assert detail.reason == {'kind': 'FALLTHROUGH'}
+
+
+# ---------------------------------------------------------------------------
+# Evaluation before the client counts as initialized
+# ---------------------------------------------------------------------------
+
+CACHED_DATA_WARNING = "Feature Flag evaluation attempted before client has initialized - using last known values"
+
+
+def cached_data_warnings(caplog) -> List[str]:
+    return [r.getMessage() for r in caplog.records if r.getMessage().startswith(CACHED_DATA_WARNING)]
+
+
+@pytest.mark.parametrize('use_as', ['initializer', 'synchronizer', 'both'])
+def test_evaluation_logs_the_cached_data_warning_once(tmp_path, caplog, use_as):
+    # File data has no selector, so the data system reports it as cached, not refreshed.
+    # The first evaluation then logs the cached data warning, although the value is correct.
+    path = os.path.join(str(tmp_path), 'data.json')
+    write_file(path, DOCUMENT)
+    file_source = Files.new_data_source(paths=[path])
+    builder = custom()
+    if use_as in ('initializer', 'both'):
+        builder = builder.initializers([file_source])
+    if use_as in ('synchronizer', 'both'):
+        builder = builder.synchronizers(file_source)
+    config = Config('SDK_KEY', data_system=builder.build(), send_events=False)
+    with caplog.at_level(logging.WARNING), LDClient(config) as client:
+        assert client.variation('flag2', user, 'default') == 'value2'
+        assert client.variation('flag1', user, 'default') == 'on'
+    assert len(cached_data_warnings(caplog)) == 1
 
 
 # ---------------------------------------------------------------------------
