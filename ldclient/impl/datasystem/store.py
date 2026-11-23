@@ -89,6 +89,14 @@ class InMemoryFeatureStore(ReadOnlyStore):
                 )
             )
 
+    def all_including_deleted(self, kind: VersionedDataKind, callback: Callable[[Any], Any] = lambda x: x) -> Any:
+        """
+        Returns all items of a kind, including deleted items. A deleted item is
+        a placeholder that keeps the version of the deletion.
+        """
+        with self._lock.read():
+            return callback(dict(self._items[kind]))
+
     def set_basis(self, collections: Collections) -> bool:
         """
         Initializes the store with a full set of data, replacing any existing data.
@@ -558,10 +566,13 @@ class Store(_StoreBase):
                 store = self._persistent_store
                 assert store is not None
                 try:
-                    # Get all data from memory store and write to persistent store
+                    # Get all data from memory store and write to persistent store.
+                    # Include the deleted items, so that the persistent store keeps
+                    # the version of each deletion and an older update cannot add
+                    # the item again.
                     all_data: Collections = {}
                     for kind in [FEATURES, SEGMENTS]:
-                        all_data[kind] = self._memory_store.all(kind, __mapping_from_kind(kind))
+                        all_data[kind] = self._memory_store.all_including_deleted(kind, __mapping_from_kind(kind))
                     store.init(all_data)
                 except Exception as e:
                     return e

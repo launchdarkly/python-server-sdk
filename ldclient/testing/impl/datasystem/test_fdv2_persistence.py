@@ -728,6 +728,76 @@ def test_persistent_store_commit_encodes_data_correctly():
     assert flag_in_store["on"] is True
 
 
+def test_persistent_store_commit_writes_deleted_items():
+    """Test that Store.commit() writes deleted items to the persistent store as tombstones"""
+    from ldclient.impl.datasystem.store import Store
+    from ldclient.impl.listeners import Listeners
+    from ldclient.interfaces import (
+        Change,
+        ChangeSet,
+        ChangeType,
+        IntentCode,
+        ObjectKind,
+        Selector
+    )
+
+    persistent_store = StubFeatureStore()
+    store = Store(Listeners(), Listeners())
+    store.with_persistence(persistent_store, True, None)
+
+    store.apply(
+        ChangeSet(
+            intent_code=IntentCode.TRANSFER_FULL,
+            changes=[
+                Change(
+                    action=ChangeType.PUT,
+                    kind=ObjectKind.FLAG,
+                    key="kept-flag",
+                    version=1,
+                    object={"key": "kept-flag", "version": 1, "on": True},
+                ),
+                Change(
+                    action=ChangeType.PUT,
+                    kind=ObjectKind.FLAG,
+                    key="deleted-flag",
+                    version=1,
+                    object={"key": "deleted-flag", "version": 1, "on": True},
+                ),
+                Change(
+                    action=ChangeType.PUT,
+                    kind=ObjectKind.SEGMENT,
+                    key="deleted-segment",
+                    version=1,
+                    object={"key": "deleted-segment", "version": 1},
+                ),
+            ],
+            selector=Selector.no_selector(),
+        ),
+        True,
+    )
+    store.apply(
+        ChangeSet(
+            intent_code=IntentCode.TRANSFER_CHANGES,
+            changes=[
+                Change(action=ChangeType.DELETE, kind=ObjectKind.FLAG, key="deleted-flag", version=2),
+                Change(action=ChangeType.DELETE, kind=ObjectKind.SEGMENT, key="deleted-segment", version=2),
+            ],
+            selector=Selector.no_selector(),
+        ),
+        True,
+    )
+
+    # Write the memory store back to the persistent store.
+    err = store.commit()
+
+    # The persistent store holds the kept flag and a tombstone for each deleted item.
+    assert err is None
+    snapshot = persistent_store.get_data_snapshot()
+    assert snapshot[FEATURES]["kept-flag"]["version"] == 1
+    assert snapshot[FEATURES].get("deleted-flag") == {"key": "deleted-flag", "deleted": True, "version": 2}
+    assert snapshot[SEGMENTS].get("deleted-segment") == {"key": "deleted-segment", "deleted": True, "version": 2}
+
+
 def test_persistent_store_commit_with_no_persistent_store():
     """Test that Store.commit() safely handles the case where there's no persistent store"""
     from ldclient.impl.datasystem.store import Store
