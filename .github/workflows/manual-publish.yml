@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.10"
 
-      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1
+      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets/v1
         name: "Get PyPI token"
         with:
           aws_assume_role: ${{ vars.AWS_ROLE_ARN }}

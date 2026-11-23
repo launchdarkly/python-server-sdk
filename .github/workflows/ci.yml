@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores/v0
         with:
           redis: true
           consul: true
@@ -55,7 +55,7 @@ jobs:
         run: make start-contract-test-service-bg
 
       - name: Run contract tests v2
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +63,7 @@ jobs:
           enable_persistence_tests: "true"
 
       - name: Run contract tests v3
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9000
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -78,7 +78,7 @@ jobs:
         run: make start-async-contract-test-service-bg
 
       - name: Run async contract tests v2
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9001
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -86,7 +86,7 @@ jobs:
           enable_persistence_tests: "true"
 
       - name: Run async contract tests v3
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9001
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -161,7 +161,7 @@ jobs:
         run: make start-contract-test-service-bg
 
       - name: Run contract tests against the sdist
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9000
           enable_persistence_tests: "false"
@@ -172,7 +172,7 @@ jobs:
         run: make start-async-contract-test-service-bg
 
       - name: Run async contract tests against the sdist
-        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests-v1
+        uses: launchdarkly/gh-actions/actions/contract-tests@contract-tests/v1
         with:
           test_service_port: 9001
           enable_persistence_tests: "false"
@@ -198,7 +198,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores-v0
+      - uses: launchdarkly/gh-actions/actions/persistent-stores@persistent-stores/v0
         with:
           redis: true
           consul: true
