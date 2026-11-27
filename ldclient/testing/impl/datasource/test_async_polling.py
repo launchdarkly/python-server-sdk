@@ -202,7 +202,7 @@ class TestAsyncPollingUpdateProcessor:
         config = make_config()
         processor = make_processor(config=config, store=store, ready=ready)
 
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         processor.start()
         await asyncio.wait_for(ready.wait(), timeout=2.0)
@@ -226,7 +226,7 @@ class TestAsyncPollingUpdateProcessor:
         processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
 
         mock_requester = AsyncMock(side_effect=UnsuccessfulResponseException(401))
-        processor._requester.get_all_data = mock_requester
+        processor._requester.get_all_data_with_headers = mock_requester
 
         processor.start()
         await asyncio.sleep(0.1)
@@ -246,7 +246,7 @@ class TestAsyncPollingUpdateProcessor:
 
         retry = fast_retry_state()
         processor = make_processor(retry_state=retry)
-        processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+        processor._requester.get_all_data_with_headers = AsyncMock(side_effect=UnsuccessfulResponseException(401))
 
         processor.start()
         await asyncio.sleep(0.05)
@@ -267,11 +267,11 @@ class TestAsyncPollingUpdateProcessor:
             retry = for_polling(30)
             processor = make_processor(config=config, store=store, ready=ready, retry_state=retry)
 
-            processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+            processor._requester.get_all_data_with_headers = AsyncMock(side_effect=UnsuccessfulResponseException(401))
             await processor._fetch_and_store()
             assert retry.next_delay == 5 * 60
 
-            processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+            processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
             await processor._fetch_and_store()
             assert retry.next_delay == 30
             assert retry._extended, "one success restores the cadence but does not reset"
@@ -292,14 +292,14 @@ class TestAsyncPollingUpdateProcessor:
 
         call_count = 0
 
-        async def get_all_data():
+        async def get_all_data_with_headers():
             nonlocal call_count
             call_count += 1
             if call_count < 3:
                 raise UnsuccessfulResponseException(500)
-            return SAMPLE_DATA
+            return (SAMPLE_DATA, {})
 
-        processor._requester.get_all_data = get_all_data
+        processor._requester.get_all_data_with_headers = get_all_data_with_headers
 
         processor.start()
         await asyncio.wait_for(ready.wait(), timeout=2.0)
@@ -322,14 +322,14 @@ class TestAsyncPollingUpdateProcessor:
 
         call_count = 0
 
-        async def get_all_data():
+        async def get_all_data_with_headers():
             nonlocal call_count
             call_count += 1
             if call_count < 3:
                 raise RuntimeError("transient error")
-            return SAMPLE_DATA
+            return (SAMPLE_DATA, {})
 
-        processor._requester.get_all_data = get_all_data
+        processor._requester.get_all_data_with_headers = get_all_data_with_headers
 
         processor.start()
 
@@ -357,10 +357,10 @@ class TestAsyncPollingUpdateProcessor:
         config = make_config()
         processor = make_processor(config=config, store=store, ready=ready)
 
-        async def get_all_data():
+        async def get_all_data_with_headers():
             raise RuntimeError("transient error")
 
-        processor._requester.get_all_data = get_all_data
+        processor._requester.get_all_data_with_headers = get_all_data_with_headers
 
         processor.start()
         # Let several polls run; all raise. A transient error must not release
@@ -390,7 +390,7 @@ class TestAsyncPollingUpdateProcessor:
         certificate failure included. Only an HTTP status can do that."""
         retry = for_polling(30)
         processor = make_processor(retry_state=retry)
-        processor._requester.get_all_data = AsyncMock(side_effect=error)
+        processor._requester.get_all_data_with_headers = AsyncMock(side_effect=error)
 
         await processor._fetch_and_store()
         assert retry.next_delay == 30
@@ -405,7 +405,7 @@ class TestAsyncPollingUpdateProcessor:
         with no_retry_jitter():
             retry = for_polling(30)
             processor = make_processor(retry_state=retry)
-            processor._requester.get_all_data = AsyncMock(side_effect=UnsuccessfulResponseException(401))
+            processor._requester.get_all_data_with_headers = AsyncMock(side_effect=UnsuccessfulResponseException(401))
 
             await processor._fetch_and_store()
             await processor._fetch_and_store()
@@ -425,7 +425,7 @@ class TestAsyncPollingUpdateProcessor:
         with no_retry_jitter():
             retry = for_polling(30)
             processor = make_processor(retry_state=retry)
-            processor._requester.get_all_data = AsyncMock(side_effect=ConnectionResetError(104, "reset by peer"))
+            processor._requester.get_all_data_with_headers = AsyncMock(side_effect=ConnectionResetError(104, "reset by peer"))
 
             await processor._fetch_and_store()
 
@@ -462,7 +462,7 @@ class TestAsyncPollingUpdateProcessor:
             order.append('transport_closed')
 
         requester = MagicMock()
-        requester.get_all_data = slow_poll
+        requester.get_all_data_with_headers = slow_poll
         requester.close = close
 
         processor = make_processor(requester=requester)
@@ -480,7 +480,7 @@ class TestAsyncPollingUpdateProcessor:
         task is waiting between polls."""
         retry = fast_retry_state(ONE_HOUR)
         processor = make_processor(retry_state=retry)
-        processor._requester.get_all_data = AsyncMock(
+        processor._requester.get_all_data_with_headers = AsyncMock(
             side_effect=UnsuccessfulResponseException(401)
         )
 
@@ -511,7 +511,7 @@ class TestAsyncPollingUpdateProcessor:
             poll_count += 1
             await asyncio.sleep(60)  # Would block indefinitely without cancel
 
-        processor._requester.get_all_data = slow_poll
+        processor._requester.get_all_data_with_headers = slow_poll
 
         processor.start()
         await asyncio.sleep(0.05)  # Let the task start
@@ -538,7 +538,7 @@ class TestAsyncPollingUpdateProcessor:
         processor = make_processor(config=config, store=store, ready=ready, retry_state=fast_retry_state())
         processor._data_source_update_sink = sink
 
-        processor._requester.get_all_data = AsyncMock(
+        processor._requester.get_all_data_with_headers = AsyncMock(
             side_effect=UnsuccessfulResponseException(403)
         )
 
@@ -566,7 +566,7 @@ class TestAsyncPollingUpdateProcessor:
 
         processor = make_processor(config=config)
         processor._data_source_update_sink = sink
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         processor.start()
         await processor.stop()
@@ -590,7 +590,7 @@ class TestAsyncPollingUpdateProcessor:
         config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, listeners, Listeners())
 
         processor = make_processor(config=config, store=store)
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         await processor.stop()
         await processor._fetch_and_store()
@@ -619,7 +619,7 @@ class TestAsyncPollingUpdateProcessor:
         config._data_source_update_sink = AsyncDataSourceUpdateSinkImpl(store, listeners, Listeners())
 
         processor = make_processor(config=config, store=store, ready=ready)
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         processor.start()
         await asyncio.wait_for(ready.wait(), timeout=2.0)
@@ -651,7 +651,7 @@ class TestAsyncPollingUpdateProcessor:
         processor = make_processor(config=config, store=store, ready=ready)
         processor._data_source_update_sink = sink
 
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         processor.start()
         await asyncio.wait_for(ready.wait(), timeout=2.0)
@@ -672,7 +672,7 @@ class TestAsyncPollingUpdateProcessor:
         mock_interval.__get__ = MagicMock(return_value=0)
 
         processor = make_processor()
-        processor._requester.get_all_data = AsyncMock(return_value=SAMPLE_DATA)
+        processor._requester.get_all_data_with_headers = AsyncMock(return_value=(SAMPLE_DATA, {}))
 
         processor.start()
         task = processor._task

@@ -19,7 +19,8 @@ from ldclient.impl.datasource.datasource_common import (
     STREAM_ALL_PATH,
     StreamClosedError,
     async_sink_or_store,
-    parse_path
+    parse_path,
+    record_environment_id
 )
 from ldclient.impl.retry import (
     FailureKind,
@@ -92,6 +93,7 @@ class AsyncStreamingUpdateProcessor(AsyncUpdateProcessor):
                     # interrupt() is a no-op when the connection has already gone, so
                     # clear a stale flag here rather than swallow the next real close.
                     self._interrupted_by_sdk = False
+                    record_environment_id(self._data_source_update_sink, action.headers)
 
                     # On reconnect after an error the timer was cleared; reset it here.
                     # For the initial connect the pre-loop stamp is already set.

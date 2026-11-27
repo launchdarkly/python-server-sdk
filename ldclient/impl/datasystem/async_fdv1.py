@@ -125,6 +125,10 @@ class AsyncFDv1(AsyncDataSystem):
         return self._store_view
 
     @property
+    def environment_id(self) -> Optional[str]:
+        return self._data_source_update_sink.environment_id
+
+    @property
     def override_layer(self) -> None:
         # Overrides are an option of the FDv2 data system only.
         return None

@@ -4,7 +4,7 @@ Default implementation of feature flag polling requests.
 
 import json
 from collections import namedtuple
-from typing import Optional
+from typing import Mapping, Optional, Tuple
 from urllib import parse
 
 from ldclient.impl.aio.transport import AsyncHTTPTransport
@@ -30,6 +30,10 @@ class AsyncFeatureRequesterImpl(AsyncFeatureRequester):
             self._poll_uri += '?%s' % parse.urlencode({'filter': config.payload_filter_key})
 
     async def get_all_data(self):
+        (data, _) = await self.get_all_data_with_headers()
+        return data
+
+    async def get_all_data_with_headers(self) -> Tuple[dict, Optional[Mapping[str, str]]]:
         uri = self._poll_uri
         hdrs = _headers(self._config, ASYNC_USER_AGENT)
         cache_entry = self._cache.get(uri)
@@ -50,7 +54,7 @@ class AsyncFeatureRequesterImpl(AsyncFeatureRequester):
                 self._cache[uri] = CacheEntry(data=data, etag=etag)
         log.debug("%s response status:[%d] From cache? [%s] ETag:[%s]", uri, r.status, from_cache, etag)
 
-        return {FEATURES: data['flags'], SEGMENTS: data['segments']}
+        return ({FEATURES: data['flags'], SEGMENTS: data['segments']}, r.headers)
 
     async def close(self):
         if self._owns_transport:
