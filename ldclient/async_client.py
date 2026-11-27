@@ -3,6 +3,7 @@ Async client for the LaunchDarkly Server-Side Python SDK.
 """
 
 import asyncio
+import math
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -355,10 +356,13 @@ class AsyncLDClient:
         :param context: the evaluation context associated with the event
         :param data: optional additional data associated with the event
         :param metric_value: a numeric value used by the LaunchDarkly experimentation feature in
-          numeric custom metrics; can be omitted if this event is used by only non-numeric metrics
+          numeric custom metrics; can be omitted if this event is used by only non-numeric metrics.
+          If it is NaN or infinite, a warning is logged and the event is not recorded
         """
         if not context.valid:
             log.warning("Invalid context for track (%s)" % context.error)
+        elif isinstance(metric_value, float) and not math.isfinite(metric_value):
+            log.warning('track called with non-finite metric value for event "%s"; event was not recorded' % event_name)
         else:
             self._send_event(self._event_factory_default.new_custom_event(event_name, context, data, metric_value))
 

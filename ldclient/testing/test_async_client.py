@@ -278,6 +278,28 @@ async def test_track_sends_event():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('metric_value', [float('nan'), float('inf'), float('-inf')])
+async def test_track_non_finite_metric_value(metric_value, caplog):
+    """track() drops a custom event whose metric value is NaN or infinite."""
+    store = MockAsyncFeatureStore()
+    store._initialized = True
+
+    mock_ep = MockAsyncEventProcessor()
+    config = AsyncConfig(
+        "test-sdk-key",
+        feature_store=store,
+        update_processor_class=MockAsyncUpdateProcessor,
+        event_processor_class=lambda _cfg: mock_ep,
+        send_events=True,
+    )
+    async with AsyncLDClient(config) as client:
+        client.track('my-event', Context.create('user-1'), metric_value=metric_value)
+
+    assert mock_ep.events == []
+    assert 'non-finite metric value for event "my-event"' in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_data_source_status_provider_accessible():
     """data_source_status_provider is not None after start()."""
     store = MockAsyncFeatureStore()
