@@ -169,6 +169,53 @@ def _make_valid_update() -> Update:
 
 
 @pytest.mark.asyncio
+async def test_environment_id_from_initializer_basis():
+    builder = ChangeSetBuilder()
+    builder.start(IntentCode.TRANSFER_FULL)
+    change_set = builder.finish(Selector(state="initializer-state", version=1))
+    initializer = MockAsyncInitializer(
+        _Success(value=Basis(change_set=change_set, persist=True, environment_id="env-from-initializer")),
+    )
+    data_system = AsyncFDv2(AsyncConfig(sdk_key="dummy"), AsyncDataSystemConfig(
+        initializers=[MockAsyncInitializerBuilder(initializer)],
+    ))
+    assert data_system.environment_id is None
+
+    ready = asyncio.Event()
+    data_system.start(ready)
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=1)
+        assert data_system.environment_id == "env-from-initializer"
+    finally:
+        await data_system.stop()
+
+
+@pytest.mark.asyncio
+async def test_environment_id_is_recorded_only_from_valid_updates():
+    synchronizer = MockAsyncSynchronizer([
+        Update(state=DataSourceState.VALID, environment_id="env-from-sync"),
+        Update(state=DataSourceState.INTERRUPTED, environment_id="env-from-interrupted"),
+    ])
+    data_system = AsyncFDv2(AsyncConfig(sdk_key="dummy"), AsyncDataSystemConfig(
+        synchronizers=[MockAsyncSynchronizerBuilder(synchronizer)],
+    ))
+    interrupted = asyncio.Event()
+
+    def on_status(status: DataSourceStatus):
+        if status.state == DataSourceState.INTERRUPTED:
+            interrupted.set()
+
+    data_system.data_source_status_provider.add_listener(on_status)
+
+    data_system.start(asyncio.Event())
+    try:
+        await asyncio.wait_for(interrupted.wait(), timeout=1)
+        assert data_system.environment_id == "env-from-sync"
+    finally:
+        await data_system.stop()
+
+
+@pytest.mark.asyncio
 async def test_async_fdv2_basic_start_stop():
     td = TestDataV2.data_source()
     data_system_config = DataSystemConfig(

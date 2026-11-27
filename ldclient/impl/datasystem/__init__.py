@@ -246,6 +246,15 @@ class AsyncDataSystem(Protocol):
 
     @property
     @abstractmethod
+    def environment_id(self) -> Optional[str]:
+        """
+        Returns the environment ID reported by LaunchDarkly, if it is known.
+        See :attr:`DataSystem.environment_id`.
+        """
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def override_layer(self) -> Optional["OverrideLayer"]:
         """
         Returns the override layer when the data system was built with an override source,

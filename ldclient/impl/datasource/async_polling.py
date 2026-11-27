@@ -5,11 +5,14 @@ Default implementation of the polling component.
 # currently excluded from documentation - see docs/README.md
 
 import time
-from typing import Optional
+from typing import Any, Mapping, Optional, Protocol, Tuple, runtime_checkable
 
 from ldclient.async_config import AsyncConfig
 from ldclient.impl.aio.concurrency import AsyncEvent, AsyncRepeatingTask
-from ldclient.impl.datasource.datasource_common import async_sink_or_store
+from ldclient.impl.datasource.datasource_common import (
+    async_sink_or_store,
+    record_environment_id
+)
 from ldclient.impl.retry import (
     FailureKind,
     RetryState,
@@ -29,6 +32,12 @@ from ldclient.interfaces import (
     DataSourceErrorKind,
     DataSourceState
 )
+
+
+@runtime_checkable
+class _AsyncFeatureRequesterWithHeaders(Protocol):
+    async def get_all_data_with_headers(self) -> Tuple[Any, Optional[Mapping[str, str]]]:
+        ...
 
 
 class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
@@ -69,10 +78,21 @@ class AsyncPollingUpdateProcessor(AsyncUpdateProcessor):
         finally:
             await self._requester.close()
 
+    async def _get_all_data_with_headers(self) -> Tuple[Any, Optional[Mapping[str, str]]]:
+        """
+        Externally provided feature requesters are not required to surface
+        response headers, so fall back to the data-only method.
+        """
+        if isinstance(self._requester, _AsyncFeatureRequesterWithHeaders):
+            return await self._requester.get_all_data_with_headers()
+
+        return (await self._requester.get_all_data(), None)
+
     async def _fetch_and_store(self) -> None:
         """Makes one poll request and records the outcome on the retry state."""
         try:
-            all_data = await self._requester.get_all_data()
+            (all_data, headers) = await self._get_all_data_with_headers()
+            record_environment_id(self._data_source_update_sink, headers)
             await async_sink_or_store(self._data_source_update_sink, self._store).init(all_data)
 
             if self._data_source_update_sink is not None:

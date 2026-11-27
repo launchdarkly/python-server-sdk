@@ -735,7 +735,7 @@ class AsyncLDClient:
         if not hooks:
             return await block()
 
-        series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method)
+        series_context = EvaluationSeriesContext(key=key, context=context, default_value=default_value, method=method, environment_id=self._data_system.environment_id)
         hook_data = self.__execute_before_evaluation(hooks, series_context)
         try:
             evaluation_result = await block()

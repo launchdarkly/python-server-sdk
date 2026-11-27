@@ -276,6 +276,8 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
             wrapper = _AsyncFeatureStoreClientWrapper(data_system_config.data_store, self._data_store_status_provider.update_status)
             self._store.with_async_persistence(wrapper, writable, self._data_store_status_provider)
 
+        self._environment_id: Optional[str] = None
+
         self._store_view = _AsyncReadOnlyStoreView(self._store)
 
         # Set only when an override source is configured. See the sync FDv2 for the roles of
@@ -401,6 +403,12 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         # Close the store
         await self._store.close()
 
+    def _record_environment_id(self, environment_id: Optional[str]):
+        if not isinstance(environment_id, str) or environment_id == '':
+            return
+
+        self._environment_id = environment_id
+
     def _close_override_source(self, failure_message: str) -> None:
         # A custom source can raise from close. That is logged and not raised, so the rest of
         # the client still stops, or still starts after a failed start.
@@ -499,6 +507,7 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
 
                 basis = basis_result.value
                 log.info("Initialized via %s", initializer.name)
+                self._record_environment_id(basis.environment_id)
 
                 # Apply the basis to the store
                 await self._store.apply(basis.change_set, basis.persist)
@@ -675,6 +684,9 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
                 if self._stop_event.is_set():
                     return ConditionDirective.FALLBACK
 
+                if update.state == DataSourceState.VALID:
+                    self._record_environment_id(update.environment_id)
+
                 # Handle the update
                 if update.change_set is not None:
                     await self._store.apply(update.change_set, True)
@@ -712,6 +724,11 @@ class AsyncFDv2(_FDv2Base, AsyncDataSystem):
         # For continuous synchronizers (streaming/polling), this is unexpected and indicates
         # the synchronizer can't provide more updates, so we should remove it and fall back
         return ConditionDirective.REMOVE
+
+    @property
+    def environment_id(self) -> Optional[str]:
+        """Get the environment ID reported by LaunchDarkly, if known."""
+        return self._environment_id
 
     @property
     def store(self) -> AsyncReadOnlyStore:

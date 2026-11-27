@@ -23,10 +23,18 @@ class AsyncDataSourceUpdateSinkImpl(AsyncDataSourceUpdateSink):
         self.__tracker = DependencyTracker()
 
         self.__status = DataSourceStatus(DataSourceState.INITIALIZING, time.time(), None)
+        self.__environment_id: Optional[str] = None
 
     @property
     def status(self) -> DataSourceStatus:
         return self.__status
+
+    @property
+    def environment_id(self) -> Optional[str]:
+        return self.__environment_id
+
+    def set_environment_id(self, environment_id: str) -> None:
+        self.__environment_id = environment_id
 
     async def init(self, all_data: Mapping[VersionedDataKind, Mapping[str, dict]]) -> None:
         old_data: Optional[Dict[VersionedDataKind, Mapping[str, dict]]] = None
