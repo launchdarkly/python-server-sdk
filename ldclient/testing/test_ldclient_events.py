@@ -1,3 +1,5 @@
+import pytest
+
 from ldclient.client import Config, Context, LDClient
 from ldclient.evaluation import EvaluationDetail
 from ldclient.feature_store import InMemoryFeatureStore
@@ -153,6 +155,15 @@ def test_track_with_metric_value():
         assert e.context == context
         assert e.data == 42
         assert e.metric_value == 1.5
+
+
+@pytest.mark.parametrize('metric_value', [float('nan'), float('inf'), float('-inf')])
+def test_track_non_finite_metric_value(metric_value, caplog):
+    with make_client() as client:
+        count_events(client)
+        client.track('my_event', context, metric_value=metric_value)
+        assert count_events(client) == 0
+        assert 'non-finite metric value for event "my_event"' in caplog.text
 
 
 def test_track_invalid_context():
